@@ -1298,6 +1298,8 @@ body::before {
 }
 
 .avatar-item {
+  appearance: none;
+  -webkit-appearance: none;
   background: rgba(10, 14, 26, 0.6);
   border: 1px solid rgba(34, 211, 238, 0.2);
   border-radius: 12px;
@@ -1306,6 +1308,7 @@ body::before {
   flex: 0 0 88px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  outline: none;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -1319,6 +1322,7 @@ body::before {
   transform-origin: center;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  pointer-events: none;
 }
 
 .avatar-item:hover {
@@ -1361,6 +1365,21 @@ body::before {
 .avatar-item.is-selected {
   border-color: rgba(168, 85, 247, 0.8);
   box-shadow: 0 0 18px rgba(168, 85, 247, 0.4);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .avatar-item,
+  .avatar-item img,
+  .avatar-arrow {
+    transition: none !important;
+  }
+
+  .avatar-item:hover,
+  .avatar-item:hover img,
+  .avatar-arrow:hover {
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 .avatar-lightbox {
