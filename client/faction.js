@@ -78,10 +78,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const lightboxCaption = document.getElementById("avatar-lightbox-caption");
   const lightboxBackdrop = document.querySelector("#avatar-lightbox .avatar-lightbox__backdrop");
   const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const marquee = avatarGrid?.closest(".avatar-marquee") || null;
 
   let selectedStructure = localStorage.getItem("empire_structure");
   let selectedAvatar = localStorage.getItem("empire_avatar");
   let hoverPause = false;
+  let marqueeTouchState = {
+    active: false,
+    moved: false,
+    startX: 0,
+    startScrollLeft: 0
+  };
 
   const avatars = [
     "../img/avatars/grok_image_1773615281856.jpg",
@@ -201,9 +208,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selectedStructure && selectedAvatar) {
       goGame.classList.remove("faction-link--disabled");
       goGame.setAttribute("aria-disabled", "false");
+      goGame.tabIndex = 0;
     } else {
       goGame.classList.add("faction-link--disabled");
       goGame.setAttribute("aria-disabled", "true");
+      goGame.tabIndex = -1;
     }
   }
 
@@ -332,8 +341,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (existing) existing.remove();
       });
       item.addEventListener("click", () => {
+        if (marqueeTouchState.moved) return;
         applyAvatarSelection(src, { openPreview: true });
       });
+      item.addEventListener("touchend", (event) => {
+        if (marqueeTouchState.moved) return;
+        event.preventDefault();
+        applyAvatarSelection(src);
+      }, { passive: false });
     });
   }
 
@@ -341,6 +356,10 @@ document.addEventListener("DOMContentLoaded", () => {
     grid.querySelectorAll(".structure-card").forEach((card) => {
       const selectCard = () => applyStructureSelection(card.dataset.structure);
       card.addEventListener("click", selectCard);
+      card.addEventListener("touchend", (event) => {
+        event.preventDefault();
+        selectCard();
+      }, { passive: false });
     });
   }
 
@@ -348,8 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
   updateContinueState();
   updateNote();
 
-  if (avatarLeft && avatarRight && avatarGrid) {
-    const marquee = avatarGrid.closest(".avatar-marquee");
+  if (avatarLeft && avatarRight && avatarGrid && marquee) {
     const scrollByAmount = () => (marquee ? marquee.clientWidth * 0.6 : 220);
     const baseSpeed = 0.55;
     let holdVelocity = 0;
@@ -393,29 +411,33 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (isCoarsePointer && marquee) {
-      let isDragging = false;
-      let startX = 0;
-      let startScrollLeft = 0;
-
       marquee.addEventListener("touchstart", (event) => {
         const touch = event.touches[0];
         if (!touch) return;
-        isDragging = true;
-        startX = touch.clientX;
-        startScrollLeft = marquee.scrollLeft;
+        marqueeTouchState.active = true;
+        marqueeTouchState.moved = false;
+        marqueeTouchState.startX = touch.clientX;
+        marqueeTouchState.startScrollLeft = marquee.scrollLeft;
         hoverPause = true;
       }, { passive: true });
 
       marquee.addEventListener("touchmove", (event) => {
-        if (!isDragging) return;
+        if (!marqueeTouchState.active) return;
         const touch = event.touches[0];
         if (!touch) return;
-        marquee.scrollLeft = startScrollLeft - (touch.clientX - startX);
+        const deltaX = touch.clientX - marqueeTouchState.startX;
+        if (Math.abs(deltaX) > 6) {
+          marqueeTouchState.moved = true;
+        }
+        marquee.scrollLeft = marqueeTouchState.startScrollLeft - deltaX;
       }, { passive: true });
 
       const endDrag = () => {
-        isDragging = false;
+        marqueeTouchState.active = false;
         hoverPause = false;
+        window.setTimeout(() => {
+          marqueeTouchState.moved = false;
+        }, 50);
       };
 
       marquee.addEventListener("touchend", endDrag);

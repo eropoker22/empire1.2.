@@ -1132,6 +1132,7 @@ body::before {
   font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
@@ -1184,6 +1185,7 @@ body::before {
   text-decoration: none;
   background: rgba(10, 14, 26, 0.6);
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1250,6 +1252,7 @@ body::before {
   padding: 10px;
   touch-action: pan-x;
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 .avatar-track {
@@ -1301,6 +1304,7 @@ body::before {
   cursor: pointer;
   flex: 0 0 88px;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -1312,6 +1316,8 @@ body::before {
   display: block;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   transform-origin: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .avatar-item:hover {
@@ -2689,6 +2695,14 @@ body::before {
     gap: 10px;
   }
 
+  .avatar-item,
+  .avatar-item img,
+  .avatar-arrow,
+  .faction-link,
+  .structure-card {
+    transition: none;
+  }
+
   .faction-links {
     flex-direction: column;
   }
@@ -2696,6 +2710,27 @@ body::before {
   .faction-links .faction-link {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .auth-shell {
+    padding: 12px;
+  }
+
+  .auth-body--matrix .auth-shell {
+    align-items: stretch;
+  }
+
+  .auth-card,
+  .auth-card--wide {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .auth-card--wide {
+    min-height: auto;
+    padding: 16px;
   }
 }
 
@@ -2743,5 +2778,14 @@ body::before {
 
   .avatar-item {
     flex-basis: 78px;
+  }
+
+  .avatar-item:hover,
+  .avatar-item:hover img,
+  .structure-card:hover,
+  .faction-link:hover,
+  .avatar-arrow:hover {
+    transform: none;
+    box-shadow: none;
   }
 }
