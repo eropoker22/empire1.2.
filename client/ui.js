@@ -1959,6 +1959,7 @@ window.Empire.UI = (() => {
 
   function hydrateProfileModal(profile) {
     if (!profile) return;
+    const economy = cachedEconomy || {};
     const setText = (id, value) => {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
@@ -1980,10 +1981,11 @@ window.Empire.UI = (() => {
     setText("profile-modal-alliance", profile.alliance || "Žádná");
     setText("profile-modal-districts", profile.districts || 0);
     setText("profile-modal-cash", `$${profile.money || 0}`);
-    setText("profile-modal-drugs", profile.drugs || 0);
-    setText("profile-modal-garage", profile.garage || 0);
-    setText("profile-modal-weapons", profile.weapons || 0);
-    setText("profile-modal-defense", profile.defense || 0);
+    setText("profile-modal-drugs", profile.drugs ?? economy.drugs ?? 0);
+    setText("profile-modal-garage", profile.garage ?? economy.garage ?? 0);
+    setText("profile-modal-storage", profile.materials ?? economy.materials ?? 0);
+    setText("profile-modal-weapons", profile.weapons ?? economy.weapons ?? 0);
+    setText("profile-modal-defense", profile.defense ?? economy.defense ?? 0);
   }
 
   function showProfileModal() {
@@ -2017,12 +2019,15 @@ window.Empire.UI = (() => {
     document.getElementById("stat-influence").textContent = economy.influence || 0;
     const drugs = document.getElementById("stat-drugs");
     const garage = document.getElementById("stat-garage");
+    const storage = document.getElementById("stat-storage");
     const weapons = document.getElementById("stat-weapons");
     const defense = document.getElementById("stat-defense");
     if (drugs) drugs.textContent = economy.drugs || 0;
     if (garage) garage.textContent = economy.garage || 0;
+    if (storage) storage.textContent = economy.materials || 0;
     if (weapons) weapons.textContent = economy.weapons || 0;
     if (defense) defense.textContent = economy.defense || 0;
+    if (cachedProfile) hydrateProfileModal(cachedProfile);
     updateWeaponsPopover();
     updateDefensePopover();
   }
