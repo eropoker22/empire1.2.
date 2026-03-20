@@ -359,35 +359,35 @@
 
     <div id="settings-modal" class="modal hidden">
       <div id="settings-modal-backdrop" class="modal__backdrop"></div>
-      <div class="modal__content modal__content--profile">
+      <div class="modal__content modal__content--profile settings-modal__content">
         <div class="modal__header">
           <h3>Nastavení</h3>
           <button class="modal__close" id="settings-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body">
-          <div class="modal__row">
-            <span>Zvuk</span>
-            <label class="toggle">
+          <div class="modal__row settings-modal__row settings-modal__row--toggle">
+            <span class="settings-modal__label">Zvuk</span>
+            <label class="toggle settings-toggle">
               <input id="settings-sound" type="checkbox" checked />
               <span class="toggle__track"></span>
             </label>
           </div>
-          <div class="modal__row">
-            <span>Hudba</span>
-            <label class="toggle">
+          <div class="modal__row settings-modal__row settings-modal__row--toggle">
+            <span class="settings-modal__label">Hudba</span>
+            <label class="toggle settings-toggle">
               <input id="settings-music" type="checkbox" checked />
               <span class="toggle__track"></span>
             </label>
           </div>
-          <div class="modal__row">
-            <span>Notifikace</span>
-            <label class="toggle">
+          <div class="modal__row settings-modal__row settings-modal__row--toggle">
+            <span class="settings-modal__label">Notifikace</span>
+            <label class="toggle settings-toggle">
               <input id="settings-notifications" type="checkbox" checked />
               <span class="toggle__track"></span>
             </label>
           </div>
-          <div class="modal__row">
-            <span>Kvalita efektů</span>
+          <div class="modal__row settings-modal__row">
+            <span class="settings-modal__label">Kvalita efektů</span>
             <div class="select">
               <select id="settings-effects-quality">
                 <option value="high">Vysoká</option>
@@ -396,8 +396,8 @@
               </select>
             </div>
           </div>
-          <div class="modal__row">
-            <span>Jazyk</span>
+          <div class="modal__row settings-modal__row">
+            <span class="settings-modal__label">Jazyk</span>
             <div class="select">
               <select id="settings-language">
                 <option value="cs">Čeština</option>
