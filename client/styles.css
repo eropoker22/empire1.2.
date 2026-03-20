@@ -2471,7 +2471,7 @@ body::before {
   }
 
   .vortex-graffiti__tag--one {
-    font-size: 20px;
+    display: none;
   }
 
   .vortex-graffiti__tag--four,
