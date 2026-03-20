@@ -13,9 +13,16 @@ window.Empire.Map = (() => {
     scale: 1,
     offsetX: 0,
     offsetY: 0,
+    hasViewportOverride: false,
     isPanning: false,
+    isPinching: false,
+    touchMoved: false,
+    lastTouchAt: 0,
     panStart: { x: 0, y: 0 },
     viewStart: { x: 0, y: 0 },
+    pinchStartDistance: 0,
+    pinchStartScale: 1,
+    pinchWorldCenter: null,
     mapImage: null,
     mapSize: { width: 1400, height: 900 }
   };
@@ -135,7 +142,13 @@ window.Empire.Map = (() => {
     state.canvas.addEventListener("mouseleave", onMouseLeave);
     state.canvas.addEventListener("mousedown", onMouseDown);
     state.canvas.addEventListener("mouseup", onMouseUp);
+    state.canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    state.canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    state.canvas.addEventListener("touchend", onTouchEnd, { passive: false });
+    state.canvas.addEventListener("touchcancel", onTouchCancel, { passive: false });
     state.canvas.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("mousemove", onWindowMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
     window.addEventListener("resize", resizeCanvas);
   }
 
@@ -144,11 +157,11 @@ window.Empire.Map = (() => {
     state.canvas.width = rect.width * window.devicePixelRatio;
     state.canvas.height = rect.height * window.devicePixelRatio;
     state.ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
-    const minScale = Math.max(
-      rect.width / state.mapSize.width,
-      rect.height / state.mapSize.height
-    );
+    const minScale = getMinScale();
     if (state.scale < minScale) state.scale = minScale;
+    if (!state.hasViewportOverride) {
+      centerMap();
+    }
     clampPan();
     render();
   }
@@ -161,6 +174,7 @@ window.Empire.Map = (() => {
   }
 
   function onMouseMove(event) {
+    if (isTouchGhost()) return;
     if (state.isPanning) {
       const dx = event.clientX - state.panStart.x;
       const dy = event.clientY - state.panStart.y;
@@ -180,25 +194,33 @@ window.Empire.Map = (() => {
   }
 
   function onMouseLeave() {
+    if (isTouchGhost()) return;
+    if (state.isPanning) return;
     state.hoverId = null;
     hideTooltip();
     render();
   }
 
   function onMouseDown(event) {
+    if (isTouchGhost()) return;
     if (event.button !== 0) return;
     state.isPanning = true;
+    state.hasViewportOverride = true;
     state.panStart = { x: event.clientX, y: event.clientY };
     state.viewStart = { x: state.offsetX, y: state.offsetY };
+    state.canvas.style.cursor = "grabbing";
   }
 
   function onMouseUp(event) {
+    if (isTouchGhost()) return;
     if (event.button !== 0) return;
+    if (!state.isPanning) return;
     const moved = Math.hypot(
       event.clientX - state.panStart.x,
       event.clientY - state.panStart.y
     );
     state.isPanning = false;
+    state.canvas.style.cursor = "grab";
     if (moved > 6) return;
 
     const rect = state.canvas.getBoundingClientRect();
@@ -212,27 +234,144 @@ window.Empire.Map = (() => {
     }
   }
 
+  function onWindowMouseMove(event) {
+    if (isTouchGhost() || !state.isPanning) return;
+    const dx = event.clientX - state.panStart.x;
+    const dy = event.clientY - state.panStart.y;
+    state.offsetX = state.viewStart.x + dx;
+    state.offsetY = state.viewStart.y + dy;
+    clampPan();
+    render();
+  }
+
   function onWheel(event) {
+    if (isTouchGhost()) return;
     event.preventDefault();
+    state.hasViewportOverride = true;
     const delta = -event.deltaY * 0.0015;
-    const minScale = Math.max(
-      state.canvas.width / window.devicePixelRatio / state.mapSize.width,
-      state.canvas.height / window.devicePixelRatio / state.mapSize.height
-    );
+    const minScale = getMinScale();
     const newScale = clamp(state.scale * (1 + delta), minScale, 2.5);
 
     const rect = state.canvas.getBoundingClientRect();
     const mx = event.clientX - rect.left;
     const my = event.clientY - rect.top;
-    const worldBefore = toWorld(mx, my);
+    zoomAtPoint(mx, my, newScale);
+  }
 
-    state.scale = newScale;
-    const worldAfter = toWorld(mx, my);
+  function onTouchStart(event) {
+    if (!event.touches.length) return;
+    state.lastTouchAt = Date.now();
+    hideTooltip();
 
-    state.offsetX += (worldAfter.x - worldBefore.x) * state.scale;
-    state.offsetY += (worldAfter.y - worldBefore.y) * state.scale;
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      state.isPinching = false;
+      state.isPanning = true;
+      state.touchMoved = false;
+      state.hasViewportOverride = true;
+      state.panStart = { x: touch.clientX, y: touch.clientY };
+      state.viewStart = { x: state.offsetX, y: state.offsetY };
+      event.preventDefault();
+      return;
+    }
+
+    if (event.touches.length >= 2) {
+      state.hasViewportOverride = true;
+      beginPinch(event.touches[0], event.touches[1]);
+      event.preventDefault();
+    }
+  }
+
+  function onTouchMove(event) {
+    if (!event.touches.length) return;
+    state.lastTouchAt = Date.now();
+
+    if (event.touches.length >= 2) {
+      const first = event.touches[0];
+      const second = event.touches[1];
+      const distance = distanceBetweenTouches(first, second);
+      if (!state.isPinching || !state.pinchStartDistance) {
+        beginPinch(first, second);
+      }
+
+      const rect = state.canvas.getBoundingClientRect();
+      const midpoint = midpointBetweenTouches(first, second);
+      const newScale = clamp(
+        state.pinchStartScale * (distance / state.pinchStartDistance),
+        getMinScale(),
+        2.5
+      );
+      state.scale = newScale;
+      state.offsetX = midpoint.x - rect.left - (state.pinchWorldCenter?.x || 0) * newScale;
+      state.offsetY = midpoint.y - rect.top - (state.pinchWorldCenter?.y || 0) * newScale;
+      clampPan();
+      render();
+      event.preventDefault();
+      return;
+    }
+
+    if (!state.isPanning) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - state.panStart.x;
+    const dy = touch.clientY - state.panStart.y;
+    if (Math.hypot(dx, dy) > 4) state.touchMoved = true;
+    state.offsetX = state.viewStart.x + dx;
+    state.offsetY = state.viewStart.y + dy;
     clampPan();
     render();
+    event.preventDefault();
+  }
+
+  function onTouchEnd(event) {
+    state.lastTouchAt = Date.now();
+
+    if (state.isPinching && event.touches.length >= 2) {
+      beginPinch(event.touches[0], event.touches[1]);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      state.isPinching = false;
+      state.isPanning = true;
+      state.panStart = { x: touch.clientX, y: touch.clientY };
+      state.viewStart = { x: state.offsetX, y: state.offsetY };
+      state.touchMoved = true;
+      event.preventDefault();
+      return;
+    }
+
+    const changedTouch = event.changedTouches[0];
+    const shouldOpenDistrict =
+      changedTouch &&
+      !state.isPinching &&
+      state.isPanning &&
+      !state.touchMoved;
+
+    state.isPanning = false;
+    state.isPinching = false;
+
+    if (shouldOpenDistrict) {
+      const rect = state.canvas.getBoundingClientRect();
+      const point = toWorld(changedTouch.clientX - rect.left, changedTouch.clientY - rect.top);
+      const picked = pickDistrict(point.x, point.y);
+      if (picked) {
+        state.selectedId = picked.id;
+        window.Empire.selectedDistrict = picked;
+        showModal(picked);
+        render();
+      }
+    }
+
+    event.preventDefault();
+  }
+
+  function onTouchCancel() {
+    state.lastTouchAt = Date.now();
+    state.isPanning = false;
+    state.isPinching = false;
+    state.touchMoved = false;
   }
 
   function pickDistrict(x, y) {
@@ -535,11 +674,19 @@ window.Empire.Map = (() => {
     const mapW = state.mapSize.width * state.scale;
     const mapH = state.mapSize.height * state.scale;
 
-    const minX = Math.min(0, viewW - mapW);
-    const minY = Math.min(0, viewH - mapH);
+    if (mapW <= viewW) {
+      state.offsetX = (viewW - mapW) / 2;
+    } else {
+      const minX = viewW - mapW;
+      state.offsetX = clamp(state.offsetX, minX, 0);
+    }
 
-    state.offsetX = clamp(state.offsetX, minX, 0);
-    state.offsetY = clamp(state.offsetY, minY, 0);
+    if (mapH <= viewH) {
+      state.offsetY = (viewH - mapH) / 2;
+    } else {
+      const minY = viewH - mapH;
+      state.offsetY = clamp(state.offsetY, minY, 0);
+    }
   }
 
   function loadMapImage() {
@@ -579,6 +726,60 @@ window.Empire.Map = (() => {
 
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
+  }
+
+  function getMinScale() {
+    return Math.max(
+      state.canvas.width / window.devicePixelRatio / state.mapSize.width,
+      state.canvas.height / window.devicePixelRatio / state.mapSize.height
+    );
+  }
+
+  function centerMap() {
+    const viewW = state.canvas.width / window.devicePixelRatio;
+    const viewH = state.canvas.height / window.devicePixelRatio;
+    const mapW = state.mapSize.width * state.scale;
+    const mapH = state.mapSize.height * state.scale;
+    state.offsetX = (viewW - mapW) / 2;
+    state.offsetY = (viewH - mapH) / 2;
+  }
+
+  function zoomAtPoint(viewX, viewY, newScale) {
+    const worldBefore = toWorld(viewX, viewY);
+    state.scale = newScale;
+    state.offsetX = viewX - worldBefore.x * newScale;
+    state.offsetY = viewY - worldBefore.y * newScale;
+    clampPan();
+    render();
+  }
+
+  function beginPinch(firstTouch, secondTouch) {
+    const rect = state.canvas.getBoundingClientRect();
+    const midpoint = midpointBetweenTouches(firstTouch, secondTouch);
+    state.isPinching = true;
+    state.isPanning = false;
+    state.touchMoved = true;
+    state.pinchStartDistance = Math.max(distanceBetweenTouches(firstTouch, secondTouch), 1);
+    state.pinchStartScale = state.scale;
+    state.pinchWorldCenter = toWorld(midpoint.x - rect.left, midpoint.y - rect.top);
+  }
+
+  function distanceBetweenTouches(firstTouch, secondTouch) {
+    return Math.hypot(
+      secondTouch.clientX - firstTouch.clientX,
+      secondTouch.clientY - firstTouch.clientY
+    );
+  }
+
+  function midpointBetweenTouches(firstTouch, secondTouch) {
+    return {
+      x: (firstTouch.clientX + secondTouch.clientX) / 2,
+      y: (firstTouch.clientY + secondTouch.clientY) / 2
+    };
+  }
+
+  function isTouchGhost() {
+    return Date.now() - state.lastTouchAt < 500;
   }
 
   return { init, render, setDistricts, applyUpdate };

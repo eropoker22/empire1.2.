@@ -35,6 +35,15 @@ window.Empire.UI = (() => {
     { name: "Raketová věž", power: 30 }
   ];
 
+  const SETTINGS_STORAGE_KEY = "empire_settings";
+  const DEFAULT_SETTINGS = Object.freeze({
+    sound: true,
+    music: true,
+    notifications: true,
+    effectsQuality: "high",
+    language: "cs"
+  });
+
   const districtBuildingCatalog = {
     downtown: [
       "Centrální banka",
@@ -1466,9 +1475,41 @@ window.Empire.UI = (() => {
     const root = document.getElementById("settings-modal");
     const backdrop = document.getElementById("settings-modal-backdrop");
     const closeBtn = document.getElementById("settings-modal-close");
+    const saveBtn = document.getElementById("settings-save-btn");
+    const soundInput = document.getElementById("settings-sound");
+    const musicInput = document.getElementById("settings-music");
+    const notificationsInput = document.getElementById("settings-notifications");
+    const effectsQualitySelect = document.getElementById("settings-effects-quality");
+    const languageSelect = document.getElementById("settings-language");
     if (!root) return;
+
+    const applySettingsToForm = () => {
+      const settings = getSettingsState();
+      if (soundInput) soundInput.checked = settings.sound;
+      if (musicInput) musicInput.checked = settings.music;
+      if (notificationsInput) notificationsInput.checked = settings.notifications;
+      if (effectsQualitySelect) effectsQualitySelect.value = settings.effectsQuality;
+      if (languageSelect) languageSelect.value = settings.language;
+    };
+
+    const saveSettings = () => {
+      const settings = {
+        sound: Boolean(soundInput?.checked),
+        music: Boolean(musicInput?.checked),
+        notifications: Boolean(notificationsInput?.checked),
+        effectsQuality: effectsQualitySelect?.value || DEFAULT_SETTINGS.effectsQuality,
+        language: languageSelect?.value || DEFAULT_SETTINGS.language
+      };
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      root.classList.add("hidden");
+      pushEvent("Nastavení bylo uloženo.");
+    };
+
+    applySettingsToForm();
     if (backdrop) backdrop.addEventListener("click", () => root.classList.add("hidden"));
     if (closeBtn) closeBtn.addEventListener("click", () => root.classList.add("hidden"));
+    if (saveBtn) saveBtn.addEventListener("click", saveSettings);
+    root.addEventListener("settings:open", applySettingsToForm);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") root.classList.add("hidden");
     });
@@ -1954,7 +1995,20 @@ window.Empire.UI = (() => {
   function showSettingsModal() {
     const root = document.getElementById("settings-modal");
     if (!root) return;
+    root.dispatchEvent(new CustomEvent("settings:open"));
     root.classList.remove("hidden");
+  }
+
+  function getSettingsState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "null");
+      return {
+        ...DEFAULT_SETTINGS,
+        ...(parsed && typeof parsed === "object" ? parsed : {})
+      };
+    } catch {
+      return { ...DEFAULT_SETTINGS };
+    }
   }
 
   function updateEconomy(economy) {

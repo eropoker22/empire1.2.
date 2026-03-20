@@ -368,42 +368,45 @@
           <div class="modal__row">
             <span>Zvuk</span>
             <label class="toggle">
-              <input type="checkbox" checked />
+              <input id="settings-sound" type="checkbox" checked />
               <span class="toggle__track"></span>
             </label>
           </div>
           <div class="modal__row">
             <span>Hudba</span>
             <label class="toggle">
-              <input type="checkbox" checked />
+              <input id="settings-music" type="checkbox" checked />
               <span class="toggle__track"></span>
             </label>
           </div>
           <div class="modal__row">
             <span>Notifikace</span>
             <label class="toggle">
-              <input type="checkbox" checked />
+              <input id="settings-notifications" type="checkbox" checked />
               <span class="toggle__track"></span>
             </label>
           </div>
           <div class="modal__row">
             <span>Kvalita efektů</span>
             <div class="select">
-              <select>
-                <option>Vysoká</option>
-                <option>Střední</option>
-                <option>Nízká</option>
+              <select id="settings-effects-quality">
+                <option value="high">Vysoká</option>
+                <option value="medium">Střední</option>
+                <option value="low">Nízká</option>
               </select>
             </div>
           </div>
           <div class="modal__row">
             <span>Jazyk</span>
             <div class="select">
-              <select>
-                <option>Čeština</option>
-                <option>English</option>
+              <select id="settings-language">
+                <option value="cs">Čeština</option>
+                <option value="en">English</option>
               </select>
             </div>
+          </div>
+          <div class="modal__actions">
+            <button id="settings-save-btn" class="btn btn--primary" type="button">Uložit</button>
           </div>
         </div>
       </div>

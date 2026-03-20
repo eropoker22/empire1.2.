@@ -26,6 +26,7 @@ body {
     #07080f;
   min-height: 100vh;
   position: relative;
+  overflow-x: hidden;
 }
 
 body::before {
@@ -263,12 +264,14 @@ body::before {
   gap: 20px;
   padding: 24px;
   z-index: 2;
+  min-width: 0;
 }
 
 .panel {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 .card {
@@ -304,6 +307,7 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 
 .map-header {
@@ -352,6 +356,9 @@ body::before {
   border: 1px solid rgba(34, 211, 238, 0.2);
   background: rgba(8, 14, 26, 0.75);
   cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .map-tooltip {
@@ -488,6 +495,9 @@ body::before {
 }
 
 .auth-body--login {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
   position: relative;
   overflow: hidden;
   background:
@@ -594,6 +604,8 @@ body::before {
 
 .auth-shell {
   min-height: 100vh;
+  width: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1874,6 +1886,7 @@ body::before {
   display: grid;
   place-items: center;
   z-index: 60;
+  padding: 16px;
 }
 
 .modal__backdrop {
@@ -2402,10 +2415,24 @@ body::before {
 @media (max-width: 1200px) {
   .main {
     grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 18px;
   }
 
   #city-map {
     height: 520px;
+  }
+
+  .panel--left {
+    order: 2;
+  }
+
+  .map-area {
+    order: 1;
+  }
+
+  .panel--right {
+    order: 3;
   }
 
   .topbar {
@@ -2445,8 +2472,38 @@ body::before {
 }
 
 @media (max-width: 900px) {
+  .auth-shell {
+    min-height: auto;
+    justify-content: flex-start;
+    padding-bottom: 24px;
+  }
+
+  .auth-body--login .auth-shell {
+    padding-bottom: 24px;
+  }
+
+  .auth-footer--fixed {
+    position: relative;
+  }
+
+  .auth-footer {
+    padding-top: 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .auth-footer__inner {
+    width: min(100%, 92vw);
+    justify-content: center;
+  }
+
+  .auth-footer__meta {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
   .topbar__right {
     margin-top: 10px;
+    gap: 10px;
   }
 
   .topbar__stats {
@@ -2480,5 +2537,163 @@ body::before {
   .mobile-bottom-actions .nav-btn,
   .mobile-bottom-actions .topbar__logout {
     width: 100%;
+  }
+
+  .map-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .map-legend {
+    flex-wrap: wrap;
+  }
+
+  #city-map {
+    height: min(58vh, 480px);
+  }
+
+  .card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    padding: 14px 16px;
+  }
+
+  .brand {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .topbar__nav {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .topbar__right {
+    width: 100%;
+  }
+
+  .topbar__stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 10px;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .stat {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .stat--weapons {
+    grid-column: 1 / -1;
+  }
+
+  .stat__popover {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(280px, calc(100vw - 32px));
+    max-height: 40vh;
+  }
+
+  .main {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  #city-map {
+    height: min(52vh, 420px);
+    border-radius: 18px;
+  }
+
+  .round-status-card {
+    align-self: stretch;
+  }
+
+  .mobile-bottom-actions {
+    padding: 14px;
+  }
+
+  .modal__content {
+    width: min(100%, 94vw);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+
+  .modal__body {
+    min-width: 0;
+  }
+
+  .modal__row {
+    gap: 10px;
+  }
+
+  .modal__actions {
+    justify-content: stretch;
+  }
+
+  .modal__actions .btn {
+    width: 100%;
+  }
+
+  .alliance-control__row,
+  .alliance-chat__input,
+  .profile-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .alliance-control__row input,
+  .alliance-chat__input input,
+  .alliance-control__row .btn,
+  .alliance-chat__input .btn,
+  .profile-actions .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar__stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .map-header h1 {
+    font-size: 20px;
+  }
+
+  #city-map {
+    height: min(48vh, 360px);
+  }
+
+  .modal {
+    padding: 10px;
+  }
+
+  .modal__content {
+    padding: 14px;
+    max-height: calc(100dvh - 20px);
+  }
+
+  .modal__row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .modal__row .select,
+  .modal__row select,
+  .modal__row input,
+  .modal__row .toggle {
+    width: 100%;
+  }
+
+  .mobile-bottom-actions {
+    grid-template-columns: 1fr;
   }
 }
