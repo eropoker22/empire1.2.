@@ -2104,16 +2104,20 @@ body::before {
 }
 
 .buildings-modal__layout {
+  --buildings-modal-panel-height: min(68vh, 720px);
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 14px;
   margin-top: 8px;
+  align-items: stretch;
 }
 
 .buildings-modal__types,
 .buildings-modal__detail {
-  max-height: min(68vh, 720px);
-  overflow: visible;
+  height: var(--buildings-modal-panel-height);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
 }
 
 .buildings-modal__types {
@@ -2141,6 +2145,9 @@ body::before {
 }
 
 .buildings-modal__detail-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
   padding: 16px;
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.78);
@@ -2380,7 +2387,18 @@ body::before {
 
 @media (max-width: 720px) {
   .buildings-modal__layout {
+    --buildings-modal-panel-height: min(48vh, 420px);
     grid-template-columns: 1fr;
+  }
+
+  .buildings-modal__types {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .buildings-modal__detail {
+    height: var(--buildings-modal-panel-height);
   }
 
   .market-modal__toolbar {
