@@ -1,2 +1,3 @@
 [build]
+  command = "rm -rf client/img && mkdir -p client/img && cp -R img/. client/img/"
   publish = "client"
