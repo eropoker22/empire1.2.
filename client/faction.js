@@ -87,7 +87,8 @@ document.addEventListener("DOMContentLoaded", () => {
     active: false,
     moved: false,
     startX: 0,
-    startScrollLeft: 0
+    startScrollLeft: 0,
+    targetAvatar: null
   };
 
   const avatars = [
@@ -341,14 +342,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (existing) existing.remove();
       });
       item.addEventListener("click", () => {
-        if (marqueeTouchState.moved) return;
+        if (isCoarsePointer || marqueeTouchState.moved) return;
         applyAvatarSelection(src, { openPreview: true });
       });
-      item.addEventListener("touchend", (event) => {
-        if (marqueeTouchState.moved) return;
-        event.preventDefault();
-        applyAvatarSelection(src);
-      }, { passive: false });
     });
   }
 
@@ -414,10 +410,12 @@ document.addEventListener("DOMContentLoaded", () => {
       marquee.addEventListener("touchstart", (event) => {
         const touch = event.touches[0];
         if (!touch) return;
+        const targetItem = event.target instanceof Element ? event.target.closest(".avatar-item") : null;
         marqueeTouchState.active = true;
         marqueeTouchState.moved = false;
         marqueeTouchState.startX = touch.clientX;
         marqueeTouchState.startScrollLeft = marquee.scrollLeft;
+        marqueeTouchState.targetAvatar = targetItem?.dataset.avatar || null;
         hoverPause = true;
       }, { passive: true });
 
@@ -432,9 +430,17 @@ document.addEventListener("DOMContentLoaded", () => {
         marquee.scrollLeft = marqueeTouchState.startScrollLeft - deltaX;
       }, { passive: true });
 
-      const endDrag = () => {
+      const endDrag = (event) => {
+        const targetAvatar =
+          marqueeTouchState.targetAvatar ||
+          (event?.target instanceof Element ? event.target.closest(".avatar-item")?.dataset.avatar : null);
+        const shouldSelect = Boolean(targetAvatar) && !marqueeTouchState.moved;
         marqueeTouchState.active = false;
         hoverPause = false;
+        marqueeTouchState.targetAvatar = null;
+        if (shouldSelect) {
+          applyAvatarSelection(targetAvatar);
+        }
         window.setTimeout(() => {
           marqueeTouchState.moved = false;
         }, 50);
