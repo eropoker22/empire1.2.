@@ -499,7 +499,8 @@ body::before {
   flex-direction: column;
   min-height: 100dvh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     radial-gradient(circle at 20% 10%, rgba(34, 211, 238, 0.22), transparent 45%),
     radial-gradient(circle at 80% 0%, rgba(244, 114, 182, 0.22), transparent 50%),
@@ -2735,6 +2736,56 @@ body::before {
 }
 
 @media (max-width: 560px) {
+  .auth-shell {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .auth-card {
+    width: min(100%, 94vw);
+    max-width: 94vw;
+    min-height: auto;
+    padding: 20px 16px;
+  }
+
+  .auth-footer {
+    padding: 0 14px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .auth-footer__inner {
+    width: 100%;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .auth-footer__brand {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .auth-footer__logo {
+    width: 44px;
+    height: 44px;
+  }
+
+  .auth-footer__links {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .auth-footer__meta {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .auth-footer__meta span:nth-child(even) {
+    display: none;
+  }
+
   .topbar__stats {
     grid-template-columns: minmax(0, 1fr);
   }
