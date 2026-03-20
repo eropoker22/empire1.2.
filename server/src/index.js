@@ -1,0 +1,58 @@
+const http = require("http");
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+
+const { loadEnv } = require("./config/env");
+const { limiter } = require("./middleware/rateLimit");
+const { initWebSocket } = require("./ws/wsServer");
+const { runIncomeTick } = require("./jobs/incomeTick");
+const { runRoundTick } = require("./jobs/roundTick");
+
+const authRoutes = require("./routes/auth");
+const playerRoutes = require("./routes/players");
+const districtRoutes = require("./routes/districts");
+const combatRoutes = require("./routes/combat");
+const economyRoutes = require("./routes/economy");
+const marketRoutes = require("./routes/market");
+const allianceRoutes = require("./routes/alliances");
+const roundRoutes = require("./routes/rounds");
+
+loadEnv();
+
+const app = express();
+
+app.use(helmet());
+app.use(cors());
+app.use(express.json({ limit: "256kb" }));
+app.use(limiter);
+
+app.get("/health", (req, res) => {
+  res.json({ ok: true, status: "running" });
+});
+
+app.use("/auth", authRoutes);
+app.use("/players", playerRoutes);
+app.use("/districts", districtRoutes);
+app.use("/combat", combatRoutes);
+app.use("/economy", economyRoutes);
+app.use("/market", marketRoutes);
+app.use("/alliances", allianceRoutes);
+app.use("/rounds", roundRoutes);
+
+const port = Number(process.env.PORT || 3000);
+const server = http.createServer(app);
+
+initWebSocket(server);
+
+setInterval(() => {
+  runIncomeTick().catch((err) => console.error("Income tick failed", err));
+}, 60 * 60 * 1000);
+
+setInterval(() => {
+  runRoundTick().catch((err) => console.error("Round tick failed", err));
+}, 60 * 1000);
+
+server.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});

@@ -1,0 +1,13 @@
+const ROUND_DAYS = 10;
+const INCOME_TICK_MINUTES = 60;
+const ATTACK_COOLDOWN_MINUTES = 15;
+const MAX_INFLUENCE = 100;
+const MAP_SEED = "empire-city-v1";
+
+module.exports = {
+  ROUND_DAYS,
+  INCOME_TICK_MINUTES,
+  ATTACK_COOLDOWN_MINUTES,
+  MAX_INFLUENCE,
+  MAP_SEED
+};
