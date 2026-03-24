@@ -3781,7 +3781,7 @@ body::before {
     top: auto;
     transform: none;
     margin-top: 6px;
-    font-size: 30px;
+    font-size: 45px;
     line-height: 1;
   }
 
@@ -4090,7 +4090,7 @@ body::before {
 
   #stat-influence {
     margin-top: 5px;
-    font-size: 27px;
+    font-size: 41px;
   }
 
   .map-header h1 {
