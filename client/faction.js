@@ -80,6 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const lightboxCaption = document.getElementById("avatar-lightbox-caption");
   const lightboxPrev = document.getElementById("avatar-lightbox-prev");
   const lightboxNext = document.getElementById("avatar-lightbox-next");
+  const lightboxClose = document.getElementById("avatar-lightbox-close");
   const lightboxBackdrop = document.querySelector("#avatar-lightbox .avatar-lightbox__backdrop");
   const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const marquee = avatarGrid?.closest(".avatar-marquee") || null;
@@ -219,6 +220,111 @@ document.addEventListener("DOMContentLoaded", () => {
     "korporace"
   ];
 
+  const factionLegendNamePrefix = {
+    "mafián": "Don Umbra",
+    "kartel": "El Circuito",
+    "pouliční gang": "Street Wolf",
+    "tajná organizace": "Shade Proxy",
+    "hackeři": "Null Ghost",
+    "motorkářský gang": "Road Viper",
+    "soukromá armáda": "Iron Unit",
+    "korporace": "Executive Prime"
+  };
+
+  const factionLegendBios = {
+    "mafián": [
+      "Tichý vyjednavač, který kupuje loajalitu dřív, než padne první výstřel.",
+      "Pouliční účetní rodiny, co mění dluhy ve zbraň proti rivalům.",
+      "Pravá ruka dona, specialista na vydírání klubů a barů.",
+      "Nenápadný stratég, co řídí výpalné síť po celé čtvrti."
+    ],
+    "kartel": [
+      "Logistický mozek pašerácké trasy mezi přístavem a nočními sklady.",
+      "Chemik kartelu, který hlídá kvalitu i strach na ulici.",
+      "Polní velitel konvojů, co nikdy nenechá zásilku bez krytí.",
+      "Náborář kartelu, který ztracené duše mění v disciplinované jezdce."
+    ],
+    "pouliční gang": [
+      "První do útoku, poslední na ústup. Ulice ho respektují i nenávidí.",
+      "Graffiti taktik, který značkuje sektory dřív než přijede policie.",
+      "Rychlý runner, co zná každou zadní uličku ve Vortex City.",
+      "Charismatický provokatér, který dokáže z davu udělat armádu."
+    ],
+    "tajná organizace": [
+      "Operativní stín, který sbírá kompromitující data na politiky.",
+      "Mistr infiltrace, co mění cizí pevnosti ve vlastní spící buňky.",
+      "Analytik chaosu, který předvídá pohyb gangů o dva kroky dopředu.",
+      "Nenápadný manipulátor, který tahá za nitky přes prostředníky."
+    ],
+    "hackeři": [
+      "Síťový predátor, co láme zabezpečení městské infrastruktury v reálném čase.",
+      "Specialistka na finanční průniky, která čistí účty rivalů na dálku.",
+      "Architekt malwaru, co vypíná kamery přesně před útokem.",
+      "Datový kurýr, který přenáší tajemství mezi gangy za nejvyšší nabídku."
+    ],
+    "motorkářský gang": [
+      "Velitel kolon, který proměňuje dálnice v nepřátelské území.",
+      "Mechanik-válečník, co staví rychlé stroje i mobilní obranné pasti.",
+      "Průzkumník hranic, který první mapuje nové sektory pro gang.",
+      "Noční jezdkyně, co koordinuje útoky mezi přístavem a průmyslem."
+    ],
+    "soukromá armáda": [
+      "Bývalý instruktor elit, co vede městské operace s vojenskou přesností.",
+      "Specialista na obranné linie, který mění sektor v pevnost.",
+      "Taktická spojka, co synchronizuje útoky dronů a pozemních jednotek.",
+      "Kontraktor bez emocí, který měří hodnotu cíle čistě výsledkem."
+    ],
+    "korporace": [
+      "Firemní vyjednavač, který kupuje radnice i policejní ticho.",
+      "Investiční predátor, co převádí krizové zóny do portfolia korporace.",
+      "Manažer vlivu, který vyrábí reputaci i skandály na objednávku.",
+      "Ředitel expanze, co mění město v tabulku aktiv a ztrát."
+    ]
+  };
+
+  const factionLegendMotivations = {
+    "mafián": [
+      "Chce sjednotit podsvětí pod jednu rodinu a vybírat desátek z každé ulice Vortex City.",
+      "Touží ovládnout radnici přes dluhy a udělat z města soukromý trezor rodiny.",
+      "Věří, že jen pevná ruka mafie udrží v chaosu pořádek a zisk."
+    ],
+    "kartel": [
+      "Chce ovládnout přístav a letiště, aby každý tok zboží vedl přes kartel.",
+      "Touží proměnit Vortex City v hlavní uzel černého trhu celého regionu.",
+      "Vítězství znamená kontrolu cen drog, zbraní i tras bez cizího zásahu."
+    ],
+    "pouliční gang": [
+      "Chce dokázat, že ulice patří těm, kdo je brání, ne těm, kdo je kupují.",
+      "Touží sjednotit rozdělené bloky pod jednu barvu a jednu vlajku.",
+      "Ovládnutím města chce dát své partě respekt, který jim byl vždy upírán."
+    ],
+    "tajná organizace": [
+      "Chce ovládnout Vortex City ze stínu a rozhodovat o válkách bez otevřeného boje.",
+      "Touží držet kompromitující materiály na každého mocného hráče ve městě.",
+      "Kontrola města je cesta k absolutní informační převaze."
+    ],
+    "hackeři": [
+      "Chce přepsat digitální pravidla města a přesměrovat jeho finance pod vlastní kontrolu.",
+      "Touží vypnout infrastrukturu rivalům jediným příkazem.",
+      "Ovládnutí Vortex City znamená mít přístup ke každému systému i tajemství."
+    ],
+    "motorkářský gang": [
+      "Chce držet všechny dopravní tepny města a rozhodovat, kdo projede a kdo zmizí.",
+      "Touží udělat z Vortex City teritorium, kde rychlost znamená moc.",
+      "Kontrola města je pro gang svoboda bez hranic a bez cizích pravidel."
+    ],
+    "soukromá armáda": [
+      "Chce proměnit město v pevnost řízenou disciplínou a vojenským řádem.",
+      "Touží ovládnout klíčovou infrastrukturu a prodávat bezpečí za vlastní podmínky.",
+      "Vítězství ve Vortex City je důkaz, že profesionální síla porazí každý gang."
+    ],
+    "korporace": [
+      "Chce převzít město ekonomicky a změnit gangy v dodavatele korporátní moci.",
+      "Touží ovládnout média, burzu i politiku a přepsat pravidla ve svůj prospěch.",
+      "Kontrola Vortex City je pro korporaci vstupenka k regionálnímu monopolu."
+    ]
+  };
+
   const gangColorOptions = [
     { name: "Červená", value: "#ef4444" },
     { name: "Modrá", value: "#3b82f6" },
@@ -270,6 +376,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (/^#[0-9a-f]{6}$/.test(raw)) return raw;
     return null;
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function buildFactionAvatarPools(avatarList, factionKeys, maxPerFaction) {
@@ -358,6 +473,23 @@ document.addEventListener("DOMContentLoaded", () => {
     return "Neznámý agent";
   }
 
+  function resolveAvatarLegend(src) {
+    const avatars = getAvailableAvatars();
+    const index = avatars.indexOf(src);
+    const idx = index >= 0 ? index : 0;
+    const factionKey = selectedStructure && data[selectedStructure] ? selectedStructure : null;
+    const prefix = factionLegendNamePrefix[factionKey] || "Agent";
+    const bioPool = factionLegendBios[factionKey] || ["Neznámá postava, která čeká na svůj příběh."];
+    const motivePool = factionLegendMotivations[factionKey] || [
+      "Chce přežít ve Vortex City a získat vlastní místo u moci."
+    ];
+    return {
+      name: `${prefix} ${idx + 1}`,
+      bio: bioPool[idx % bioPool.length],
+      motivation: motivePool[idx % motivePool.length]
+    };
+  }
+
   function isLightboxOpen() {
     return Boolean(lightbox && !lightbox.classList.contains("hidden"));
   }
@@ -374,7 +506,14 @@ document.addEventListener("DOMContentLoaded", () => {
     lightboxImg.src = src;
     lightboxImg.dataset.avatar = src || "";
     if (lightboxCaption) {
-      lightboxCaption.textContent = getAvatarLabel(src);
+      const legend = resolveAvatarLegend(src);
+      lightboxCaption.innerHTML = `
+        <div class="avatar-lightbox__legend-name">${escapeHtml(legend.name)}</div>
+        <div class="avatar-lightbox__legend-bio">${escapeHtml(legend.bio)}</div>
+        <div class="avatar-lightbox__legend-motive">
+          <strong>Motivace:</strong> ${escapeHtml(legend.motivation)}
+        </div>
+      `;
     }
     lightbox.classList.remove("hidden");
     updateLightboxNavigation();
@@ -710,6 +849,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (lightboxBackdrop) {
     lightboxBackdrop.addEventListener("click", closeLightbox);
+  }
+
+  if (lightboxClose) {
+    lightboxClose.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeLightbox();
+    });
+    lightboxClose.addEventListener("touchend", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeLightbox();
+    }, { passive: false });
   }
 
   if (lightboxPrev) {
