@@ -123,12 +123,90 @@ window.Empire.CityGen = (() => {
       a.angle === b.angle ? a.dist - b.dist : a.angle - b.angle
     );
 
-    const cycle = ["residential", "industrial", "commercial", "park"];
+    const nonDowntownTargets = {
+      residential: 42,
+      industrial: 36,
+      commercial: 30,
+      park: 34
+    };
+    const typeOrder = ["residential", "industrial", "commercial", "park"];
+    const typePlan = buildBalancedTypePlan(remaining.length, nonDowntownTargets, typeOrder);
+
     for (let i = 0; i < remaining.length; i += 1) {
-      typeMap.set(remaining[i].id, cycle[i % cycle.length]);
+      typeMap.set(remaining[i].id, typePlan[i] || "residential");
     }
 
     return typeMap;
+  }
+
+  function buildBalancedTypePlan(total, targets, order) {
+    if (!Number.isFinite(total) || total <= 0) return [];
+    const normalizedOrder = Array.isArray(order) ? order.filter(Boolean) : [];
+    if (!normalizedOrder.length) return [];
+
+    const baseCounts = normalizedOrder.map((type) =>
+      Math.max(0, Math.floor(Number(targets?.[type]) || 0))
+    );
+    const baseTotal = baseCounts.reduce((sum, count) => sum + count, 0);
+
+    let counts = [];
+    if (baseTotal > 0) {
+      if (baseTotal === total) {
+        counts = [...baseCounts];
+      } else {
+        const scale = total / baseTotal;
+        counts = baseCounts.map((count) => Math.floor(count * scale));
+        let assigned = counts.reduce((sum, count) => sum + count, 0);
+
+        const fractions = baseCounts
+          .map((count, index) => ({
+            index,
+            frac: count * scale - Math.floor(count * scale)
+          }))
+          .sort((a, b) => b.frac - a.frac);
+
+        let cursor = 0;
+        while (assigned < total && fractions.length) {
+          const targetIndex = fractions[cursor % fractions.length].index;
+          counts[targetIndex] += 1;
+          assigned += 1;
+          cursor += 1;
+        }
+
+        while (assigned > total) {
+          const removeIndex = counts.findIndex((count) => count > 0);
+          if (removeIndex === -1) break;
+          counts[removeIndex] -= 1;
+          assigned -= 1;
+        }
+      }
+    } else {
+      counts = normalizedOrder.map(() => 0);
+      for (let i = 0; i < total; i += 1) {
+        counts[i % counts.length] += 1;
+      }
+    }
+
+    const remainingCounts = [...counts];
+    const plan = [];
+    let guard = 0;
+    while (plan.length < total && guard < total * 20) {
+      let placed = false;
+      for (let i = 0; i < normalizedOrder.length && plan.length < total; i += 1) {
+        if (remainingCounts[i] <= 0) continue;
+        plan.push(normalizedOrder[i]);
+        remainingCounts[i] -= 1;
+        placed = true;
+      }
+      if (!placed) break;
+      guard += 1;
+    }
+
+    while (plan.length < total) {
+      plan.push(normalizedOrder[0]);
+    }
+
+    return plan;
   }
 
   function baseIncome(type) {

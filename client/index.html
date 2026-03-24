@@ -21,11 +21,11 @@
         </div>
         <div class="topbar__right">
           <div class="topbar__stats">
-            <div class="stat">
+            <div class="stat" id="stat-clean-wrap">
               <span class="stat__label">Čisté peníze</span>
               <span class="stat__value" id="stat-clean-money">$0</span>
             </div>
-            <div class="stat">
+            <div class="stat" id="stat-dirty-wrap">
               <span class="stat__label">Špinavé peníze</span>
               <span class="stat__value" id="stat-dirty-money">$0</span>
             </div>
@@ -533,7 +533,7 @@
         </div>
         <div class="modal__body">
           <div class="weapons-modal__hint">
-            Vyber typ distriktu a vpravo se zobrazí dostupné budovy.
+            Postup: Distrikt -> typ budovy -> konkrétní jméno budovy.
           </div>
           <div class="buildings-modal__layout">
             <div class="buildings-modal__types" id="buildings-type-list"></div>

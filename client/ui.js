@@ -64,6 +64,7 @@ window.Empire.UI = (() => {
     commercial: [
       "Obchodní centrum",
       "Restaurace",
+      "Herna",
       "Lékárna",
       "Kasino",
       "Autosalon",
@@ -76,6 +77,7 @@ window.Empire.UI = (() => {
       "Rekrutační centrum",
       "Brainwash centrum",
       "Garage",
+      "Taxi služba",
       "Klinika",
       "Škola"
     ],
@@ -110,6 +112,299 @@ window.Empire.UI = (() => {
     park: "../img/park/1.png",
     downtown: "../img/downtown/1.png"
   };
+
+  const namedCommercialMalls = [
+    "Neon Mall",
+    "Iron Market Plaza",
+    "Karina shopping center"
+  ];
+
+  const namedCommercialRestaurants = [
+    "Neon Bite",
+    "Black Plate",
+    "Street Fuel",
+    "Blood & Grill",
+    "Midnight Diner",
+    "Iron Taste",
+    "Shadow Kitchen",
+    "Dirty Spoon",
+    "Vice Kitchen",
+    "Urban Hunger",
+    "Smoke & Meat",
+    "The Last Bite",
+    "Gangster Grill",
+    "Concrete Kitchen",
+    "Dark Appetite",
+    "Night Feast",
+    "The Hungry Syndicate",
+    "Rusty Fork",
+    "Back Alley Bistro",
+    "Sinful Kitchen",
+    "Underground Taste",
+    "Savage Kitchen",
+    "Chrome Diner",
+    "Heat Kitchen",
+    "No Mercy Meals",
+    "Broken Plate",
+    "Elite Hunger"
+  ];
+
+  const namedCommercialPharmacies = [
+    "Neon Medics",
+    "Pulse Pharmacy",
+    "Black Cross Pharma",
+    "Street Remedy",
+    "NightCare Clinic",
+    "Iron Vein Pharmacy",
+    "QuickFix Med",
+    "Shadow Medics",
+    "Urban Cure",
+    "Last Chance Pharmacy"
+  ];
+
+  const namedCommercialAutoSalons = [
+    "Neon Motors",
+    "Iron Wheels Garage",
+    "Blackline Autos",
+    "Street Kings Motors",
+    "Midnight Drive Showroom",
+    "Chrome Syndicate Cars",
+    "Ghost Ride Autos",
+    "Velocity X Garage"
+  ];
+
+  const namedCommercialFitnessClubs = [
+    "Iron District Gym",
+    "Beast Factory",
+    "Street Power Club",
+    "No Mercy Fitness"
+  ];
+
+  const namedCommercialOfficeBlocks = [
+    "Iron Tower Offices",
+    "Blackline Corporate Hub",
+    "Neon Business Center",
+    "Vortex Office Complex",
+    "Skyline Syndicate Offices",
+    "ShadowCorp Tower"
+  ];
+
+  const namedCommercialExchanges = [
+    "ZeroSum Vault",
+    "Neon Arbitrage",
+    "Phantom Rates",
+    "Cashflow Mirage",
+    "Obsidian Exchange",
+    "Flux Currency Lab",
+    "DeadDrop Finance",
+    "Parallax Exchange",
+    "Ghost Ledger",
+    "Black Circuit Exchange"
+  ];
+
+  const namedCommercialArcades = [
+    "Neon Jackpots",
+    "Lucky Circuit",
+    "Black Reel Club",
+    "Midnight Slots",
+    "Spin Syndicate",
+    "Velvet Jackpot Lounge",
+    "Ghost Spin Arcade"
+  ];
+
+  const namedCommercialCasinos = [
+    "Dominion Prime Casino",
+    "High Rollers Sanctum",
+    "Velvet Eric XxX"
+  ];
+
+  const namedIndustrialDataCenters = [
+    "NeuroGrid Core",
+    "Black Node Nexus",
+    "DataForge Complex",
+    "Synapse Vault",
+    "Quantum Relay Hub",
+    "GhostNet Core",
+    "Iron Pulse Servers",
+    "DeepCode Facility",
+    "CipherStack Center",
+    "Neon Matrix Node"
+  ];
+
+  const namedIndustrialPowerStations = [
+    "Neon Power Grid",
+    "IronVolt Station",
+    "BlackCore Energy",
+    "Pulse Reactor",
+    "Voltage Nexus",
+    "Dark Energy Hub",
+    "GridLock Station",
+    "Quantum Power Plant",
+    "Overcharge Facility",
+    "ThunderCore Station",
+    "Nova Energy Complex",
+    "Static Surge Plant",
+    "Flux Power Systems",
+    "Obsidian Reactor",
+    "HyperGrid Control"
+  ];
+
+  const namedIndustrialStorages = [
+    "IronVault Storage",
+    "BlackCrate Depot",
+    "Shadow Storage Hub",
+    "CargoCore Warehouse",
+    "Ghost Stockpile",
+    "SteelBox Depot",
+    "NightStorage Facility",
+    "Hidden Goods Warehouse",
+    "VaultLine Storage",
+    "Obsidian Depot",
+    "DeadDrop Warehouse",
+    "Lockdown Storage",
+    "Backroom Stockpile",
+    "SecureHold Facility"
+  ];
+
+  const namedIndustrialFactories = [
+    "IronWorks Factory",
+    "BlackSmoke Industries",
+    "RustCore Plant",
+    "SteelPulse Factory",
+    "GrimeWorks Facility",
+    "DarkForge Industrial",
+    "Vortex Manufacturing",
+    "HeavyGear Plant",
+    "SmokeLine Industries",
+    "Obsidian Production",
+    "Dust & Steel Works",
+    "NightShift Factory",
+    "CoreMechanix Plant",
+    "Ashline Industries",
+    "BruteForce Manufacturing",
+    "IronClad Works",
+    "GritFactory Complex",
+    "SteelHive Plant",
+    "ToxicFlow Industries",
+    "ShadowMachina Works",
+    "HyperSteel Production",
+    "GrindCore Factory",
+    "MassDrive Industries",
+    "DirtyWorks Plant",
+    "Overload Manufacturing"
+  ];
+
+  const namedIndustrialArmories = [
+    "Iron Arsenal",
+    "BlackForge Armory",
+    "WarCore Factory",
+    "Steel Reaper Works",
+    "Crimson Armory",
+    "Bullet Syndicate",
+    "Deadshot Industries",
+    "Obsidian Weapons Lab",
+    "Vortex Arms Facility",
+    "Nightfall Armory",
+    "RapidFire Complex",
+    "HellTrigger Works",
+    "Ghost Weapon Systems",
+    "Bloodline Arsenal",
+    "Savage Arms Co.",
+    "Zero Mercy Armory",
+    "Titan Forge Weapons",
+    "DarkSteel Industries",
+    "Recoil Factory",
+    "Phantom Arms Lab",
+    "Iron Rain Arsenal"
+  ];
+
+  const namedResidentialBrainwashCenters = [
+    "NeuroControl Lab",
+    "MindHack Facility",
+    "BlackMind Institute",
+    "Synapse Override Center",
+    "GhostMind Program",
+    "PsyCore Lab",
+    "Oblivion Mind Center",
+    "Neural Dominion Hub",
+    "ThoughtForge Facility",
+    "Cortex Manipulation Lab"
+  ];
+
+  const namedResidentialApartmentBlocks = Array.from(
+    { length: 36 },
+    (_, index) => `Blok ${index + 1}`
+  );
+
+  const namedResidentialGarages = [
+    "Iron Garage",
+    "Street Wheels Hub",
+    "BlackTorque Garage",
+    "Ghost Garage",
+    "NightRide Workshop",
+    "SteelDrive Garage",
+    "BackAlley Garage",
+    "Velocity Garage",
+    "Shadow Wheels"
+  ];
+
+  const namedResidentialClinics = [
+    "NightCare Clinic",
+    "BlackCross Medical",
+    "PulseFix Clinic",
+    "StreetMed Center",
+    "Iron Health Unit",
+    "GhostCare Facility",
+    "RapidAid Clinic",
+    "ShadowMed Center",
+    "LastHope Clinic",
+    "Urban Recovery"
+  ];
+
+  const namedResidentialRecruitCenters = [
+    "Iron Recruit Hub",
+    "Street Army Center",
+    "BlackFlag Recruitment",
+    "Shadow Enlistment",
+    "Warborn Center",
+    "Ghost Recruit Station",
+    "Bloodline Recruitment",
+    "Urban Soldiers Hub",
+    "Vortex Recruit Base",
+    "Frontline Enlistment",
+    "No Mercy Recruitment"
+  ];
+
+  const namedResidentialSchools = [
+    "Street Academy",
+    "Neon Learning Center",
+    "Urban Knowledge Hub",
+    "IronMind School",
+    "Shadow Education",
+    "Vortex Academy",
+    "CoreSkill Institute",
+    "Future Minds School",
+    "BlackBoard Academy",
+    "City Knowledge Center",
+    "BrainCore School",
+    "NextGen Academy",
+    "StreetWise Institute",
+    "LogicLab School"
+  ];
+
+  const namedResidentialTaxiServices = [
+    "NightRide Taxi",
+    "Neon Cab Co.",
+    "GhostDrive Taxi",
+    "StreetMove Transport",
+    "RapidRide Taxi",
+    "Shadow Cab Service",
+    "Urban Wheels Taxi",
+    "BlackRoute Taxi",
+    "Velocity Cab",
+    "Backstreet Taxi",
+    "FlashRide Taxi"
+  ];
 
   const commercialDistrictPools = {
     early: [
@@ -1412,6 +1707,10 @@ window.Empire.UI = (() => {
 
     if (!root || !openBtn || !typeList || !detail || !content) return;
 
+    let currentRenderedEntries = [];
+    let activeDistrictType = buildingDistrictTypes[0]?.key || "commercial";
+    const selectedBuildingTypeByDistrict = new Map();
+
     const closeModal = () => {
       root.classList.add("hidden");
     };
@@ -1431,6 +1730,12 @@ window.Empire.UI = (() => {
     const renderDetail = (typeKey) => {
       const selected = buildingDistrictTypes.find((type) => type.key === typeKey) || buildingDistrictTypes[0];
       const backgroundImage = districtTypeBackgrounds[selected.key] || "";
+      const detailState = renderDistrictTypeDetail(selected.key, selectedBuildingTypeByDistrict.get(selected.key));
+      currentRenderedEntries = detailState.entries;
+      if (detailState.selectedBaseName) {
+        selectedBuildingTypeByDistrict.set(selected.key, detailState.selectedBaseName);
+      }
+      activeDistrictType = selected.key;
 
       content.classList.toggle("buildings-modal__content--with-bg", Boolean(backgroundImage));
       content.style.backgroundImage = backgroundImage
@@ -1441,12 +1746,12 @@ window.Empire.UI = (() => {
         <section class="buildings-modal__detail-card">
           <div class="buildings-modal__detail-title">${selected.label}</div>
           <div class="buildings-modal__detail-meta">${formatDistrictType(selected.key)}</div>
-          ${renderDistrictTypeDetail(selected.key)}
+          ${detailState.markup}
         </section>
       `;
     };
 
-    const renderBuildings = (selectedType = buildingDistrictTypes[0].key) => {
+    const renderBuildings = (selectedType = activeDistrictType) => {
       renderTypes(selectedType);
       renderDetail(selectedType);
     };
@@ -1467,21 +1772,38 @@ window.Empire.UI = (() => {
     detail.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
-      const button = target.closest("[data-building-name]");
+
+      const typeButton = target.closest("[data-building-base-name]");
+      if (typeButton instanceof HTMLElement) {
+        if (typeButton.hasAttribute("data-building-locked")) {
+          pushEvent("Typ budovy je zamčený. V tomto stavu ho nevlastníš.");
+          return;
+        }
+        const selectedBaseName = typeButton.dataset.buildingBaseName;
+        if (!selectedBaseName) return;
+        selectedBuildingTypeByDistrict.set(activeDistrictType, selectedBaseName);
+        renderDetail(activeDistrictType);
+        return;
+      }
+
+      const button = target.closest("[data-building-entry-index]");
       if (!(button instanceof HTMLElement)) return;
       if (button.hasAttribute("data-building-locked")) {
         pushEvent("Budova je zamčená. Tento typ distriktu v ukázkovém stavu nevlastníš.");
         return;
       }
-      const buildingName = button.dataset.buildingName;
-      const districtType = button.dataset.buildingType || buildingDistrictTypes[0].key;
-      if (!buildingName) return;
+      const entryIndex = Number(button.dataset.buildingEntryIndex);
+      const entry = currentRenderedEntries[entryIndex];
+      if (!entry) return;
       const pseudoDistrict = {
-        id: hashDistrictSeed(buildingName, districtType.length),
-        type: districtType
+        id: entry.districtId,
+        type: entry.districtType
       };
+      const detailInput = entry.variantName
+        ? { baseName: entry.baseName, variantName: entry.variantName }
+        : entry.baseName;
       if (window.Empire.Map?.showBuildingDetail) {
-        window.Empire.Map.showBuildingDetail(buildingName, pseudoDistrict);
+        window.Empire.Map.showBuildingDetail(detailInput, pseudoDistrict);
       }
     });
     if (backdrop) backdrop.addEventListener("click", closeModal);
@@ -1501,32 +1823,152 @@ window.Empire.UI = (() => {
     ];
   }
 
-  function renderDistrictTypeDetail(typeKey) {
-    const buildings = resolveBuildingsForDistrictType(typeKey);
-    const lockContext = resolveBuildingsLockContext(typeKey);
-    return `
-      <div class="buildings-modal__building-grid">
-        ${buildings
+  function renderDistrictTypeDetail(typeKey, selectedBaseName) {
+    const entries = resolveBuildingEntriesForDistrictType(typeKey);
+    if (!entries.length) {
+      return {
+        entries: [],
+        selectedBaseName: null,
+        markup: '<div class="buildings-modal__empty">Pro tento typ zatím nejsou dostupné budovy.</div>'
+      };
+    }
+
+    const groupedByType = new Map();
+    entries.forEach((entry) => {
+      const key = String(entry.baseName || "Neznámá budova");
+      if (!groupedByType.has(key)) {
+        groupedByType.set(key, {
+          baseName: key,
+          count: 0,
+          unlocked: false
+        });
+      }
+      const group = groupedByType.get(key);
+      group.count += 1;
+      group.unlocked = group.unlocked || Boolean(entry.unlocked);
+    });
+
+    const baseTypes = Array.from(groupedByType.values()).sort((a, b) =>
+      a.baseName.localeCompare(b.baseName, "cs", { sensitivity: "base" })
+    );
+    const activeBaseName = baseTypes.some((item) => item.baseName === selectedBaseName)
+      ? selectedBaseName
+      : baseTypes[0].baseName;
+    const scopedEntries = entries
+      .filter((entry) => entry.baseName === activeBaseName)
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, "cs", { sensitivity: "base" }));
+
+    return {
+      entries: scopedEntries,
+      selectedBaseName: activeBaseName,
+      markup: `
+      <div class="buildings-modal__group">
+        <div class="buildings-modal__group-title">Krok 1 • Typ budovy</div>
+        <div class="buildings-modal__building-grid">
+          ${baseTypes
+            .map((item) => {
+              const activeClass = item.baseName === activeBaseName ? " is-active" : "";
+              return `
+                <button
+                  class="buildings-modal__building buildings-modal__building--interactive${activeClass}${item.unlocked ? "" : " buildings-modal__building--locked"}"
+                  type="button"
+                  data-building-base-name="${item.baseName}"
+                  ${item.unlocked ? "" : 'data-building-locked="1" disabled aria-disabled="true"'}
+                >
+                  <span>${item.baseName}</span>
+                  <span>${item.count}x</span>
+                </button>
+              `;
+            })
+            .join("")}
+        </div>
+      </div>
+      <div class="buildings-modal__group">
+        <div class="buildings-modal__group-title">Krok 2 • Vyber konkrétní budovu</div>
+        <div class="buildings-modal__building-grid">
+          ${scopedEntries
           .map(
-            (building) => {
-              const isUnlocked = !lockContext.enforceLocks || lockContext.unlockedBuildings.has(normalizeOwnerName(building));
+            (entry, index) => {
               return `
               <button
-                class="buildings-modal__building buildings-modal__building--interactive${isUnlocked ? "" : " buildings-modal__building--locked"}"
+                class="buildings-modal__building buildings-modal__building--interactive${entry.unlocked ? "" : " buildings-modal__building--locked"}"
                 type="button"
-                data-building-name="${building}"
+                data-building-entry-index="${index}"
                 data-building-type="${typeKey}"
-                ${isUnlocked ? "" : 'data-building-locked="1" disabled aria-disabled="true"'}
+                ${entry.unlocked ? "" : 'data-building-locked="1" disabled aria-disabled="true"'}
               >
-                <span>${building}</span>
-                ${isUnlocked ? "" : '<span class="buildings-modal__lock">LOCKED</span>'}
+                <span>${entry.displayName}</span>
+                ${entry.unlocked ? "" : '<span class="buildings-modal__lock">LOCKED</span>'}
               </button>
             `;
             }
           )
           .join("")}
+        </div>
       </div>
-    `;
+    `
+    };
+  }
+
+  function resolveBuildingEntriesForDistrictType(typeKey) {
+    const ownedEntries = resolveOwnedBuildingEntriesForDistrictType(typeKey);
+    if (ownedEntries.length) return ownedEntries;
+
+    const buildings = resolveBuildingsForDistrictType(typeKey);
+    const lockContext = resolveBuildingsLockContext(typeKey);
+    return buildings.map((building) => {
+      const baseName = String(building || "Neznámá budova");
+      const isUnlocked = !lockContext.enforceLocks || lockContext.unlockedBuildings.has(normalizeOwnerName(baseName));
+      return {
+        baseName,
+        variantName: null,
+        displayName: baseName,
+        districtType: typeKey,
+        districtId: hashDistrictSeed(baseName, typeKey.length),
+        unlocked: isUnlocked
+      };
+    });
+  }
+
+  function resolveOwnedBuildingEntriesForDistrictType(typeKey) {
+    const playerNames = getPlayerOwnerNameSet();
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const entries = [];
+
+    districts.forEach((district) => {
+      if (district.type !== typeKey) return;
+      const owner = normalizeOwnerName(district.owner);
+      if (!owner || !playerNames.has(owner)) return;
+
+      const districtLabel = String(district.name || `${formatDistrictType(typeKey)} ${district.id || "?"}`);
+      const buildings = Array.isArray(district.buildings) ? district.buildings : [];
+      buildings.forEach((building, index) => {
+        const baseName = String(building || "Neznámá budova");
+        const named = resolveDistrictBuildingDisplayName(district, index, baseName, districtLabel);
+        const variantName = named !== baseName ? named : null;
+        entries.push({
+          baseName,
+          variantName,
+          displayName: named,
+          districtType: typeKey,
+          districtId: Number.isFinite(Number(district.id))
+            ? Number(district.id)
+            : hashDistrictSeed(`${districtLabel}:${baseName}`, index),
+          unlocked: true
+        });
+      });
+    });
+
+    return entries;
+  }
+
+  function resolveDistrictBuildingDisplayName(district, index, baseName, districtLabel) {
+    const overrides = Array.isArray(district?.buildingNameOverrides) ? district.buildingNameOverrides : [];
+    const override = overrides[index];
+    if (typeof override === "string" && override.trim()) {
+      return override.trim();
+    }
+    return `${baseName} • ${districtLabel}`;
   }
 
   function resolveBuildingsLockContext(typeKey) {
@@ -1562,6 +2004,7 @@ window.Empire.UI = (() => {
     const nextDistricts = districts.map((district) => ({
       ...district,
       buildings: Array.isArray(district.buildings) ? district.buildings : [],
+      buildingNameOverrides: Array.isArray(district.buildingNameOverrides) ? [...district.buildingNameOverrides] : [],
       buildingTier: district.buildingTier || null,
       buildingSetKey: district.buildingSetKey || null,
       buildingSetTitle: district.buildingSetTitle || null
@@ -1598,8 +2041,315 @@ window.Empire.UI = (() => {
       tiers: ["mid", "high", "core"],
       ratios: { low: 0.4, high: 0.25 }
     });
+    rebalanceCommercialArcades(nextDistricts, 7);
+    rebalanceResidentialTaxi(nextDistricts, {
+      removeBrainwash: 11,
+      addTaxi: 11
+    });
+    rebalanceIndustrialStorage(nextDistricts, {
+      removeStorage: 12,
+      addArmories: 6,
+      addFactories: 6
+    });
+    assignCommercialMallNames(nextDistricts);
+    assignCommercialRestaurantNames(nextDistricts);
+    assignCommercialPharmacyNames(nextDistricts);
+    assignCommercialAutoSalonNames(nextDistricts);
+    assignCommercialFitnessClubNames(nextDistricts);
+    assignCommercialOfficeBlockNames(nextDistricts);
+    assignCommercialExchangeNames(nextDistricts);
+    assignCommercialArcadeNames(nextDistricts);
+    assignCommercialCasinoNames(nextDistricts);
+    assignIndustrialDataCenterNames(nextDistricts);
+    assignIndustrialPowerStationNames(nextDistricts);
+    assignIndustrialStorageNames(nextDistricts);
+    assignIndustrialFactoryNames(nextDistricts);
+    assignIndustrialArmoryNames(nextDistricts);
+    assignResidentialBrainwashNames(nextDistricts);
+    assignResidentialApartmentBlockNames(nextDistricts);
+    assignResidentialGarageNames(nextDistricts);
+    assignResidentialClinicNames(nextDistricts);
+    assignResidentialRecruitNames(nextDistricts);
+    assignResidentialSchoolNames(nextDistricts);
+    assignResidentialTaxiNames(nextDistricts);
 
     return nextDistricts;
+  }
+
+  function assignCommercialMallNames(districts) {
+    assignNamedCommercialBuildings(districts, "Obchodní centrum", namedCommercialMalls);
+  }
+
+  function assignCommercialRestaurantNames(districts) {
+    assignNamedCommercialBuildings(districts, "Restaurace", namedCommercialRestaurants);
+  }
+
+  function assignCommercialPharmacyNames(districts) {
+    assignNamedCommercialBuildings(districts, "Lékárna", namedCommercialPharmacies);
+  }
+
+  function assignCommercialAutoSalonNames(districts) {
+    assignNamedCommercialBuildings(districts, "Autosalon", namedCommercialAutoSalons);
+  }
+
+  function assignCommercialFitnessClubNames(districts) {
+    assignNamedCommercialBuildings(districts, "Fitness club", namedCommercialFitnessClubs);
+  }
+
+  function assignCommercialOfficeBlockNames(districts) {
+    assignNamedCommercialBuildings(districts, "Kancelářský blok", namedCommercialOfficeBlocks);
+  }
+
+  function assignCommercialExchangeNames(districts) {
+    assignNamedCommercialBuildings(districts, "Směnárna", namedCommercialExchanges);
+  }
+
+  function assignCommercialArcadeNames(districts) {
+    assignNamedCommercialBuildings(districts, "Herna", namedCommercialArcades);
+  }
+
+  function assignCommercialCasinoNames(districts) {
+    assignNamedCommercialBuildings(districts, "Kasino", namedCommercialCasinos);
+  }
+
+  function assignIndustrialDataCenterNames(districts) {
+    assignNamedIndustrialBuildings(districts, "Datové centrum", namedIndustrialDataCenters);
+  }
+
+  function assignIndustrialPowerStationNames(districts) {
+    assignNamedIndustrialBuildings(districts, "Energetická stanice", namedIndustrialPowerStations);
+  }
+
+  function assignIndustrialStorageNames(districts) {
+    assignNamedIndustrialBuildings(districts, "Sklad", namedIndustrialStorages);
+  }
+
+  function assignIndustrialFactoryNames(districts) {
+    assignNamedIndustrialBuildings(districts, "Továrna", namedIndustrialFactories);
+  }
+
+  function assignIndustrialArmoryNames(districts) {
+    assignNamedIndustrialBuildings(districts, "Zbrojovka", namedIndustrialArmories);
+  }
+
+  function assignResidentialBrainwashNames(districts) {
+    assignNamedResidentialBuildings(districts, "Brainwash centrum", namedResidentialBrainwashCenters);
+  }
+
+  function assignResidentialApartmentBlockNames(districts) {
+    assignNamedResidentialBuildings(districts, "Bytový blok", namedResidentialApartmentBlocks);
+  }
+
+  function assignResidentialGarageNames(districts) {
+    assignNamedResidentialBuildings(districts, "Garage", namedResidentialGarages);
+  }
+
+  function assignResidentialClinicNames(districts) {
+    assignNamedResidentialBuildings(districts, "Klinika", namedResidentialClinics);
+  }
+
+  function assignResidentialRecruitNames(districts) {
+    assignNamedResidentialBuildings(districts, "Rekrutační centrum", namedResidentialRecruitCenters);
+  }
+
+  function assignResidentialSchoolNames(districts) {
+    assignNamedResidentialBuildings(districts, "Škola", namedResidentialSchools);
+  }
+
+  function assignResidentialTaxiNames(districts) {
+    assignNamedResidentialBuildings(districts, "Taxi služba", namedResidentialTaxiServices);
+  }
+
+  function assignNamedCommercialBuildings(districts, buildingName, customNames) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    if (!Array.isArray(customNames) || !customNames.length) return;
+    const targets = districts
+      .filter((district) => district.type === "commercial" && Array.isArray(district.buildings))
+      .sort((a, b) => a.id - b.id)
+      .flatMap((district) =>
+        district.buildings
+          .map((name, index) => (name === buildingName ? { district, index } : null))
+          .filter(Boolean)
+      );
+
+    targets.forEach((target, index) => {
+      const customName = customNames[index];
+      if (!customName) return;
+      if (!Array.isArray(target.district.buildingNameOverrides)) {
+        target.district.buildingNameOverrides = [];
+      }
+      target.district.buildingNameOverrides[target.index] = customName;
+    });
+  }
+
+  function assignNamedIndustrialBuildings(districts, buildingName, customNames) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    if (!Array.isArray(customNames) || !customNames.length) return;
+    const targets = districts
+      .filter((district) => district.type === "industrial" && Array.isArray(district.buildings))
+      .sort((a, b) => a.id - b.id)
+      .flatMap((district) =>
+        district.buildings
+          .map((name, index) => (name === buildingName ? { district, index } : null))
+          .filter(Boolean)
+      );
+
+    targets.forEach((target, index) => {
+      const customName = customNames[index];
+      if (!customName) return;
+      if (!Array.isArray(target.district.buildingNameOverrides)) {
+        target.district.buildingNameOverrides = [];
+      }
+      target.district.buildingNameOverrides[target.index] = customName;
+    });
+  }
+
+  function assignNamedResidentialBuildings(districts, buildingName, customNames) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    if (!Array.isArray(customNames) || !customNames.length) return;
+    const targets = districts
+      .filter((district) => district.type === "residential" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0))
+      .flatMap((district) =>
+        district.buildings
+          .map((name, index) => (name === buildingName ? { district, index } : null))
+          .filter(Boolean)
+      );
+
+    targets.forEach((target, index) => {
+      const customName = customNames[index];
+      if (!customName) return;
+      if (!Array.isArray(target.district.buildingNameOverrides)) {
+        target.district.buildingNameOverrides = [];
+      }
+      target.district.buildingNameOverrides[target.index] = customName;
+    });
+  }
+
+  function rebalanceCommercialArcades(districts, targetArcades = 7) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    const desired = Math.max(0, Math.floor(Number(targetArcades) || 0));
+    const commercialDistricts = districts
+      .filter((district) => district.type === "commercial" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+
+    const arcadeSlots = [];
+    const restaurantSlots = [];
+    commercialDistricts.forEach((district) => {
+      district.buildings.forEach((building, index) => {
+        if (building === "Herna") arcadeSlots.push({ district, index });
+        if (building === "Restaurace") restaurantSlots.push({ district, index });
+      });
+    });
+
+    if (arcadeSlots.length < desired) {
+      const needed = desired - arcadeSlots.length;
+      for (let i = 0; i < needed && i < restaurantSlots.length; i += 1) {
+        const slot = restaurantSlots[i];
+        slot.district.buildings[slot.index] = "Herna";
+      }
+      return;
+    }
+
+    if (arcadeSlots.length > desired) {
+      const overflow = arcadeSlots.length - desired;
+      for (let i = 0; i < overflow; i += 1) {
+        const slot = arcadeSlots[i];
+        slot.district.buildings[slot.index] = "Restaurace";
+      }
+    }
+  }
+
+  function rebalanceIndustrialStorage(
+    districts,
+    { removeStorage = 12, addArmories = 6, addFactories = 6 } = {}
+  ) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    const removeTarget = Math.max(0, Math.floor(Number(removeStorage) || 0));
+    const armoryTarget = Math.max(0, Math.floor(Number(addArmories) || 0));
+    const factoryTarget = Math.max(0, Math.floor(Number(addFactories) || 0));
+    if (!removeTarget || (!armoryTarget && !factoryTarget)) return;
+
+    const industrialDistricts = districts
+      .filter((district) => district.type === "industrial" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+
+    let storageSlots = industrialDistricts.flatMap((district) =>
+      district.buildings
+        .map((building, index) =>
+          building === "Sklad" ? { district, index, key: `${district.id}:${index}` } : null
+        )
+        .filter(Boolean)
+    );
+
+    const replacementOrder = [
+      ...Array.from({ length: armoryTarget }, () => "Zbrojovka"),
+      ...Array.from({ length: factoryTarget }, () => "Továrna")
+    ];
+    const maxReplacements = Math.min(removeTarget, replacementOrder.length, storageSlots.length);
+    if (!maxReplacements) return;
+
+    storageSlots = storageSlots.slice(0, maxReplacements);
+    const selected = [];
+
+    const takeSlots = (targetName, count) => {
+      if (!count || !storageSlots.length) return [];
+      const preferred = [];
+      const fallback = [];
+      storageSlots.forEach((slot) => {
+        if (slot.district.buildings.includes(targetName)) fallback.push(slot);
+        else preferred.push(slot);
+      });
+      const picks = [...preferred.slice(0, count)];
+      if (picks.length < count) {
+        picks.push(...fallback.slice(0, count - picks.length));
+      }
+      const pickedKeys = new Set(picks.map((slot) => slot.key));
+      storageSlots = storageSlots.filter((slot) => !pickedKeys.has(slot.key));
+      return picks;
+    };
+
+    const armoryReplaceCount = Math.min(armoryTarget, maxReplacements);
+    const factoryReplaceCount = Math.min(factoryTarget, maxReplacements - armoryReplaceCount);
+
+    takeSlots("Zbrojovka", armoryReplaceCount).forEach((slot) =>
+      selected.push({ ...slot, next: "Zbrojovka" })
+    );
+    takeSlots("Továrna", factoryReplaceCount).forEach((slot) =>
+      selected.push({ ...slot, next: "Továrna" })
+    );
+
+    selected.forEach((slot) => {
+      slot.district.buildings[slot.index] = slot.next;
+    });
+  }
+
+  function rebalanceResidentialTaxi(
+    districts,
+    { removeBrainwash = 11, addTaxi = 11 } = {}
+  ) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    const removeTarget = Math.max(0, Math.floor(Number(removeBrainwash) || 0));
+    const addTarget = Math.max(0, Math.floor(Number(addTaxi) || 0));
+    if (!removeTarget || !addTarget) return;
+
+    const residentialDistricts = districts
+      .filter((district) => district.type === "residential" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+
+    const brainwashSlots = residentialDistricts.flatMap((district) =>
+      district.buildings
+        .map((building, index) => (building === "Brainwash centrum" ? { district, index } : null))
+        .filter(Boolean)
+    );
+
+    const replacements = Math.min(removeTarget, addTarget, brainwashSlots.length);
+    if (!replacements) return;
+
+    for (let i = 0; i < replacements; i += 1) {
+      const slot = brainwashSlots[i];
+      slot.district.buildings[slot.index] = "Taxi služba";
+    }
   }
 
   function assignDistrictTypePools(districts, bounds, config) {
@@ -1623,7 +2373,8 @@ window.Empire.UI = (() => {
       if (index < lowCount) tier = config.tiers[0];
       else if (index >= lowCount + midCount) tier = config.tiers[2];
       const set = pickDistrictSet(config.pools, entry.district, tier, index);
-      entry.district.buildings = set.buildings;
+      entry.district.buildings = Array.isArray(set.buildings) ? [...set.buildings] : [];
+      entry.district.buildingNameOverrides = [];
       entry.district.buildingTier = set.tier;
       entry.district.buildingSetKey = set.key;
       entry.district.buildingSetTitle = set.title;

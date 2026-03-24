@@ -807,6 +807,7 @@ window.Empire.Map = (() => {
       income: Number(district.income || 0),
       polygon: district.polygon,
       buildings: Array.isArray(district.buildings) ? district.buildings : [],
+      buildingNameOverrides: Array.isArray(district.buildingNameOverrides) ? district.buildingNameOverrides : [],
       buildingTier: district.buildingTier || null,
       buildingSetKey: district.buildingSetKey || null,
       buildingSetTitle: district.buildingSetTitle || null
@@ -908,8 +909,8 @@ window.Empire.Map = (() => {
     const panelInfo = document.getElementById("building-detail-panel-info");
     const tabButtons = Array.from(root.querySelectorAll("[data-building-tab]"));
 
-    if (title) title.textContent = `Budova: ${details.name}`;
-    if (name) name.textContent = details.name;
+    if (title) title.textContent = `Budova: ${details.baseName}`;
+    if (name) name.textContent = details.displayName;
     if (hourly) hourly.textContent = `$${details.hourlyIncome} / hod`;
     if (daily) daily.textContent = `$${details.dailyIncome} / den`;
     if (info) info.textContent = details.info;
@@ -927,10 +928,147 @@ window.Empire.Map = (() => {
   }
 
   function resolveBuildingDetails(buildingName, district) {
-    const safeName = String(buildingName || "Neznámá budova");
+    const context = resolveBuildingDetailContext(buildingName);
+    const safeName = context.baseName;
+    const displayName = context.variantName || safeName;
     const districtSeed = district?.id || 0;
-    const seed = hashOwner(`${districtSeed}:${safeName}`);
-    const hourlyIncome = 60 + (seed % 31) * 12;
+    const seed = hashOwner(`${districtSeed}:${safeName}:${context.variantName || ""}`);
+    const mallProfiles = {
+      "Neon Mall": {
+        hourlyIncome: 612,
+        info:
+          "Neon Mall je high-volume retail uzel. Rychle točí hotovost a zvyšuje tempo příjmů v komerční zóně."
+      },
+      "Iron Market Plaza": {
+        hourlyIncome: 576,
+        info:
+          "Iron Market Plaza je těžký tržní hub. Má stabilní výnos a bonus pro obchodní operace v širším okolí."
+      },
+      "Karina shopping center": {
+        hourlyIncome: 648,
+        info:
+          "Karina shopping center je prémiové obchodní centrum s nejvyšším obratem. Je silné na dlouhodobý ekonomický tlak."
+      }
+    };
+    const restaurantProfiles = {
+      "Neon Bite": {
+        hourlyIncome: 286,
+        info: "Rychlá neonová kuchyně. Zvyšuje noční cashflow a pomáhá držet tlak na soupeře."
+      },
+      "Black Plate": {
+        hourlyIncome: 278,
+        info: "High-risk gastro front. Vhodné pro tiché praní menších částek při stabilní kontrole."
+      },
+      "Street Fuel": {
+        hourlyIncome: 264,
+        info: "Jídlo pro pouliční týmy. Posiluje operativu v okolních sektorech během konfliktu."
+      },
+      "Blood & Grill": {
+        hourlyIncome: 298,
+        info: "Agresivní grill point. Přináší vyšší příjem, ale přitahuje větší pozornost."
+      },
+      "Midnight Diner": {
+        hourlyIncome: 272,
+        info: "Noční diner s dlouhou provozní dobou. Stabilní income i mimo hlavní špičku."
+      },
+      "Iron Taste": {
+        hourlyIncome: 266,
+        info: "Tvrdý industriální styl. Dobře funguje v zónách s častým pohybem posil."
+      },
+      "Shadow Kitchen": {
+        hourlyIncome: 281,
+        info: "Skrytá kuchyně pro interní síť. Vhodná pro nenápadný růst vlivu."
+      },
+      "Dirty Spoon": {
+        hourlyIncome: 252,
+        info: "Levná frontová kuchyně. Nižší výnos, ale rychlá a spolehlivá rotace peněz."
+      },
+      "Vice Kitchen": {
+        hourlyIncome: 294,
+        info: "Silně napojená na noční trh. Zvyšuje obrat v rizikových časech."
+      },
+      "Urban Hunger": {
+        hourlyIncome: 260,
+        info: "Městský fast servis. Udržuje stabilní tok zákazníků celý den."
+      },
+      "Smoke & Meat": {
+        hourlyIncome: 288,
+        info: "Prémiový smokehouse. Vyšší marže a lepší efekt při dlouhodobém držení sektoru."
+      },
+      "The Last Bite": {
+        hourlyIncome: 257,
+        info: "Pozdní provoz pro poslední vlnu klientů. Dobré doplnění ekonomiky distriktu."
+      },
+      "Gangster Grill": {
+        hourlyIncome: 301,
+        info: "Silný brand pod kontrolou gangu. Roste rychleji, když je zóna bezpečná."
+      },
+      "Concrete Kitchen": {
+        hourlyIncome: 269,
+        info: "Betonový core point. Stabilní příjmy s nízkou volatilitou."
+      },
+      "Dark Appetite": {
+        hourlyIncome: 284,
+        info: "Noir restaurace pro VIP kontakty. Pomáhá budovat vliv mezi klíčovými lidmi."
+      },
+      "Night Feast": {
+        hourlyIncome: 276,
+        info: "Noční hostiny a eventy. Krátké špičky s výraznějším výdělkem."
+      },
+      "The Hungry Syndicate": {
+        hourlyIncome: 305,
+        info: "Syndikátní jídelní uzel. Výborný výkon při propojení více commercial sektorů."
+      },
+      "Rusty Fork": {
+        hourlyIncome: 249,
+        info: "Starší podnik s loajální klientelou. Pomalejší, ale velmi stabilní cashflow."
+      },
+      "Back Alley Bistro": {
+        hourlyIncome: 262,
+        info: "Bistro v zadních uličkách. Výhodné pro skrytý provoz bez velké publicity."
+      },
+      "Sinful Kitchen": {
+        hourlyIncome: 292,
+        info: "Rizikový nightlife spot. Umí tahat vyšší příjmy za cenu většího napětí."
+      },
+      "Underground Taste": {
+        hourlyIncome: 274,
+        info: "Podzemní kulinářská síť. Podporuje ekonomiku v konfliktních oblastech."
+      },
+      "Savage Kitchen": {
+        hourlyIncome: 297,
+        info: "Tvrdý street koncept. Silný výnos během agresivní expanze."
+      },
+      "Chrome Diner": {
+        hourlyIncome: 267,
+        info: "Chromový diner nové generace. Konzistentní příjem s dobrým poměrem rizika."
+      },
+      "Heat Kitchen": {
+        hourlyIncome: 289,
+        info: "Horká kuchyně s rychlým obratem. Funguje nejlépe při aktivním trhu."
+      },
+      "No Mercy Meals": {
+        hourlyIncome: 303,
+        info: "Bezkompromisní provozní model. Vysoký potenciál výdělku pro ofenzivní hru."
+      },
+      "Broken Plate": {
+        hourlyIncome: 255,
+        info: "Low-profile spot. Menší výnos, ale výborná odolnost při výkyvech."
+      },
+      "Elite Hunger": {
+        hourlyIncome: 312,
+        info: "Elitní koncept pro horní vrstvu města. Nejvyšší restauranční obrat v síti."
+      }
+    };
+    const activeSpecialProfile =
+      context.variantName && safeName === "Obchodní centrum"
+        ? mallProfiles[context.variantName] || null
+        : context.variantName && safeName === "Restaurace"
+          ? restaurantProfiles[context.variantName] || null
+          : null;
+    const hourlyIncome = activeSpecialProfile
+      ? activeSpecialProfile.hourlyIncome
+      : 60 + (seed % 31) * 12;
     const dailyIncome = hourlyIncome * 24;
     const infoSamples = [
       "Tahle budova drží lokální cashflow a pomáhá stabilizovat kontrolu sektoru při dlouhých konfliktech.",
@@ -939,8 +1077,8 @@ window.Empire.Map = (() => {
       "Je to strategický bod pro ekonomiku distriktu. V pozdější fázi hry může výrazně zvednout výnosy.",
       "Budova je vhodná pro tichý růst vlivu. Největší přínos má při držení sektoru delší dobu."
     ];
-    const info = infoSamples[seed % infoSamples.length];
-    return { name: safeName, hourlyIncome, dailyIncome, info };
+    const info = activeSpecialProfile?.info || infoSamples[seed % infoSamples.length];
+    return { baseName: safeName, displayName, hourlyIncome, dailyIncome, info };
   }
 
   function showModal(district) {
@@ -1032,10 +1170,39 @@ window.Empire.Map = (() => {
         const index = Number(button.getAttribute("data-building-index"));
         const buildingName = buildings[index];
         if (!buildingName) return;
-        openBuildingDetailModal(buildingName, district);
+        const detailInput = resolveBuildingDetailInput(district, index, buildingName);
+        openBuildingDetailModal(detailInput, district);
       });
     });
     root.classList.remove("hidden");
+  }
+
+  function resolveDistrictBuildingName(district, index, fallbackName) {
+    const overrides = Array.isArray(district?.buildingNameOverrides) ? district.buildingNameOverrides : [];
+    const named = overrides[index];
+    if (typeof named === "string" && named.trim()) {
+      return named.trim();
+    }
+    return String(fallbackName || "Neznámá budova");
+  }
+
+  function resolveBuildingDetailInput(district, index, fallbackName) {
+    const baseName = String(fallbackName || "Neznámá budova");
+    const variantName = resolveDistrictBuildingName(district, index, baseName);
+    if (variantName !== baseName) {
+      return { baseName, variantName };
+    }
+    return baseName;
+  }
+
+  function resolveBuildingDetailContext(buildingInput) {
+    if (buildingInput && typeof buildingInput === "object") {
+      const baseName = String(buildingInput.baseName || buildingInput.name || "Neznámá budova");
+      const variantRaw = String(buildingInput.variantName || "").trim();
+      const variantName = variantRaw && variantRaw !== baseName ? variantRaw : null;
+      return { baseName, variantName };
+    }
+    return { baseName: String(buildingInput || "Neznámá budova"), variantName: null };
   }
 
   function resolveBuildingLockMeta(district) {

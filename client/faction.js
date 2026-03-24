@@ -445,7 +445,7 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("empire_avatar", src);
     updateContinueState();
     updateNote();
-    if (options.openPreview && !isCoarsePointer) {
+    if (options.openPreview) {
       openLightbox(src);
     }
   }
@@ -514,7 +514,7 @@ document.addEventListener("DOMContentLoaded", () => {
           event.preventDefault();
           return;
         }
-        applyAvatarSelection(src, { openPreview: !isCoarsePointer });
+        applyAvatarSelection(src, { openPreview: true });
       });
     });
     if (marquee) marquee.scrollLeft = 0;
@@ -598,8 +598,22 @@ document.addEventListener("DOMContentLoaded", () => {
       normalizeMarqueeLoop();
     };
 
-    avatarLeft.addEventListener("click", () => jumpBy(-scrollByAmount()));
-    avatarRight.addEventListener("click", () => jumpBy(scrollByAmount()));
+    const jumpLeft = () => jumpBy(-scrollByAmount());
+    const jumpRight = () => jumpBy(scrollByAmount());
+
+    avatarLeft.addEventListener("click", jumpLeft);
+    avatarRight.addEventListener("click", jumpRight);
+
+    if (isCoarsePointer) {
+      avatarLeft.addEventListener("touchend", (event) => {
+        event.preventDefault();
+        jumpLeft();
+      }, { passive: false });
+      avatarRight.addEventListener("touchend", (event) => {
+        event.preventDefault();
+        jumpRight();
+      }, { passive: false });
+    }
     window.addEventListener("resize", updateMarqueeLoopWidth);
 
     if (!isCoarsePointer) {
