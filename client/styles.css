@@ -3910,6 +3910,95 @@ body::before {
     overflow-wrap: anywhere;
   }
 
+  #district-modal {
+    padding: 4px;
+  }
+
+  #district-modal .modal__content {
+    width: calc(100vw - 8px);
+    max-width: calc(100vw - 8px);
+    height: calc(100dvh - 8px);
+    max-height: calc(100dvh - 8px);
+    border-radius: 12px;
+    padding: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #district-modal .modal__header {
+    margin-bottom: 6px;
+    flex: 0 0 auto;
+  }
+
+  #district-modal .modal__header h3 {
+    font-size: 16px;
+  }
+
+  #district-modal .modal__close {
+    width: 30px;
+    height: 30px;
+  }
+
+  #district-modal .modal__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  #district-modal .modal__row {
+    padding: 5px 0;
+  }
+
+  #district-modal .modal__row span {
+    font-size: 11px;
+  }
+
+  #district-modal .modal__row strong {
+    font-size: 13px;
+  }
+
+  #district-modal .modal__gallery {
+    margin-top: 6px;
+    padding-top: 6px;
+    gap: 6px;
+  }
+
+  #district-modal .modal__gallery-title {
+    font-size: 10px;
+    letter-spacing: 0.7px;
+  }
+
+  #district-modal .district-buildings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #district-modal .district-buildings__item {
+    padding: 8px 9px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+
+  #district-modal .modal__gallery-grid img {
+    height: 108px;
+  }
+
+  #district-modal .modal__actions {
+    margin-top: 6px;
+    gap: 6px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  #district-modal .modal__actions .btn {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
   .modal__body {
     min-width: 0;
   }
@@ -4193,6 +4282,59 @@ body::before {
 
   #profile-modal .modal__row strong {
     font-size: 11px;
+  }
+
+  #district-modal {
+    padding: 2px;
+  }
+
+  #district-modal .modal__content {
+    width: calc(100vw - 4px);
+    max-width: calc(100vw - 4px);
+    height: calc(100dvh - 4px);
+    max-height: calc(100dvh - 4px);
+    border-radius: 10px;
+    padding: 8px;
+  }
+
+  #district-modal .modal__header h3 {
+    font-size: 15px;
+  }
+
+  #district-modal .modal__close {
+    width: 28px;
+    height: 28px;
+  }
+
+  #district-modal .modal__body {
+    gap: 5px;
+  }
+
+  #district-modal .modal__row {
+    padding: 4px 0;
+  }
+
+  #district-modal .modal__row span {
+    font-size: 10px;
+  }
+
+  #district-modal .modal__row strong {
+    font-size: 12px;
+  }
+
+  #district-modal .district-buildings__item {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  #district-modal .modal__gallery-grid img {
+    height: 92px;
+  }
+
+  #district-modal .modal__actions .btn {
+    min-height: 36px;
+    padding: 7px 8px;
+    font-size: 12px;
   }
 
   .modal__row {

@@ -1239,6 +1239,7 @@ window.Empire.Map = (() => {
     if (!state.modal?.root) return;
     const defendableByPlayer = isDistrictDefendable(district);
     const isDowntown = district.type === "downtown";
+    const districtNumber = resolveDistrictNumberLabel(district);
 
     updateModalActionsForDistrict(district);
 
@@ -1251,7 +1252,9 @@ window.Empire.Map = (() => {
       updateDistrictBuildings(district);
       updateDistrictGallery(district);
     } else {
-      document.getElementById("modal-name").textContent = isDowntown ? "Downtown sektor" : "Neznámý sektor";
+      document.getElementById("modal-name").textContent = isDowntown
+        ? `Downtown sektor #${districtNumber}`
+        : `District č. ${districtNumber}`;
       document.getElementById("modal-type").textContent = isDowntown ? "Downtown" : "Skryto";
       document.getElementById("modal-owner").textContent = "Skryto";
       document.getElementById("modal-income").textContent = "Skryto";
