@@ -3911,15 +3911,15 @@ body::before {
   }
 
   #district-modal {
-    padding: 4px;
+    padding: 10px;
   }
 
   #district-modal .modal__content {
-    width: calc(100vw - 8px);
-    max-width: calc(100vw - 8px);
-    height: calc(100dvh - 8px);
-    max-height: calc(100dvh - 8px);
-    border-radius: 12px;
+    width: min(96vw, 430px);
+    max-width: 430px;
+    height: min(86dvh, 620px);
+    max-height: min(86dvh, 620px);
+    border-radius: 14px;
     padding: 10px;
     overflow: hidden;
     display: flex;
@@ -4285,15 +4285,15 @@ body::before {
   }
 
   #district-modal {
-    padding: 2px;
+    padding: 8px;
   }
 
   #district-modal .modal__content {
-    width: calc(100vw - 4px);
-    max-width: calc(100vw - 4px);
-    height: calc(100dvh - 4px);
-    max-height: calc(100dvh - 4px);
-    border-radius: 10px;
+    width: min(97vw, 392px);
+    max-width: 392px;
+    height: min(84dvh, 560px);
+    max-height: min(84dvh, 560px);
+    border-radius: 12px;
     padding: 8px;
   }
 
