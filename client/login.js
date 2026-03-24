@@ -68,6 +68,7 @@ function bindGuest() {
   if (!btn) return;
   btn.addEventListener("click", () => {
     localStorage.removeItem("empire_token");
+    localStorage.removeItem("empire_structure");
     window.location.href = "faction.html";
   });
 }

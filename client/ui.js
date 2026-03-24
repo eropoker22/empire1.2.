@@ -59,7 +59,10 @@ window.Empire.UI = (() => {
       "Lobby klub",
       "Burza",
       "Soud",
-      "VIP salonek"
+      "VIP salonek",
+      "Letiště",
+      "Přístav",
+      "Parlament"
     ],
     commercial: [
       "Obchodní centrum",
@@ -112,6 +115,51 @@ window.Empire.UI = (() => {
     park: "../img/park/1.png",
     downtown: "../img/downtown/1.png"
   };
+
+  const namedDowntownExchanges = [
+    "Vortex Exchange"
+  ];
+
+  const namedDowntownCentralBanks = [
+    "Iron Reserve Bank",
+    "Obsidian Central Vault"
+  ];
+
+  const namedDowntownAirports = [
+    "Neon Skyport"
+  ];
+
+  const namedDowntownLobbyClubs = [
+    "Velvet Influence Club",
+    "Shadow Lobby Lounge",
+    "Golden Circle Club"
+  ];
+
+  const namedDowntownCityHalls = [
+    "City Dominion Hall",
+    "Urban Control Center"
+  ];
+
+  const namedDowntownParliaments = [
+    "The Vortex Council"
+  ];
+
+  const namedDowntownPorts = [
+    "Black Tide Port",
+    "Ironsea Dockyard",
+    "Shadow Harbor"
+  ];
+
+  const namedDowntownCourts = [
+    "High Justice Court",
+    "Iron Verdict Hall",
+    "Obsidian Tribunal"
+  ];
+
+  const namedDowntownVipLounges = [
+    "Platinum Lounge",
+    "Eclipse VIP Gold Room"
+  ];
 
   const namedCommercialMalls = [
     "Neon Mall",
@@ -404,6 +452,96 @@ window.Empire.UI = (() => {
     "Velocity Cab",
     "Backstreet Taxi",
     "FlashRide Taxi"
+  ];
+
+  const namedParkDrugLabs = [
+    "Neon Chem Lab",
+    "BlackDust Factory",
+    "GhostCook Lab",
+    "Shadow Chemistry",
+    "CrystalForge",
+    "NightBatch Lab",
+    "Toxic Synthesis",
+    "DarkMix Facility",
+    "StreetLab X",
+    "PureRush Lab",
+    "SilentCook Lab"
+  ];
+
+  const namedParkSmugglingTunnels = [
+    "Ghost Tunnel",
+    "BlackRoute Passage",
+    "Shadow Transit",
+    "Silent Tunnel Network",
+    "Underground Flow",
+    "DarkPath Tunnel",
+    "Hidden Route X",
+    "Night Tunnel Line",
+    "Smugglers Vein",
+    "Phantom Passage",
+    "DeepRoute Tunnel",
+    "Backline Tunnel",
+    "ZeroTrace Route",
+    "Iron Tunnel"
+  ];
+
+  const namedParkStreetDealers = [
+    "Corner Dealers",
+    "Night Sellers",
+    "Ghost Pushers",
+    "Street Hustlers",
+    "Shadow Dealers",
+    "QuickDrop Crew",
+    "BackAlley Sellers",
+    "Neon Push",
+    "Silent Dealers",
+    "FastCash Crew",
+    "Dirty Hands",
+    "Block Hustlers",
+    "Dark Trade Crew",
+    "Urban Pushers",
+    "NoFace Dealers"
+  ];
+
+  const namedParkStripClubs = [
+    "Velvet Nights",
+    "Neon Desire",
+    "Midnight Dolls",
+    "Crimson Lounge",
+    "Silk & Sin",
+    "Shadow Seduction",
+    "Dark Angels Club",
+    "Electric Temptation",
+    "Night Velvet",
+    "Obsidian Desire",
+    "RedLight Palace",
+    "Forbidden Lounge",
+    "Lust District",
+    "Golden Sinners",
+    "Vice Lounge"
+  ];
+
+  const namedParkConvenienceStores = [
+    "QuickStop Market",
+    "NightMart",
+    "Urban MiniShop",
+    "Street Corner Store",
+    "24/7 Neon Shop",
+    "FastBuy Market",
+    "Backstreet Market",
+    "GhostMart",
+    "QuickPick Store",
+    "City MiniMarket",
+    "FlashMart",
+    "Night Supply",
+    "Urban Grab Shop",
+    "RapidBuy Store",
+    "Street Essentials",
+    "MiniCore Market",
+    "InstantShop",
+    "Shadow Mart",
+    "EasyBuy Corner",
+    "Daily Needs Shop"
   ];
 
   const commercialDistrictPools = {
@@ -903,8 +1041,9 @@ window.Empire.UI = (() => {
     initPlayerScenarioButtons();
     document.getElementById("attack-btn").addEventListener("click", async () => {
       if (!window.Empire.selectedDistrict) return;
-      if (isDistrictDefendableByPlayer(window.Empire.selectedDistrict)) {
-        pushEvent("Vlastní nebo alianční distrikt nelze napadnout. Použij Obranu.");
+      const availability = evaluateDistrictActionAvailability(window.Empire.selectedDistrict, "attack");
+      if (!availability.allowed) {
+        pushEvent(availability.reason);
         return;
       }
       if (!window.Empire.token) {
@@ -914,7 +1053,11 @@ window.Empire.UI = (() => {
       const result = await window.Empire.API.attackDistrict(
         window.Empire.selectedDistrict.id
       );
-      if (result && result.message) {
+      if (result?.error) {
+        pushEvent(formatAttackError(result.error));
+        return;
+      }
+      if (result?.message) {
         pushEvent(result.message);
       }
     });
@@ -923,8 +1066,9 @@ window.Empire.UI = (() => {
     if (raidBtn) {
       raidBtn.addEventListener("click", () => {
         if (!window.Empire.selectedDistrict) return;
-        if (isDistrictDefendableByPlayer(window.Empire.selectedDistrict)) {
-          pushEvent("Vlastní nebo alianční distrikt nelze vykrást. Použij Obranu.");
+        const availability = evaluateDistrictActionAvailability(window.Empire.selectedDistrict, "raid");
+        if (!availability.allowed) {
+          pushEvent(availability.reason);
           return;
         }
         if (!window.Empire.token) {
@@ -939,8 +1083,9 @@ window.Empire.UI = (() => {
     if (spyBtn) {
       spyBtn.addEventListener("click", () => {
         if (!window.Empire.selectedDistrict) return;
-        if (isDistrictDefendableByPlayer(window.Empire.selectedDistrict)) {
-          pushEvent("Vlastní nebo alianční distrikt nelze špehovat. Použij Obranu.");
+        const availability = evaluateDistrictActionAvailability(window.Empire.selectedDistrict, "spy");
+        if (!availability.allowed) {
+          pushEvent(availability.reason);
           return;
         }
         if (!window.Empire.token) {
@@ -1008,15 +1153,183 @@ window.Empire.UI = (() => {
     }
   }
 
+  function formatAttackError(errorCode) {
+    switch (String(errorCode || "").trim().toLowerCase()) {
+      case "cooldown":
+        return "Útok je na cooldownu.";
+      case "insufficient_funds":
+        return "Na útok nemáš dostatek prostředků.";
+      case "not_found":
+        return "Cílový distrikt nebyl nalezen.";
+      case "own_district":
+        return "Vlastní distrikt nelze napadnout.";
+      case "allied_district":
+        return "Alianční distrikt nelze napadnout.";
+      case "not_adjacent":
+        return "Útočit můžeš jen na distrikt, který sousedí s tvým dobytým distriktem.";
+      case "attack_failed":
+        return "Útok se nepodařilo zpracovat.";
+      default:
+        return "Útok se nepodařilo provést.";
+    }
+  }
+
   function initLeaderboardModal() {
     const openBtn = document.getElementById("leaderboard-open");
     const root = document.getElementById("leaderboard-modal");
     const backdrop = document.getElementById("leaderboard-modal-backdrop");
     const closeBtn = document.getElementById("leaderboard-modal-close");
-    if (!openBtn || !root) return;
+    const content = document.getElementById("leaderboard-modal-content");
+    if (!openBtn || !root || !content) return;
+
+    const avatarPool = [
+      "../img/avatars/grok_image_1773615281856.jpg",
+      "../img/avatars/grok_image_1773615288781.jpg",
+      "../img/avatars/grok_image_1773615384205.jpg",
+      "../img/avatars/grok_image_1773615486819.jpg",
+      "../img/avatars/grok_image_1773619750005.jpg",
+      "../img/avatars/grok_image_1773619765153.jpg",
+      "../img/avatars/grok_image_1773619828633.jpg",
+      "../img/avatars/grok_image_1773619862866.jpg",
+      "../img/avatars/grok_image_1773619917189.jpg",
+      "../img/avatars/grok_image_1773619952518.jpg",
+      "../img/avatars/grok_image_1773620275790.jpg",
+      "../img/avatars/grok_image_1773620278343.jpg",
+      "../img/avatars/grok_image_1773620295724.jpg",
+      "../img/avatars/grok_image_1773620311309.jpg",
+      "../img/avatars/grok_image_1773620316935.jpg",
+      "../img/avatars/grok_image_1773620321599.jpg",
+      "../img/avatars/grok_image_1773620327962.jpg",
+      "../img/avatars/grok_image_1773620346567.jpg",
+      "../img/avatars/grok_image_1773620360803.jpg",
+      "../img/avatars/grok_image_1773620382664.jpg"
+    ];
+
+    const nickPool = [
+      "RazorVlk", "GhostMara", "NyxPrime", "IronShade", "VortexAce",
+      "BlackComet", "NeonRiot", "CobraUnit", "UrbanHex", "SteelDrift",
+      "ZeroPulse", "NightCipher", "CrimsonDot", "VoltRaven", "SilentBrick",
+      "AlphaDock", "ChromeLynx", "DeltaWolf", "ShadowMint", "MetroHawk",
+      "ApexNova", "ToxicRay", "RetroKane", "FrostMamba", "StreetRune",
+      "KiloGhost", "RustQueen", "NovaPilot", "BetaVenom", "PixelVandal",
+      "OnyxRoad", "DarkMirage", "TurboSable", "ViperCrown", "CoreHunter",
+      "PlasmaRook", "RiftRunner", "FlintByte", "HydraLoop", "CipherFox"
+    ];
+
+    const alliancePool = [
+      "Neon Syndicate",
+      "Iron Wolves",
+      "Black Harbor",
+      "Vortex Pact",
+      "Street Dominion",
+      "Shadow Cartel",
+      "Chrome Circuit",
+      "Night Crown",
+      "Obsidian Order",
+      "Steel Mirage",
+      "Urban Serpents",
+      "Ghost Collective"
+    ];
+
+    const currentServerEntries = Array.from({ length: 20 }, (_, index) => ({
+      rank: index + 1,
+      nick: nickPool[index],
+      influenceRate: 980 - index * 28 + (index % 3) * 9,
+      alliance: alliancePool[index % alliancePool.length],
+      avatar: avatarPool[index % avatarPool.length]
+    }));
+
+    const monthlyEntries = Array.from({ length: 40 }, (_, index) => ({
+      rank: index + 1,
+      nick: nickPool[index],
+      score: 18750 - index * 245 + (index % 4) * 19
+    }));
+
+    const state = {
+      tab: "server"
+    };
+
+    const renderServerEntries = () =>
+      currentServerEntries
+        .map(
+          (entry) => `
+            <div class="leaderboard-entry leaderboard-entry--server">
+              <div class="leaderboard-rank">#${entry.rank}</div>
+              <img class="leaderboard-avatar" src="${entry.avatar}" alt="Avatar ${entry.nick}" loading="lazy" />
+              <div class="leaderboard-main">
+                <div class="leaderboard-nick">${entry.nick}</div>
+                <div class="leaderboard-sub">Aliance: ${entry.alliance}</div>
+              </div>
+              <div class="leaderboard-value">
+                <span>Míra vlivu</span>
+                <strong>${entry.influenceRate}</strong>
+              </div>
+            </div>
+          `
+        )
+        .join("");
+
+    const renderMonthlyEntries = () =>
+      monthlyEntries
+        .map(
+          (entry) => `
+            <div class="leaderboard-entry leaderboard-entry--monthly">
+              <div class="leaderboard-rank">#${entry.rank}</div>
+              <div class="leaderboard-main">
+                <div class="leaderboard-nick">${entry.nick}</div>
+                <div class="leaderboard-sub">Měsíční výkon</div>
+              </div>
+              <div class="leaderboard-value">
+                <span>Body</span>
+                <strong>${entry.score}</strong>
+              </div>
+            </div>
+          `
+        )
+        .join("");
+
+    const render = () => {
+      const isServer = state.tab === "server";
+      content.innerHTML = `
+        <div class="leaderboard-tabs">
+          <button class="leaderboard-tab ${isServer ? "is-active" : ""}" type="button" data-leaderboard-tab="server">
+            Aktuální server
+          </button>
+          <button class="leaderboard-tab ${!isServer ? "is-active" : ""}" type="button" data-leaderboard-tab="monthly">
+            Měsíční
+          </button>
+        </div>
+        <div class="leaderboard-board">
+          <div class="leaderboard-board__meta">
+            ${isServer
+              ? "Top 20 hráčů na aktuálním serveru."
+              : "Top 40 hráčů v měsíční statistice."}
+          </div>
+          <div class="leaderboard-list">
+            ${isServer ? renderServerEntries() : renderMonthlyEntries()}
+          </div>
+        </div>
+      `;
+    };
+
+    content.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const tabButton = target.closest("[data-leaderboard-tab]");
+      if (!(tabButton instanceof HTMLElement)) return;
+      const tab = tabButton.dataset.leaderboardTab;
+      if (tab !== "server" && tab !== "monthly") return;
+      if (state.tab === tab) return;
+      state.tab = tab;
+      render();
+    });
 
     const close = () => root.classList.add("hidden");
-    const open = () => root.classList.remove("hidden");
+    const open = () => {
+      state.tab = "server";
+      render();
+      root.classList.remove("hidden");
+    };
 
     openBtn.addEventListener("click", open);
     if (backdrop) backdrop.addEventListener("click", close);
@@ -1170,6 +1483,82 @@ window.Empire.UI = (() => {
 
   function isDistrictDefendableByPlayer(district) {
     return isDistrictOwnedByPlayer(district) || isDistrictOwnedByAlliance(district);
+  }
+
+  function resolveDistrictById(districtId, districts = window.Empire.districts) {
+    const safeDistricts = Array.isArray(districts) ? districts : [];
+    if (districtId == null) return null;
+    const targetKey = String(districtId);
+    return safeDistricts.find((district) => String(district?.id) === targetKey) || null;
+  }
+
+  function isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory = false } = {}) {
+    const safeDistrict = district || window.Empire.selectedDistrict;
+    if (!safeDistrict?.id) return false;
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    if (!districts.length) return false;
+
+    const targetDistrict = resolveDistrictById(safeDistrict.id, districts);
+    if (!targetDistrict) return false;
+
+    const adjacency = buildDistrictAdjacency(districts);
+    const neighbors = adjacency.get(targetDistrict.id);
+    if (!neighbors || !neighbors.size) return false;
+
+    const allowedOwnerNames = new Set(getPlayerOwnerNameSet());
+    if (includeAllianceTerritory) {
+      getActiveAllianceOwnerNames().forEach((name) => {
+        allowedOwnerNames.add(name);
+      });
+    }
+
+    if (!allowedOwnerNames.size) return false;
+
+    const districtsById = new Map(districts.map((item) => [item.id, item]));
+    for (const neighborId of neighbors) {
+      const neighbor = districtsById.get(neighborId);
+      if (!neighbor) continue;
+      const owner = normalizeOwnerName(neighbor.owner);
+      if (owner && allowedOwnerNames.has(owner)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function evaluateDistrictActionAvailability(district, action) {
+    if (!district) {
+      return { allowed: false, reason: "Nejprve vyber distrikt." };
+    }
+
+    if (isDistrictDefendableByPlayer(district)) {
+      if (action === "attack") {
+        return { allowed: false, reason: "Vlastní nebo alianční distrikt nelze napadnout. Použij Obranu." };
+      }
+      if (action === "raid") {
+        return { allowed: false, reason: "Vlastní nebo alianční distrikt nelze vykrást. Použij Obranu." };
+      }
+      if (action === "spy") {
+        return { allowed: false, reason: "Vlastní nebo alianční distrikt nelze špehovat. Použij Obranu." };
+      }
+    }
+
+    if (action === "attack") {
+      const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: false });
+      return adjacent
+        ? { allowed: true, reason: "" }
+        : { allowed: false, reason: "Útočit můžeš jen na distrikt, který sousedí s tvým dobytým distriktem." };
+    }
+
+    if (action === "raid" || action === "spy") {
+      const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: true });
+      return adjacent
+        ? { allowed: true, reason: "" }
+        : { allowed: false, reason: "Špehovat a vykrást můžeš jen distrikt, který sousedí s tvým nebo aliančním distriktem." };
+    }
+
+    return { allowed: false, reason: "Akci nelze provést." };
   }
 
   function getActiveAllianceOwnerNames() {
@@ -1364,12 +1753,7 @@ window.Empire.UI = (() => {
       setScenarioVisionMode(true);
       setScenarioAllianceOwners([allyName]);
       setScenarioEnemyOwners([]);
-      nextDistricts = assignOwnersToNeighborClusters(districts, [
-        { owner: ownerName, count: 5 },
-        { owner: allyName, count: 5 }
-      ], {
-        excludeTypes: ["downtown"]
-      });
+      nextDistricts = assignAllianceTenScenarioOwnership(districts, ownerName, allyName);
       const ownDistrictCount = countOwnedDistrictsForOwner(nextDistricts, ownerName);
       const allyDistrictCount = countOwnedDistrictsForOwner(nextDistricts, allyName);
       const totalOwned = ownDistrictCount + allyDistrictCount;
@@ -1415,6 +1799,80 @@ window.Empire.UI = (() => {
     window.Empire.player = baseProfile;
     window.Empire.Map.setDistricts(nextDistricts);
     updateProfile(baseProfile);
+  }
+
+  function assignAllianceTenScenarioOwnership(districts, ownerName, allyName) {
+    const safeDistricts = Array.isArray(districts) ? districts : [];
+    if (!safeDistricts.length) return [];
+
+    const ownersByDistrict = new Map();
+    const districtCenters = new Map(
+      safeDistricts.map((district) => [district.id, polygonCentroid(district.polygon || [])])
+    );
+    const neighborsByDistrict = buildDistrictAdjacency(safeDistricts);
+    const available = new Set(safeDistricts.map((district) => district.id));
+    const preferredTypes = ["commercial", "industrial", "residential", "park", "downtown"];
+    const mapBounds = getDistrictBounds(safeDistricts);
+
+    preferredTypes.forEach((type) => {
+      const candidate = safeDistricts
+        .filter((district) => String(district?.type || "").toLowerCase() === type && available.has(district.id))
+        .sort((a, b) => {
+          const distA = distanceFromMapCenter(a, mapBounds);
+          const distB = distanceFromMapCenter(b, mapBounds);
+          if (distA === distB) return Number(a.id || 0) - Number(b.id || 0);
+          return distA - distB;
+        })[0];
+      if (!candidate) return;
+      ownersByDistrict.set(candidate.id, ownerName);
+      available.delete(candidate.id);
+    });
+
+    if (ownersByDistrict.size < 5 && available.size) {
+      const fallback = safeDistricts
+        .filter((district) => available.has(district.id))
+        .sort((a, b) => {
+          const distA = distanceFromMapCenter(a, mapBounds);
+          const distB = distanceFromMapCenter(b, mapBounds);
+          if (distA === distB) return Number(a.id || 0) - Number(b.id || 0);
+          return distA - distB;
+        });
+      const missing = Math.min(5 - ownersByDistrict.size, fallback.length);
+      for (let i = 0; i < missing; i += 1) {
+        const district = fallback[i];
+        ownersByDistrict.set(district.id, ownerName);
+        available.delete(district.id);
+      }
+    }
+
+    const allyTarget = Math.min(5, available.size);
+    if (allyTarget > 0) {
+      const ownerClusterIds = Array.from(ownersByDistrict.keys());
+      const ownerClusterSet = new Set(ownerClusterIds);
+      let allySeedId = null;
+      if (ownerClusterIds.length) {
+        allySeedId = pickNearestToCluster(available, ownerClusterIds, districtCenters, ownerClusterSet);
+      }
+      if (!allySeedId) {
+        allySeedId = pickClusterSeed(available, districtCenters, 1, 2);
+      }
+      const allyCluster = growDistrictCluster({
+        seedId: allySeedId,
+        targetSize: allyTarget,
+        available,
+        neighborsByDistrict,
+        districtCenters
+      });
+      allyCluster.forEach((districtId) => {
+        ownersByDistrict.set(districtId, allyName);
+        available.delete(districtId);
+      });
+    }
+
+    return safeDistricts.map((district) => ({
+      ...district,
+      owner: ownersByDistrict.get(district.id) || null
+    }));
   }
 
   function assignOwnersToNeighborClusters(districts, allocations, options = {}) {
@@ -1857,23 +2315,25 @@ window.Empire.UI = (() => {
         groupedByType.set(key, {
           baseName: key,
           count: 0,
+          unlockedCount: 0,
           unlocked: false
         });
       }
       const group = groupedByType.get(key);
       group.count += 1;
+      if (entry.unlocked) group.unlockedCount += 1;
       group.unlocked = group.unlocked || Boolean(entry.unlocked);
     });
 
     const baseTypes = Array.from(groupedByType.values()).sort((a, b) =>
       a.baseName.localeCompare(b.baseName, "cs", { sensitivity: "base" })
     );
-    const activeBaseName = baseTypes.some((item) => item.baseName === selectedBaseName)
+    const activeBaseName = baseTypes.some((item) => item.baseName === selectedBaseName && item.unlocked)
       ? selectedBaseName
       : null;
     const scopedEntries = activeBaseName
       ? entries
-        .filter((entry) => entry.baseName === activeBaseName)
+        .filter((entry) => entry.baseName === activeBaseName && entry.unlocked)
         .sort((a, b) => a.displayName.localeCompare(b.displayName, "cs", { sensitivity: "base" }))
       : [];
 
@@ -1895,7 +2355,7 @@ window.Empire.UI = (() => {
                   ${item.unlocked ? "" : 'data-building-locked="1" disabled aria-disabled="true"'}
                 >
                   <span>${item.baseName}</span>
-                  <span>${item.count}x</span>
+                  <span>${item.unlocked ? `${item.unlockedCount}x` : "LOCKED"}</span>
                 </button>
               `;
             })
@@ -1911,20 +2371,18 @@ window.Empire.UI = (() => {
                 (entry, index) => {
                   return `
               <button
-                class="buildings-modal__building buildings-modal__building--interactive${entry.unlocked ? "" : " buildings-modal__building--locked"}"
+                class="buildings-modal__building buildings-modal__building--interactive"
                 type="button"
                 data-building-entry-index="${index}"
                 data-building-type="${typeKey}"
-                ${entry.unlocked ? "" : 'data-building-locked="1" disabled aria-disabled="true"'}
               >
                 <span>${entry.displayName}</span>
-                ${entry.unlocked ? "" : '<span class="buildings-modal__lock">LOCKED</span>'}
               </button>
             `;
                 }
               )
               .join("")
-            : '<div class="buildings-modal__empty">Nejdřív vyber typ budovy v kroku 1.</div>'}
+            : '<div class="buildings-modal__empty">Nejdřív vyber odemčený typ budovy v kroku 1.</div>'}
         </div>
       </div>
     `
@@ -1932,6 +2390,11 @@ window.Empire.UI = (() => {
   }
 
   function resolveBuildingEntriesForDistrictType(typeKey) {
+    if (scenarioVisionEnabled) {
+      const scenarioEntries = resolveScenarioBuildingEntriesForDistrictType(typeKey);
+      if (scenarioEntries.length) return scenarioEntries;
+    }
+
     const ownedEntries = resolveOwnedBuildingEntriesForDistrictType(typeKey);
     if (ownedEntries.length) return ownedEntries;
 
@@ -1949,6 +2412,39 @@ window.Empire.UI = (() => {
         unlocked: isUnlocked
       };
     });
+  }
+
+  function resolveScenarioBuildingEntriesForDistrictType(typeKey) {
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const playerNames = getPlayerOwnerNameSet();
+    const entries = [];
+
+    districts.forEach((district) => {
+      if (district.type !== typeKey) return;
+
+      const districtLabel = String(district.name || `${formatDistrictType(typeKey)} ${district.id || "?"}`);
+      const owner = normalizeOwnerName(district.owner);
+      const isOwnedByPlayer = Boolean(owner && playerNames.has(owner));
+      const buildings = Array.isArray(district.buildings) ? district.buildings : [];
+
+      buildings.forEach((building, index) => {
+        const baseName = String(building || "Neznámá budova");
+        const named = resolveDistrictBuildingDisplayName(district, index, baseName, districtLabel);
+        const variantName = named !== baseName ? named : null;
+        entries.push({
+          baseName,
+          variantName,
+          displayName: named,
+          districtType: typeKey,
+          districtId: Number.isFinite(Number(district.id))
+            ? Number(district.id)
+            : hashDistrictSeed(`${districtLabel}:${baseName}`, index),
+          unlocked: isOwnedByPlayer
+        });
+      });
+    });
+
+    return entries;
   }
 
   function resolveOwnedBuildingEntriesForDistrictType(typeKey) {
@@ -2072,6 +2568,16 @@ window.Empire.UI = (() => {
       addArmories: 6,
       addFactories: 6
     });
+    rebalanceDowntownCivicInfrastructure(nextDistricts);
+    assignDowntownExchangeNames(nextDistricts);
+    assignDowntownCentralBankNames(nextDistricts);
+    assignDowntownAirportNames(nextDistricts);
+    assignDowntownLobbyClubNames(nextDistricts);
+    assignDowntownCityHallNames(nextDistricts);
+    assignDowntownParliamentNames(nextDistricts);
+    assignDowntownPortNames(nextDistricts);
+    assignDowntownCourtNames(nextDistricts);
+    assignDowntownVipLoungeNames(nextDistricts);
     assignCommercialMallNames(nextDistricts);
     assignCommercialRestaurantNames(nextDistricts);
     assignCommercialPharmacyNames(nextDistricts);
@@ -2093,8 +2599,49 @@ window.Empire.UI = (() => {
     assignResidentialRecruitNames(nextDistricts);
     assignResidentialSchoolNames(nextDistricts);
     assignResidentialTaxiNames(nextDistricts);
+    assignParkDrugLabNames(nextDistricts);
+    assignParkSmugglingTunnelNames(nextDistricts);
+    assignParkStreetDealersNames(nextDistricts);
+    assignParkStripClubNames(nextDistricts);
+    assignParkConvenienceStoreNames(nextDistricts);
 
     return nextDistricts;
+  }
+
+  function assignDowntownExchangeNames(districts) {
+    assignNamedDowntownBuildings(districts, "Burza", namedDowntownExchanges);
+  }
+
+  function assignDowntownCentralBankNames(districts) {
+    assignNamedDowntownBuildings(districts, "Centrální banka", namedDowntownCentralBanks);
+  }
+
+  function assignDowntownAirportNames(districts) {
+    assignNamedDowntownBuildings(districts, "Letiště", namedDowntownAirports);
+  }
+
+  function assignDowntownLobbyClubNames(districts) {
+    assignNamedDowntownBuildings(districts, "Lobby klub", namedDowntownLobbyClubs);
+  }
+
+  function assignDowntownCityHallNames(districts) {
+    assignNamedDowntownBuildings(districts, "Magistrát", namedDowntownCityHalls);
+  }
+
+  function assignDowntownParliamentNames(districts) {
+    assignNamedDowntownBuildings(districts, "Parlament", namedDowntownParliaments);
+  }
+
+  function assignDowntownPortNames(districts) {
+    assignNamedDowntownBuildings(districts, "Přístav", namedDowntownPorts);
+  }
+
+  function assignDowntownCourtNames(districts) {
+    assignNamedDowntownBuildings(districts, "Soud", namedDowntownCourts);
+  }
+
+  function assignDowntownVipLoungeNames(districts) {
+    assignNamedDowntownBuildings(districts, "VIP salonek", namedDowntownVipLounges);
   }
 
   function assignCommercialMallNames(districts) {
@@ -2181,6 +2728,26 @@ window.Empire.UI = (() => {
     assignNamedResidentialBuildings(districts, "Taxi služba", namedResidentialTaxiServices);
   }
 
+  function assignParkDrugLabNames(districts) {
+    assignNamedParkBuildings(districts, "Drug lab", namedParkDrugLabs);
+  }
+
+  function assignParkSmugglingTunnelNames(districts) {
+    assignNamedParkBuildings(districts, "Pašovací tunel", namedParkSmugglingTunnels);
+  }
+
+  function assignParkStreetDealersNames(districts) {
+    assignNamedParkBuildings(districts, "Pouliční dealeři", namedParkStreetDealers);
+  }
+
+  function assignParkStripClubNames(districts) {
+    assignNamedParkBuildings(districts, "Strip club", namedParkStripClubs);
+  }
+
+  function assignParkConvenienceStoreNames(districts) {
+    assignNamedParkBuildings(districts, "Večerka", namedParkConvenienceStores);
+  }
+
   function assignNamedCommercialBuildings(districts, buildingName, customNames) {
     if (!Array.isArray(districts) || !districts.length) return;
     if (!Array.isArray(customNames) || !customNames.length) return;
@@ -2230,6 +2797,50 @@ window.Empire.UI = (() => {
     if (!Array.isArray(customNames) || !customNames.length) return;
     const targets = districts
       .filter((district) => district.type === "residential" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0))
+      .flatMap((district) =>
+        district.buildings
+          .map((name, index) => (name === buildingName ? { district, index } : null))
+          .filter(Boolean)
+      );
+
+    targets.forEach((target, index) => {
+      const customName = customNames[index];
+      if (!customName) return;
+      if (!Array.isArray(target.district.buildingNameOverrides)) {
+        target.district.buildingNameOverrides = [];
+      }
+      target.district.buildingNameOverrides[target.index] = customName;
+    });
+  }
+
+  function assignNamedParkBuildings(districts, buildingName, customNames) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    if (!Array.isArray(customNames) || !customNames.length) return;
+    const targets = districts
+      .filter((district) => district.type === "park" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0))
+      .flatMap((district) =>
+        district.buildings
+          .map((name, index) => (name === buildingName ? { district, index } : null))
+          .filter(Boolean)
+      );
+
+    targets.forEach((target, index) => {
+      const customName = customNames[index];
+      if (!customName) return;
+      if (!Array.isArray(target.district.buildingNameOverrides)) {
+        target.district.buildingNameOverrides = [];
+      }
+      target.district.buildingNameOverrides[target.index] = customName;
+    });
+  }
+
+  function assignNamedDowntownBuildings(districts, buildingName, customNames) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    if (!Array.isArray(customNames) || !customNames.length) return;
+    const targets = districts
+      .filter((district) => district.type === "downtown" && Array.isArray(district.buildings))
       .sort((a, b) => Number(a.id || 0) - Number(b.id || 0))
       .flatMap((district) =>
         district.buildings
@@ -2373,6 +2984,36 @@ window.Empire.UI = (() => {
     }
   }
 
+  function rebalanceDowntownCivicInfrastructure(districts) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    const downtownDistricts = districts
+      .filter((district) => district.type === "downtown" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+    if (!downtownDistricts.length) return;
+
+    const bankSlots = [];
+    const magistrateSlots = [];
+    downtownDistricts.forEach((district) => {
+      district.buildings.forEach((building, index) => {
+        if (building === "Centrální banka") bankSlots.push({ district, index });
+        if (building === "Magistrát") magistrateSlots.push({ district, index });
+      });
+    });
+
+    const bankReplacements = ["Letiště", "Přístav"];
+    const magistrateReplacements = ["Přístav", "Přístav", "Parlament"];
+
+    for (let i = 0; i < bankReplacements.length && i < bankSlots.length; i += 1) {
+      const slot = bankSlots[i];
+      slot.district.buildings[slot.index] = bankReplacements[i];
+    }
+
+    for (let i = 0; i < magistrateReplacements.length && i < magistrateSlots.length; i += 1) {
+      const slot = magistrateSlots[i];
+      slot.district.buildings[slot.index] = magistrateReplacements[i];
+    }
+  }
+
   function assignDistrictTypePools(districts, bounds, config) {
     const typedDistricts = districts.filter((district) => district.type === config.type);
     if (!typedDistricts.length) return;
@@ -2497,7 +3138,6 @@ window.Empire.UI = (() => {
     ]);
 
     window.Empire.player = profile;
-    updateProfile(profile);
     updateEconomy(economy);
     setLiveAllianceOwnersFromAlliance(allianceData?.alliance || null);
 
@@ -2505,7 +3145,148 @@ window.Empire.UI = (() => {
       window.Empire.Map.setDistricts(districtData.districts);
     }
 
+    updateProfile(profile);
+
     window.Empire.WS.connect();
+  }
+
+  function extractAllianceDisplayName(allianceValue) {
+    const raw = String(allianceValue || "").trim();
+    if (!raw) return "";
+    if (normalizeOwnerName(raw) === "žádná") return "";
+    let cleaned = raw.replace(/\(\s*[^)]*sektor[^)]*\)\s*$/i, "").trim();
+    cleaned = cleaned.replace(/\s*\+\s*\d*\s*spojen[a-z]*.*$/i, "").trim();
+    if (cleaned.includes("•")) {
+      cleaned = cleaned.split("•")[0].trim();
+    }
+    return cleaned || raw;
+  }
+
+  function extractAllianceSectorCountHint(allianceValue) {
+    const raw = String(allianceValue || "").trim();
+    const match = raw.match(/(\d+)\s*sektor/i);
+    if (!match) return 0;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+  }
+
+  function formatSectorCountLabel(value) {
+    const amount = Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+    if (amount === 1) return "1 sektor";
+    if (amount >= 2 && amount <= 4) return `${amount} sektory`;
+    return `${amount} sektorů`;
+  }
+
+  function formatPopulationLabel(value) {
+    const amount = Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+    return amount.toLocaleString("cs-CZ");
+  }
+
+  function countAllianceControlledSectors() {
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    if (!districts.length) return 0;
+    const ownerNames = new Set(getPlayerOwnerNameSet());
+    getActiveAllianceOwnerNames().forEach((owner) => ownerNames.add(owner));
+    if (!ownerNames.size) return 0;
+    return districts.reduce((sum, district) => {
+      const owner = normalizeOwnerName(district?.owner);
+      return owner && ownerNames.has(owner) ? sum + 1 : sum;
+    }, 0);
+  }
+
+  function countPlayerControlledPopulation(profile) {
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    if (!districts.length) return Number(profile?.population || 0);
+
+    const weights = {
+      downtown: 3600,
+      commercial: 2600,
+      residential: 5400,
+      industrial: 1900,
+      park: 1300
+    };
+    const playerOwners = getPlayerOwnerNameSet();
+    if (!playerOwners.size) return Number(profile?.population || 0);
+
+    const total = districts.reduce((sum, district) => {
+      const owner = normalizeOwnerName(district?.owner);
+      if (!owner || !playerOwners.has(owner)) return sum;
+      const typeKey = String(district?.type || "").trim().toLowerCase();
+      const fallback = 2200;
+      const population = Number(district?.population);
+      if (Number.isFinite(population) && population > 0) {
+        return sum + Math.floor(population);
+      }
+      return sum + (weights[typeKey] || fallback);
+    }, 0);
+
+    if (total > 0) return total;
+    return Number(profile?.population || 0);
+  }
+
+  function formatFactionLabel(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "-";
+    const normalized = raw.toLowerCase();
+    const labels = {
+      "mafián": "Mafián",
+      "kartel": "Kartel",
+      "pouliční gang": "Pouliční gang",
+      "tajná organizace": "Tajná organizace",
+      "hackeři": "Hackeři",
+      "motorkářský gang": "Motorkářský gang",
+      "soukromá armáda": "Soukromá armáda",
+      "korporace": "Korporace"
+    };
+    return labels[normalized] || raw;
+  }
+
+  function resolveWantedLevel(profile) {
+    const explicitCandidates = [
+      profile?.wantedLevel,
+      profile?.wanted_level,
+      profile?.wanted,
+      profile?.heat,
+      profile?.notoriety,
+      profile?.policeHeat,
+      profile?.police_heat
+    ];
+    for (let i = 0; i < explicitCandidates.length; i += 1) {
+      const parsed = Number(explicitCandidates[i]);
+      if (Number.isFinite(parsed)) {
+        return Math.max(0, Math.floor(parsed));
+      }
+    }
+
+    const economy = cachedEconomy || {};
+    const moneyProfile = resolveMoneyBreakdown(profile || {});
+    const moneyEconomy = resolveMoneyBreakdown(economy || {});
+    const dirtyMoney = Math.max(moneyProfile.dirtyMoney || 0, moneyEconomy.dirtyMoney || 0);
+    const districts = Math.max(0, Math.floor(Number(profile?.districts || 0)));
+    const influence = Math.max(0, Number(profile?.influence || 0));
+    const population = countPlayerControlledPopulation(profile);
+
+    const score = Math.round(
+      districts * 4
+      + influence * 0.08
+      + dirtyMoney / 12000
+      + population / 25000
+    );
+    return Math.max(0, Math.min(100, score));
+  }
+
+  function formatAllianceProfileSummary(profile) {
+    const name = extractAllianceDisplayName(profile?.alliance);
+    if (!name) return "Žádná";
+
+    let totalSectors = countAllianceControlledSectors();
+    if (!totalSectors) {
+      totalSectors = extractAllianceSectorCountHint(profile?.alliance);
+    }
+
+    return totalSectors > 0
+      ? `${name} • ${formatSectorCountLabel(totalSectors)}`
+      : name;
   }
 
   function updateProfile(profile) {
@@ -2514,17 +3295,23 @@ window.Empire.UI = (() => {
       ...(window.Empire.player || {}),
       ...(profile || {})
     };
-    document.getElementById("profile-gang").textContent = profile.gangName || "-";
+    const factionLabel = formatFactionLabel(profile.structure || localStorage.getItem("empire_structure"));
+    const wantedLevel = resolveWantedLevel(profile);
+    document.getElementById("profile-gang").textContent = formatPopulationLabel(countPlayerControlledPopulation(profile));
     document.getElementById("profile-districts").textContent = profile.districts || 0;
-    document.getElementById("profile-alliance").textContent = profile.alliance || "Žádná";
+    document.getElementById("profile-alliance").textContent = formatAllianceProfileSummary(profile);
     setAllianceButtonState(profile.alliance || "Žádná");
     const structure = document.getElementById("profile-structure");
     const statStructure = document.getElementById("stat-structure");
+    const faction = document.getElementById("profile-faction");
     if (structure) {
-      structure.textContent = profile.structure || localStorage.getItem("empire_structure") || "-";
+      structure.textContent = `${wantedLevel}`;
     }
     if (statStructure) {
-      statStructure.textContent = profile.structure || localStorage.getItem("empire_structure") || "-";
+      statStructure.textContent = `${wantedLevel}`;
+    }
+    if (faction) {
+      faction.textContent = factionLabel;
     }
     refreshGangColorDisplays();
     hydrateProfileModal(profile);
@@ -2951,7 +3738,10 @@ window.Empire.UI = (() => {
   function syncGuestAllianceLabel(allianceName) {
     const profileAlliance = document.getElementById("profile-alliance");
     if (profileAlliance && !window.Empire.token) {
-      profileAlliance.textContent = allianceName || "Žádná";
+      profileAlliance.textContent = formatAllianceProfileSummary({
+        ...(window.Empire.player || {}),
+        alliance: allianceName || "Žádná"
+      });
     }
     setAllianceButtonState(allianceName || "Žádná");
   }
@@ -3711,6 +4501,7 @@ window.Empire.UI = (() => {
 
   return {
     assignDistrictMetadata,
+    evaluateDistrictActionAvailability,
     init,
     hydrateAfterAuth,
     updateProfile,

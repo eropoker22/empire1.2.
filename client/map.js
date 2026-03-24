@@ -723,21 +723,31 @@ window.Empire.Map = (() => {
     }
     const defendableByPlayer = isDistrictDefendable(district);
     const isDowntown = district.type === "downtown";
+    const ownerRelation = resolveDistrictOwnerRelation(district);
+    const ownerIntelSection = buildOwnerIntelSection(district, ownerRelation);
 
     state.tooltip.classList.remove("hidden");
 
     if (state.vision.fogPreviewMode && !defendableByPlayer) {
-      state.tooltip.innerHTML = isDowntown
+      const districtNumber = resolveDistrictNumberLabel(district);
+      state.tooltip.innerHTML = ownerRelation === "enemy"
         ? `
-          <div class="map-tooltip__title">Downtown sektor</div>
-          <div>Citlivá zóna města.</div>
+          <div class="map-tooltip__title">Nepřátelský sektor</div>
+          <div>Distrikt č.: ${districtNumber}</div>
+          ${ownerIntelSection}
+          <div>Detailní info sektoru je skryté.</div>
         `
-        : `
-          <div class="map-tooltip__title">Neznámý sektor</div>
-          <div>Informace o cizím distriktu jsou skryté.</div>
-        `;
-      state.tooltip.style.left = `${clientX + 12}px`;
-      state.tooltip.style.top = `${clientY + 12}px`;
+        : isDowntown
+          ? `
+            <div class="map-tooltip__title">Downtown sektor</div>
+            <div>Distrikt č.: ${districtNumber}</div>
+            <div>Citlivá zóna města.</div>
+          `
+          : `
+            <div class="map-tooltip__title">Distrikt č. ${districtNumber}</div>
+            <div>Informace o cizím distriktu jsou skryté.</div>
+          `;
+      placeTooltipWithinMap(clientX, clientY);
       return;
     }
 
@@ -762,11 +772,155 @@ window.Empire.Map = (() => {
       <div>Vlastník: ${district.owner || "Neobsazeno"}</div>
       <div>Příjem: $${district.income}/hod</div>
       <div>Vliv: ${district.influence}</div>
+      ${ownerIntelSection}
       ${setLine}
       ${buildingLine}
     `;
-    state.tooltip.style.left = `${clientX + 12}px`;
-    state.tooltip.style.top = `${clientY + 12}px`;
+    placeTooltipWithinMap(clientX, clientY);
+  }
+
+  function resolveDistrictNumberLabel(district) {
+    const numericId = Number(district?.id);
+    if (Number.isFinite(numericId)) {
+      return `${Math.max(0, Math.floor(numericId))}`;
+    }
+
+    const name = String(district?.name || "");
+    const fromName = name.match(/(\d+)/);
+    if (fromName?.[1]) {
+      return fromName[1];
+    }
+
+    const rawId = String(district?.id || "").trim();
+    if (!rawId) return "?";
+    if (rawId.includes("-")) {
+      return rawId.split("-")[0];
+    }
+    return rawId;
+  }
+
+  function resolveDistrictOwnerRelation(district) {
+    if (isDistrictOwnedByAlly(district)) return "ally";
+    if (isDistrictOwnedByEnemy(district)) return "enemy";
+    return "other";
+  }
+
+  function buildOwnerIntelSection(district, relation) {
+    if (!district?.owner) return "";
+    if (relation !== "ally" && relation !== "enemy") return "";
+    const intel = resolveOwnerIntel(district, relation);
+    if (!intel) return "";
+    const relationLabel = relation === "ally" ? "Spojenecký hráč" : "Nepřátelský hráč";
+    const members = intel.allianceMembers.map((nick) => escapeHtml(nick)).join(", ");
+    return `
+      <div class="map-tooltip__section">
+        <div class="map-tooltip__label">${relationLabel}</div>
+        <div>Nick: ${escapeHtml(intel.nick)}</div>
+        <div>Gang: ${escapeHtml(intel.gangName)}</div>
+        <div>Aliance: ${members}</div>
+      </div>
+    `;
+  }
+
+  function resolveOwnerIntel(district, relation) {
+    const owner = normalizeName(district?.owner);
+    if (!owner) return null;
+
+    const ownerSeed = hashOwner(`${owner}:${relation}`);
+    const nick = generateSyntheticNick(ownerSeed);
+    const gangName = generateSyntheticGangName(ownerSeed);
+    const allianceMembers = generateSyntheticAllianceMembers(owner, relation, ownerSeed, nick);
+
+    return {
+      nick,
+      gangName,
+      allianceMembers
+    };
+  }
+
+  function generateSyntheticNick(seed) {
+    const prefixes = ["Razor", "Ghost", "Viper", "Nyx", "Cipher", "Blaze", "Nova", "Kane", "Venom", "Sable"];
+    const suffixes = ["Hex", "Prime", "Zero", "Fox", "Core", "Volt", "Reign", "Shade", "Drift", "Flux"];
+    const first = prefixes[Math.abs(seed) % prefixes.length];
+    const second = suffixes[Math.abs(Math.floor(seed / 7)) % suffixes.length];
+    const number = 10 + (Math.abs(seed) % 90);
+    return `${first} ${second}-${number}`;
+  }
+
+  function generateSyntheticGangName(seed) {
+    const first = ["Neon", "Iron", "Black", "Shadow", "Obsidian", "Chrome", "Crimson", "Night", "Vortex", "Steel"];
+    const second = ["Syndicate", "Cartel", "Legion", "Covenant", "Raiders", "Empire", "Network", "Coalition", "Order", "Circle"];
+    return `${first[Math.abs(seed) % first.length]} ${second[Math.abs(Math.floor(seed / 11)) % second.length]}`;
+  }
+
+  function generateSyntheticAllianceMembers(owner, relation, seed, ownerNick) {
+    const members = [ownerNick];
+    const relationOwners = relation === "ally"
+      ? Array.from(state.vision.alliedOwnerNames || [])
+      : Array.from(state.vision.enemyOwnerNames || []);
+    const uniqueOwners = Array.from(new Set(relationOwners.map((name) => normalizeName(name)).filter(Boolean)));
+
+    uniqueOwners.forEach((candidate) => {
+      if (members.length >= 3) return;
+      if (candidate === owner) return;
+      const candidateSeed = hashOwner(`${candidate}:${relation}`);
+      const nick = generateSyntheticNick(candidateSeed);
+      if (!members.includes(nick)) members.push(nick);
+    });
+
+    let fillerIndex = 0;
+    while (members.length < 3) {
+      const fillerNick = generateSyntheticNick(seed + 97 * (fillerIndex + 1));
+      if (!members.includes(fillerNick)) members.push(fillerNick);
+      fillerIndex += 1;
+    }
+
+    return members.slice(0, 3);
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function placeTooltipWithinMap(clientX, clientY) {
+    if (!state.tooltip) return;
+    const margin = 12;
+    const inset = 6;
+    let left = Number(clientX || 0) + margin;
+    let top = Number(clientY || 0) + margin;
+
+    const mapRect = state.canvas?.getBoundingClientRect?.();
+    if (!mapRect) {
+      state.tooltip.style.left = `${left}px`;
+      state.tooltip.style.top = `${top}px`;
+      return;
+    }
+
+    const tooltipRect = state.tooltip.getBoundingClientRect();
+    const minLeft = mapRect.left + inset;
+    const maxLeft = mapRect.right - tooltipRect.width - inset;
+    const minTop = mapRect.top + inset;
+    const maxTop = mapRect.bottom - tooltipRect.height - inset;
+
+    if (maxLeft < minLeft) {
+      left = minLeft;
+    } else {
+      left = Math.min(maxLeft, Math.max(minLeft, left));
+    }
+
+    if (maxTop < minTop) {
+      top = minTop;
+    } else {
+      top = Math.min(maxTop, Math.max(minTop, top));
+    }
+
+    state.tooltip.style.left = `${left}px`;
+    state.tooltip.style.top = `${top}px`;
   }
 
   function hideTooltip() {
@@ -1117,10 +1271,34 @@ window.Empire.Map = (() => {
     if (!attackBtn || !raidBtn || !spyBtn || !defenseBtn) return;
 
     const defendableByPlayer = isDistrictDefendable(district);
-    attackBtn.classList.toggle("hidden", defendableByPlayer);
-    raidBtn.classList.toggle("hidden", defendableByPlayer);
-    spyBtn.classList.toggle("hidden", defendableByPlayer);
+    const evaluateAction = window.Empire.UI?.evaluateDistrictActionAvailability;
+    const attackState = typeof evaluateAction === "function"
+      ? evaluateAction(district, "attack")
+      : { allowed: !defendableByPlayer, reason: "" };
+    const raidState = typeof evaluateAction === "function"
+      ? evaluateAction(district, "raid")
+      : { allowed: !defendableByPlayer, reason: "" };
+    const spyState = typeof evaluateAction === "function"
+      ? evaluateAction(district, "spy")
+      : { allowed: !defendableByPlayer, reason: "" };
+
+    const showAttack = !defendableByPlayer && attackState.allowed;
+    const showRaid = !defendableByPlayer && raidState.allowed;
+    const showSpy = !defendableByPlayer && spyState.allowed;
+
+    attackBtn.classList.toggle("hidden", !showAttack);
+    raidBtn.classList.toggle("hidden", !showRaid);
+    spyBtn.classList.toggle("hidden", !showSpy);
     defenseBtn.classList.toggle("hidden", !defendableByPlayer);
+    attackBtn.disabled = false;
+    raidBtn.disabled = false;
+    spyBtn.disabled = false;
+    attackBtn.setAttribute("aria-disabled", "false");
+    raidBtn.setAttribute("aria-disabled", "false");
+    spyBtn.setAttribute("aria-disabled", "false");
+    attackBtn.title = "";
+    raidBtn.title = "";
+    spyBtn.title = "";
   }
 
   function hideModal() {

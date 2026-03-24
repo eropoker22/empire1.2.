@@ -63,7 +63,6 @@
       <main class="main">
         <section class="panel panel--left">
           <div class="card">
-            <h2>Městské události</h2>
             <p class="muted">Dočasné úkoly s omezenou platností.</p>
             <button class="btn btn--primary events-hero" id="city-events-open">
               Otevřít City Events
@@ -71,14 +70,14 @@
             <p class="muted events-hero__note">Vyber si jednu ze tří postav a aktivuj její quest line.</p>
           </div>
 
-          <div class="card">
+          <div class="card compact-action-card">
             <p class="muted">Správa a přehled městských budov.</p>
             <button class="btn events-hero" id="buildings-open">
               Budovy
             </button>
           </div>
 
-          <div class="card">
+          <div class="card compact-action-card">
             <p class="muted">Obchod, směna a tržní přehled.</p>
             <button class="btn events-hero" id="market-open">
               Market
@@ -94,7 +93,7 @@
             </div>
           </div>
 
-          <div class="card">
+          <div class="card compact-action-card">
             <p class="muted">Pořadí gangů podle síly, vlivu a kontroly města.</p>
             <button class="btn events-hero" id="leaderboard-open">
               Leaderboard
@@ -126,6 +125,10 @@
             <div class="profile-row">
               <span>Hledanost</span>
               <strong id="profile-structure">-</strong>
+            </div>
+            <div class="profile-row">
+              <span>Frakce</span>
+              <strong id="profile-faction">-</strong>
             </div>
             <div class="profile-row">
               <span>Distrikty</span>
@@ -264,7 +267,7 @@
 
     <div id="leaderboard-modal" class="modal hidden">
       <div id="leaderboard-modal-backdrop" class="modal__backdrop"></div>
-      <div class="modal__content modal__content--profile">
+      <div class="modal__content modal__content--profile leaderboard-modal__content">
         <div class="modal__header">
           <h3>Leaderboard</h3>
           <button class="modal__close" id="leaderboard-modal-close" aria-label="Zavřít">✕</button>

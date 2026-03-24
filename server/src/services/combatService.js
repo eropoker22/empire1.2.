@@ -23,7 +23,7 @@ async function attackDistrict({ playerId, districtId }) {
     }
 
     const districtRes = await client.query(
-      `SELECT d.id, d.type, d.influence_level, d.owner_player_id, p.influence_points AS owner_influence
+      `SELECT d.id, d.type, d.influence_level, d.owner_player_id, p.influence_points AS owner_influence, p.alliance_id AS owner_alliance_id
        FROM districts d
        LEFT JOIN players p ON p.id = d.owner_player_id
        WHERE d.id = $1
@@ -37,18 +37,49 @@ async function attackDistrict({ playerId, districtId }) {
     }
 
     const playerRes = await client.query(
-      "SELECT clean_money, dirty_money, influence_points FROM players WHERE id = $1 FOR UPDATE",
+      "SELECT clean_money, dirty_money, influence_points, alliance_id FROM players WHERE id = $1 FOR UPDATE",
       [playerId]
     );
 
+    if (playerRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "not_found" };
+    }
+
     const player = playerRes.rows[0];
+    const district = districtRes.rows[0];
+
+    if (district.owner_player_id === playerId) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "own_district" };
+    }
+
+    if (player.alliance_id && district.owner_alliance_id && player.alliance_id === district.owner_alliance_id) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "allied_district" };
+    }
+
+    const mapRes = await client.query(
+      "SELECT id, owner_player_id, polygon FROM districts"
+    );
+
+    const isAdjacent = isAttackTargetAdjacentToOwnedDistrict({
+      districts: mapRes.rows,
+      targetDistrictId: district.id,
+      playerId
+    });
+
+    if (!isAdjacent) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "not_adjacent" };
+    }
+
     const attackCost = 20;
     if (Number(player.clean_money || 0) + Number(player.dirty_money || 0) < attackCost) {
       await client.query("ROLLBACK");
       return { ok: false, error: "insufficient_funds" };
     }
 
-    const district = districtRes.rows[0];
     const defenderInfluence = district.owner_influence || 0;
     const attackerInfluence = player.influence_points || 0;
 
@@ -146,6 +177,97 @@ function typeInfluenceMultiplier(type) {
     default:
       return 0.85;
   }
+}
+
+function isAttackTargetAdjacentToOwnedDistrict({ districts, targetDistrictId, playerId }) {
+  const safeDistricts = Array.isArray(districts) ? districts : [];
+  if (!safeDistricts.length || !targetDistrictId || !playerId) return false;
+
+  const targetKey = String(targetDistrictId);
+  const districtsById = new Map(
+    safeDistricts.map((district) => [String(district.id), district])
+  );
+  if (!districtsById.has(targetKey)) return false;
+
+  const adjacency = buildDistrictAdjacency(safeDistricts);
+  const neighbors = adjacency.get(targetKey);
+  if (!neighbors || !neighbors.size) return false;
+
+  for (const neighborKey of neighbors) {
+    const neighbor = districtsById.get(neighborKey);
+    if (!neighbor) continue;
+    if (neighbor.owner_player_id === playerId) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function buildDistrictAdjacency(districts) {
+  const adjacency = new Map();
+  const edgeOwners = new Map();
+
+  (districts || []).forEach((district) => {
+    const districtKey = String(district.id);
+    if (!adjacency.has(districtKey)) {
+      adjacency.set(districtKey, new Set());
+    }
+
+    const polygon = normalizePolygonPoints(district.polygon);
+    if (polygon.length < 2) return;
+
+    for (let i = 0; i < polygon.length; i += 1) {
+      const from = polygon[i];
+      const to = polygon[(i + 1) % polygon.length];
+      const edgeKey = normalizeEdgeKey(from, to);
+      if (!edgeOwners.has(edgeKey)) {
+        edgeOwners.set(edgeKey, []);
+      }
+      edgeOwners.get(edgeKey).push(districtKey);
+    }
+  });
+
+  edgeOwners.forEach((owners) => {
+    const uniqueOwners = Array.from(new Set(owners));
+    for (let i = 0; i < uniqueOwners.length; i += 1) {
+      for (let j = i + 1; j < uniqueOwners.length; j += 1) {
+        const a = uniqueOwners[i];
+        const b = uniqueOwners[j];
+        adjacency.get(a)?.add(b);
+        adjacency.get(b)?.add(a);
+      }
+    }
+  });
+
+  return adjacency;
+}
+
+function normalizePolygonPoints(polygon) {
+  if (!Array.isArray(polygon)) return [];
+  return polygon
+    .map((point) => {
+      if (Array.isArray(point)) {
+        return [Number(point[0] || 0), Number(point[1] || 0)];
+      }
+      if (point && typeof point === "object") {
+        return [Number(point.x || 0), Number(point.y || 0)];
+      }
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function normalizeEdgeKey(from, to) {
+  const a = normalizePointKey(from);
+  const b = normalizePointKey(to);
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+function normalizePointKey(point) {
+  const x = Number(point?.[0] || 0).toFixed(3);
+  const y = Number(point?.[1] || 0).toFixed(3);
+  return `${x},${y}`;
 }
 
 module.exports = { attackDistrict };
