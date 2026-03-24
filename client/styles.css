@@ -221,7 +221,7 @@ body::before {
 #stat-influence {
   color: #fde68a;
   text-shadow: 0 0 10px rgba(250, 204, 21, 0.26);
-  font-size: 24px;
+  font-size: 28px;
   line-height: 1;
   position: absolute;
   left: 50%;
@@ -1621,6 +1621,47 @@ body::before {
   text-shadow:
     0 0 8px rgba(34, 211, 238, 0.7),
     0 0 16px rgba(244, 114, 182, 0.4);
+}
+
+.avatar-lightbox__controls {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.avatar-lightbox__arrow {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  border: 1px solid rgba(203, 244, 255, 0.35);
+  background:
+    linear-gradient(135deg, rgba(203, 244, 255, 0.18), rgba(34, 211, 238, 0.1)),
+    rgba(10, 14, 26, 0.74);
+  color: #e2faff;
+  font-size: 30px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 18px rgba(203, 244, 255, 0.2),
+    0 0 18px rgba(34, 211, 238, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.avatar-lightbox__arrow:hover {
+  transform: translateY(-1px);
+  border-color: rgba(244, 114, 182, 0.62);
+  box-shadow:
+    inset 0 0 22px rgba(203, 244, 255, 0.28),
+    0 0 22px rgba(244, 114, 182, 0.32);
+}
+
+.avatar-lightbox__arrow:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
 }
 
 .alliance-chat {
@@ -3482,7 +3523,7 @@ body::before {
     top: auto;
     transform: none;
     margin-top: 6px;
-    font-size: 22px;
+    font-size: 24px;
     line-height: 1;
   }
 
@@ -3634,6 +3675,18 @@ body::before {
     min-height: 40vh;
   }
 
+  .avatar-lightbox__controls {
+    margin-top: 10px;
+    gap: 10px;
+  }
+
+  .avatar-lightbox__arrow {
+    width: 54px;
+    height: 54px;
+    border-radius: 16px;
+    font-size: 34px;
+  }
+
   .avatar-marquee::-webkit-scrollbar {
     display: none;
   }
@@ -3763,7 +3816,7 @@ body::before {
 
   #stat-influence {
     margin-top: 5px;
-    font-size: 20px;
+    font-size: 22px;
   }
 
   .map-header h1 {

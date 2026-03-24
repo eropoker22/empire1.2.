@@ -1708,7 +1708,7 @@ window.Empire.UI = (() => {
     if (!root || !openBtn || !typeList || !detail || !content) return;
 
     let currentRenderedEntries = [];
-    let activeDistrictType = buildingDistrictTypes[0]?.key || "commercial";
+    let activeDistrictType = null;
     const selectedBuildingTypeByDistrict = new Map();
 
     const closeModal = () => {
@@ -1728,7 +1728,22 @@ window.Empire.UI = (() => {
     };
 
     const renderDetail = (typeKey) => {
-      const selected = buildingDistrictTypes.find((type) => type.key === typeKey) || buildingDistrictTypes[0];
+      const selected = buildingDistrictTypes.find((type) => type.key === typeKey) || null;
+      if (!selected) {
+        currentRenderedEntries = [];
+        activeDistrictType = null;
+        content.classList.remove("buildings-modal__content--with-bg");
+        content.style.backgroundImage = "";
+        detail.innerHTML = `
+          <section class="buildings-modal__detail-card">
+            <div class="buildings-modal__detail-title">Vyber distrikt</div>
+            <div class="buildings-modal__detail-meta">Krok 1 • Klikni na typ distriktu vlevo.</div>
+            <div class="buildings-modal__empty">Po výběru distriktu uvidíš dostupné typy budov.</div>
+          </section>
+        `;
+        return;
+      }
+
       const backgroundImage = districtTypeBackgrounds[selected.key] || "";
       const detailState = renderDistrictTypeDetail(selected.key, selectedBuildingTypeByDistrict.get(selected.key));
       currentRenderedEntries = detailState.entries;
@@ -1757,7 +1772,9 @@ window.Empire.UI = (() => {
     };
 
     openBtn.addEventListener("click", () => {
-      renderBuildings();
+      activeDistrictType = null;
+      selectedBuildingTypeByDistrict.clear();
+      renderBuildings(null);
       root.classList.remove("hidden");
     });
     typeList.addEventListener("click", (event) => {
@@ -1853,10 +1870,12 @@ window.Empire.UI = (() => {
     );
     const activeBaseName = baseTypes.some((item) => item.baseName === selectedBaseName)
       ? selectedBaseName
-      : baseTypes[0].baseName;
-    const scopedEntries = entries
-      .filter((entry) => entry.baseName === activeBaseName)
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, "cs", { sensitivity: "base" }));
+      : null;
+    const scopedEntries = activeBaseName
+      ? entries
+        .filter((entry) => entry.baseName === activeBaseName)
+        .sort((a, b) => a.displayName.localeCompare(b.displayName, "cs", { sensitivity: "base" }))
+      : [];
 
     return {
       entries: scopedEntries,
@@ -1886,10 +1905,11 @@ window.Empire.UI = (() => {
       <div class="buildings-modal__group">
         <div class="buildings-modal__group-title">Krok 2 • Vyber konkrétní budovu</div>
         <div class="buildings-modal__building-grid">
-          ${scopedEntries
-          .map(
-            (entry, index) => {
-              return `
+          ${activeBaseName
+            ? scopedEntries
+              .map(
+                (entry, index) => {
+                  return `
               <button
                 class="buildings-modal__building buildings-modal__building--interactive${entry.unlocked ? "" : " buildings-modal__building--locked"}"
                 type="button"
@@ -1901,9 +1921,10 @@ window.Empire.UI = (() => {
                 ${entry.unlocked ? "" : '<span class="buildings-modal__lock">LOCKED</span>'}
               </button>
             `;
-            }
-          )
-          .join("")}
+                }
+              )
+              .join("")
+            : '<div class="buildings-modal__empty">Nejdřív vyber typ budovy v kroku 1.</div>'}
         </div>
       </div>
     `

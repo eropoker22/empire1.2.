@@ -78,6 +78,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const lightbox = document.getElementById("avatar-lightbox");
   const lightboxImg = document.getElementById("avatar-lightbox-img");
   const lightboxCaption = document.getElementById("avatar-lightbox-caption");
+  const lightboxPrev = document.getElementById("avatar-lightbox-prev");
+  const lightboxNext = document.getElementById("avatar-lightbox-next");
   const lightboxBackdrop = document.querySelector("#avatar-lightbox .avatar-lightbox__backdrop");
   const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const marquee = avatarGrid?.closest(".avatar-marquee") || null;
@@ -356,18 +358,44 @@ document.addEventListener("DOMContentLoaded", () => {
     return "Neznámý agent";
   }
 
+  function isLightboxOpen() {
+    return Boolean(lightbox && !lightbox.classList.contains("hidden"));
+  }
+
+  function updateLightboxNavigation() {
+    if (!lightboxPrev || !lightboxNext) return;
+    const canNavigate = getAvailableAvatars().length > 1;
+    lightboxPrev.disabled = !canNavigate;
+    lightboxNext.disabled = !canNavigate;
+  }
+
   function openLightbox(src) {
     if (!lightbox || !lightboxImg) return;
     lightboxImg.src = src;
+    lightboxImg.dataset.avatar = src || "";
     if (lightboxCaption) {
       lightboxCaption.textContent = getAvatarLabel(src);
     }
     lightbox.classList.remove("hidden");
+    updateLightboxNavigation();
   }
 
   function closeLightbox() {
     if (!lightbox) return;
     lightbox.classList.add("hidden");
+  }
+
+  function shiftLightboxAvatar(direction) {
+    const avatars = getAvailableAvatars();
+    if (!avatars.length) return;
+    const step = Number(direction) < 0 ? -1 : 1;
+    const currentSrc = String(lightboxImg?.dataset?.avatar || selectedAvatar || avatars[0]);
+    let currentIndex = avatars.indexOf(currentSrc);
+    if (currentIndex < 0) currentIndex = 0;
+    const nextIndex = (currentIndex + step + avatars.length) % avatars.length;
+    const nextSrc = avatars[nextIndex];
+    applyAvatarSelection(nextSrc, { openPreview: false });
+    openLightbox(nextSrc);
   }
 
   function applyGangColorSelection(color) {
@@ -405,6 +433,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     renderAvatars();
+    if (isLightboxOpen()) {
+      if (selectedAvatar && availableAvatars.includes(selectedAvatar)) {
+        openLightbox(selectedAvatar);
+      } else {
+        closeLightbox();
+      }
+    }
 
     const info = data[choice];
     if (info) {
@@ -472,6 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!availableAvatars.length) {
       avatarGrid.innerHTML = '<div class="avatar-track__hint">Nejdřív vyber frakci. Pak se zobrazí její avatary.</div>';
       marqueeLoopWidth = 0;
+      if (isLightboxOpen()) closeLightbox();
       return;
     }
     const looped = isCoarsePointer ? availableAvatars : availableAvatars.concat(availableAvatars);
@@ -519,6 +555,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     if (marquee) marquee.scrollLeft = 0;
     updateMarqueeLoopWidth();
+    updateLightboxNavigation();
   }
 
   renderGangColorOptions();
@@ -675,6 +712,30 @@ document.addEventListener("DOMContentLoaded", () => {
     lightboxBackdrop.addEventListener("click", closeLightbox);
   }
 
+  if (lightboxPrev) {
+    lightboxPrev.addEventListener("click", (event) => {
+      event.stopPropagation();
+      shiftLightboxAvatar(-1);
+    });
+    lightboxPrev.addEventListener("touchend", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      shiftLightboxAvatar(-1);
+    }, { passive: false });
+  }
+
+  if (lightboxNext) {
+    lightboxNext.addEventListener("click", (event) => {
+      event.stopPropagation();
+      shiftLightboxAvatar(1);
+    });
+    lightboxNext.addEventListener("touchend", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      shiftLightboxAvatar(1);
+    }, { passive: false });
+  }
+
   if (lightbox) {
     lightbox.addEventListener("click", (event) => {
       if (event.target === lightbox) closeLightbox();
@@ -682,7 +743,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeLightbox();
+    if (event.key === "Escape") {
+      closeLightbox();
+      return;
+    }
+    if (!isLightboxOpen()) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      shiftLightboxAvatar(-1);
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      shiftLightboxAvatar(1);
+    }
   });
 
   if (goGame) {
