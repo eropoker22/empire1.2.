@@ -4644,6 +4644,30 @@ body::before {
     height: min(88dvh, 640px);
     max-height: min(88dvh, 640px);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #building-detail-modal .modal__body {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    padding-right: 2px;
+  }
+
+  #building-detail-modal .modal__body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  #building-detail-modal .building-detail-panel {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+    padding-right: 0;
   }
 
   #building-detail-modal .building-detail-action-btn {
