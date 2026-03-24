@@ -14,12 +14,12 @@
           <div class="brand__logo brand__logo--img" aria-label="EmpireStreets logo"></div>
           <div>
             <div class="brand__name">Empire City</div>
-            <div class="brand__tag">Vyber strukturu gangu.</div>
+            <div class="brand__tag">Vyber frakci, barvu a avatara.</div>
           </div>
         </div>
 
         <h1>Vyber frakci</h1>
-        <p class="muted">Tím určíš identitu gangu pro toto kolo.</p>
+        <p class="muted">Nastavíš identitu gangu pro toto kolo a barvu na mapě.</p>
 
         <div class="structure-grid" id="structure-grid">
           <button class="structure-card" data-structure="mafián">Mafián</button>
@@ -38,9 +38,18 @@
           <div class="faction-bonus" id="faction-bonus"></div>
         </div>
 
+        <div class="card gang-color-card">
+          <h2>Vyber barvu gangu</h2>
+          <p class="muted">Tahle barva se použije pro tvoje distrikty na mapě.</p>
+          <div class="gang-color-grid" id="gang-color-grid"></div>
+          <div class="gang-color-meta">
+            Aktivní barva: <strong id="gang-color-value">Nevybráno</strong>
+          </div>
+        </div>
+
         <div class="card avatar-card">
           <h2>Vyber avatara</h2>
-          <p class="muted">Klikni na obrázek pro zvětšení a výběr.</p>
+          <p class="muted">Po výběru frakce uvidíš jen avatary dané frakce.</p>
           <div class="avatar-marquee" aria-label="Avatar carousel">
             <div class="avatar-track" id="avatar-grid"></div>
           </div>
@@ -59,7 +68,7 @@
           <a class="faction-link" href="login.html">Zpět na přihlášení</a>
         </div>
 
-        <p id="structure-note" class="muted">Vyber jednu možnost pro pokračování.</p>
+        <p id="structure-note" class="muted">Vyber frakci, barvu a avatara pro pokračování.</p>
       </div>
     </main>
 

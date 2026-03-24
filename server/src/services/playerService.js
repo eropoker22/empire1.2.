@@ -1,8 +1,10 @@
 const { pool } = require("../config/db");
+const { ensureMoneySchema } = require("./moneyService");
 
 async function getPlayerProfile(playerId) {
+  await ensureMoneySchema();
   const result = await pool.query(
-    `SELECT p.id, p.username, p.gang_name, p.money, p.influence_points,
+    `SELECT p.id, p.username, p.gang_name, p.money, p.clean_money, p.dirty_money, p.influence_points,
             p.gang_structure,
             a.name AS alliance_name,
             (SELECT COUNT(*) FROM districts d WHERE d.owner_player_id = p.id) AS district_count

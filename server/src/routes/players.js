@@ -14,7 +14,9 @@ router.get("/me", auth, async (req, res) => {
     username: profile.username,
     gangName: profile.gang_name,
     structure: profile.gang_structure || null,
-    money: Number(profile.money),
+    money: Number(profile.clean_money || 0) + Number(profile.dirty_money || 0),
+    cleanMoney: Number(profile.clean_money || 0),
+    dirtyMoney: Number(profile.dirty_money || 0),
     influence: Number(profile.influence_points),
     alliance: profile.alliance_name,
     districts: Number(profile.district_count)

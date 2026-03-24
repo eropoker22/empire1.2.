@@ -2,16 +2,18 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { pool } = require("../config/db");
 const { ensureMarketSchema } = require("./marketService");
+const { ensureMoneySchema } = require("./moneyService");
 
 async function registerPlayer({ username, password, gangName }) {
   await ensureMarketSchema();
+  await ensureMoneySchema();
   const passwordHash = await bcrypt.hash(password, 12);
 
   const result = await pool.query(
     `INSERT INTO players (
-       username, password_hash, gang_name, money, drugs, weapons, materials, data_shards
+       username, password_hash, gang_name, money, clean_money, dirty_money, drugs, weapons, materials, data_shards
      )
-     VALUES ($1, $2, $3, 12000, 80, 30, 120, 18)
+     VALUES ($1, $2, $3, 12000, 12000, 0, 80, 30, 120, 18)
      RETURNING id, username, gang_name, gang_structure`,
     [username, passwordHash, gangName]
   );

@@ -24,8 +24,36 @@ window.Empire.Map = (() => {
     pinchStartScale: 1,
     pinchWorldCenter: null,
     mapImage: null,
-    mapSize: { width: 1400, height: 900 }
+    mapSize: { width: 1400, height: 900 },
+    vision: {
+      fogPreviewMode: false,
+      alliedOwnerNames: new Set(),
+      enemyOwnerNames: new Set()
+    }
   };
+
+  const ownerPalette = [
+    "rgba(244,114,182,0.34)",
+    "rgba(168,85,247,0.34)",
+    "rgba(45,212,191,0.34)",
+    "rgba(56,189,248,0.35)",
+    "rgba(250,204,21,0.34)"
+  ];
+
+  const enemyPalette = [
+    "rgba(244,114,182,0.22)",
+    "rgba(168,85,247,0.22)",
+    "rgba(45,212,191,0.22)",
+    "rgba(56,189,248,0.22)",
+    "rgba(250,204,21,0.22)"
+  ];
+
+  const allyPalette = [
+    "rgba(56,189,248,0.46)",
+    "rgba(34,197,94,0.46)",
+    "rgba(250,204,21,0.46)",
+    "rgba(168,85,247,0.46)"
+  ];
 
   const parkImages = [
     "../img/park/u6568429269_abandoned_cyberpunk_city_park_at_night_overgrown__cd9ea708-7c9a-4e69-b5be-3a6fef6c66f8_0.png",
@@ -38,7 +66,7 @@ window.Empire.Map = (() => {
     "../img/park/u6568429269_ultra_realistic_cyberpunk_park_in_the_middle_of_a_cfb7f673-84fa-469c-8158-40911aae18a6_0.png",
     "../img/park/u6568429269_ultra_realistic_cyberpunk_underground_city_park_h_6cc910b5-951d-4778-96c4-33ce2a4b2d96_0.png",
     "../img/park/u6568429269_ultra_realistic_cyberpunk_underground_city_park_h_6cc910b5-951d-4778-96c4-33ce2a4b2d96_2.png",
-    "../img/park/u6568429269_ultra_realistic_cyberpunk_underground_city_park_h_da845c2d-83a4-4e5e-927d-fbab08a2e6f2_0.png",
+    "../img/park/1.png",
     "../img/park/u6568429269_ultra_realistic_futuristic_cyberpunk_city_park_at_4e6e39a1-7ff7-4445-9365-b559a33df0ba_0.png"
   ];
 
@@ -48,7 +76,7 @@ window.Empire.Map = (() => {
     "../img/downtown/u6568429269_ultra_realistic_futuristic_cyberpunk_corporate_co_97954e9e-ca7b-408f-900d-96dcfa46b674_1.png",
     "../img/downtown/u6568429269_ultra_realistic_futuristic_cyberpunk_corporate_co_97954e9e-ca7b-408f-900d-96dcfa46b674_2.png",
     "../img/downtown/u6568429269_ultra_realistic_futuristic_cyberpunk_corporate_co_97954e9e-ca7b-408f-900d-96dcfa46b674_3.png",
-    "../img/downtown/u6568429269_ultra_realistic_futuristic_cyberpunk_downtown_pla_9fd803d9-f679-43c7-b791-40f5f958e092_0.png",
+    "../img/downtown/1.png",
     "../img/downtown/u6568429269_ultra_realistic_futuristic_cyberpunk_downtown_pla_9fd803d9-f679-43c7-b791-40f5f958e092_2.png",
     "../img/downtown/u6568429269_ultra_realistic_futuristic_cyberpunk_downtown_pla_c8027657-4880-4137-acb3-a6b8ac44d0ff_1.png",
     "../img/downtown/u6568429269_ultra_realistic_futuristic_cyberpunk_downtown_pla_c8027657-4880-4137-acb3-a6b8ac44d0ff_2.png",
@@ -66,7 +94,7 @@ window.Empire.Map = (() => {
     "../img/commercial/u6568429269_ultra_realistic_cyberpunk_luxury_commercial_distr_b75e77b8-4c90-473c-95c0-ba4c6c1456eb_2.png",
     "../img/commercial/u6568429269_ultra_realistic_cyberpunk_luxury_commercial_distr_b75e77b8-4c90-473c-95c0-ba4c6c1456eb_3.png",
     "../img/commercial/u6568429269_ultra_realistic_cyberpunk_luxury_commercial_distr_dc550711-88c1-45c7-8ddb-316de1b5fd2a_1.png",
-    "../img/commercial/u6568429269_ultra_realistic_cyberpunk_luxury_commercial_distr_dc550711-88c1-45c7-8ddb-316de1b5fd2a_2.png",
+    "../img/commercial/1.png",
     "../img/commercial/u6568429269_ultra_realistic_cyberpunk_residential_district_at_ebf246bf-a944-47da-9d77-35cd0c8cb70f_3.png",
     "../img/commercial/u6568429269_ultra_realistic_futuristic_cyberpunk_corporate_co_32d9d42c-9397-4a7a-b58a-1d29d6a49940_1.png",
     "../img/commercial/u6568429269_ultra_realistic_futuristic_cyberpunk_corporate_co_32d9d42c-9397-4a7a-b58a-1d29d6a49940_3.png",
@@ -89,7 +117,7 @@ window.Empire.Map = (() => {
     "../img/residental/u6568429269_ultra_realistic_cyberpunk_residential_district_wi_cffdadea-d0bc-4bb6-b888-64e83e9d1a03_3.png",
     "../img/residental/u6568429269_ultra_realistic_futuristic_cyberpunk_residential__f7a77fe8-ab6b-4dda-9a87-ce74f484cba5_0.png",
     "../img/residental/u6568429269_ultra_realistic_futuristic_cyberpunk_residential__f7a77fe8-ab6b-4dda-9a87-ce74f484cba5_1.png",
-    "../img/residental/u6568429269_ultra_realistic_futuristic_cyberpunk_residential__f7a77fe8-ab6b-4dda-9a87-ce74f484cba5_2.png",
+    "../img/residental/1.png",
     "../img/residental/u6568429269_ultra_realistic_futuristic_cyberpunk_residential__f7a77fe8-ab6b-4dda-9a87-ce74f484cba5_3.png"
   ];
 
@@ -107,8 +135,13 @@ window.Empire.Map = (() => {
     "../img/industrial/u6568429269_ultra_realistic_futuristic_cyberpunk_industrial_c_a28bf0fd-ad5d-4eb8-bcb5-1ae5d11fc967_0.png",
     "../img/industrial/u6568429269_ultra_realistic_futuristic_cyberpunk_industrial_c_a28bf0fd-ad5d-4eb8-bcb5-1ae5d11fc967_1.png",
     "../img/industrial/u6568429269_ultra_realistic_futuristic_cyberpunk_industrial_c_a28bf0fd-ad5d-4eb8-bcb5-1ae5d11fc967_2.png",
-    "../img/industrial/u6568429269_ultra_realistic_futuristic_cyberpunk_industrial_c_a28bf0fd-ad5d-4eb8-bcb5-1ae5d11fc967_3.png"
+    "../img/industrial/1.png"
   ];
+
+  const districtImageOverrides = {
+    "park:106": ["../img/park/1.png"],
+    "commercial:10": ["../img/commercial/1.png"]
+  };
 
   function init() {
     state.canvas = document.getElementById("city-map");
@@ -119,6 +152,7 @@ window.Empire.Map = (() => {
     loadMapImage();
     generateCity();
     initModal();
+    initBuildingDetailModal();
     bindEvents();
     resizeCanvas();
   }
@@ -127,7 +161,7 @@ window.Empire.Map = (() => {
     const seed = "empire-city-v1";
     const width = state.mapSize.width;
     const height = state.mapSize.height;
-    const districtCount = 130;
+    const districtCount = 150;
     const city = window.Empire.CityGen.generate({ seed, width, height, districtCount });
     const enrichedDistricts = window.Empire.UI?.assignDistrictMetadata
       ? window.Empire.UI.assignDistrictMetadata(city.districts)
@@ -158,9 +192,12 @@ window.Empire.Map = (() => {
     state.canvas.height = rect.height * window.devicePixelRatio;
     state.ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
     const minScale = getMinScale();
-    if (state.scale < minScale) state.scale = minScale;
     if (!state.hasViewportOverride) {
+      // On fresh load keep map maximally zoomed out (whole city visible).
+      state.scale = minScale;
       centerMap();
+    } else if (state.scale < minScale) {
+      state.scale = minScale;
     }
     clampPan();
     render();
@@ -419,7 +456,14 @@ window.Empire.Map = (() => {
     ctx.fillStyle = "#0b1119";
     ctx.fillRect(-2000, -2000, 6000, 6000);
     if (state.mapImage && state.mapImage.complete) {
-      ctx.drawImage(state.mapImage, 0, 0, state.mapSize.width, state.mapSize.height);
+      if (state.vision.fogPreviewMode) {
+        ctx.save();
+        ctx.filter = "grayscale(1) contrast(1.06)";
+        ctx.drawImage(state.mapImage, 0, 0, state.mapSize.width, state.mapSize.height);
+        ctx.restore();
+      } else {
+        ctx.drawImage(state.mapImage, 0, 0, state.mapSize.width, state.mapSize.height);
+      }
     }
   }
 
@@ -448,7 +492,28 @@ window.Empire.Map = (() => {
   }
 
   function districtFill(district) {
-    if (district.owner) return "rgba(34,197,94,0.35)";
+    if (isDistrictOwnedByPlayer(district)) return resolvePlayerOwnedFill();
+    if (isDistrictOwnedByAlly(district)) return allyFill(district.owner);
+    if (isDistrictOwnedByEnemy(district)) return enemyFill(district.owner);
+
+    if (state.vision.fogPreviewMode) {
+      switch (district.type) {
+        case "downtown":
+          return "rgba(248,113,113,0.4)";
+        case "industrial":
+          return "rgba(165,172,180,0.28)";
+        case "commercial":
+          return "rgba(152,160,168,0.28)";
+        case "park":
+          return "rgba(135,145,154,0.26)";
+        case "residential":
+        default:
+          return "rgba(122,130,140,0.26)";
+      }
+    }
+
+    if (district.owner) return ownerFill(district.owner);
+
     switch (district.type) {
       case "downtown":
         return "rgba(248,113,113,0.28)";
@@ -462,6 +527,112 @@ window.Empire.Map = (() => {
       default:
         return "rgba(253,186,116,0.24)";
     }
+  }
+
+  function ownerFill(owner) {
+    const normalized = normalizeName(owner);
+    if (!normalized) return "rgba(34,197,94,0.35)";
+    const index = hashOwner(normalized) % ownerPalette.length;
+    return ownerPalette[index];
+  }
+
+  function enemyFill(owner) {
+    const normalized = normalizeName(owner);
+    if (!normalized) return "rgba(203,213,225,0.22)";
+    const index = hashOwner(normalized) % enemyPalette.length;
+    return enemyPalette[index];
+  }
+
+  function allyFill(owner) {
+    const normalized = normalizeName(owner);
+    if (!normalized) return allyPalette[0];
+    const alliedOwners = Array.from(state.vision.alliedOwnerNames);
+    const indexByOrder = alliedOwners.indexOf(normalized);
+    if (indexByOrder >= 0) {
+      return allyPalette[indexByOrder % allyPalette.length];
+    }
+    const indexByHash = hashOwner(normalized) % allyPalette.length;
+    return allyPalette[indexByHash];
+  }
+
+  function resolvePlayerOwnedFill() {
+    const stored = normalizeHexColor(localStorage.getItem("empire_gang_color"));
+    if (!stored) return "rgba(34,197,94,0.45)";
+    return hexToRgba(stored, 0.45);
+  }
+
+  function normalizeHexColor(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw) return null;
+    if (/^#[0-9a-f]{3}$/.test(raw)) {
+      return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
+    }
+    if (/^#[0-9a-f]{6}$/.test(raw)) return raw;
+    return null;
+  }
+
+  function hexToRgba(hex, alpha = 1) {
+    const normalized = normalizeHexColor(hex);
+    if (!normalized) return "rgba(34,197,94,0.45)";
+    const r = parseInt(normalized.slice(1, 3), 16);
+    const g = parseInt(normalized.slice(3, 5), 16);
+    const b = parseInt(normalized.slice(5, 7), 16);
+    const safeAlpha = Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1;
+    return `rgba(${r},${g},${b},${safeAlpha})`;
+  }
+
+  function isPlayerOwner(ownerName) {
+    return getPlayerOwnerNames().has(normalizeName(ownerName));
+  }
+
+  function isDistrictOwnedByPlayer(district) {
+    if (!district?.owner) return false;
+    return isPlayerOwner(String(district.owner).trim());
+  }
+
+  function isDistrictOwnedByAlly(district) {
+    if (!district?.owner) return false;
+    const owner = normalizeName(district.owner);
+    if (!owner) return false;
+    if (isPlayerOwner(owner)) return false;
+    return state.vision.alliedOwnerNames.has(owner);
+  }
+
+  function isDistrictOwnedByEnemy(district) {
+    if (!district?.owner) return false;
+    const owner = normalizeName(district.owner);
+    if (!owner) return false;
+    if (isPlayerOwner(owner)) return false;
+    if (state.vision.alliedOwnerNames.has(owner)) return false;
+    return state.vision.enemyOwnerNames.has(owner);
+  }
+
+  function isDistrictDefendable(district) {
+    return isDistrictOwnedByPlayer(district) || isDistrictOwnedByAlly(district);
+  }
+
+  function getPlayerOwnerNames() {
+    const player = window.Empire.player || {};
+    const names = [
+      player.gangName,
+      player.username,
+      localStorage.getItem("empire_gang_name")
+    ]
+      .map((value) => normalizeName(value))
+      .filter(Boolean);
+    return new Set(names);
+  }
+
+  function normalizeName(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function hashOwner(value) {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+    }
+    return hash;
   }
 
   function updateDistrictGallery(district) {
@@ -493,6 +664,18 @@ window.Empire.Map = (() => {
     const total = set.images.length;
     if (total === 0) {
       gallery.classList.add("hidden");
+      return;
+    }
+
+    const overrideKey = `${district.type}:${district.id}`;
+    const overrideImages = districtImageOverrides[overrideKey];
+    if (Array.isArray(overrideImages) && overrideImages.length) {
+      grid.innerHTML = overrideImages
+        .map((src, index) => `
+          <img src="${src}" alt="${set.title} ${index + 1}" loading="lazy" />
+        `)
+        .join("");
+      gallery.classList.remove("hidden");
       return;
     }
 
@@ -538,6 +721,25 @@ window.Empire.Map = (() => {
       hideTooltip();
       return;
     }
+    const defendableByPlayer = isDistrictDefendable(district);
+    const isDowntown = district.type === "downtown";
+
+    state.tooltip.classList.remove("hidden");
+
+    if (state.vision.fogPreviewMode && !defendableByPlayer) {
+      state.tooltip.innerHTML = isDowntown
+        ? `
+          <div class="map-tooltip__title">Downtown sektor</div>
+          <div>Citlivá zóna města.</div>
+        `
+        : `
+          <div class="map-tooltip__title">Neznámý sektor</div>
+          <div>Informace o cizím distriktu jsou skryté.</div>
+        `;
+      state.tooltip.style.left = `${clientX + 12}px`;
+      state.tooltip.style.top = `${clientY + 12}px`;
+      return;
+    }
 
     const buildingLine =
       Array.isArray(district.buildings) && district.buildings.length
@@ -554,7 +756,6 @@ window.Empire.Map = (() => {
       ? `<div class="map-tooltip__section"><div class="map-tooltip__label">Set</div><div>${district.buildingSetTitle}</div></div>`
       : "";
 
-    state.tooltip.classList.remove("hidden");
     state.tooltip.innerHTML = `
       <div class="map-tooltip__title">${district.name}</div>
       <div>Typ: ${district.type}</div>
@@ -576,6 +777,23 @@ window.Empire.Map = (() => {
   function applyUpdate(update) {
     if (!update || !Array.isArray(update.districts)) return;
     setDistricts(update.districts);
+  }
+
+  function setVisionContext(context = {}) {
+    state.vision.fogPreviewMode = Boolean(context.fogPreviewMode);
+    const allied = Array.isArray(context.alliedOwnerNames) ? context.alliedOwnerNames : [];
+    const enemies = Array.isArray(context.enemyOwnerNames) ? context.enemyOwnerNames : [];
+    state.vision.alliedOwnerNames = new Set(
+      allied
+        .map((value) => normalizeName(value))
+        .filter(Boolean)
+    );
+    state.vision.enemyOwnerNames = new Set(
+      enemies
+        .map((value) => normalizeName(value))
+        .filter(Boolean)
+    );
+    render();
   }
 
   function setDistricts(districts) {
@@ -623,22 +841,148 @@ window.Empire.Map = (() => {
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") hideModal();
       if (event.key === "Enter" && !state.modal?.root?.classList.contains("hidden")) {
+        const defense = document.getElementById("defense-btn");
+        if (defense && !defense.classList.contains("hidden")) {
+          defense.click();
+          return;
+        }
         const attack = document.getElementById("attack-btn");
         if (attack) attack.click();
       }
     });
   }
 
+  function initBuildingDetailModal() {
+    const root = document.getElementById("building-detail-modal");
+    if (!root) return;
+
+    const backdrop = document.getElementById("building-detail-modal-backdrop");
+    const closeBtn = document.getElementById("building-detail-modal-close");
+    const tabButtons = Array.from(root.querySelectorAll("[data-building-tab]"));
+    const actionButtons = Array.from(root.querySelectorAll("[data-building-action]"));
+    const panelStats = document.getElementById("building-detail-panel-stats");
+    const panelInfo = document.getElementById("building-detail-panel-info");
+
+    const setTab = (tab) => {
+      const showInfo = tab === "info";
+      if (panelStats) panelStats.classList.toggle("hidden", showInfo);
+      if (panelInfo) panelInfo.classList.toggle("hidden", !showInfo);
+      tabButtons.forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.buildingTab === tab);
+      });
+    };
+
+    const close = () => root.classList.add("hidden");
+
+    if (backdrop) backdrop.addEventListener("click", close);
+    if (closeBtn) closeBtn.addEventListener("click", close);
+    root.addEventListener("click", (event) => {
+      if (event.target === root || event.target === backdrop) close();
+    });
+    tabButtons.forEach((button) => {
+      button.addEventListener("click", () => setTab(button.dataset.buildingTab || "stats"));
+    });
+    actionButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const actionId = button.dataset.buildingAction || "?";
+        const buildingName = document.getElementById("building-detail-name")?.textContent || "Budova";
+        window.Empire.UI?.pushEvent?.(`${buildingName}: Akce ${actionId} bude doplněna později.`);
+      });
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close();
+    });
+  }
+
+  function openBuildingDetailModal(buildingName, district) {
+    const root = document.getElementById("building-detail-modal");
+    if (!root) return;
+
+    const details = resolveBuildingDetails(buildingName, district);
+    const title = document.getElementById("building-detail-title");
+    const name = document.getElementById("building-detail-name");
+    const hourly = document.getElementById("building-detail-hourly");
+    const daily = document.getElementById("building-detail-daily");
+    const info = document.getElementById("building-detail-info-text");
+    const panelStats = document.getElementById("building-detail-panel-stats");
+    const panelInfo = document.getElementById("building-detail-panel-info");
+    const tabButtons = Array.from(root.querySelectorAll("[data-building-tab]"));
+
+    if (title) title.textContent = `Budova: ${details.name}`;
+    if (name) name.textContent = details.name;
+    if (hourly) hourly.textContent = `$${details.hourlyIncome} / hod`;
+    if (daily) daily.textContent = `$${details.dailyIncome} / den`;
+    if (info) info.textContent = details.info;
+    if (panelStats) panelStats.classList.remove("hidden");
+    if (panelInfo) panelInfo.classList.add("hidden");
+    tabButtons.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.buildingTab === "stats");
+    });
+
+    root.classList.remove("hidden");
+  }
+
+  function showBuildingDetail(buildingName, district) {
+    openBuildingDetailModal(buildingName, district || null);
+  }
+
+  function resolveBuildingDetails(buildingName, district) {
+    const safeName = String(buildingName || "Neznámá budova");
+    const districtSeed = district?.id || 0;
+    const seed = hashOwner(`${districtSeed}:${safeName}`);
+    const hourlyIncome = 60 + (seed % 31) * 12;
+    const dailyIncome = hourlyIncome * 24;
+    const infoSamples = [
+      "Tahle budova drží lokální cashflow a pomáhá stabilizovat kontrolu sektoru při dlouhých konfliktech.",
+      "Budova funguje jako logistický uzel. Je vhodná pro podporu útoku i obrany podle aktuální situace.",
+      "Poskytuje operativní zázemí pro lidi v terénu, takže zvyšuje efektivitu gangových aktivit v okolí.",
+      "Je to strategický bod pro ekonomiku distriktu. V pozdější fázi hry může výrazně zvednout výnosy.",
+      "Budova je vhodná pro tichý růst vlivu. Největší přínos má při držení sektoru delší dobu."
+    ];
+    const info = infoSamples[seed % infoSamples.length];
+    return { name: safeName, hourlyIncome, dailyIncome, info };
+  }
+
   function showModal(district) {
     if (!state.modal?.root) return;
-    document.getElementById("modal-name").textContent = district.name || "Distrikt";
-    document.getElementById("modal-type").textContent = district.type || "-";
-    document.getElementById("modal-owner").textContent = district.owner || "Neobsazeno";
-    document.getElementById("modal-income").textContent = `$${district.income || 0}/hod`;
-    document.getElementById("modal-influence").textContent = district.influence || 0;
-    updateDistrictBuildings(district);
-    updateDistrictGallery(district);
+    const defendableByPlayer = isDistrictDefendable(district);
+    const isDowntown = district.type === "downtown";
+
+    updateModalActionsForDistrict(district);
+
+    if (!state.vision.fogPreviewMode || defendableByPlayer) {
+      document.getElementById("modal-name").textContent = district.name || "Distrikt";
+      document.getElementById("modal-type").textContent = district.type || "-";
+      document.getElementById("modal-owner").textContent = district.owner || "Neobsazeno";
+      document.getElementById("modal-income").textContent = `$${district.income || 0}/hod`;
+      document.getElementById("modal-influence").textContent = district.influence || 0;
+      updateDistrictBuildings(district);
+      updateDistrictGallery(district);
+    } else {
+      document.getElementById("modal-name").textContent = isDowntown ? "Downtown sektor" : "Neznámý sektor";
+      document.getElementById("modal-type").textContent = isDowntown ? "Downtown" : "Skryto";
+      document.getElementById("modal-owner").textContent = "Skryto";
+      document.getElementById("modal-income").textContent = "Skryto";
+      document.getElementById("modal-influence").textContent = "Skryto";
+      updateDistrictBuildings(null);
+      updateDistrictGallery(null);
+    }
+
     state.modal.root.classList.remove("hidden");
+  }
+
+  function updateModalActionsForDistrict(district) {
+    const attackBtn = document.getElementById("attack-btn");
+    const raidBtn = document.getElementById("raid-btn");
+    const spyBtn = document.getElementById("spy-btn");
+    const defenseBtn = document.getElementById("defense-btn");
+    if (!attackBtn || !raidBtn || !spyBtn || !defenseBtn) return;
+
+    const defendableByPlayer = isDistrictDefendable(district);
+    attackBtn.classList.toggle("hidden", defendableByPlayer);
+    raidBtn.classList.toggle("hidden", defendableByPlayer);
+    spyBtn.classList.toggle("hidden", defendableByPlayer);
+    defenseBtn.classList.toggle("hidden", !defendableByPlayer);
   }
 
   function hideModal() {
@@ -651,6 +995,11 @@ window.Empire.Map = (() => {
     const title = document.getElementById("modal-buildings-title");
     const list = document.getElementById("modal-buildings-list");
     if (!root || !title || !list) return;
+    if (!district) {
+      root.classList.add("hidden");
+      list.innerHTML = "";
+      return;
+    }
 
     const buildings = Array.isArray(district.buildings) ? district.buildings : [];
     if (!buildings.length) {
@@ -658,14 +1007,45 @@ window.Empire.Map = (() => {
       list.innerHTML = "";
       return;
     }
+    const lockMeta = resolveBuildingLockMeta(district);
 
     title.textContent = district.buildingSetTitle
       ? `Budovy v distriktu • ${district.buildingSetTitle} (${district.buildingTier || "set"})`
       : "Budovy v distriktu";
     list.innerHTML = buildings
-      .map((building) => `<div class="district-buildings__item">${building}</div>`)
+      .map(
+        (building, index) => `
+          <button
+            class="district-buildings__item district-buildings__item--interactive${lockMeta.locked ? " district-buildings__item--locked" : ""}"
+            type="button"
+            data-building-index="${index}"
+            ${lockMeta.locked ? 'data-building-locked="1" disabled aria-disabled="true"' : ""}
+          >
+            <span class="district-buildings__name">${building}</span>
+            ${lockMeta.locked ? `<span class="district-buildings__lock">${lockMeta.label}</span>` : ""}
+          </button>
+        `
+      )
       .join("");
+    list.querySelectorAll("[data-building-index]:not([data-building-locked])").forEach((button) => {
+      button.addEventListener("click", () => {
+        const index = Number(button.getAttribute("data-building-index"));
+        const buildingName = buildings[index];
+        if (!buildingName) return;
+        openBuildingDetailModal(buildingName, district);
+      });
+    });
     root.classList.remove("hidden");
+  }
+
+  function resolveBuildingLockMeta(district) {
+    if (isDistrictOwnedByPlayer(district)) {
+      return { locked: false, label: "" };
+    }
+    if (isDistrictOwnedByAlly(district)) {
+      return { locked: true, label: "ALLY LOCKED" };
+    }
+    return { locked: true, label: "LOCKED" };
   }
 
   function clampPan() {
@@ -782,5 +1162,5 @@ window.Empire.Map = (() => {
     return Date.now() - state.lastTouchAt < 500;
   }
 
-  return { init, render, setDistricts, applyUpdate };
+  return { init, render, setDistricts, applyUpdate, setVisionContext, showBuildingDetail };
 })();

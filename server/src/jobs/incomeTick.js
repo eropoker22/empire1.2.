@@ -1,6 +1,8 @@
 const { pool } = require("../config/db");
+const { ensureMoneySchema, addDirtyMoney } = require("../services/moneyService");
 
 async function runIncomeTick() {
+  await ensureMoneySchema();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -20,10 +22,7 @@ async function runIncomeTick() {
       const income = Number(row.income);
       const bonusPct = Number(row.bonus_pct || 0);
       const payout = Math.floor(income * (1 + bonusPct / 100));
-      await client.query(
-        "UPDATE players SET money = money + $1 WHERE id = $2",
-        [payout, row.player_id]
-      );
+      await addDirtyMoney(client, row.player_id, payout);
       await client.query(
         "INSERT INTO economy_ledger (player_id, delta, reason) VALUES ($1, $2, $3)",
         [row.player_id, payout, "income_tick"]

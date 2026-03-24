@@ -1,7 +1,9 @@
 const { pool } = require("../config/db");
 const { ROUND_DAYS } = require("../config/constants");
+const { ensureMoneySchema } = require("../services/moneyService");
 
 async function runRoundTick() {
+  await ensureMoneySchema();
   const activeRes = await pool.query("SELECT * FROM rounds WHERE active = true ORDER BY started_at DESC LIMIT 1");
   if (activeRes.rowCount === 0) return;
 
@@ -21,7 +23,7 @@ async function runRoundTick() {
     );
 
     await pool.query("UPDATE districts SET owner_player_id = NULL, influence_level = 0");
-    await pool.query("UPDATE players SET money = 0, influence_points = 0");
+    await pool.query("UPDATE players SET money = 0, clean_money = 0, dirty_money = 0, influence_points = 0");
 
     await pool.query("COMMIT");
   } catch (err) {

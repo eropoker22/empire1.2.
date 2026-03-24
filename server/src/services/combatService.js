@@ -1,7 +1,9 @@
 const { pool } = require("../config/db");
 const { ATTACK_COOLDOWN_MINUTES, MAX_INFLUENCE } = require("../config/constants");
+const { ensureMoneySchema, spendPlayerMoney } = require("./moneyService");
 
 async function attackDistrict({ playerId, districtId }) {
+  await ensureMoneySchema();
   const client = await pool.connect();
 
   try {
@@ -35,13 +37,13 @@ async function attackDistrict({ playerId, districtId }) {
     }
 
     const playerRes = await client.query(
-      "SELECT money, influence_points FROM players WHERE id = $1 FOR UPDATE",
+      "SELECT clean_money, dirty_money, influence_points FROM players WHERE id = $1 FOR UPDATE",
       [playerId]
     );
 
     const player = playerRes.rows[0];
     const attackCost = 20;
-    if (player.money < attackCost) {
+    if (Number(player.clean_money || 0) + Number(player.dirty_money || 0) < attackCost) {
       await client.query("ROLLBACK");
       return { ok: false, error: "insufficient_funds" };
     }
@@ -77,9 +79,10 @@ async function attackDistrict({ playerId, districtId }) {
     );
 
     const influenceGain = success ? Math.ceil(influenceChange / 4) : Math.floor(influenceChange / 8);
+    await spendPlayerMoney(client, { playerId, amount: attackCost, preferDirty: true });
     await client.query(
-      "UPDATE players SET money = money - $1, influence_points = influence_points + $2 WHERE id = $3",
-      [attackCost, influenceGain, playerId]
+      "UPDATE players SET influence_points = influence_points + $1 WHERE id = $2",
+      [influenceGain, playerId]
     );
 
     await client.query(

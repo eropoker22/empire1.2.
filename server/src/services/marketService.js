@@ -1,4 +1,11 @@
 const { pool } = require("../config/db");
+const {
+  ensureMoneySchema,
+  normalizeMoneyRow,
+  spendPlayerMoney,
+  addCleanMoney,
+  addDirtyMoney
+} = require("./moneyService");
 const MARKET_FEE_BPS = 500;
 
 const RESOURCE_COLUMNS = {
@@ -12,10 +19,10 @@ let marketSchemaReady = false;
 
 async function ensureMarketSchema() {
   if (marketSchemaReady) return;
+  await ensureMoneySchema();
   await pool.query(`
     ALTER TABLE players
       ADD COLUMN IF NOT EXISTS drugs INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS garage INT NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS weapons INT NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS defense INT NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS materials INT NOT NULL DEFAULT 0,
@@ -80,7 +87,7 @@ async function getMarketState(playerId) {
   await ensureMarketSchema();
 
   const balancesRes = await pool.query(
-    `SELECT money, drugs, weapons, materials, data_shards
+    `SELECT money, clean_money, dirty_money, drugs, weapons, materials, data_shards
        FROM players
       WHERE id = $1`,
     [playerId]
@@ -117,9 +124,12 @@ async function getMarketState(playerId) {
   );
 
   const balances = balancesRes.rows[0] || {};
+  const money = normalizeMoneyRow(balances);
   return {
     balances: {
-      money: Number(balances.money || 0),
+      money: money.totalMoney,
+      cleanMoney: money.cleanMoney,
+      dirtyMoney: money.dirtyMoney,
       drugs: Number(balances.drugs || 0),
       weapons: Number(balances.weapons || 0),
       materials: Number(balances.materials || 0),
@@ -238,7 +248,7 @@ async function cancelMarketOrder({ playerId, orderId }) {
 async function reserveOrderEscrow(client, { playerId, resourceKey, side, quantity, pricePerUnit }) {
   const resourceColumn = RESOURCE_COLUMNS[resourceKey];
   const playerRes = await client.query(
-    `SELECT money, ${resourceColumn} AS resource
+    `SELECT clean_money, dirty_money, ${resourceColumn} AS resource
        FROM players
       WHERE id = $1
       FOR UPDATE`,
@@ -268,18 +278,12 @@ async function reserveOrderEscrow(client, { playerId, resourceKey, side, quantit
   }
 
   const escrowCost = quantity * pricePerUnit;
-  if (Number(player.money) < escrowCost) {
+  if (Number(player.clean_money || 0) + Number(player.dirty_money || 0) < escrowCost) {
     const error = new Error("insufficient_money");
     error.status = 400;
     throw error;
   }
-  await client.query(
-    `UPDATE players
-        SET money = money - $1,
-            updated_at = NOW()
-      WHERE id = $2`,
-    [escrowCost, playerId]
-  );
+  await spendPlayerMoney(client, { playerId, amount: escrowCost, preferDirty: false });
 }
 
 async function refundOrderEscrow(client, order) {
@@ -298,13 +302,7 @@ async function refundOrderEscrow(client, order) {
     return;
   }
 
-  await client.query(
-    `UPDATE players
-        SET money = money + $1,
-            updated_at = NOW()
-      WHERE id = $2`,
-    [remainingQuantity * Number(order.price_per_unit), order.player_id]
-  );
+  await addCleanMoney(client, order.player_id, remainingQuantity * Number(order.price_per_unit));
 }
 
 async function matchOrder(client, order) {
@@ -366,13 +364,7 @@ async function matchOrder(client, order) {
         WHERE id = $2`,
       [tradeQuantity, buyerId]
     );
-    await client.query(
-      `UPDATE players
-          SET money = money + $1,
-              updated_at = NOW()
-        WHERE id = $2`,
-      [sellerNet, sellerId]
-    );
+    await addDirtyMoney(client, sellerId, sellerNet);
     await client.query(
       `INSERT INTO economy_ledger (player_id, delta, reason)
        VALUES ($1, $2, $3)`,
@@ -388,12 +380,10 @@ async function matchOrder(client, order) {
     );
 
     if (activeOrder.side === "buy" && activeOrder.price_per_unit > executionPrice) {
-      await client.query(
-        `UPDATE players
-            SET money = money + $1,
-                updated_at = NOW()
-          WHERE id = $2`,
-        [tradeQuantity * (activeOrder.price_per_unit - executionPrice), activeOrder.player_id]
+      await addCleanMoney(
+        client,
+        activeOrder.player_id,
+        tradeQuantity * (activeOrder.price_per_unit - executionPrice)
       );
     }
 

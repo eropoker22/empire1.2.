@@ -73,6 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const avatarGrid = document.getElementById("avatar-grid");
   const avatarLeft = document.getElementById("avatar-left");
   const avatarRight = document.getElementById("avatar-right");
+  const gangColorGrid = document.getElementById("gang-color-grid");
+  const gangColorValue = document.getElementById("gang-color-value");
   const lightbox = document.getElementById("avatar-lightbox");
   const lightboxImg = document.getElementById("avatar-lightbox-img");
   const lightboxCaption = document.getElementById("avatar-lightbox-caption");
@@ -82,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let selectedStructure = localStorage.getItem("empire_structure");
   let selectedAvatar = localStorage.getItem("empire_avatar");
+  let selectedGangColor = localStorage.getItem("empire_gang_color");
   let hoverPause = false;
   let marqueeTouchState = {
     active: false,
@@ -90,8 +93,9 @@ document.addEventListener("DOMContentLoaded", () => {
     startScrollLeft: 0,
     targetAvatar: null
   };
+  let marqueeLoopWidth = 0;
 
-  const avatars = [
+  const allAvatars = [
     "../img/avatars/grok_image_1773615281856.jpg",
     "../img/avatars/grok_image_1773615288781.jpg",
     "../img/avatars/grok_image_1773615384205.jpg",
@@ -204,9 +208,123 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const factionOrder = [
+    "mafián",
+    "kartel",
+    "pouliční gang",
+    "tajná organizace",
+    "hackeři",
+    "motorkářský gang",
+    "soukromá armáda",
+    "korporace"
+  ];
+
+  const gangColorOptions = [
+    { name: "Červená", value: "#ef4444" },
+    { name: "Modrá", value: "#3b82f6" },
+    { name: "Zelená", value: "#22c55e" },
+    { name: "Žlutá", value: "#eab308" },
+    { name: "Oranžová", value: "#f97316" },
+    { name: "Fialová", value: "#8b5cf6" },
+    { name: "Růžová", value: "#ec4899" },
+    { name: "Tyrkysová", value: "#14b8a6" },
+    { name: "Azurová", value: "#06b6d4" },
+    { name: "Purpurová", value: "#a21caf" },
+    { name: "Vínová", value: "#7f1d1d" },
+    { name: "Olivová", value: "#6b8e23" },
+    { name: "Limetková", value: "#84cc16" },
+    { name: "Mentolová", value: "#a7f3d0" },
+    { name: "Lososová", value: "#fa8072" },
+    { name: "Korálová", value: "#ff7f50" },
+    { name: "Zlatá", value: "#ffd700" },
+    { name: "Stříbrná", value: "#c0c0c0" },
+    { name: "Béžová", value: "#f5f5dc" },
+    { name: "Hnědá", value: "#8b4513" },
+    { name: "Černá", value: "#111111" },
+    { name: "Bílá", value: "#ffffff" },
+    { name: "Šedá", value: "#9ca3af" },
+    { name: "Indigo", value: "#4f46e5" },
+    { name: "Safírová", value: "#0f52ba" },
+    { name: "Smaragdová", value: "#50c878" },
+    { name: "Karmínová", value: "#dc143c" },
+    { name: "Levandulová", value: "#e6e6fa" },
+    { name: "Broskvová", value: "#ffdab9" },
+    { name: "Antracitová", value: "#36454f" }
+  ];
+  const gangColorValueSet = new Set(gangColorOptions.map((item) => item.value));
+  const gangColorByValue = new Map(gangColorOptions.map((item) => [item.value, item.name]));
+
+  selectedGangColor = normalizeHexColor(selectedGangColor);
+  if (selectedGangColor && !gangColorValueSet.has(selectedGangColor)) {
+    selectedGangColor = null;
+    localStorage.removeItem("empire_gang_color");
+  }
+
+  const factionAvatarPools = buildFactionAvatarPools(allAvatars, factionOrder, 10);
+
+  function normalizeHexColor(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw) return null;
+    if (/^#[0-9a-f]{3}$/.test(raw)) {
+      return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
+    }
+    if (/^#[0-9a-f]{6}$/.test(raw)) return raw;
+    return null;
+  }
+
+  function buildFactionAvatarPools(avatarList, factionKeys, maxPerFaction) {
+    const pools = {};
+    const sanitized = Array.isArray(avatarList) ? avatarList.filter(Boolean) : [];
+    const keys = Array.isArray(factionKeys) ? factionKeys.filter(Boolean) : [];
+    if (!keys.length) return pools;
+    const base = Math.floor(sanitized.length / keys.length);
+    let remainder = sanitized.length % keys.length;
+    let cursor = 0;
+
+    keys.forEach((key) => {
+      const desired = base + (remainder > 0 ? 1 : 0);
+      const take = Math.min(maxPerFaction, desired);
+      pools[key] = sanitized.slice(cursor, cursor + take);
+      cursor += take;
+      if (remainder > 0) remainder -= 1;
+    });
+
+    return pools;
+  }
+
+  function getAvailableAvatars() {
+    if (!selectedStructure) return [];
+    const avatars = factionAvatarPools[selectedStructure];
+    return Array.isArray(avatars) ? avatars : [];
+  }
+
+  function resolveGangColorName(color) {
+    const normalized = normalizeHexColor(color);
+    if (!normalized) return "Nevybráno";
+    return gangColorByValue.get(normalized) || normalized.toUpperCase();
+  }
+
+  function renderGangColorOptions() {
+    if (!gangColorGrid) return;
+    gangColorGrid.innerHTML = gangColorOptions
+      .map(
+        ({ name, value }) => `
+          <button
+            class="gang-color-swatch"
+            type="button"
+            data-gang-color="${value}"
+            style="--swatch:${value}"
+            aria-label="${name}"
+            title="${name}"
+          ></button>
+        `
+      )
+      .join("");
+  }
+
   function updateContinueState() {
     if (!goGame) return;
-    if (selectedStructure && selectedAvatar) {
+    if (selectedStructure && selectedAvatar && selectedGangColor) {
       goGame.classList.remove("faction-link--disabled");
       goGame.setAttribute("aria-disabled", "false");
       goGame.tabIndex = 0;
@@ -219,19 +337,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateNote() {
     if (!note) return;
-    if (selectedStructure && selectedAvatar) {
-      note.textContent = `Vybráno: ${selectedStructure} + avatar.`;
+    if (selectedStructure && selectedAvatar && selectedGangColor) {
+      note.textContent = `Vybráno: ${selectedStructure} • ${resolveGangColorName(selectedGangColor)} • avatar.`;
       return;
     }
-    if (selectedStructure && !selectedAvatar) {
-      note.textContent = `Vybráno: ${selectedStructure}. Teď vyber avatara.`;
-      return;
-    }
-    if (!selectedStructure && selectedAvatar) {
-      note.textContent = "Vybrán avatar. Teď vyber frakci.";
-      return;
-    }
-    note.textContent = "Vyber jednu možnost pro pokračování.";
+    const missing = [];
+    if (!selectedStructure) missing.push("frakci");
+    if (!selectedGangColor) missing.push("barvu gangu");
+    if (!selectedAvatar) missing.push("avatara");
+    note.textContent = `Chybí vybrat: ${missing.join(", ")}.`;
   }
 
   function getAvatarLabel(src) {
@@ -258,6 +372,26 @@ document.addEventListener("DOMContentLoaded", () => {
     lightbox.classList.add("hidden");
   }
 
+  function applyGangColorSelection(color) {
+    const normalized = normalizeHexColor(color);
+    if (!normalized || !gangColorValueSet.has(normalized)) return;
+    selectedGangColor = normalized;
+    localStorage.setItem("empire_gang_color", normalized);
+    if (gangColorGrid) {
+      gangColorGrid.querySelectorAll("[data-gang-color]").forEach((button) => {
+        const buttonColor = normalizeHexColor(button.dataset.gangColor);
+        button.classList.toggle("is-selected", buttonColor === normalized);
+      });
+    }
+    if (gangColorValue) {
+      const colorName = resolveGangColorName(normalized);
+      gangColorValue.textContent = `${colorName} (${normalized.toUpperCase()})`;
+      gangColorValue.style.color = normalized;
+    }
+    updateContinueState();
+    updateNote();
+  }
+
   function applyStructureSelection(choice) {
     if (!choice || !grid) return;
     grid.querySelectorAll(".structure-card").forEach((btn) => {
@@ -265,7 +399,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     selectedStructure = choice;
     localStorage.setItem("empire_structure", choice);
-    updateNote();
+
+    const availableAvatars = getAvailableAvatars();
+    if (!availableAvatars.includes(selectedAvatar)) {
+      selectedAvatar = null;
+      localStorage.removeItem("empire_avatar");
+    }
+
+    renderAvatars();
+
     const info = data[choice];
     if (info) {
       if (detail) detail.classList.add("is-active");
@@ -274,6 +416,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (bonus) bonus.textContent = info.bonus;
     }
     updateContinueState();
+    updateNote();
     if (token) {
       fetch("http://localhost:3000/players/structure", {
         method: "POST",
@@ -295,6 +438,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function applyAvatarSelection(src, options = {}) {
     if (!src || !avatarGrid) return;
+    const availableAvatars = getAvailableAvatars();
+    if (!availableAvatars.includes(src)) return;
     avatarGrid.querySelectorAll(".avatar-item").forEach((btn) => {
       btn.classList.toggle("is-selected", btn.dataset.avatar === src);
     });
@@ -307,9 +452,31 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function normalizeMarqueeLoop() {
+    if (!marquee || marqueeLoopWidth <= 0) return;
+    while (marquee.scrollLeft >= marqueeLoopWidth) {
+      marquee.scrollLeft -= marqueeLoopWidth;
+    }
+    while (marquee.scrollLeft < 0) {
+      marquee.scrollLeft += marqueeLoopWidth;
+    }
+  }
+
+  function updateMarqueeLoopWidth() {
+    if (!marquee) return;
+    marqueeLoopWidth = marquee.scrollWidth / 2;
+    normalizeMarqueeLoop();
+  }
+
   function renderAvatars() {
     if (!avatarGrid) return;
-    const looped = avatars.concat(avatars);
+    const availableAvatars = getAvailableAvatars();
+    if (!availableAvatars.length) {
+      avatarGrid.innerHTML = '<div class="avatar-track__hint">Nejdřív vyber frakci. Pak se zobrazí její avatary.</div>';
+      marqueeLoopWidth = 0;
+      return;
+    }
+    const looped = availableAvatars.concat(availableAvatars);
     avatarGrid.innerHTML = looped
       .map((src) => `
         <button class="avatar-item" data-avatar="${src}" aria-label="Vybrat avatara">
@@ -346,7 +513,11 @@ document.addEventListener("DOMContentLoaded", () => {
         applyAvatarSelection(src, { openPreview: true });
       });
     });
+    if (marquee) marquee.scrollLeft = 0;
+    updateMarqueeLoopWidth();
   }
+
+  renderGangColorOptions();
 
   if (grid) {
     grid.querySelectorAll(".structure-card").forEach((card) => {
@@ -359,44 +530,59 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  if (gangColorGrid) {
+    gangColorGrid.querySelectorAll("[data-gang-color]").forEach((swatch) => {
+      const selectColor = () => applyGangColorSelection(swatch.dataset.gangColor);
+      swatch.addEventListener("click", selectColor);
+      swatch.addEventListener("touchend", (event) => {
+        event.preventDefault();
+        selectColor();
+      }, { passive: false });
+    });
+  }
+
   renderAvatars();
   updateContinueState();
   updateNote();
 
   if (avatarLeft && avatarRight && avatarGrid && marquee) {
     const scrollByAmount = () => (marquee ? marquee.clientWidth * 0.6 : 220);
-    const baseSpeed = 0.55;
-    let holdVelocity = 0;
+    const autoSpeedPxPerMs = 0.038;
+    let holdDirection = 0;
     let lastTime = 0;
+    marquee.style.scrollBehavior = "auto";
 
     const step = (time) => {
       if (!marquee) return;
       if (!lastTime) lastTime = time;
-      const delta = time - lastTime;
+      const delta = Math.min(34, Math.max(0, time - lastTime));
       lastTime = time;
-      const velocity = hoverPause ? 0 : (holdVelocity !== 0 ? holdVelocity : baseSpeed);
-      marquee.scrollLeft += (velocity * delta) / 16.67;
-      const half = marquee.scrollWidth / 2;
-      if (marquee.scrollLeft >= half) marquee.scrollLeft -= half;
-      if (marquee.scrollLeft < 0) marquee.scrollLeft += half;
+      if (!hoverPause && marqueeLoopWidth > 0) {
+        const speed = holdDirection !== 0 ? holdDirection * autoSpeedPxPerMs * 5.2 : autoSpeedPxPerMs;
+        marquee.scrollLeft += speed * delta;
+        normalizeMarqueeLoop();
+      }
       requestAnimationFrame(step);
     };
 
     if (marquee && !isCoarsePointer) requestAnimationFrame(step);
 
-    let holdActive = false;
-
     const startHold = (dir) => {
-      holdActive = true;
-      holdVelocity = dir * 2.6;
+      holdDirection = dir;
     };
     const stopHold = () => {
-      holdVelocity = 0;
-      holdActive = false;
+      holdDirection = 0;
     };
 
-    avatarLeft.addEventListener("click", () => marquee?.scrollBy({ left: -scrollByAmount(), behavior: "smooth" }));
-    avatarRight.addEventListener("click", () => marquee?.scrollBy({ left: scrollByAmount(), behavior: "smooth" }));
+    const jumpBy = (delta) => {
+      if (!marquee) return;
+      marquee.scrollLeft += delta;
+      normalizeMarqueeLoop();
+    };
+
+    avatarLeft.addEventListener("click", () => jumpBy(-scrollByAmount()));
+    avatarRight.addEventListener("click", () => jumpBy(scrollByAmount()));
+    window.addEventListener("resize", updateMarqueeLoopWidth);
 
     if (!isCoarsePointer) {
       avatarLeft.addEventListener("mousedown", () => startHold(-1));
@@ -428,6 +614,7 @@ document.addEventListener("DOMContentLoaded", () => {
           marqueeTouchState.moved = true;
         }
         marquee.scrollLeft = marqueeTouchState.startScrollLeft - deltaX;
+        normalizeMarqueeLoop();
       }, { passive: true });
 
       const endDrag = (event) => {
@@ -441,6 +628,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (shouldSelect) {
           applyAvatarSelection(targetAvatar);
         }
+        normalizeMarqueeLoop();
         window.setTimeout(() => {
           marqueeTouchState.moved = false;
         }, 50);
@@ -459,6 +647,13 @@ document.addEventListener("DOMContentLoaded", () => {
     applyAvatarSelection(selectedAvatar);
   }
 
+  if (selectedGangColor) {
+    applyGangColorSelection(selectedGangColor);
+  } else if (gangColorValue) {
+    gangColorValue.textContent = "Nevybráno";
+    gangColorValue.style.color = "";
+  }
+
   if (lightboxBackdrop) {
     lightboxBackdrop.addEventListener("click", closeLightbox);
   }
@@ -475,7 +670,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (goGame) {
     goGame.addEventListener("click", (event) => {
-      if (!selectedStructure || !selectedAvatar) {
+      if (!selectedStructure || !selectedAvatar || !selectedGangColor) {
         event.preventDefault();
       }
     });

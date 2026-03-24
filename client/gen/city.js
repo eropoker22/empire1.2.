@@ -112,7 +112,7 @@ window.Empire.CityGen = (() => {
     const sortedByDist = [...entries].sort((a, b) =>
       a.dist === b.dist ? a.angle - b.angle : a.dist - b.dist
     );
-    const downtownCount = 10;
+    const downtownCount = 8;
     const typeMap = new Map();
 
     for (let i = 0; i < downtownCount && i < sortedByDist.length; i += 1) {

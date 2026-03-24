@@ -22,50 +22,19 @@
         <div class="topbar__right">
           <div class="topbar__stats">
             <div class="stat">
-              <span class="stat__label">Hotovost</span>
-              <span class="stat__value" id="stat-cash">$0</span>
+              <span class="stat__label">Čisté peníze</span>
+              <span class="stat__value" id="stat-clean-money">$0</span>
             </div>
             <div class="stat">
+              <span class="stat__label">Špinavé peníze</span>
+              <span class="stat__value" id="stat-dirty-money">$0</span>
+            </div>
+            <div class="stat" id="stat-influence-wrap">
               <span class="stat__label">Vliv</span>
               <span class="stat__value" id="stat-influence">0</span>
             </div>
-            <div class="stat">
-              <span class="stat__label">Drogy</span>
-              <span class="stat__value" id="stat-drugs">0</span>
-            </div>
-            <div class="stat">
-              <span class="stat__label">Garáž</span>
-              <span class="stat__value" id="stat-garage">0</span>
-            </div>
-            <div class="stat">
-              <span class="stat__label">Sklad</span>
-              <span class="stat__value" id="stat-storage">0</span>
-            </div>
-            <div class="stat stat--weapons" id="stat-weapons-wrap">
-              <span class="stat__label">Zbraně</span>
-              <span class="stat__value" id="stat-weapons">0</span>
-              <div class="stat__popover" id="weapons-popover">
-                <div class="stat__popover-title">Arzenál</div>
-                <div class="stat__popover-actions">
-                  <button
-                    class="btn btn--primary stat__popover-btn"
-                    id="weapons-attack-btn"
-                    data-weapon-action="attack"
-                  >
-                    Útok
-                  </button>
-                  <button
-                    class="btn btn--ghost stat__popover-btn"
-                    id="weapons-defense-btn"
-                    data-weapon-action="defense"
-                  >
-                    Obrana
-                  </button>
-                </div>
-                <div class="stat__popover-list" 
-                  
-                </div>
-              </div>
+            <div class="stat" id="stat-storage-wrap" role="button" tabindex="0" aria-label="Otevřít sklad">
+              <span class="stat__label stat__label--storage">SKLAD</span>
             </div>
           </div>
           <div class="topbar__actions">
@@ -91,7 +60,6 @@
           </div>
 
           <div class="card">
-            <h2>Budovy</h2>
             <p class="muted">Správa a přehled městských budov.</p>
             <button class="btn events-hero" id="buildings-open">
               Budovy
@@ -99,7 +67,6 @@
           </div>
 
           <div class="card">
-            <h2>Market</h2>
             <p class="muted">Obchod, směna a tržní přehled.</p>
             <button class="btn events-hero" id="market-open">
               Market
@@ -113,6 +80,13 @@
                 <div class="ticker__item">Čekám na rozkazy...</div>
               </div>
             </div>
+          </div>
+
+          <div class="card">
+            <p class="muted">Pořadí gangů podle síly, vlivu a kontroly města.</p>
+            <button class="btn events-hero" id="leaderboard-open">
+              Leaderboard
+            </button>
           </div>
         </section>
 
@@ -153,6 +127,24 @@
             <div class="profile-row">
               <span>Aliance</span>
               <strong id="profile-alliance">Žádná</strong>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Ukázkové stavy hráče</h2>
+            <p class="muted">Klikni a zobrazí se, jak vypadá profil a mapa v dané situaci.</p>
+            <div class="scenario-preview">
+              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="full-map">
+                Hráč ovládá celou mapu
+              </button>
+              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="single-district">
+                Hráč má 1 distrikt
+              </button>
+              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-ten">
+                Aliance 2 hráčů má 10 sektorů
+              </button>
+              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-war">
+                Já 3 sektory • spojenci 8 • nepřátelé 18
+              </button>
             </div>
           </div>
           <div class="card">
@@ -214,6 +206,109 @@
             <button class="btn btn--danger" id="attack-btn">Zaútočit</button>
             <button class="btn btn--primary" id="raid-btn">Vykrást</button>
             <button class="btn btn--warn" id="spy-btn">Špehovat</button>
+            <button class="btn btn--primary hidden" id="defense-btn">Obrana</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="district-defense-modal" class="modal hidden">
+      <div id="district-defense-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content">
+        <div class="modal__header">
+          <h3>Obrana distriktu</h3>
+          <button class="modal__close" id="district-defense-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body">
+          <div class="modal__row">
+            <span>Vybraný distrikt</span>
+            <strong id="defense-modal-district">-</strong>
+          </div>
+          <p class="muted">
+            Tady doplníme nastavení obrany (věže, jednotky, pasti a priority).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="storage-modal" class="modal hidden">
+      <div id="storage-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content">
+        <div class="modal__header">
+          <h3>Sklad</h3>
+          <button class="modal__close" id="storage-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body">
+          <div class="storage-modal__section">
+            <div class="storage-modal__section-title">Útočné zbraně</div>
+            <div class="storage-modal__list" id="storage-modal-attack-list"></div>
+          </div>
+          <div class="storage-modal__section">
+            <div class="storage-modal__section-title">Obranné zbraně</div>
+            <div class="storage-modal__list" id="storage-modal-defense-list"></div>
+          </div>
+          <div class="storage-modal__section">
+            <div class="storage-modal__section-title">Drogy</div>
+            <div class="storage-modal__list" id="storage-modal-drugs-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="leaderboard-modal" class="modal hidden">
+      <div id="leaderboard-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content modal__content--profile">
+        <div class="modal__header">
+          <h3>Leaderboard</h3>
+          <button class="modal__close" id="leaderboard-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body">
+          <div id="leaderboard-modal-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="building-detail-modal" class="modal hidden">
+      <div id="building-detail-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content building-detail-modal__content">
+        <div class="modal__header">
+          <h3 id="building-detail-title">Detail budovy</h3>
+          <button class="modal__close" id="building-detail-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body">
+          <div class="building-detail-tabs">
+            <button class="building-detail-tabs__btn is-active" type="button" data-building-tab="stats">
+              Statistiky
+            </button>
+            <button class="building-detail-tabs__btn" type="button" data-building-tab="info">
+              Info
+            </button>
+          </div>
+
+          <div id="building-detail-panel-stats" class="building-detail-panel">
+            <div class="modal__row">
+              <span>Název</span>
+              <strong id="building-detail-name">-</strong>
+            </div>
+            <div class="modal__row">
+              <span>Hodinový income</span>
+              <strong id="building-detail-hourly">$0 / hod</strong>
+            </div>
+            <div class="modal__row">
+              <span>Denní income</span>
+              <strong id="building-detail-daily">$0 / den</strong>
+            </div>
+            <div class="modal__actions">
+              <button class="btn btn--primary" type="button" data-building-action="1">Akce 1</button>
+              <button class="btn btn--ghost" type="button" data-building-action="2">Akce 2</button>
+              <button class="btn btn--warn" type="button" data-building-action="3">Akce 3</button>
+            </div>
+          </div>
+
+          <div id="building-detail-panel-info" class="building-detail-panel hidden">
+            <p class="building-detail-info-text" id="building-detail-info-text">
+              Tato budova zatím nemá doplněný finální popis.
+            </p>
           </div>
         </div>
       </div>
@@ -290,16 +385,16 @@
             <strong id="profile-modal-districts">0</strong>
           </div>
           <div class="modal__row">
-            <span>Hotovost</span>
-            <strong id="profile-modal-cash">$0</strong>
+            <span>Čisté peníze</span>
+            <strong id="profile-modal-clean-money">$0</strong>
+          </div>
+          <div class="modal__row">
+            <span>Špinavé peníze</span>
+            <strong id="profile-modal-dirty-money">$0</strong>
           </div>
           <div class="modal__row">
             <span>Drogy</span>
             <strong id="profile-modal-drugs">0</strong>
-          </div>
-          <div class="modal__row">
-            <span>Garáž</span>
-            <strong id="profile-modal-garage">0</strong>
           </div>
           <div class="modal__row">
             <span>Sklad</span>

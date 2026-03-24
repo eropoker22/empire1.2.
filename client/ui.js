@@ -35,6 +35,14 @@ window.Empire.UI = (() => {
     { name: "Raketová věž", power: 30 }
   ];
 
+  const storageDrugTypes = [
+    { name: "Marihuana", ratio: 0.28 },
+    { name: "Kokain", ratio: 0.22 },
+    { name: "Pervitin", ratio: 0.2 },
+    { name: "Extáze", ratio: 0.17 },
+    { name: "Heroin", ratio: 0.13 }
+  ];
+
   const SETTINGS_STORAGE_KEY = "empire_settings";
   const DEFAULT_SETTINGS = Object.freeze({
     sound: true,
@@ -575,9 +583,16 @@ window.Empire.UI = (() => {
   let allianceRefreshHandler = null;
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
+  let scenarioVisionEnabled = false;
+  let liveAllianceOwnerNames = new Set();
+  let scenarioAllianceOwnerNames = new Set();
+  let scenarioEnemyOwnerNames = new Set();
+  const EMPTY_OWNER_NAMES = new Set();
 
   function init() {
     bindActions();
+    syncMapVisionContext();
+    refreshGangColorDisplays();
   }
 
   function bindActions() {
@@ -585,14 +600,22 @@ window.Empire.UI = (() => {
     initBuildingsModal();
     initAllianceModal();
     initMarketModal();
+    initLeaderboardModal();
+    initStorageModal();
     initWeaponsModal();
     initWeaponsPopover();
+    initDistrictDefenseModal();
+    initPlayerScenarioButtons();
     document.getElementById("attack-btn").addEventListener("click", async () => {
+      if (!window.Empire.selectedDistrict) return;
+      if (isDistrictDefendableByPlayer(window.Empire.selectedDistrict)) {
+        pushEvent("Vlastní nebo alianční distrikt nelze napadnout. Použij Obranu.");
+        return;
+      }
       if (!window.Empire.token) {
         pushEvent("Pro útok je nutné přihlášení.");
         return;
       }
-      if (!window.Empire.selectedDistrict) return;
       const result = await window.Empire.API.attackDistrict(
         window.Empire.selectedDistrict.id
       );
@@ -604,11 +627,15 @@ window.Empire.UI = (() => {
     const raidBtn = document.getElementById("raid-btn");
     if (raidBtn) {
       raidBtn.addEventListener("click", () => {
+        if (!window.Empire.selectedDistrict) return;
+        if (isDistrictDefendableByPlayer(window.Empire.selectedDistrict)) {
+          pushEvent("Vlastní nebo alianční distrikt nelze vykrást. Použij Obranu.");
+          return;
+        }
         if (!window.Empire.token) {
           pushEvent("Pro vykrádání je nutné přihlášení.");
           return;
         }
-        if (!window.Empire.selectedDistrict) return;
         pushEvent("Vykrádání distriktu bylo zahájeno.");
       });
     }
@@ -616,12 +643,28 @@ window.Empire.UI = (() => {
     const spyBtn = document.getElementById("spy-btn");
     if (spyBtn) {
       spyBtn.addEventListener("click", () => {
+        if (!window.Empire.selectedDistrict) return;
+        if (isDistrictDefendableByPlayer(window.Empire.selectedDistrict)) {
+          pushEvent("Vlastní nebo alianční distrikt nelze špehovat. Použij Obranu.");
+          return;
+        }
         if (!window.Empire.token) {
           pushEvent("Pro špehování je nutné přihlášení.");
           return;
         }
-        if (!window.Empire.selectedDistrict) return;
         pushEvent("Špehování distriktu bylo zahájeno.");
+      });
+    }
+
+    const defenseBtn = document.getElementById("defense-btn");
+    if (defenseBtn) {
+      defenseBtn.addEventListener("click", () => {
+        if (!window.Empire.selectedDistrict) return;
+        if (!isDistrictDefendableByPlayer(window.Empire.selectedDistrict)) {
+          pushEvent("Obranu lze nastavovat jen ve vlastním nebo aliančním distriktu.");
+          return;
+        }
+        openDistrictDefenseModal(window.Empire.selectedDistrict);
       });
     }
 
@@ -668,6 +711,587 @@ window.Empire.UI = (() => {
         openWeaponsModal("defense");
       });
     }
+  }
+
+  function initLeaderboardModal() {
+    const openBtn = document.getElementById("leaderboard-open");
+    const root = document.getElementById("leaderboard-modal");
+    const backdrop = document.getElementById("leaderboard-modal-backdrop");
+    const closeBtn = document.getElementById("leaderboard-modal-close");
+    if (!openBtn || !root) return;
+
+    const close = () => root.classList.add("hidden");
+    const open = () => root.classList.remove("hidden");
+
+    openBtn.addEventListener("click", open);
+    if (backdrop) backdrop.addEventListener("click", close);
+    if (closeBtn) closeBtn.addEventListener("click", close);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close();
+    });
+  }
+
+  function initStorageModal() {
+    const trigger = document.getElementById("stat-storage-wrap");
+    const root = document.getElementById("storage-modal");
+    const backdrop = document.getElementById("storage-modal-backdrop");
+    const closeBtn = document.getElementById("storage-modal-close");
+    if (!trigger || !root) return;
+
+    const close = () => root.classList.add("hidden");
+    const open = () => {
+      hydrateStorageModalValues();
+      root.classList.remove("hidden");
+    };
+
+    trigger.addEventListener("click", open);
+    trigger.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      open();
+    });
+    if (backdrop) backdrop.addEventListener("click", close);
+    if (closeBtn) closeBtn.addEventListener("click", close);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close();
+    });
+  }
+
+  function hydrateStorageModalValues() {
+    const economy = cachedEconomy || {};
+    const player = window.Empire.player || {};
+    const attackCounts = resolveWeaponCounts();
+    const defenseCounts = resolveDefenseCounts();
+    const attackEntries = attackWeaponStats.slice(0, 4).map((item) => ({
+      name: item.name,
+      value: findInventoryValueByName(attackCounts, item.name)
+    }));
+    const defenseEntries = defenseWeaponStats.slice(0, 4).map((item) => ({
+      name: item.name,
+      value: findInventoryValueByName(defenseCounts, item.name)
+    }));
+    const totalDrugs = Number(economy.drugs ?? player.drugs ?? 0);
+    const drugEntries = resolveStorageDrugEntries(totalDrugs);
+
+    renderStorageList("storage-modal-attack-list", attackEntries, "ks");
+    renderStorageList("storage-modal-defense-list", defenseEntries, "ks");
+    renderStorageList("storage-modal-drugs-list", drugEntries, "bal.");
+  }
+
+  function findInventoryValueByName(source, name) {
+    const safeSource = source && typeof source === "object" ? source : {};
+    const key = Object.keys(safeSource).find((candidate) => candidate.toLowerCase() === String(name || "").toLowerCase());
+    if (!key) return 0;
+    const value = Number(safeSource[key] || 0);
+    return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  }
+
+  function resolveStorageDrugEntries(totalDrugs) {
+    const parsedTotal = Number(totalDrugs || 0);
+    const safeTotal = Number.isFinite(parsedTotal) ? Math.max(0, Math.floor(parsedTotal)) : 0;
+    const entries = storageDrugTypes.map((item) => ({
+      name: item.name,
+      value: Math.floor(safeTotal * item.ratio)
+    }));
+    const used = entries.reduce((sum, item) => sum + item.value, 0);
+    const remainder = Math.max(0, safeTotal - used);
+    if (entries.length > 0 && remainder > 0) {
+      entries[0].value += remainder;
+    }
+    return entries;
+  }
+
+  function renderStorageList(containerId, entries, suffix = "") {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const safeEntries = Array.isArray(entries) ? entries : [];
+    container.innerHTML = safeEntries
+      .map((entry) => {
+        const valueLabel = suffix
+          ? `${entry.value} ${suffix}`
+          : `${entry.value}`;
+        return `
+          <div class="storage-modal__item">
+            <span>${entry.name}</span>
+            <strong>${valueLabel}</strong>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function initDistrictDefenseModal() {
+    const root = document.getElementById("district-defense-modal");
+    const backdrop = document.getElementById("district-defense-modal-backdrop");
+    const closeBtn = document.getElementById("district-defense-modal-close");
+    if (!root) return;
+    if (backdrop) backdrop.addEventListener("click", () => root.classList.add("hidden"));
+    if (closeBtn) closeBtn.addEventListener("click", () => root.classList.add("hidden"));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") root.classList.add("hidden");
+    });
+  }
+
+  function openDistrictDefenseModal(district) {
+    const root = document.getElementById("district-defense-modal");
+    const districtLabel = document.getElementById("defense-modal-district");
+    if (!root) return;
+    if (districtLabel) {
+      districtLabel.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    }
+    root.classList.remove("hidden");
+  }
+
+  function normalizeOwnerName(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function getPlayerOwnerNameSet() {
+    const player = window.Empire.player || {};
+    const names = [
+      player.gangName,
+      player.username,
+      cachedProfile?.gangName,
+      cachedProfile?.username,
+      localStorage.getItem("empire_gang_name")
+    ]
+      .map((value) => normalizeOwnerName(value))
+      .filter(Boolean);
+    return new Set(names);
+  }
+
+  function isDistrictOwnedByPlayer(district) {
+    const owner = normalizeOwnerName(district?.owner);
+    if (!owner) return false;
+    return getPlayerOwnerNameSet().has(owner);
+  }
+
+  function isDistrictOwnedByAlliance(district) {
+    const owner = normalizeOwnerName(district?.owner);
+    if (!owner) return false;
+    if (isDistrictOwnedByPlayer(district)) return false;
+    return getActiveAllianceOwnerNames().has(owner);
+  }
+
+  function isDistrictDefendableByPlayer(district) {
+    return isDistrictOwnedByPlayer(district) || isDistrictOwnedByAlliance(district);
+  }
+
+  function getActiveAllianceOwnerNames() {
+    return scenarioVisionEnabled ? scenarioAllianceOwnerNames : liveAllianceOwnerNames;
+  }
+
+  function getActiveEnemyOwnerNames() {
+    return scenarioVisionEnabled ? scenarioEnemyOwnerNames : EMPTY_OWNER_NAMES;
+  }
+
+  function setScenarioVisionMode(enabled) {
+    scenarioVisionEnabled = Boolean(enabled);
+    syncMapVisionContext();
+  }
+
+  function setScenarioAllianceOwners(ownerNames) {
+    const normalized = Array.isArray(ownerNames)
+      ? ownerNames.map((value) => normalizeOwnerName(value)).filter(Boolean)
+      : [];
+    scenarioAllianceOwnerNames = new Set(normalized);
+    syncMapVisionContext();
+  }
+
+  function setScenarioEnemyOwners(ownerNames) {
+    const normalized = Array.isArray(ownerNames)
+      ? ownerNames.map((value) => normalizeOwnerName(value)).filter(Boolean)
+      : [];
+    scenarioEnemyOwnerNames = new Set(normalized);
+    syncMapVisionContext();
+  }
+
+  function setLiveAllianceOwnersFromAlliance(alliance) {
+    const playerNames = getPlayerOwnerNameSet();
+    const names = new Set();
+    const members = Array.isArray(alliance?.members) ? alliance.members : [];
+    members.forEach((member) => {
+      const candidates = [member?.gang_name, member?.gangName, member?.username];
+      candidates.forEach((candidate) => {
+        const normalized = normalizeOwnerName(candidate);
+        if (!normalized) return;
+        if (playerNames.has(normalized)) return;
+        names.add(normalized);
+      });
+    });
+    liveAllianceOwnerNames = names;
+    syncMapVisionContext();
+  }
+
+  function clearLiveAllianceOwners() {
+    liveAllianceOwnerNames = new Set();
+    syncMapVisionContext();
+  }
+
+  function syncMapVisionContext() {
+    if (!window.Empire.Map?.setVisionContext) return;
+    window.Empire.Map.setVisionContext({
+      fogPreviewMode: scenarioVisionEnabled,
+      alliedOwnerNames: Array.from(getActiveAllianceOwnerNames()),
+      enemyOwnerNames: Array.from(getActiveEnemyOwnerNames())
+    });
+  }
+
+  function resolveMoneyBreakdown(source) {
+    const fromClean = Number(source?.cleanMoney ?? source?.clean_money ?? 0);
+    const fromDirty = Number(source?.dirtyMoney ?? source?.dirty_money ?? 0);
+    const fromTotal = Number(source?.balance ?? source?.money ?? 0);
+    let cleanMoney = Number.isFinite(fromClean) ? fromClean : 0;
+    let dirtyMoney = Number.isFinite(fromDirty) ? fromDirty : 0;
+    let totalMoney = cleanMoney + dirtyMoney;
+
+    if (totalMoney === 0 && fromTotal > 0) {
+      cleanMoney = fromTotal;
+      totalMoney = fromTotal;
+    } else if (fromTotal > totalMoney) {
+      cleanMoney += fromTotal - totalMoney;
+      totalMoney = fromTotal;
+    }
+
+    return { cleanMoney, dirtyMoney, totalMoney };
+  }
+
+  function normalizeHexColor(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw) return null;
+    if (/^#[0-9a-f]{3}$/.test(raw)) {
+      return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
+    }
+    if (/^#[0-9a-f]{6}$/.test(raw)) return raw;
+    return null;
+  }
+
+  function resolveStoredGangColor() {
+    return normalizeHexColor(localStorage.getItem("empire_gang_color"));
+  }
+
+  function applyProfileModalVisuals(avatarSrc = null) {
+    const content = document.querySelector("#profile-modal .modal__content");
+    if (!content) return;
+    const gangColor = resolveStoredGangColor();
+    const fallback = "rgba(34, 211, 238, 0.45)";
+    content.style.setProperty("--profile-border-color", gangColor || fallback);
+    if (avatarSrc) {
+      const safe = String(avatarSrc).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      content.style.setProperty("--profile-avatar-url", `url("${safe}")`);
+    } else {
+      content.style.setProperty("--profile-avatar-url", "none");
+    }
+  }
+
+  function formatGangColorText(color) {
+    return color ? color.toUpperCase() : "Nevybráno";
+  }
+
+  function renderGangColorChipMarkup(color) {
+    const label = formatGangColorText(color);
+    const dotClass = color ? "gang-color-chip__dot" : "gang-color-chip__dot is-empty";
+    const dotStyle = color ? ` style="background:${color}"` : "";
+    const textStyle = color ? ` style="color:${color}"` : "";
+    return `
+      <span class="gang-color-chip">
+        <span class="${dotClass}"${dotStyle}></span>
+        <span${textStyle}>${label}</span>
+      </span>
+    `;
+  }
+
+  function refreshGangColorDisplays() {
+    applyProfileModalVisuals(localStorage.getItem("empire_avatar"));
+  }
+
+  function initPlayerScenarioButtons() {
+    const scenarioButtons = Array.from(document.querySelectorAll("[data-player-scenario]"));
+    if (!scenarioButtons.length) return;
+
+    scenarioButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const scenarioKey = button.dataset.playerScenario;
+        applyPlayerScenario(scenarioKey);
+        scenarioButtons.forEach((candidate) => {
+          candidate.classList.toggle("is-active", candidate === button);
+        });
+      });
+    });
+  }
+
+  function applyPlayerScenario(scenarioKey) {
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    if (!districts.length || !window.Empire.Map?.setDistricts) {
+      pushEvent("Mapa ještě není připravená.");
+      return;
+    }
+
+    const ownerName = resolveScenarioOwnerName();
+    const allyName = `${ownerName} - spojenec`;
+    let nextDistricts = districts.map((district) => ({ ...district, owner: null }));
+
+    const baseProfile = {
+      ...(window.Empire.player || {}),
+      ...(cachedProfile || {}),
+      gangName: cachedProfile?.gangName || ownerName,
+      structure: cachedProfile?.structure || localStorage.getItem("empire_structure") || "-",
+      alliance: "Žádná",
+      districts: 0
+    };
+
+    if (scenarioKey === "full-map") {
+      setScenarioVisionMode(true);
+      setScenarioAllianceOwners([]);
+      setScenarioEnemyOwners([]);
+      nextDistricts = districts.map((district) => ({ ...district, owner: ownerName }));
+      baseProfile.districts = districts.length;
+      baseProfile.alliance = "Žádná";
+      pushEvent(`Ukázka: ${ownerName} ovládá celou mapu (${districts.length} sektorů).`);
+    } else if (scenarioKey === "single-district") {
+      setScenarioVisionMode(true);
+      setScenarioAllianceOwners([]);
+      setScenarioEnemyOwners([]);
+      const bounds = getDistrictBounds(districts);
+      const selected = [...districts].sort(
+        (a, b) => distanceFromMapCenter(a, bounds) - distanceFromMapCenter(b, bounds)
+      )[0];
+      if (selected) {
+        nextDistricts = districts.map((district) => ({
+          ...district,
+          owner: district.id === selected.id ? ownerName : null
+        }));
+        baseProfile.districts = 1;
+      }
+      baseProfile.alliance = "Žádná";
+      pushEvent("Ukázka: hráč drží pouze jeden distrikt.");
+    } else if (scenarioKey === "alliance-ten") {
+      setScenarioVisionMode(true);
+      setScenarioAllianceOwners([allyName]);
+      setScenarioEnemyOwners([]);
+      nextDistricts = assignOwnersToNeighborClusters(districts, [
+        { owner: ownerName, count: 5 },
+        { owner: allyName, count: 5 }
+      ], {
+        excludeTypes: ["downtown"]
+      });
+      const ownDistrictCount = countOwnedDistrictsForOwner(nextDistricts, ownerName);
+      const allyDistrictCount = countOwnedDistrictsForOwner(nextDistricts, allyName);
+      const totalOwned = ownDistrictCount + allyDistrictCount;
+      baseProfile.districts = ownDistrictCount;
+      baseProfile.alliance = `${ownerName} + spojenec (2/4 • ${totalOwned} sektorů)`;
+      pushEvent(`Ukázka: ${ownerName} drží ${ownDistrictCount} sektorů, spojenec ${allyDistrictCount}.`);
+    } else if (scenarioKey === "alliance-war") {
+      const allyOneName = `${ownerName} - spojenec A`;
+      const allyTwoName = `${ownerName} - spojenec B`;
+      const enemyAllianceOne = ["Stínoví vlci 1", "Stínoví vlci 2", "Stínoví vlci 3"];
+      const enemyAllianceTwo = ["Neonové kobry 1", "Neonové kobry 2", "Neonové kobry 3"];
+      const enemyOwners = [...enemyAllianceOne, ...enemyAllianceTwo];
+
+      setScenarioVisionMode(true);
+      setScenarioAllianceOwners([allyOneName, allyTwoName]);
+      setScenarioEnemyOwners(enemyOwners);
+
+      const allocations = [
+        { owner: ownerName, count: 3 },
+        { owner: allyOneName, count: 4 },
+        { owner: allyTwoName, count: 4 },
+        ...enemyOwners.map((enemyOwner) => ({ owner: enemyOwner, count: 3 }))
+      ];
+      nextDistricts = assignOwnersToNeighborClusters(districts, allocations, {
+        excludeTypes: ["downtown"]
+      });
+      const ownDistrictCount = countOwnedDistrictsForOwner(nextDistricts, ownerName);
+      const allyTotal = countOwnedDistrictsForOwner(nextDistricts, allyOneName)
+        + countOwnedDistrictsForOwner(nextDistricts, allyTwoName);
+      const enemyTotal = enemyOwners.reduce(
+        (sum, enemyOwner) => sum + countOwnedDistrictsForOwner(nextDistricts, enemyOwner),
+        0
+      );
+      baseProfile.districts = ownDistrictCount;
+      baseProfile.alliance = `${ownerName} + 2 spojenci (3/4 • ${ownDistrictCount + allyTotal} sektorů)`;
+      pushEvent(
+        `Ukázka: ty držíš ${ownDistrictCount} sektory, 2 spojenci drží ${allyTotal} a 2 nepřátelské aliance drží ${enemyTotal} sektorů.`
+      );
+    } else {
+      return;
+    }
+
+    window.Empire.player = baseProfile;
+    window.Empire.Map.setDistricts(nextDistricts);
+    updateProfile(baseProfile);
+  }
+
+  function assignOwnersToNeighborClusters(districts, allocations, options = {}) {
+    const safeAllocations = Array.isArray(allocations) ? allocations : [];
+    const excludedTypes = new Set(
+      (Array.isArray(options?.excludeTypes) ? options.excludeTypes : [])
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const allocatableDistricts = excludedTypes.size
+      ? (districts || []).filter(
+        (district) => !excludedTypes.has(String(district?.type || "").trim().toLowerCase())
+      )
+      : (districts || []);
+    const districtCenters = new Map(
+      (districts || []).map((district) => [district.id, polygonCentroid(district.polygon || [])])
+    );
+    const neighborsByDistrict = buildDistrictAdjacency(districts || []);
+    const available = new Set(allocatableDistricts.map((district) => district.id));
+    const ownersByDistrict = new Map();
+    const ownerCount = safeAllocations.length;
+
+    safeAllocations.forEach((item, ownerIndex) => {
+      const owner = String(item?.owner || "").trim();
+      const count = Math.min(Math.max(0, Number(item?.count) || 0), available.size);
+      if (!owner || count < 1) return;
+      const seedId = pickClusterSeed(available, districtCenters, ownerIndex, ownerCount);
+      const clusterIds = growDistrictCluster({
+        seedId,
+        targetSize: count,
+        available,
+        neighborsByDistrict,
+        districtCenters
+      });
+      clusterIds.forEach((districtId) => {
+        ownersByDistrict.set(districtId, owner);
+        available.delete(districtId);
+      });
+    });
+
+    return districts.map((district) => ({
+      ...district,
+      owner: ownersByDistrict.get(district.id) || null
+    }));
+  }
+
+  function countOwnedDistrictsForOwner(districts, ownerName) {
+    const normalizedOwner = normalizeOwnerName(ownerName);
+    if (!normalizedOwner) return 0;
+    return (districts || []).reduce((sum, district) => {
+      if (normalizeOwnerName(district.owner) === normalizedOwner) return sum + 1;
+      return sum;
+    }, 0);
+  }
+
+  function pickClusterSeed(available, districtCenters, ownerIndex, ownerCount) {
+    const ranked = Array.from(available).sort((a, b) => {
+      const centerA = districtCenters.get(a) || { x: 0, y: 0 };
+      const centerB = districtCenters.get(b) || { x: 0, y: 0 };
+      if (centerA.x === centerB.x) return centerA.y - centerB.y;
+      return centerA.x - centerB.x;
+    });
+    if (!ranked.length) return null;
+    if (ranked.length === 1) return ranked[0];
+    const ratio = (ownerIndex + 0.5) / Math.max(ownerCount, 1);
+    const index = Math.min(ranked.length - 1, Math.max(0, Math.round(ratio * (ranked.length - 1))));
+    return ranked[index];
+  }
+
+  function growDistrictCluster({ seedId, targetSize, available, neighborsByDistrict, districtCenters }) {
+    if (!seedId || !available.has(seedId) || targetSize < 1) return [];
+    const cluster = [seedId];
+    const clusterSet = new Set(cluster);
+    const frontier = new Set();
+
+    const pushNeighbors = (districtId) => {
+      const neighbors = neighborsByDistrict.get(districtId) || new Set();
+      neighbors.forEach((neighborId) => {
+        if (!available.has(neighborId)) return;
+        if (clusterSet.has(neighborId)) return;
+        frontier.add(neighborId);
+      });
+    };
+
+    pushNeighbors(seedId);
+
+    while (cluster.length < targetSize) {
+      const nextFromFrontier = pickNearestToCluster(frontier, cluster, districtCenters, clusterSet);
+      let nextId = nextFromFrontier;
+      if (!nextId) {
+        nextId = pickNearestToCluster(available, cluster, districtCenters, clusterSet);
+      }
+      if (!nextId) break;
+      cluster.push(nextId);
+      clusterSet.add(nextId);
+      frontier.delete(nextId);
+      pushNeighbors(nextId);
+    }
+
+    return cluster;
+  }
+
+  function pickNearestToCluster(candidates, cluster, districtCenters, clusterSet) {
+    let bestId = null;
+    let bestDistance = Infinity;
+    candidates.forEach((candidateId) => {
+      if (clusterSet.has(candidateId)) return;
+      const distance = distanceToCluster(candidateId, cluster, districtCenters);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestId = candidateId;
+      }
+    });
+    return bestId;
+  }
+
+  function distanceToCluster(candidateId, cluster, districtCenters) {
+    const from = districtCenters.get(candidateId) || { x: 0, y: 0 };
+    let best = Infinity;
+    for (let i = 0; i < cluster.length; i += 1) {
+      const to = districtCenters.get(cluster[i]) || { x: 0, y: 0 };
+      const distance = Math.hypot(from.x - to.x, from.y - to.y);
+      if (distance < best) best = distance;
+    }
+    return best;
+  }
+
+  function buildDistrictAdjacency(districts) {
+    const adjacency = new Map((districts || []).map((district) => [district.id, new Set()]));
+    const edgeOwners = new Map();
+
+    (districts || []).forEach((district) => {
+      const polygon = Array.isArray(district.polygon) ? district.polygon : [];
+      if (polygon.length < 2) return;
+      for (let i = 0; i < polygon.length; i += 1) {
+        const from = polygon[i];
+        const to = polygon[(i + 1) % polygon.length];
+        const edgeKey = normalizeEdgeKey(from, to);
+        if (!edgeOwners.has(edgeKey)) edgeOwners.set(edgeKey, []);
+        edgeOwners.get(edgeKey).push(district.id);
+      }
+    });
+
+    edgeOwners.forEach((ownerIds) => {
+      const unique = Array.from(new Set(ownerIds));
+      for (let i = 0; i < unique.length; i += 1) {
+        for (let j = i + 1; j < unique.length; j += 1) {
+          const a = unique[i];
+          const b = unique[j];
+          adjacency.get(a)?.add(b);
+          adjacency.get(b)?.add(a);
+        }
+      }
+    });
+
+    return adjacency;
+  }
+
+  function normalizeEdgeKey(from, to) {
+    const a = normalizePointKey(from);
+    const b = normalizePointKey(to);
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+  }
+
+  function normalizePointKey(point) {
+    const x = Number(point?.[0] || 0).toFixed(3);
+    const y = Number(point?.[1] || 0).toFixed(3);
+    return `${x},${y}`;
+  }
+
+  function resolveScenarioOwnerName() {
+    return cachedProfile?.gangName || cachedProfile?.username || "Tvůj gang";
   }
 
   function initEventsModal() {
@@ -840,6 +1464,26 @@ window.Empire.UI = (() => {
       if (!selectedType) return;
       renderBuildings(selectedType);
     });
+    detail.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const button = target.closest("[data-building-name]");
+      if (!(button instanceof HTMLElement)) return;
+      if (button.hasAttribute("data-building-locked")) {
+        pushEvent("Budova je zamčená. Tento typ distriktu v ukázkovém stavu nevlastníš.");
+        return;
+      }
+      const buildingName = button.dataset.buildingName;
+      const districtType = button.dataset.buildingType || buildingDistrictTypes[0].key;
+      if (!buildingName) return;
+      const pseudoDistrict = {
+        id: hashDistrictSeed(buildingName, districtType.length),
+        type: districtType
+      };
+      if (window.Empire.Map?.showBuildingDetail) {
+        window.Empire.Map.showBuildingDetail(buildingName, pseudoDistrict);
+      }
+    });
     if (backdrop) backdrop.addEventListener("click", closeModal);
     if (closeBtn) closeBtn.addEventListener("click", closeModal);
     document.addEventListener("keydown", (event) => {
@@ -848,31 +1492,69 @@ window.Empire.UI = (() => {
   }
 
   function resolveBuildingsForDistrictType(typeKey) {
-    const catalog = districtBuildingCatalog[typeKey] || [
+    return districtBuildingCatalog[typeKey] || [
       "Operační základna",
       "Sklad",
       "Kontrolní bod",
       "Garáž",
       "Bezpečný dům"
     ];
-    return catalog.map((building, index) => `${index + 1}. ${building}`);
   }
 
   function renderDistrictTypeDetail(typeKey) {
     const buildings = resolveBuildingsForDistrictType(typeKey);
+    const lockContext = resolveBuildingsLockContext(typeKey);
     return `
       <div class="buildings-modal__building-grid">
         ${buildings
           .map(
-            (building) => `
-              <button class="buildings-modal__building buildings-modal__building--interactive" type="button">
-                ${building}
+            (building) => {
+              const isUnlocked = !lockContext.enforceLocks || lockContext.unlockedBuildings.has(normalizeOwnerName(building));
+              return `
+              <button
+                class="buildings-modal__building buildings-modal__building--interactive${isUnlocked ? "" : " buildings-modal__building--locked"}"
+                type="button"
+                data-building-name="${building}"
+                data-building-type="${typeKey}"
+                ${isUnlocked ? "" : 'data-building-locked="1" disabled aria-disabled="true"'}
+              >
+                <span>${building}</span>
+                ${isUnlocked ? "" : '<span class="buildings-modal__lock">LOCKED</span>'}
               </button>
-            `
+            `;
+            }
           )
           .join("")}
       </div>
     `;
+  }
+
+  function resolveBuildingsLockContext(typeKey) {
+    if (!scenarioVisionEnabled) {
+      return { enforceLocks: false, unlockedBuildings: new Set() };
+    }
+    return {
+      enforceLocks: true,
+      unlockedBuildings: getOwnedBuildingsForType(typeKey)
+    };
+  }
+
+  function getOwnedBuildingsForType(typeKey) {
+    const playerNames = getPlayerOwnerNameSet();
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const ownedBuildings = new Set();
+
+    districts.forEach((district) => {
+      if (district.type !== typeKey) return;
+      const owner = normalizeOwnerName(district.owner);
+      if (!owner || !playerNames.has(owner)) return;
+      const buildings = Array.isArray(district.buildings) ? district.buildings : [];
+      buildings.forEach((building) => {
+        ownedBuildings.add(normalizeOwnerName(building));
+      });
+    });
+
+    return ownedBuildings;
   }
 
   function assignDistrictMetadata(districts) {
@@ -1032,13 +1714,20 @@ window.Empire.UI = (() => {
   }
 
   async function hydrateAfterAuth() {
-    const profile = await window.Empire.API.getProfile();
-    const economy = await window.Empire.API.getEconomy();
-    const districtData = await window.Empire.API.getDistricts();
+    setScenarioVisionMode(false);
+    setScenarioAllianceOwners([]);
+    setScenarioEnemyOwners([]);
+    const [profile, economy, districtData, allianceData] = await Promise.all([
+      window.Empire.API.getProfile(),
+      window.Empire.API.getEconomy(),
+      window.Empire.API.getDistricts(),
+      window.Empire.API.getAlliance().catch(() => ({ alliance: null }))
+    ]);
 
     window.Empire.player = profile;
     updateProfile(profile);
     updateEconomy(economy);
+    setLiveAllianceOwnersFromAlliance(allianceData?.alliance || null);
 
     if (districtData && districtData.districts) {
       window.Empire.Map.setDistricts(districtData.districts);
@@ -1049,9 +1738,14 @@ window.Empire.UI = (() => {
 
   function updateProfile(profile) {
     cachedProfile = profile;
+    window.Empire.player = {
+      ...(window.Empire.player || {}),
+      ...(profile || {})
+    };
     document.getElementById("profile-gang").textContent = profile.gangName || "-";
     document.getElementById("profile-districts").textContent = profile.districts || 0;
     document.getElementById("profile-alliance").textContent = profile.alliance || "Žádná";
+    setAllianceButtonState(profile.alliance || "Žádná");
     const structure = document.getElementById("profile-structure");
     const statStructure = document.getElementById("stat-structure");
     if (structure) {
@@ -1060,9 +1754,12 @@ window.Empire.UI = (() => {
     if (statStructure) {
       statStructure.textContent = profile.structure || localStorage.getItem("empire_structure") || "-";
     }
+    refreshGangColorDisplays();
     hydrateProfileModal(profile);
     updateWeaponsPopover();
     updateDefensePopover();
+    syncMapVisionContext();
+    window.Empire.Map?.render?.();
   }
 
   function setGuestMode(isGuest) {
@@ -1073,7 +1770,10 @@ window.Empire.UI = (() => {
       const state = getLocalAllianceState();
       renderAllianceChat(state.chat);
       syncGuestAllianceLabel(state.activeAlliance?.name || "Žádná");
+      setLiveAllianceOwnersFromAlliance(state.activeAlliance || null);
       syncGuestEconomyFromMarket();
+    } else {
+      clearLiveAllianceOwners();
     }
   }
 
@@ -1108,6 +1808,7 @@ window.Empire.UI = (() => {
         const localState = getLocalAllianceState();
         renderAllianceState(localState.activeAlliance, localState.alliances);
         renderAllianceChat(localState.chat);
+        setLiveAllianceOwnersFromAlliance(localState.activeAlliance || null);
         return;
       }
       const [mine, listing] = await Promise.all([
@@ -1116,6 +1817,7 @@ window.Empire.UI = (() => {
       ]);
       renderAllianceState(mine.alliance || null, listing.alliances || []);
       renderAllianceChat([]);
+      setLiveAllianceOwnersFromAlliance(mine.alliance || null);
     };
     allianceRefreshHandler = refreshAlliance;
 
@@ -1221,10 +1923,15 @@ window.Empire.UI = (() => {
     leaveBtn.classList.toggle("hidden", !activeAlliance);
 
     if (activeAlliance) {
+      const gangColor = resolveStoredGangColor();
       activePanel.innerHTML = `
         <div class="modal__row">
           <span>Aktivní aliance</span>
           <strong>${activeAlliance.name}</strong>
+        </div>
+        <div class="modal__row">
+          <span>Tvoje barva gangu</span>
+          <strong>${renderGangColorChipMarkup(gangColor)}</strong>
         </div>
         <div class="modal__row">
           <span>Bonus income</span>
@@ -1249,10 +1956,15 @@ window.Empire.UI = (() => {
         </div>
       `;
     } else {
+      const gangColor = resolveStoredGangColor();
       activePanel.innerHTML = `
         <div class="modal__row">
           <span>Aktivní aliance</span>
           <strong>Žádná</strong>
+        </div>
+        <div class="modal__row">
+          <span>Tvoje barva gangu</span>
+          <strong>${renderGangColorChipMarkup(gangColor)}</strong>
         </div>
       `;
     }
@@ -1469,6 +2181,20 @@ window.Empire.UI = (() => {
     if (profileAlliance && !window.Empire.token) {
       profileAlliance.textContent = allianceName || "Žádná";
     }
+    setAllianceButtonState(allianceName || "Žádná");
+  }
+
+  function setAllianceButtonState(allianceName) {
+    const allianceBtn = document.getElementById("alliance-btn");
+    if (!allianceBtn) return;
+
+    const normalized = String(allianceName || "").trim();
+    if (!normalized || normalized === "Žádná") {
+      allianceBtn.textContent = "Aliance";
+      return;
+    }
+
+    allianceBtn.textContent = `Aliance: ${normalized}`;
   }
 
   function initSettingsModal() {
@@ -1642,6 +2368,7 @@ window.Empire.UI = (() => {
 
     const market = cachedMarket || { balances: {}, orderBook: [], myOrders: [] };
     const balances = market.balances || {};
+    const money = resolveMoneyBreakdown(balances);
     const selectedOrders = (market.orderBook || []).filter((order) => order.resourceKey === resourceKey);
     const sells = selectedOrders.filter((order) => order.side === "sell");
     const buys = selectedOrders.filter((order) => order.side === "buy");
@@ -1649,7 +2376,9 @@ window.Empire.UI = (() => {
     const trades = (market.recentTrades || []).filter((trade) => trade.resourceKey === resourceKey);
 
     summary.innerHTML = `
-      <div class="market-balance-pill">Cash: $${balances.money || 0}</div>
+      <div class="market-balance-pill">Čisté: $${money.cleanMoney}</div>
+      <div class="market-balance-pill">Špinavé: $${money.dirtyMoney}</div>
+      <div class="market-balance-pill">Celkem: $${money.totalMoney}</div>
       <div class="market-balance-pill">Drogy: ${balances.drugs || 0}</div>
       <div class="market-balance-pill">Zbraně: ${balances.weapons || 0}</div>
       <div class="market-balance-pill">Materiály: ${balances.materials || 0}</div>
@@ -1736,12 +2465,15 @@ window.Empire.UI = (() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(LOCAL_MARKET_KEY) || "null");
       if (parsed && parsed.balances && Array.isArray(parsed.orderBook) && Array.isArray(parsed.myOrders) && Array.isArray(parsed.recentTrades)) {
+        normalizeLocalMarketBalances(parsed.balances);
         return parsed;
       }
     } catch {}
     const seeded = {
       balances: {
         money: 12000,
+        cleanMoney: 12000,
+        dirtyMoney: 0,
         drugs: 80,
         weapons: 30,
         materials: 120,
@@ -1769,7 +2501,42 @@ window.Empire.UI = (() => {
   }
 
   function saveLocalMarketState(state) {
+    normalizeLocalMarketBalances(state.balances || {});
     localStorage.setItem(LOCAL_MARKET_KEY, JSON.stringify(state));
+  }
+
+  function normalizeLocalMarketBalances(balances) {
+    if (!balances) return;
+    const money = resolveMoneyBreakdown(balances);
+    balances.cleanMoney = money.cleanMoney;
+    balances.dirtyMoney = money.dirtyMoney;
+    balances.money = money.totalMoney;
+  }
+
+  function spendLocalMoney(balances, amount) {
+    normalizeLocalMarketBalances(balances);
+    if (!Number.isInteger(amount) || amount < 0) return false;
+    let remaining = amount;
+    const fromClean = Math.min(Number(balances.cleanMoney || 0), remaining);
+    balances.cleanMoney -= fromClean;
+    remaining -= fromClean;
+    const fromDirty = Math.min(Number(balances.dirtyMoney || 0), remaining);
+    balances.dirtyMoney -= fromDirty;
+    remaining -= fromDirty;
+    balances.money = Number(balances.cleanMoney || 0) + Number(balances.dirtyMoney || 0);
+    return remaining === 0;
+  }
+
+  function addLocalMoney(balances, amount, bucket = "clean") {
+    normalizeLocalMarketBalances(balances);
+    const value = Number(amount || 0);
+    if (value <= 0) return;
+    if (bucket === "dirty") {
+      balances.dirtyMoney += value;
+    } else {
+      balances.cleanMoney += value;
+    }
+    balances.money = Number(balances.cleanMoney || 0) + Number(balances.dirtyMoney || 0);
   }
 
   function makeSeedOrder(resourceKey, side, remainingQuantity, pricePerUnit, username) {
@@ -1786,6 +2553,7 @@ window.Empire.UI = (() => {
 
   function createLocalMarketOrder({ resourceKey, side, quantity, pricePerUnit }) {
     const state = getLocalMarketState();
+    normalizeLocalMarketBalances(state.balances || {});
     if (!["buy", "sell"].includes(side)) return { error: "invalid_side" };
     if (!Number.isInteger(quantity) || quantity <= 0) return { error: "invalid_quantity" };
     if (!Number.isInteger(pricePerUnit) || pricePerUnit <= 0) return { error: "invalid_price" };
@@ -1794,14 +2562,17 @@ window.Empire.UI = (() => {
     if (side === "sell" && Number(state.balances[balanceKey] || 0) < quantity) {
       return { error: "insufficient_resource" };
     }
-    if (side === "buy" && Number(state.balances.money || 0) < quantity * pricePerUnit) {
+    const orderCost = quantity * pricePerUnit;
+    if (side === "buy" && Number(state.balances.money || 0) < orderCost) {
       return { error: "insufficient_money" };
     }
 
     if (side === "sell") {
       state.balances[balanceKey] -= quantity;
     } else {
-      state.balances.money -= quantity * pricePerUnit;
+      if (!spendLocalMoney(state.balances, orderCost)) {
+        return { error: "insufficient_money" };
+      }
     }
 
     const order = {
@@ -1822,6 +2593,7 @@ window.Empire.UI = (() => {
 
   function cancelLocalMarketOrder(orderId) {
     const state = getLocalMarketState();
+    normalizeLocalMarketBalances(state.balances || {});
     const order = state.myOrders.find((item) => item.id === orderId && item.status === "open");
     if (!order) return { error: "order_not_found" };
 
@@ -1829,7 +2601,7 @@ window.Empire.UI = (() => {
     if (order.side === "sell") {
       state.balances[balanceKey] += order.remainingQuantity;
     } else {
-      state.balances.money += order.remainingQuantity * order.pricePerUnit;
+      addLocalMoney(state.balances, order.remainingQuantity * order.pricePerUnit, "clean");
     }
     order.remainingQuantity = 0;
     order.status = "cancelled";
@@ -1838,6 +2610,7 @@ window.Empire.UI = (() => {
   }
 
   function matchLocalMarketOrder(state, order) {
+    normalizeLocalMarketBalances(state.balances || {});
     const candidates = (state.orderBook || []).filter((entry) =>
       entry.resourceKey === order.resourceKey &&
       entry.side !== order.side &&
@@ -1861,9 +2634,9 @@ window.Empire.UI = (() => {
 
       if (order.side === "buy") {
         state.balances[balanceKey] += traded;
-        state.balances.money += traded * Math.max(0, order.pricePerUnit - entry.pricePerUnit);
+        addLocalMoney(state.balances, traded * Math.max(0, order.pricePerUnit - entry.pricePerUnit), "clean");
       } else {
-        state.balances.money += gross - feePaid;
+        addLocalMoney(state.balances, gross - feePaid, "dirty");
       }
 
       order.remainingQuantity -= traded;
@@ -1885,11 +2658,13 @@ window.Empire.UI = (() => {
   function syncGuestEconomyFromMarket() {
     if (window.Empire.token) return;
     const state = getLocalMarketState();
+    const money = resolveMoneyBreakdown(state.balances || {});
     updateEconomy({
-      balance: Number(state.balances.money || 0),
+      balance: money.totalMoney,
+      cleanMoney: money.cleanMoney,
+      dirtyMoney: money.dirtyMoney,
       influence: 0,
       drugs: Number(state.balances.drugs || 0),
-      garage: 0,
       weapons: Number(state.balances.weapons || 0),
       defense: 0,
       materials: Number(state.balances.materials || 0),
@@ -1960,6 +2735,8 @@ window.Empire.UI = (() => {
   function hydrateProfileModal(profile) {
     if (!profile) return;
     const economy = cachedEconomy || {};
+    const moneyFromProfile = resolveMoneyBreakdown(profile || {});
+    const moneyFromEconomy = resolveMoneyBreakdown(economy || {});
     const setText = (id, value) => {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
@@ -1975,17 +2752,27 @@ window.Empire.UI = (() => {
         avatarImg.classList.add("hidden");
       }
     }
+    applyProfileModalVisuals(avatar);
     setText("profile-modal-username", profile.username || "-");
     setText("profile-modal-gang", profile.gangName || "-");
     setText("profile-modal-structure", profile.structure || localStorage.getItem("empire_structure") || "-");
     setText("profile-modal-alliance", profile.alliance || "Žádná");
     setText("profile-modal-districts", profile.districts || 0);
-    setText("profile-modal-cash", `$${profile.money || 0}`);
+    const profileHasMoneyData =
+      profile.cleanMoney !== undefined ||
+      profile.clean_money !== undefined ||
+      profile.dirtyMoney !== undefined ||
+      profile.dirty_money !== undefined ||
+      profile.money !== undefined ||
+      profile.balance !== undefined;
+    const modalMoney = profileHasMoneyData ? moneyFromProfile : moneyFromEconomy;
+    setText("profile-modal-clean-money", `$${modalMoney.cleanMoney}`);
+    setText("profile-modal-dirty-money", `$${modalMoney.dirtyMoney}`);
     setText("profile-modal-drugs", profile.drugs ?? economy.drugs ?? 0);
-    setText("profile-modal-garage", profile.garage ?? economy.garage ?? 0);
     setText("profile-modal-storage", profile.materials ?? economy.materials ?? 0);
     setText("profile-modal-weapons", profile.weapons ?? economy.weapons ?? 0);
     setText("profile-modal-defense", profile.defense ?? economy.defense ?? 0);
+    refreshGangColorDisplays();
   }
 
   function showProfileModal() {
@@ -2015,18 +2802,21 @@ window.Empire.UI = (() => {
 
   function updateEconomy(economy) {
     cachedEconomy = economy;
-    document.getElementById("stat-cash").textContent = `$${economy.balance || 0}`;
+    const money = resolveMoneyBreakdown(economy || {});
+    const cleanMoney = document.getElementById("stat-clean-money");
+    const dirtyMoney = document.getElementById("stat-dirty-money");
+    if (cleanMoney) cleanMoney.textContent = `$${money.cleanMoney}`;
+    if (dirtyMoney) dirtyMoney.textContent = `$${money.dirtyMoney}`;
     document.getElementById("stat-influence").textContent = economy.influence || 0;
     const drugs = document.getElementById("stat-drugs");
-    const garage = document.getElementById("stat-garage");
     const storage = document.getElementById("stat-storage");
     const weapons = document.getElementById("stat-weapons");
     const defense = document.getElementById("stat-defense");
     if (drugs) drugs.textContent = economy.drugs || 0;
-    if (garage) garage.textContent = economy.garage || 0;
     if (storage) storage.textContent = economy.materials || 0;
     if (weapons) weapons.textContent = economy.weapons || 0;
     if (defense) defense.textContent = economy.defense || 0;
+    hydrateStorageModalValues();
     if (cachedProfile) hydrateProfileModal(cachedProfile);
     updateWeaponsPopover();
     updateDefensePopover();
