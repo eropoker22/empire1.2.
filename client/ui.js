@@ -1026,6 +1026,7 @@ window.Empire.UI = (() => {
   function init() {
     bindActions();
     initMobileScenarioCardPlacement();
+    initMobileLeaderboardCardPlacement();
     syncMapVisionContext();
     refreshGangColorDisplays();
   }
@@ -1057,6 +1058,51 @@ window.Empire.UI = (() => {
         return;
       }
       restoreToPanel();
+    };
+
+    applyPlacement();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", applyPlacement);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(applyPlacement);
+    }
+    window.addEventListener("resize", applyPlacement);
+  }
+
+  function initMobileLeaderboardCardPlacement() {
+    const leaderboardCard = document.getElementById("leaderboard-card");
+    const leaderboardAnchor = document.getElementById("leaderboard-card-anchor");
+    const allianceChatCard = document.getElementById("alliance-chat-card");
+    if (!leaderboardCard || !leaderboardAnchor || !allianceChatCard) return;
+
+    const media = window.matchMedia("(max-width: 1200px)");
+
+    const restoreToLeftPanel = () => {
+      if (
+        leaderboardCard.parentElement === leaderboardAnchor.parentElement
+        && leaderboardCard.previousElementSibling === leaderboardAnchor
+      ) {
+        return;
+      }
+      leaderboardAnchor.insertAdjacentElement("afterend", leaderboardCard);
+    };
+
+    const moveUnderAllianceChat = () => {
+      if (
+        leaderboardCard.parentElement === allianceChatCard.parentElement
+        && leaderboardCard.previousElementSibling === allianceChatCard
+      ) {
+        return;
+      }
+      allianceChatCard.insertAdjacentElement("afterend", leaderboardCard);
+    };
+
+    const applyPlacement = () => {
+      if (media.matches) {
+        moveUnderAllianceChat();
+        return;
+      }
+      restoreToLeftPanel();
     };
 
     applyPlacement();
