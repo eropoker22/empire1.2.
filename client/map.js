@@ -5231,10 +5231,12 @@ window.Empire.Map = (() => {
 
     const backdrop = document.getElementById("building-detail-modal-backdrop");
     const closeBtn = document.getElementById("building-detail-modal-close");
+    const modalBody = root.querySelector(".modal__body");
     const tabButtons = Array.from(root.querySelectorAll("[data-building-tab]"));
     const actionButtons = Array.from(root.querySelectorAll("[data-building-action]"));
     const panelStats = document.getElementById("building-detail-panel-stats");
     const panelInfo = document.getElementById("building-detail-panel-info");
+    let swipeState = null;
 
     const setTab = (tab) => {
       const showInfo = tab === "info";
@@ -5246,9 +5248,35 @@ window.Empire.Map = (() => {
       });
     };
 
+    const isMobileSwipeViewport = () => window.matchMedia("(max-width: 900px)").matches;
+    const resetSwipeState = () => {
+      swipeState = null;
+    };
+    const finalizeSwipe = () => {
+      if (!swipeState) return;
+      const now = Date.now();
+      const { startX, startY, lastX, lastY, startedAt } = swipeState;
+      resetSwipeState();
+      if (!isMobileSwipeViewport()) return;
+      const deltaX = lastX - startX;
+      const deltaY = lastY - startY;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+      const elapsedMs = Math.max(0, now - startedAt);
+      if (absX < 46) return;
+      if (absX < absY * 1.25) return;
+      if (elapsedMs > 850 && absX < 70) return;
+      if (deltaX < 0) {
+        setTab("info");
+      } else if (deltaX > 0) {
+        setTab("stats");
+      }
+    };
+
     const close = () => {
       root.classList.add("hidden");
       state.activeBuildingDetail = null;
+      resetSwipeState();
     };
 
     if (backdrop) backdrop.addEventListener("click", close);
@@ -5259,6 +5287,44 @@ window.Empire.Map = (() => {
     tabButtons.forEach((button) => {
       button.addEventListener("click", () => setTab(button.dataset.buildingTab || "stats"));
     });
+    if (modalBody) {
+      modalBody.addEventListener("touchstart", (event) => {
+        if (root.classList.contains("hidden")) return;
+        if (!isMobileSwipeViewport()) return;
+        if (!event.touches || event.touches.length !== 1) {
+          resetSwipeState();
+          return;
+        }
+        const touch = event.touches[0];
+        swipeState = {
+          startX: touch.clientX,
+          startY: touch.clientY,
+          lastX: touch.clientX,
+          lastY: touch.clientY,
+          startedAt: Date.now()
+        };
+      }, { passive: true });
+      modalBody.addEventListener("touchmove", (event) => {
+        if (!swipeState) return;
+        if (!event.touches || event.touches.length !== 1) {
+          resetSwipeState();
+          return;
+        }
+        const touch = event.touches[0];
+        swipeState.lastX = touch.clientX;
+        swipeState.lastY = touch.clientY;
+      }, { passive: true });
+      modalBody.addEventListener("touchend", (event) => {
+        if (!swipeState) return;
+        if (event.changedTouches && event.changedTouches.length) {
+          const touch = event.changedTouches[0];
+          swipeState.lastX = touch.clientX;
+          swipeState.lastY = touch.clientY;
+        }
+        finalizeSwipe();
+      }, { passive: true });
+      modalBody.addEventListener("touchcancel", resetSwipeState, { passive: true });
+    }
     actionButtons.forEach((button) => {
       button.addEventListener("click", () => {
         const actionId = button.dataset.buildingAction || "?";

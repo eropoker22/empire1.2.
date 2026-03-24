@@ -4581,7 +4581,22 @@ body::before {
     flex: 1 1 auto;
     min-height: 0;
     gap: 6px;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+  }
+
+  #district-modal .modal__actions {
+    order: 2;
+  }
+
+  #district-modal .modal__gallery {
+    order: 3;
+  }
+
+  #district-modal .district-gossip {
+    max-height: min(25dvh, 154px);
   }
 
   #district-modal .modal__row {
@@ -5008,6 +5023,10 @@ body::before {
 
   #district-modal .modal__body {
     gap: 5px;
+  }
+
+  #district-modal .district-gossip {
+    max-height: min(24dvh, 136px);
   }
 
   #district-modal .modal__row {
