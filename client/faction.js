@@ -89,9 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let marqueeTouchState = {
     active: false,
     moved: false,
-    startX: 0,
-    startScrollLeft: 0,
-    targetAvatar: null
+    startX: 0
   };
   let marqueeLoopWidth = 0;
 
@@ -464,7 +462,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateMarqueeLoopWidth() {
     if (!marquee) return;
-    marqueeLoopWidth = marquee.scrollWidth / 2;
+    marqueeLoopWidth = isCoarsePointer ? 0 : marquee.scrollWidth / 2;
     normalizeMarqueeLoop();
   }
 
@@ -476,11 +474,12 @@ document.addEventListener("DOMContentLoaded", () => {
       marqueeLoopWidth = 0;
       return;
     }
-    const looped = availableAvatars.concat(availableAvatars);
+    const looped = isCoarsePointer ? availableAvatars : availableAvatars.concat(availableAvatars);
+    const imageLoading = isCoarsePointer ? "eager" : "lazy";
     avatarGrid.innerHTML = looped
       .map((src) => `
         <button class="avatar-item" data-avatar="${src}" aria-label="Vybrat avatara">
-          <img src="${src}" alt="Avatar" loading="lazy" />
+          <img src="${src}" alt="Avatar" loading="${imageLoading}" />
         </button>
       `)
       .join("");
@@ -488,29 +487,34 @@ document.addEventListener("DOMContentLoaded", () => {
     avatarGrid.querySelectorAll(".avatar-item").forEach((item) => {
       const src = item.dataset.avatar;
       if (src && src === selectedAvatar) item.classList.add("is-selected");
-      item.addEventListener("mouseenter", () => {
-        hoverPause = true;
-        if (src) {
+      if (!isCoarsePointer) {
+        item.addEventListener("mouseenter", () => {
+          hoverPause = true;
+          if (src) {
+            const existing = document.getElementById("avatar-hover-preview");
+            if (existing) existing.remove();
+            const preview = document.createElement("div");
+            preview.id = "avatar-hover-preview";
+            preview.className = "avatar-hover-preview";
+            const img = document.createElement("img");
+            img.src = src;
+            img.alt = "Avatar preview";
+            preview.appendChild(img);
+            document.body.appendChild(preview);
+          }
+        });
+        item.addEventListener("mouseleave", () => {
+          hoverPause = false;
           const existing = document.getElementById("avatar-hover-preview");
           if (existing) existing.remove();
-          const preview = document.createElement("div");
-          preview.id = "avatar-hover-preview";
-          preview.className = "avatar-hover-preview";
-          const img = document.createElement("img");
-          img.src = src;
-          img.alt = "Avatar preview";
-          preview.appendChild(img);
-          document.body.appendChild(preview);
+        });
+      }
+      item.addEventListener("click", (event) => {
+        if (isCoarsePointer && marqueeTouchState.moved) {
+          event.preventDefault();
+          return;
         }
-      });
-      item.addEventListener("mouseleave", () => {
-        hoverPause = false;
-        const existing = document.getElementById("avatar-hover-preview");
-        if (existing) existing.remove();
-      });
-      item.addEventListener("click", () => {
-        if (isCoarsePointer || marqueeTouchState.moved) return;
-        applyAvatarSelection(src, { openPreview: true });
+        applyAvatarSelection(src, { openPreview: !isCoarsePointer });
       });
     });
     if (marquee) marquee.scrollLeft = 0;
@@ -548,7 +552,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (avatarLeft && avatarRight && avatarGrid && marquee) {
     const scrollByAmount = () => (marquee ? marquee.clientWidth * 0.6 : 220);
     const autoSpeedPxPerMs = 0.038;
+    const mobileDriftPxPerMs = 0.009;
     let holdDirection = 0;
+    let mobileDriftDirection = 1;
     let lastTime = 0;
     marquee.style.scrollBehavior = "auto";
 
@@ -557,15 +563,27 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!lastTime) lastTime = time;
       const delta = Math.min(34, Math.max(0, time - lastTime));
       lastTime = time;
-      if (!hoverPause && marqueeLoopWidth > 0) {
-        const speed = holdDirection !== 0 ? holdDirection * autoSpeedPxPerMs * 5.2 : autoSpeedPxPerMs;
-        marquee.scrollLeft += speed * delta;
-        normalizeMarqueeLoop();
+      if (!hoverPause) {
+        if (isCoarsePointer) {
+          const maxScroll = Math.max(0, marquee.scrollWidth - marquee.clientWidth);
+          if (maxScroll > 0) {
+            if (marquee.scrollLeft <= 1) mobileDriftDirection = 1;
+            if (marquee.scrollLeft >= maxScroll - 1) mobileDriftDirection = -1;
+            marquee.scrollLeft = Math.max(
+              0,
+              Math.min(maxScroll, marquee.scrollLeft + mobileDriftDirection * mobileDriftPxPerMs * delta)
+            );
+          }
+        } else if (marqueeLoopWidth > 0) {
+          const speed = holdDirection !== 0 ? holdDirection * autoSpeedPxPerMs * 5.2 : autoSpeedPxPerMs;
+          marquee.scrollLeft += speed * delta;
+          normalizeMarqueeLoop();
+        }
       }
       requestAnimationFrame(step);
     };
 
-    if (marquee && !isCoarsePointer) requestAnimationFrame(step);
+    if (marquee) requestAnimationFrame(step);
 
     const startHold = (dir) => {
       holdDirection = dir;
@@ -596,12 +614,9 @@ document.addEventListener("DOMContentLoaded", () => {
       marquee.addEventListener("touchstart", (event) => {
         const touch = event.touches[0];
         if (!touch) return;
-        const targetItem = event.target instanceof Element ? event.target.closest(".avatar-item") : null;
         marqueeTouchState.active = true;
         marqueeTouchState.moved = false;
         marqueeTouchState.startX = touch.clientX;
-        marqueeTouchState.startScrollLeft = marquee.scrollLeft;
-        marqueeTouchState.targetAvatar = targetItem?.dataset.avatar || null;
         hoverPause = true;
       }, { passive: true });
 
@@ -609,29 +624,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!marqueeTouchState.active) return;
         const touch = event.touches[0];
         if (!touch) return;
-        const deltaX = touch.clientX - marqueeTouchState.startX;
-        if (Math.abs(deltaX) > 6) {
+        if (Math.abs(touch.clientX - marqueeTouchState.startX) > 8) {
           marqueeTouchState.moved = true;
         }
-        marquee.scrollLeft = marqueeTouchState.startScrollLeft - deltaX;
-        normalizeMarqueeLoop();
       }, { passive: true });
 
-      const endDrag = (event) => {
-        const targetAvatar =
-          marqueeTouchState.targetAvatar ||
-          (event?.target instanceof Element ? event.target.closest(".avatar-item")?.dataset.avatar : null);
-        const shouldSelect = Boolean(targetAvatar) && !marqueeTouchState.moved;
+      const endDrag = () => {
         marqueeTouchState.active = false;
         hoverPause = false;
-        marqueeTouchState.targetAvatar = null;
-        if (shouldSelect) {
-          applyAvatarSelection(targetAvatar);
-        }
-        normalizeMarqueeLoop();
         window.setTimeout(() => {
           marqueeTouchState.moved = false;
-        }, 50);
+        }, 80);
       };
 
       marquee.addEventListener("touchend", endDrag);
