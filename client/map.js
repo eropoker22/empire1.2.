@@ -6160,10 +6160,12 @@ window.Empire.Map = (() => {
   function updateDistrictGossip(district) {
     const root = document.getElementById("modal-gossip");
     const list = document.getElementById("modal-gossip-list");
+    const districtModal = document.getElementById("district-modal");
     if (!root || !list) return;
     if (!district) {
       root.classList.add("hidden");
       list.innerHTML = "";
+      districtModal?.classList.remove("district-modal--has-gossip");
       return;
     }
 
@@ -6175,6 +6177,7 @@ window.Empire.Map = (() => {
         </div>
       `;
       root.classList.remove("hidden");
+      districtModal?.classList.remove("district-modal--has-gossip");
       return;
     }
 
@@ -6192,6 +6195,7 @@ window.Empire.Map = (() => {
       `)
       .join("");
     root.classList.remove("hidden");
+    districtModal?.classList.add("district-modal--has-gossip");
   }
 
   function refreshOpenDistrictGossipSection() {

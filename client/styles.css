@@ -4645,6 +4645,28 @@ body::before {
     align-items: stretch;
   }
 
+  #district-modal.district-modal--has-gossip #raid-btn {
+    order: 1;
+  }
+
+  #district-modal.district-modal--has-gossip #spy-btn {
+    order: 2;
+  }
+
+  #district-modal.district-modal--has-gossip #attack-btn {
+    order: 3;
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: min(220px, 100%);
+  }
+
+  #district-modal.district-modal--has-gossip #defense-btn {
+    order: 4;
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    width: 100%;
+  }
+
   #district-modal .modal__actions .btn {
     min-height: 40px;
     padding: 8px 10px;
