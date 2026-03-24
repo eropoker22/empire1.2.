@@ -80,6 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const lightboxCaption = document.getElementById("avatar-lightbox-caption");
   const lightboxPrev = document.getElementById("avatar-lightbox-prev");
   const lightboxNext = document.getElementById("avatar-lightbox-next");
+  const lightboxConfirm = document.getElementById("avatar-lightbox-confirm");
   const lightboxClose = document.getElementById("avatar-lightbox-close");
   const lightboxBackdrop = document.querySelector("#avatar-lightbox .avatar-lightbox__backdrop");
   const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
@@ -885,6 +886,19 @@ document.addEventListener("DOMContentLoaded", () => {
       event.preventDefault();
       event.stopPropagation();
       shiftLightboxAvatar(1);
+    }, { passive: false });
+  }
+
+  if (lightboxConfirm) {
+    lightboxConfirm.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeLightbox();
+    });
+    lightboxConfirm.addEventListener("touchend", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeLightbox();
     }, { passive: false });
   }
 

@@ -1024,8 +1024,47 @@ window.Empire.UI = (() => {
 
   function init() {
     bindActions();
+    initMobileScenarioCardPlacement();
     syncMapVisionContext();
     refreshGangColorDisplays();
+  }
+
+  function initMobileScenarioCardPlacement() {
+    const scenarioCard = document.getElementById("scenario-card");
+    const scenarioAnchor = document.getElementById("scenario-card-anchor");
+    const main = document.querySelector(".main");
+    if (!scenarioCard || !scenarioAnchor || !main) return;
+
+    const media = window.matchMedia("(max-width: 720px)");
+    const restoreToPanel = () => {
+      if (scenarioCard.parentElement === scenarioAnchor.parentElement && scenarioCard.previousElementSibling === scenarioAnchor) {
+        return;
+      }
+      scenarioAnchor.insertAdjacentElement("afterend", scenarioCard);
+    };
+
+    const moveUnderResources = () => {
+      if (scenarioCard.parentElement === main && scenarioCard === main.firstElementChild) {
+        return;
+      }
+      main.insertAdjacentElement("afterbegin", scenarioCard);
+    };
+
+    const applyPlacement = () => {
+      if (media.matches) {
+        moveUnderResources();
+        return;
+      }
+      restoreToPanel();
+    };
+
+    applyPlacement();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", applyPlacement);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(applyPlacement);
+    }
+    window.addEventListener("resize", applyPlacement);
   }
 
   function bindActions() {
