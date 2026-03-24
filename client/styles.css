@@ -4635,6 +4635,8 @@ body::before {
 
   #district-modal .modal__gallery-grid img {
     height: 108px;
+    object-fit: contain;
+    background: rgba(3, 8, 18, 0.72);
   }
 
   #district-modal .modal__actions {
@@ -4645,26 +4647,26 @@ body::before {
     align-items: stretch;
   }
 
-  #district-modal.district-modal--has-gossip #raid-btn {
+  #district-modal #spy-btn {
     order: 1;
   }
 
-  #district-modal.district-modal--has-gossip #spy-btn {
+  #district-modal #raid-btn {
     order: 2;
   }
 
-  #district-modal.district-modal--has-gossip #attack-btn {
+  #district-modal #attack-btn {
     order: 3;
     grid-column: 1 / -1;
     justify-self: center;
     width: min(220px, 100%);
   }
 
-  #district-modal.district-modal--has-gossip #defense-btn {
+  #district-modal #defense-btn {
     order: 4;
     grid-column: 1 / -1;
-    justify-self: stretch;
-    width: 100%;
+    justify-self: center;
+    width: min(220px, 100%);
   }
 
   #district-modal .modal__actions .btn {
@@ -5070,6 +5072,8 @@ body::before {
 
   #district-modal .modal__gallery-grid img {
     height: 92px;
+    object-fit: contain;
+    background: rgba(3, 8, 18, 0.72);
   }
 
   #district-modal .modal__actions .btn {
