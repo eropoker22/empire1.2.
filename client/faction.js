@@ -551,7 +551,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (gangColorValue) {
       const colorName = resolveGangColorName(normalized);
-      gangColorValue.textContent = `${colorName} (${normalized.toUpperCase()})`;
+      gangColorValue.textContent = colorName;
       gangColorValue.style.color = normalized;
     }
     updateContinueState();

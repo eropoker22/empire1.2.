@@ -2289,7 +2289,7 @@ window.Empire.UI = (() => {
 
       content.classList.toggle("buildings-modal__content--with-bg", Boolean(backgroundImage));
       content.style.backgroundImage = backgroundImage
-        ? `linear-gradient(rgba(3, 7, 18, 0.78), rgba(3, 7, 18, 0.88)), url('${backgroundImage}')`
+        ? `linear-gradient(rgba(3, 7, 18, 0.54), rgba(3, 7, 18, 0.68)), url('${backgroundImage}')`
         : "";
 
       detail.innerHTML = `
