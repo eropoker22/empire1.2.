@@ -23,5 +23,15 @@ document.addEventListener("DOMContentLoaded", () => {
     window.Empire.UI.setGuestMode(false);
   } else {
     window.Empire.UI.setGuestMode(true);
+    const guestUsername = String(localStorage.getItem("empire_guest_username") || "").trim();
+    const guestGangName = String(localStorage.getItem("empire_gang_name") || "").trim();
+    window.Empire.UI.updateProfile({
+      username: guestUsername || "Host",
+      gangName: guestGangName || "Guest Crew",
+      structure: localStorage.getItem("empire_structure") || "-",
+      alliance: "Žádná",
+      districts: 0,
+      influence: 0
+    });
   }
 });

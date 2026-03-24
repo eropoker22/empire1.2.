@@ -1016,6 +1016,7 @@ window.Empire.UI = (() => {
   let allianceRefreshHandler = null;
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
+  const LOCAL_GANG_MEMBERS_KEY = "empire_local_gang_members";
   let scenarioVisionEnabled = false;
   let liveAllianceOwnerNames = new Set();
   let scenarioAllianceOwnerNames = new Set();
@@ -1067,6 +1068,17 @@ window.Empire.UI = (() => {
     window.addEventListener("resize", applyPlacement);
   }
 
+  function recordVerifiedIntelEvent(payload = {}) {
+    const record = window.Empire.Map?.recordIntelEvent;
+    if (typeof record !== "function") return;
+    try {
+      record({
+        ...payload,
+        intelLevel: "verified"
+      });
+    } catch {}
+  }
+
   function bindActions() {
     initEventsModal();
     initBuildingsModal();
@@ -1080,6 +1092,7 @@ window.Empire.UI = (() => {
     initPlayerScenarioButtons();
     document.getElementById("attack-btn").addEventListener("click", async () => {
       if (!window.Empire.selectedDistrict) return;
+      const targetDistrictId = window.Empire.selectedDistrict.id;
       const availability = evaluateDistrictActionAvailability(window.Empire.selectedDistrict, "attack");
       if (!availability.allowed) {
         pushEvent(availability.reason);
@@ -1090,15 +1103,26 @@ window.Empire.UI = (() => {
         return;
       }
       const result = await window.Empire.API.attackDistrict(
-        window.Empire.selectedDistrict.id
+        targetDistrictId
       );
       if (result?.error) {
-        pushEvent(formatAttackError(result.error));
+        const errorMessage = formatAttackError(result.error);
+        pushEvent(errorMessage);
+        recordVerifiedIntelEvent({
+          type: "attack_failed",
+          districtId: targetDistrictId,
+          message: errorMessage
+        });
         return;
       }
       if (result?.message) {
         pushEvent(result.message);
       }
+      recordVerifiedIntelEvent({
+        type: "attack_success",
+        districtId: targetDistrictId,
+        message: result?.message || ""
+      });
     });
 
     const raidBtn = document.getElementById("raid-btn");
@@ -1115,6 +1139,10 @@ window.Empire.UI = (() => {
           return;
         }
         pushEvent("Vykrádání distriktu bylo zahájeno.");
+        recordVerifiedIntelEvent({
+          type: "raid_started",
+          districtId: window.Empire.selectedDistrict.id
+        });
       });
     }
 
@@ -1132,6 +1160,10 @@ window.Empire.UI = (() => {
           return;
         }
         pushEvent("Špehování distriktu bylo zahájeno.");
+        recordVerifiedIntelEvent({
+          type: "spy_started",
+          districtId: window.Empire.selectedDistrict.id
+        });
       });
     }
 
@@ -2083,7 +2115,13 @@ window.Empire.UI = (() => {
   }
 
   function resolveScenarioOwnerName() {
-    return cachedProfile?.gangName || cachedProfile?.username || "Tvůj gang";
+    return (
+      cachedProfile?.gangName
+      || cachedProfile?.username
+      || localStorage.getItem("empire_gang_name")
+      || localStorage.getItem("empire_guest_username")
+      || "Tvůj gang"
+    );
   }
 
   function initEventsModal() {
@@ -2313,9 +2351,14 @@ window.Empire.UI = (() => {
         id: entry.districtId,
         type: entry.districtType
       };
-      const detailInput = entry.variantName
-        ? { baseName: entry.baseName, variantName: entry.variantName }
-        : entry.baseName;
+      const detailInput = {
+        baseName: entry.baseName,
+        variantName: entry.variantName || null,
+        districtId: entry.districtId,
+        buildingIndex: Number.isFinite(Number(entry.buildingIndex))
+          ? Math.max(0, Math.floor(Number(entry.buildingIndex)))
+          : null
+      };
       if (window.Empire.Map?.showBuildingDetail) {
         window.Empire.Map.showBuildingDetail(detailInput, pseudoDistrict);
       }
@@ -2439,7 +2482,7 @@ window.Empire.UI = (() => {
 
     const buildings = resolveBuildingsForDistrictType(typeKey);
     const lockContext = resolveBuildingsLockContext(typeKey);
-    return buildings.map((building) => {
+    return buildings.map((building, index) => {
       const baseName = String(building || "Neznámá budova");
       const isUnlocked = !lockContext.enforceLocks || lockContext.unlockedBuildings.has(normalizeOwnerName(baseName));
       return {
@@ -2448,6 +2491,7 @@ window.Empire.UI = (() => {
         displayName: baseName,
         districtType: typeKey,
         districtId: hashDistrictSeed(baseName, typeKey.length),
+        buildingIndex: index,
         unlocked: isUnlocked
       };
     });
@@ -2478,6 +2522,7 @@ window.Empire.UI = (() => {
           districtId: Number.isFinite(Number(district.id))
             ? Number(district.id)
             : hashDistrictSeed(`${districtLabel}:${baseName}`, index),
+          buildingIndex: index,
           unlocked: isOwnedByPlayer
         });
       });
@@ -2510,6 +2555,7 @@ window.Empire.UI = (() => {
           districtId: Number.isFinite(Number(district.id))
             ? Number(district.id)
             : hashDistrictSeed(`${districtLabel}:${baseName}`, index),
+          buildingIndex: index,
           unlocked: true
         });
       });
@@ -3221,6 +3267,38 @@ window.Empire.UI = (() => {
     return amount.toLocaleString("cs-CZ");
   }
 
+  function getLocalGangMembersBonus() {
+    const parsed = Number(localStorage.getItem(LOCAL_GANG_MEMBERS_KEY) || 0);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.floor(parsed));
+  }
+
+  function setLocalGangMembersBonus(value) {
+    const safeValue = Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+    localStorage.setItem(LOCAL_GANG_MEMBERS_KEY, String(safeValue));
+    return safeValue;
+  }
+
+  function refreshProfilePopulation() {
+    const profileSource = cachedProfile || window.Empire.player || {};
+    updateProfile(profileSource);
+    return countPlayerControlledPopulation(profileSource);
+  }
+
+  function addGangMembers(amount) {
+    const delta = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (delta <= 0) {
+      return refreshProfilePopulation();
+    }
+    const next = setLocalGangMembersBonus(getLocalGangMembersBonus() + delta);
+    refreshProfilePopulation();
+    return next;
+  }
+
+  function getCurrentGangMembers() {
+    return getLocalGangMembersBonus();
+  }
+
   function countAllianceControlledSectors() {
     const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
     if (!districts.length) return 0;
@@ -3234,8 +3312,9 @@ window.Empire.UI = (() => {
   }
 
   function countPlayerControlledPopulation(profile) {
+    const bonusMembers = getLocalGangMembersBonus();
     const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
-    if (!districts.length) return Number(profile?.population || 0);
+    if (!districts.length) return Number(profile?.population || 0) + bonusMembers;
 
     const weights = {
       downtown: 3600,
@@ -3245,7 +3324,7 @@ window.Empire.UI = (() => {
       park: 1300
     };
     const playerOwners = getPlayerOwnerNameSet();
-    if (!playerOwners.size) return Number(profile?.population || 0);
+    if (!playerOwners.size) return Number(profile?.population || 0) + bonusMembers;
 
     const total = districts.reduce((sum, district) => {
       const owner = normalizeOwnerName(district?.owner);
@@ -3259,8 +3338,8 @@ window.Empire.UI = (() => {
       return sum + (weights[typeKey] || fallback);
     }, 0);
 
-    if (total > 0) return total;
-    return Number(profile?.population || 0);
+    if (total > 0) return total + bonusMembers;
+    return Number(profile?.population || 0) + bonusMembers;
   }
 
   function formatFactionLabel(value) {
@@ -3901,6 +3980,14 @@ window.Empire.UI = (() => {
           return;
         }
         pushEvent("Lokální market příkaz byl vložen.");
+        recordVerifiedIntelEvent({
+          type: "market_order_created",
+          districtId: window.Empire.selectedDistrict?.id ?? null,
+          resourceKey: resourceSelect.value,
+          side: sideSelect.value,
+          quantity: Number(quantityInput.value),
+          pricePerUnit: Number(priceInput.value)
+        });
         await refreshMarket();
         syncGuestEconomyFromMarket();
         return;
@@ -3916,6 +4003,14 @@ window.Empire.UI = (() => {
         return;
       }
       pushEvent("Příkaz byl vložen na trh.");
+      recordVerifiedIntelEvent({
+        type: "market_order_created",
+        districtId: window.Empire.selectedDistrict?.id ?? null,
+        resourceKey: resourceSelect.value,
+        side: sideSelect.value,
+        quantity: Number(quantityInput.value),
+        pricePerUnit: Number(priceInput.value)
+      });
       await refreshMarket();
       const economy = await window.Empire.API.getEconomy();
       updateEconomy(economy);
@@ -3934,6 +4029,11 @@ window.Empire.UI = (() => {
           return;
         }
         pushEvent("Lokální market příkaz byl zrušen.");
+        recordVerifiedIntelEvent({
+          type: "market_order_cancelled",
+          districtId: window.Empire.selectedDistrict?.id ?? null,
+          resourceKey: resourceSelect.value
+        });
         await refreshMarket();
         syncGuestEconomyFromMarket();
         return;
@@ -3944,6 +4044,11 @@ window.Empire.UI = (() => {
         return;
       }
       pushEvent("Příkaz byl zrušen.");
+      recordVerifiedIntelEvent({
+        type: "market_order_cancelled",
+        districtId: window.Empire.selectedDistrict?.id ?? null,
+        resourceKey: resourceSelect.value
+      });
       await refreshMarket();
       const economy = await window.Empire.API.getEconomy();
       updateEconomy(economy);
@@ -4138,6 +4243,114 @@ window.Empire.UI = (() => {
       balances.cleanMoney += value;
     }
     balances.money = Number(balances.cleanMoney || 0) + Number(balances.dirtyMoney || 0);
+  }
+
+  function getEconomySnapshotFromDom() {
+    const parseMoney = (id) => {
+      const text = document.getElementById(id)?.textContent || "0";
+      const normalized = String(text).replace(/[^\d-]/g, "");
+      const parsed = Number(normalized || 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const parseStat = (id) => {
+      const text = document.getElementById(id)?.textContent || "0";
+      const normalized = String(text).replace(/[^\d-]/g, "");
+      const parsed = Number(normalized || 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    return {
+      cleanMoney: parseMoney("stat-clean-money"),
+      dirtyMoney: parseMoney("stat-dirty-money"),
+      influence: parseStat("stat-influence"),
+      drugs: 0,
+      weapons: 0,
+      defense: 0,
+      materials: 0
+    };
+  }
+
+  function ensureEconomyCache() {
+    if (!cachedEconomy || typeof cachedEconomy !== "object") {
+      cachedEconomy = getEconomySnapshotFromDom();
+    }
+    const money = resolveMoneyBreakdown(cachedEconomy || {});
+    cachedEconomy.cleanMoney = money.cleanMoney;
+    cachedEconomy.dirtyMoney = money.dirtyMoney;
+    cachedEconomy.balance = money.totalMoney;
+    return cachedEconomy;
+  }
+
+  function trySpendCash(amount) {
+    const required = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (required <= 0) return { ok: true, spent: 0 };
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy);
+    if (money.totalMoney < required) {
+      return { ok: false, reason: "insufficient_cash", available: money.totalMoney };
+    }
+
+    let remaining = required;
+    const fromClean = Math.min(money.cleanMoney, remaining);
+    money.cleanMoney -= fromClean;
+    remaining -= fromClean;
+    const fromDirty = Math.min(money.dirtyMoney, remaining);
+    money.dirtyMoney -= fromDirty;
+    remaining -= fromDirty;
+
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    updateEconomy(economy);
+    return { ok: true, spent: required, cleanSpent: fromClean, dirtySpent: fromDirty };
+  }
+
+  function addCleanCash(amount) {
+    const value = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (value <= 0) return 0;
+    const economy = ensureEconomyCache();
+    economy.cleanMoney = Number(economy.cleanMoney || 0) + value;
+    economy.balance = Number(economy.cleanMoney || 0) + Number(economy.dirtyMoney || 0);
+    updateEconomy(economy);
+    return value;
+  }
+
+  function addDirtyCash(amount) {
+    const value = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (value <= 0) return 0;
+    const economy = ensureEconomyCache();
+    economy.dirtyMoney = Number(economy.dirtyMoney || 0) + value;
+    economy.balance = Number(economy.cleanMoney || 0) + Number(economy.dirtyMoney || 0);
+    updateEconomy(economy);
+    return value;
+  }
+
+  function addInfluence(amount) {
+    const value = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (value <= 0) return 0;
+    const economy = ensureEconomyCache();
+    economy.influence = Math.max(0, Number(economy.influence || 0) + value);
+    updateEconomy(economy);
+    return value;
+  }
+
+  function launderDirtyCash(portion) {
+    const ratioRaw = Number(portion);
+    if (!Number.isFinite(ratioRaw)) return 0;
+    const ratio = Math.max(0, Math.min(1, ratioRaw > 1 ? ratioRaw / 100 : ratioRaw));
+    if (ratio <= 0) return 0;
+
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy);
+    const laundered = Math.max(0, Math.floor(money.dirtyMoney * ratio));
+    if (laundered <= 0) return 0;
+
+    money.dirtyMoney = Math.max(0, money.dirtyMoney - laundered);
+    money.cleanMoney += laundered;
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    updateEconomy(economy);
+    return laundered;
   }
 
   function makeSeedOrder(resourceKey, side, remainingQuantity, pricePerUnit, username) {
@@ -4338,6 +4551,12 @@ window.Empire.UI = (() => {
     const economy = cachedEconomy || {};
     const moneyFromProfile = resolveMoneyBreakdown(profile || {});
     const moneyFromEconomy = resolveMoneyBreakdown(economy || {});
+    const guestUsername = String(localStorage.getItem("empire_guest_username") || "").trim();
+    const guestGangName = String(localStorage.getItem("empire_gang_name") || "").trim();
+    const factionLabel = formatFactionLabel(profile.structure || localStorage.getItem("empire_structure"));
+    const wantedLevel = resolveWantedLevel(profile);
+    const influenceRaw = Number(profile.influence ?? economy.influence ?? 0);
+    const influenceValue = Number.isFinite(influenceRaw) ? Math.max(0, Math.floor(influenceRaw)) : 0;
     const setText = (id, value) => {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
@@ -4354,9 +4573,11 @@ window.Empire.UI = (() => {
       }
     }
     applyProfileModalVisuals(avatar);
-    setText("profile-modal-username", profile.username || "-");
-    setText("profile-modal-gang", profile.gangName || "-");
-    setText("profile-modal-structure", profile.structure || localStorage.getItem("empire_structure") || "-");
+    setText("profile-modal-username", profile.username || guestUsername || "-");
+    setText("profile-modal-gang", profile.gangName || guestGangName || "-");
+    setText("profile-modal-faction", factionLabel);
+    setText("profile-modal-influence", influenceValue);
+    setText("profile-modal-wanted", wantedLevel);
     setText("profile-modal-alliance", profile.alliance || "Žádná");
     setText("profile-modal-districts", profile.districts || 0);
     const profileHasMoneyData =
@@ -4369,10 +4590,6 @@ window.Empire.UI = (() => {
     const modalMoney = profileHasMoneyData ? moneyFromProfile : moneyFromEconomy;
     setText("profile-modal-clean-money", `$${modalMoney.cleanMoney}`);
     setText("profile-modal-dirty-money", `$${modalMoney.dirtyMoney}`);
-    setText("profile-modal-drugs", profile.drugs ?? economy.drugs ?? 0);
-    setText("profile-modal-storage", profile.materials ?? economy.materials ?? 0);
-    setText("profile-modal-weapons", profile.weapons ?? economy.weapons ?? 0);
-    setText("profile-modal-defense", profile.defense ?? economy.defense ?? 0);
     refreshGangColorDisplays();
   }
 
@@ -4551,6 +4768,14 @@ window.Empire.UI = (() => {
     handleMarketUpdate,
     setGuestMode,
     initProfileModal,
-    initSettingsModal
+    initSettingsModal,
+    addGangMembers,
+    getCurrentGangMembers,
+    trySpendCash,
+    addCleanCash,
+    addDirtyCash,
+    addInfluence,
+    launderDirtyCash,
+    refreshProfilePopulation
   };
 })();

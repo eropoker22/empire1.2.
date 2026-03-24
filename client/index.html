@@ -209,6 +209,10 @@
             <div class="modal__gallery-title" id="modal-buildings-title">Budovy v distriktu</div>
             <div class="district-buildings" id="modal-buildings-list"></div>
           </div>
+          <div id="modal-gossip" class="modal__gallery hidden">
+            <div class="modal__gallery-title">Drby v districtu</div>
+            <div class="district-gossip" id="modal-gossip-list"></div>
+          </div>
           <div id="modal-park-gallery" class="modal__gallery hidden">
             <div class="modal__gallery-title">Atmosféra parku</div>
             <div class="modal__gallery-grid" id="modal-park-images"></div>
@@ -309,17 +313,80 @@
               <span>Denní income</span>
               <strong id="building-detail-daily">$0 / den</strong>
             </div>
-            <div class="modal__actions">
-              <button class="btn btn--primary" type="button" data-building-action="1">Akce 1</button>
-              <button class="btn btn--ghost" type="button" data-building-action="2">Akce 2</button>
-              <button class="btn btn--warn" type="button" data-building-action="3">Akce 3</button>
+            <div id="building-detail-mechanics" class="building-detail-mechanics hidden">
+              <div class="modal__row">
+                <span>Level</span>
+                <strong id="building-detail-level">1</strong>
+              </div>
+              <div class="modal__row">
+                <span id="building-detail-label-stored">Uložení členové</span>
+                <strong id="building-detail-stored-members">0 / 0</strong>
+              </div>
+              <div class="modal__row">
+                <span id="building-detail-label-production">Produkce členů</span>
+                <strong id="building-detail-member-production">0 / 10 min</strong>
+              </div>
+              <div class="modal__row">
+                <span id="building-detail-label-heat">Heat</span>
+                <strong id="building-detail-heat">0 / 24h</strong>
+              </div>
+              <div class="modal__row">
+                <span id="building-detail-label-effects">Aktivní efekty</span>
+                <strong id="building-detail-effects">Žádné</strong>
+              </div>
+            </div>
+            <div class="building-detail-actions">
+              <div class="building-detail-actions__group">
+                <div class="building-detail-actions__label">Speciální akce</div>
+                <div class="building-detail-actions__grid">
+                  <button class="btn btn--ghost hidden building-detail-action-btn building-detail-action-btn--collect" type="button" data-building-action="collect">Vybrat členy</button>
+                  <button class="btn btn--primary building-detail-action-btn building-detail-action-btn--a1" type="button" data-building-action="1">Akce 1</button>
+                  <button class="btn btn--ghost building-detail-action-btn building-detail-action-btn--a2" type="button" data-building-action="2">Akce 2</button>
+                  <button class="btn btn--warn building-detail-action-btn building-detail-action-btn--a3" type="button" data-building-action="3">Akce 3</button>
+                </div>
+              </div>
+              <div class="building-detail-actions__group">
+                <div class="building-detail-actions__label">Vylepšení</div>
+                <div class="building-detail-actions__grid building-detail-actions__grid--single">
+                  <button class="btn btn--primary building-detail-action-btn building-detail-action-btn--upgrade" type="button" data-building-action="upgrade">Upgrade</button>
+                </div>
+              </div>
             </div>
           </div>
 
           <div id="building-detail-panel-info" class="building-detail-panel hidden">
-            <p class="building-detail-info-text" id="building-detail-info-text">
-              Tato budova zatím nemá doplněný finální popis.
-            </p>
+            <div class="building-info-card">
+              <div class="building-info-card__head">
+                <h4 class="building-info-card__title" id="building-info-heading">Profil budovy</h4>
+                <p class="building-info-card__subtitle" id="building-info-subtitle">Přehled role budovy v districtu.</p>
+              </div>
+              <div class="building-info-card__stats">
+                <div class="building-info-card__stat">
+                  <span>Hodinový income</span>
+                  <strong id="building-info-hourly">$0 / hod</strong>
+                </div>
+                <div class="building-info-card__stat">
+                  <span>Denní income</span>
+                  <strong id="building-info-daily">$0 / den</strong>
+                </div>
+              </div>
+              <div class="building-info-card__section">
+                <h5>Popis budovy</h5>
+                <p class="building-detail-info-text" id="building-detail-info-text">
+                  Tato budova zatím nemá doplněný finální popis.
+                </p>
+              </div>
+              <div class="building-info-card__section">
+                <h5>Aktivní mechaniky</h5>
+                <p class="building-info-card__effects" id="building-info-effects">Žádné aktivní mechaniky.</p>
+              </div>
+              <div class="building-info-card__section">
+                <h5>Speciální akce</h5>
+                <ul class="building-info-card__actions" id="building-info-actions">
+                  <li>Speciální akce této budovy budou doplněny.</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -384,8 +451,16 @@
             <strong id="profile-modal-gang">-</strong>
           </div>
           <div class="modal__row">
-            <span>Struktura</span>
-            <strong id="profile-modal-structure">-</strong>
+            <span>Frakce</span>
+            <strong id="profile-modal-faction">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Vliv</span>
+            <strong id="profile-modal-influence">0</strong>
+          </div>
+          <div class="modal__row">
+            <span>Hledanost</span>
+            <strong id="profile-modal-wanted">0</strong>
           </div>
           <div class="modal__row">
             <span>Aliance</span>
@@ -402,22 +477,6 @@
           <div class="modal__row">
             <span>Špinavé peníze</span>
             <strong id="profile-modal-dirty-money">$0</strong>
-          </div>
-          <div class="modal__row">
-            <span>Drogy</span>
-            <strong id="profile-modal-drugs">0</strong>
-          </div>
-          <div class="modal__row">
-            <span>Sklad</span>
-            <strong id="profile-modal-storage">0</strong>
-          </div>
-          <div class="modal__row">
-            <span>Zbraně</span>
-            <strong id="profile-modal-weapons">0</strong>
-          </div>
-          <div class="modal__row">
-            <span>Obrana</span>
-            <strong id="profile-modal-defense">0</strong>
           </div>
         </div>
       </div>
