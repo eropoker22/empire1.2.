@@ -817,6 +817,7 @@ window.Empire.Map = (() => {
       id: "neonDust",
       name: "Neon Dust",
       productionPerHour: 20,
+      supplyCost: Object.freeze({ chemicals: 2, biomass: 1, stimPack: 0 }),
       heatPerHour: 1,
       useAmount: 5,
       effectDurationMs: 2 * 60 * 60 * 1000,
@@ -826,6 +827,7 @@ window.Empire.Map = (() => {
       id: "pulseShot",
       name: "Pulse Shot",
       productionPerHour: 10,
+      supplyCost: Object.freeze({ chemicals: 2, biomass: 2, stimPack: 1 }),
       heatPerHour: 2,
       useAmount: 3,
       effectDurationMs: 2 * 60 * 60 * 1000,
@@ -835,6 +837,7 @@ window.Empire.Map = (() => {
       id: "velvetSmoke",
       name: "Velvet Smoke",
       productionPerHour: 6,
+      supplyCost: Object.freeze({ chemicals: 3, biomass: 3, stimPack: 1 }),
       heatPerHour: 3,
       useAmount: 2,
       effectDurationMs: 2 * 60 * 60 * 1000,
@@ -844,6 +847,7 @@ window.Empire.Map = (() => {
       id: "ghostSerum",
       name: "Ghost Serum",
       productionPerHour: 3,
+      supplyCost: Object.freeze({ chemicals: 4, biomass: 2, stimPack: 2 }),
       heatPerHour: 4,
       useAmount: 1,
       effectDurationMs: 2 * 60 * 60 * 1000,
@@ -853,6 +857,7 @@ window.Empire.Map = (() => {
       id: "overdriveX",
       name: "Overdrive X",
       productionPerHour: 1,
+      supplyCost: Object.freeze({ chemicals: 5, biomass: 3, stimPack: 2 }),
       heatPerHour: 6,
       useAmount: 1,
       effectDurationMs: 2 * 60 * 60 * 1000,
@@ -860,6 +865,17 @@ window.Empire.Map = (() => {
     })
   });
   const DRUG_LAB_DRUG_KEYS = Object.freeze(Object.keys(DRUG_CONFIG));
+
+  function getDrugLabSupplyCost(drugType, amount = 1) {
+    const drug = DRUG_CONFIG[String(drugType || "").trim()];
+    const units = Math.max(1, Math.floor(Number(amount) || 1));
+    const base = drug?.supplyCost || {};
+    return {
+      chemicals: Math.max(0, Math.floor(Number(base.chemicals || 0) * units)),
+      biomass: Math.max(0, Math.floor(Number(base.biomass || 0) * units)),
+      stimPack: Math.max(0, Math.floor(Number(base.stimPack || 0) * units))
+    };
+  }
 
   const DISTRICT_GOSSIP_STORAGE_KEY = "empire_district_gossip_history_v1";
   const DISTRICT_GOSSIP_MAX_PER_DISTRICT = 40;
@@ -2277,6 +2293,8 @@ window.Empire.Map = (() => {
       category,
       isProducing: false,
       producedAmount: 0,
+      queuedUnits: 1,
+      remainingUnits: 0,
       lastTick: now,
       productionRemainder: 0
     };
@@ -2290,6 +2308,8 @@ window.Empire.Map = (() => {
     const config = ARMORY_CONFIG.weapons[weaponKey] || null;
     const category = config?.category === "defense" ? "defense" : "attack";
     const producedAmountRaw = Number(rawSlot?.producedAmount || 0);
+    const queuedUnitsRaw = Number(rawSlot?.queuedUnits || 1);
+    const remainingUnitsRaw = Number(rawSlot?.remainingUnits || 0);
     const lastTickRaw = Number(rawSlot?.lastTick || now);
     const remainderRaw = Number(rawSlot?.productionRemainder || 0);
     return {
@@ -2298,6 +2318,8 @@ window.Empire.Map = (() => {
       category,
       isProducing: Boolean(rawSlot?.isProducing),
       producedAmount: Number.isFinite(producedAmountRaw) ? Math.max(0, Math.floor(producedAmountRaw)) : 0,
+      queuedUnits: Number.isFinite(queuedUnitsRaw) ? clamp(Math.floor(queuedUnitsRaw), 1, 999) : 1,
+      remainingUnits: Number.isFinite(remainingUnitsRaw) ? Math.max(0, Math.floor(remainingUnitsRaw)) : 0,
       lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : now,
       productionRemainder: Number.isFinite(remainderRaw) ? Math.max(0, remainderRaw) : 0
     };
@@ -2434,29 +2456,39 @@ window.Empire.Map = (() => {
       const cycles = Math.max(0, Math.floor(rawCycles));
       slot.productionRemainder = Math.max(0, rawCycles - cycles);
       if (cycles > 0) {
-        const metalCost = Math.max(0, Math.floor(Number(weapon.metalPartsCost || 0)));
-        const techCost = Math.max(0, Math.floor(Number(weapon.techCoreCost || 0)));
-        const maxFromMetal = metalCost > 0
-          ? Math.floor(Number(factorySupplies.metalParts || 0) / metalCost)
-          : cycles;
-        const maxFromTech = techCost > 0
-          ? Math.floor(Number(factorySupplies.techCore || 0) / techCost)
-          : cycles;
-        const crafted = Math.max(0, Math.min(cycles, maxFromMetal, maxFromTech));
+        const queuedRemaining = Math.max(0, Math.floor(Number(slot.remainingUnits || 0)));
+        const usesQueuedMode = queuedRemaining > 0;
+        let crafted = 0;
+        if (queuedRemaining > 0) {
+          crafted = Math.max(0, Math.min(cycles, queuedRemaining));
+          slot.remainingUnits = Math.max(0, queuedRemaining - crafted);
+        } else {
+          const metalCost = Math.max(0, Math.floor(Number(weapon.metalPartsCost || 0)));
+          const techCost = Math.max(0, Math.floor(Number(weapon.techCoreCost || 0)));
+          const maxFromMetal = metalCost > 0
+            ? Math.floor(Number(factorySupplies.metalParts || 0) / metalCost)
+            : cycles;
+          const maxFromTech = techCost > 0
+            ? Math.floor(Number(factorySupplies.techCore || 0) / techCost)
+            : cycles;
+          crafted = Math.max(0, Math.min(cycles, maxFromMetal, maxFromTech));
+          if (crafted > 0) {
+            if (metalCost > 0) {
+              factorySupplies.metalParts = Math.max(
+                0,
+                Math.floor(Number(factorySupplies.metalParts || 0) - crafted * metalCost)
+              );
+            }
+            if (techCost > 0) {
+              factorySupplies.techCore = Math.max(
+                0,
+                Math.floor(Number(factorySupplies.techCore || 0) - crafted * techCost)
+              );
+            }
+            factorySuppliesChanged = true;
+          }
+        }
         if (crafted > 0) {
-          if (metalCost > 0) {
-            factorySupplies.metalParts = Math.max(
-              0,
-              Math.floor(Number(factorySupplies.metalParts || 0) - crafted * metalCost)
-            );
-          }
-          if (techCost > 0) {
-            factorySupplies.techCore = Math.max(
-              0,
-              Math.floor(Number(factorySupplies.techCore || 0) - crafted * techCost)
-            );
-          }
-          factorySuppliesChanged = true;
           stateRef.storedWeapons[weaponKey] = Math.max(
             0,
             Math.floor(Number(stateRef.storedWeapons[weaponKey] || 0) + crafted)
@@ -2464,6 +2496,10 @@ window.Empire.Map = (() => {
           slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + crafted));
           produced[weaponKey] = Math.max(0, Math.floor(Number(produced[weaponKey] || 0) + crafted));
           heatAdded += crafted * Math.max(0, Math.floor(Number(weapon.heatPerUnit || 0)));
+        }
+        if (usesQueuedMode && Number(slot.remainingUnits || 0) <= 0) {
+          slot.isProducing = false;
+          slot.productionRemainder = 0;
         }
       }
       slot.lastTick = nowMs;
@@ -2548,6 +2584,8 @@ window.Empire.Map = (() => {
       id: slotId,
       activeDrugType: "neonDust",
       isProducing: false,
+      queuedUnits: 1,
+      queueRemaining: 0,
       producedAmount: 0,
       lastTick: now,
       startedAt: 0,
@@ -2559,6 +2597,8 @@ window.Empire.Map = (() => {
     const activeDrugTypeRaw = String(rawSlot?.activeDrugType || "").trim();
     const activeDrugType = DRUG_CONFIG[activeDrugTypeRaw] ? activeDrugTypeRaw : "neonDust";
     const producedAmountRaw = Number(rawSlot?.producedAmount || 0);
+    const queuedUnitsRaw = Number(rawSlot?.queuedUnits || 1);
+    const queueRemainingRaw = Number(rawSlot?.queueRemaining || 0);
     const lastTickRaw = Number(rawSlot?.lastTick || now);
     const startedAtRaw = Number(rawSlot?.startedAt || 0);
     const remainderRaw = Number(rawSlot?.productionRemainder || 0);
@@ -2566,6 +2606,8 @@ window.Empire.Map = (() => {
       id: slotId,
       activeDrugType,
       isProducing: Boolean(rawSlot?.isProducing),
+      queuedUnits: Number.isFinite(queuedUnitsRaw) ? clamp(Math.floor(queuedUnitsRaw), 1, 999) : 1,
+      queueRemaining: Number.isFinite(queueRemainingRaw) ? Math.max(0, Math.floor(queueRemainingRaw)) : 0,
       producedAmount: Number.isFinite(producedAmountRaw) ? Math.max(0, Math.floor(producedAmountRaw)) : 0,
       lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : now,
       startedAt: Number.isFinite(startedAtRaw) ? Math.max(0, Math.floor(startedAtRaw)) : 0,
@@ -2932,7 +2974,7 @@ window.Empire.Map = (() => {
       return Math.max(0, multiplier);
     }
 
-    startProduction(slotId, drugType, now = Date.now()) {
+    startProduction(slotId, drugType, now = Date.now(), units = 1) {
       const slot = this.getSlotById(slotId);
       if (!slot) {
         return { ok: false, message: "Slot neexistuje." };
@@ -2940,15 +2982,21 @@ window.Empire.Map = (() => {
       if (Number(slot.id) > this.getUnlockedSlotCount()) {
         return { ok: false, message: "Slot je zatím zamčený." };
       }
+      if (slot.isProducing && Math.max(0, Math.floor(Number(slot.queueRemaining || 0))) > 0) {
+        return { ok: false, message: `Slot ${slot.id}: výroba už běží.` };
+      }
       const safeDrugType = String(drugType || slot.activeDrugType || "").trim();
       if (!DRUG_CONFIG[safeDrugType]) {
         return { ok: false, message: "Vyber drogu pro produkci." };
       }
+      const safeUnits = clamp(Math.floor(Number(units) || Number(slot.queuedUnits) || 1), 1, 999);
       slot.activeDrugType = safeDrugType;
+      slot.queuedUnits = safeUnits;
+      slot.queueRemaining = safeUnits;
       slot.isProducing = true;
       slot.startedAt = slot.startedAt > 0 ? slot.startedAt : now;
       slot.lastTick = now;
-      return { ok: true, message: `Slot ${slot.id}: produkce ${DRUG_CONFIG[safeDrugType].name} spuštěna.` };
+      return { ok: true, message: `Slot ${slot.id}: produkce ${DRUG_CONFIG[safeDrugType].name} spuštěna (${safeUnits}x).` };
     }
 
     stopProduction(slotId, now = Date.now()) {
@@ -2960,6 +3008,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: `Slot ${slot.id}: produkce neběží.` };
       }
       slot.isProducing = false;
+      slot.queueRemaining = 0;
       slot.lastTick = now;
       return { ok: true, message: `Slot ${slot.id}: produkce zastavena.` };
     }
@@ -3009,13 +3058,24 @@ window.Empire.Map = (() => {
         slot.productionRemainder = Math.max(0, rawProduced - producedWhole);
 
         if (producedWhole > 0) {
+          const queuedRemaining = Math.max(0, Math.floor(Number(slot.queueRemaining || 0)));
           const freeSpace = Math.max(0, storageCapacity - this.getCurrentStoredTotal());
-          const storable = Math.max(0, Math.min(producedWhole, freeSpace));
+          const storable = Math.max(
+            0,
+            Math.min(producedWhole, freeSpace, queuedRemaining > 0 ? queuedRemaining : producedWhole)
+          );
           if (storable > 0) {
             const targetStorage = this.isCleanBatchActive(now) ? this.building.storageEnhanced : this.building.storage;
             targetStorage[drug.id] = Math.max(0, Number(targetStorage[drug.id] || 0) + storable);
             slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + storable));
             producedByDrug[drug.id] += storable;
+            if (queuedRemaining > 0) {
+              slot.queueRemaining = Math.max(0, queuedRemaining - storable);
+              if (slot.queueRemaining <= 0) {
+                slot.isProducing = false;
+                slot.productionRemainder = 0;
+              }
+            }
           }
           if (storable < producedWhole && this.getCurrentStoredTotal() >= storageCapacity) {
             slot.productionRemainder = 0;
@@ -3254,6 +3314,20 @@ window.Empire.Map = (() => {
     const timed = core.updateTimedEffects(now);
     const producedByDrug = core.updateProduction(now);
     const heatAdded = core.applyPassiveHeat(now);
+    const producedTotal = DRUG_LAB_DRUG_KEYS.reduce(
+      (sum, key) => sum + Math.max(0, Math.floor(Number(producedByDrug?.[key] || 0))),
+      0
+    );
+    if (producedTotal > 0) {
+      const collected = core.collectDrugs();
+      DRUG_LAB_DRUG_KEYS.forEach((key) => {
+        inventory[key] = Math.max(0, Math.floor(Number(inventory[key] || 0) + Number(collected.collected[key] || 0)));
+        player.enhancedDrugs[key] = Math.max(
+          0,
+          Math.floor(Number(player.enhancedDrugs[key] || 0) + Number(collected.collectedEnhanced[key] || 0))
+        );
+      });
+    }
 
     if (Array.isArray(timed.expiredEffects) && timed.expiredEffects.length) {
       timed.expiredEffects.forEach((effectKey) => {
@@ -7058,6 +7132,62 @@ window.Empire.Map = (() => {
     return null;
   }
 
+  function applyArmoryWeaponsToPlayerInventory(weaponMap = {}) {
+    const byNameAttack = {};
+    const byNameDefense = {};
+    const byKey = createArmoryWeaponMap();
+    ARMORY_WEAPON_KEYS.forEach((weaponKey) => {
+      const amount = Math.max(0, Math.floor(Number(weaponMap?.[weaponKey] || 0)));
+      if (!amount) return;
+      byKey[weaponKey] = amount;
+      const config = ARMORY_CONFIG.weapons[weaponKey];
+      if (!config) return;
+      if (config.category === "defense") {
+        byNameDefense[config.name] = amount;
+      } else {
+        byNameAttack[config.name] = amount;
+      }
+    });
+    const total = ARMORY_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(byKey[weaponKey] || 0), 0);
+    if (!total) {
+      return { total: 0, byKey };
+    }
+
+    const addCraftedWeapons = window.Empire.UI?.addCraftedWeapons;
+    if (typeof addCraftedWeapons === "function" && Object.keys(byNameAttack).length) {
+      addCraftedWeapons(byNameAttack);
+    } else if (Object.keys(byNameAttack).length) {
+      try {
+        const current = JSON.parse(localStorage.getItem("empire_weapons_detail") || "{}");
+        const merged = current && typeof current === "object" && !Array.isArray(current) ? current : {};
+        Object.entries(byNameAttack).forEach(([name, amount]) => {
+          const delta = Math.max(0, Math.floor(Number(amount) || 0));
+          if (!delta) return;
+          merged[name] = Math.max(0, Math.floor(Number(merged[name] || 0) + delta));
+        });
+        localStorage.setItem("empire_weapons_detail", JSON.stringify(merged));
+      } catch {}
+    }
+
+    const addCraftedDefense = window.Empire.UI?.addCraftedDefense;
+    if (typeof addCraftedDefense === "function" && Object.keys(byNameDefense).length) {
+      addCraftedDefense(byNameDefense);
+    } else if (Object.keys(byNameDefense).length) {
+      try {
+        const current = JSON.parse(localStorage.getItem("empire_defense_detail") || "{}");
+        const merged = current && typeof current === "object" && !Array.isArray(current) ? current : {};
+        Object.entries(byNameDefense).forEach(([name, amount]) => {
+          const delta = Math.max(0, Math.floor(Number(amount) || 0));
+          if (!delta) return;
+          merged[name] = Math.max(0, Math.floor(Number(merged[name] || 0) + delta));
+        });
+        localStorage.setItem("empire_defense_detail", JSON.stringify(merged));
+      } catch {}
+    }
+
+    return { total, byKey };
+  }
+
   function resolveArmoryBuildingDetails(context, district, fallback) {
     const now = Date.now();
     const primaryTarget = resolvePrimaryOwnedArmoryTarget(context, district);
@@ -7072,6 +7202,18 @@ window.Empire.Map = (() => {
       ownedArmoryCount,
       networkProductionBonusPct
     });
+    const autoTransferred = applyArmoryWeaponsToPlayerInventory(syncResult.produced);
+    if (autoTransferred.total > 0) {
+      snapshot.storedWeapons = createArmoryWeaponMap(snapshot.storedWeapons);
+      ARMORY_WEAPON_KEYS.forEach((weaponKey) => {
+        const delta = Math.max(0, Math.floor(Number(autoTransferred.byKey[weaponKey] || 0)));
+        if (!delta) return;
+        snapshot.storedWeapons[weaponKey] = Math.max(
+          0,
+          Math.floor(Number(snapshot.storedWeapons[weaponKey] || 0) - delta)
+        );
+      });
+    }
     persistArmoryState(key, snapshot);
 
     const levelMultiplier = getArmoryLevelMultiplier(snapshot.level);
@@ -7093,6 +7235,8 @@ window.Empire.Map = (() => {
         category,
         weaponName: config?.name || slot.weaponKey,
         isProducing: Boolean(slot.isProducing),
+        queuedUnits: Math.max(1, Math.floor(Number(slot.queuedUnits || 1))),
+        remainingUnits: Math.max(0, Math.floor(Number(slot.remainingUnits || 0))),
         producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
         perHour: Math.max(0, Number(rates[slot.weaponKey] || 0)),
         powerLabel: category === "defense" ? "Defense" : "Attack",
@@ -7193,11 +7337,20 @@ window.Empire.Map = (() => {
     const now = Date.now();
     const key = resolveBuildingInstanceKey(context, district);
     const snapshot = getArmoryStateByKey(key, now);
-    syncArmoryProduction(snapshot, now, {
+    const syncResult = syncArmoryProduction(snapshot, now, {
       applyHeat: true,
       ownedArmoryCount,
       networkProductionBonusPct
     });
+    const autoTransferred = applyArmoryWeaponsToPlayerInventory(syncResult.produced);
+    if (autoTransferred.total > 0) {
+      snapshot.storedWeapons = createArmoryWeaponMap(snapshot.storedWeapons);
+      ARMORY_WEAPON_KEYS.forEach((weaponKey) => {
+        const delta = Math.max(0, Math.floor(Number(autoTransferred.byKey[weaponKey] || 0)));
+        if (!delta) return;
+        snapshot.storedWeapons[weaponKey] = Math.max(0, Math.floor(Number(snapshot.storedWeapons[weaponKey] || 0) - delta));
+      });
+    }
 
     if (actionId === "1" || actionId === "2" || actionId === "3") {
       persistArmoryState(key, snapshot);
@@ -7214,51 +7367,7 @@ window.Empire.Map = (() => {
 
       snapshot.storedWeapons = createArmoryWeaponMap();
       persistArmoryState(key, snapshot);
-
-      const attackPayloadByName = {};
-      const defensePayloadByName = {};
-      ARMORY_WEAPON_KEYS.forEach((weaponKey) => {
-        const config = ARMORY_CONFIG.weapons[weaponKey];
-        if (!config) return;
-        const amount = Math.max(0, Math.floor(Number(collected[weaponKey] || 0)));
-        if (amount <= 0) return;
-        if (config.category === "defense") {
-          defensePayloadByName[config.name] = amount;
-        } else {
-          attackPayloadByName[config.name] = amount;
-        }
-      });
-      const addCraftedWeapons = window.Empire.UI?.addCraftedWeapons;
-      if (typeof addCraftedWeapons === "function" && Object.keys(attackPayloadByName).length) {
-        addCraftedWeapons(attackPayloadByName);
-      } else {
-        try {
-          const current = JSON.parse(localStorage.getItem("empire_weapons_detail") || "{}");
-          const merged = current && typeof current === "object" && !Array.isArray(current) ? current : {};
-          Object.entries(attackPayloadByName).forEach(([name, amount]) => {
-            const delta = Math.max(0, Math.floor(Number(amount) || 0));
-            if (!delta) return;
-            merged[name] = Math.max(0, Math.floor(Number(merged[name] || 0) + delta));
-          });
-          localStorage.setItem("empire_weapons_detail", JSON.stringify(merged));
-        } catch {}
-      }
-
-      const addCraftedDefense = window.Empire.UI?.addCraftedDefense;
-      if (typeof addCraftedDefense === "function" && Object.keys(defensePayloadByName).length) {
-        addCraftedDefense(defensePayloadByName);
-      } else {
-        try {
-          const current = JSON.parse(localStorage.getItem("empire_defense_detail") || "{}");
-          const merged = current && typeof current === "object" && !Array.isArray(current) ? current : {};
-          Object.entries(defensePayloadByName).forEach(([name, amount]) => {
-            const delta = Math.max(0, Math.floor(Number(amount) || 0));
-            if (!delta) return;
-            merged[name] = Math.max(0, Math.floor(Number(merged[name] || 0) + delta));
-          });
-          localStorage.setItem("empire_defense_detail", JSON.stringify(merged));
-        } catch {}
-      }
+      applyArmoryWeaponsToPlayerInventory(collected);
 
       const attackSummary = ARMORY_ATTACK_WEAPON_KEYS
         .map((weaponKey) => {
@@ -7496,6 +7605,9 @@ window.Empire.Map = (() => {
         activeDrugType: activeDrug.id,
         activeDrugName: activeDrug.name,
         isProducing: unlocked && Boolean(slot.isProducing),
+        queuedUnits: Math.max(1, Math.floor(Number(slot.queuedUnits || 1))),
+        queueRemaining: Math.max(0, Math.floor(Number(slot.queueRemaining || 0))),
+        supplyCost: getDrugLabSupplyCost(activeDrug.id, 1),
         producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
         lastTick: Math.max(0, Number(slot.lastTick || 0)),
         startedAt: Math.max(0, Number(slot.startedAt || 0))
@@ -7666,11 +7778,57 @@ window.Empire.Map = (() => {
         slot.productionRemainder = 0;
         result = { ok: true, message: `Slot ${slot.id}: nastavena droga ${DRUG_CONFIG[drugType].name}.` };
       }
+    } else if (action === "slotAmount") {
+      const slotId = Math.max(1, Math.floor(Number(payload.slotId) || 0));
+      const delta = Math.floor(Number(payload.delta) || 0);
+      const slot = core.getSlotById(slotId);
+      if (!slot) {
+        result = { ok: false, message: "Slot neexistuje." };
+      } else if (Number(slot.id) > core.getUnlockedSlotCount()) {
+        result = { ok: false, message: "Slot je zamčený." };
+      } else if (!delta) {
+        result = { ok: false, message: "Neplatná změna množství." };
+      } else {
+        slot.queuedUnits = clamp(Math.floor(Number(slot.queuedUnits || 1) + delta), 1, 999);
+        result = { ok: true, message: `Slot ${slot.id}: nastaveno ${slot.queuedUnits} dávek.` };
+      }
     } else if (action === "slotStart") {
       const slotId = Math.max(1, Math.floor(Number(payload.slotId) || 0));
       const slot = core.getSlotById(slotId);
       const selectedDrug = String(payload.drugType || slot?.activeDrugType || "").trim();
-      result = core.startProduction(slotId, selectedDrug, now);
+      const selectedUnits = clamp(Math.floor(Number(payload.units) || Number(slot?.queuedUnits || 1)), 1, 999);
+      const supplyCost = getDrugLabSupplyCost(selectedDrug, selectedUnits);
+      const availableSupplies = createDrugLabSupplyMap(player.labSupplies || {});
+      const hasEnough =
+        Number(availableSupplies.chemicals || 0) >= Number(supplyCost.chemicals || 0)
+        && Number(availableSupplies.biomass || 0) >= Number(supplyCost.biomass || 0)
+        && Number(availableSupplies.stimPack || 0) >= Number(supplyCost.stimPack || 0);
+      if (!hasEnough) {
+        result = {
+          ok: false,
+          message:
+            `Nedostatek vstupů z Lékárny (potřeba C ${supplyCost.chemicals}, B ${supplyCost.biomass}, S ${supplyCost.stimPack}; `
+            + `máš C ${availableSupplies.chemicals}, B ${availableSupplies.biomass}, S ${availableSupplies.stimPack}).`
+        };
+      } else {
+        result = core.startProduction(slotId, selectedDrug, now, selectedUnits);
+        if (result?.ok) {
+          player.labSupplies = createDrugLabSupplyMap(player.labSupplies || {});
+          player.labSupplies.chemicals = Math.max(
+            0,
+            Math.floor(Number(player.labSupplies.chemicals || 0) - Number(supplyCost.chemicals || 0))
+          );
+          player.labSupplies.biomass = Math.max(
+            0,
+            Math.floor(Number(player.labSupplies.biomass || 0) - Number(supplyCost.biomass || 0))
+          );
+          player.labSupplies.stimPack = Math.max(
+            0,
+            Math.floor(Number(player.labSupplies.stimPack || 0) - Number(supplyCost.stimPack || 0))
+          );
+          result.message += ` Spotřeba: C ${supplyCost.chemicals}, B ${supplyCost.biomass}, S ${supplyCost.stimPack}.`;
+        }
+      }
     } else if (action === "slotStop") {
       const slotId = Math.max(1, Math.floor(Number(payload.slotId) || 0));
       result = core.stopProduction(slotId, now);
@@ -7829,6 +7987,7 @@ window.Empire.Map = (() => {
       const defenseSlots = Array.isArray(mechanics.defenseSlots)
         ? mechanics.defenseSlots
         : sourceSlots.filter((slot) => String(slot.category || "").trim() === "defense");
+      const playerMaterials = mechanics.playerMaterials || {};
       const renderSlotRows = (slots) => slots
         .map((slot) => `
           <div class="drug-lab-slot${slot.isProducing ? "" : " drug-lab-slot--locked"}">
@@ -7839,8 +7998,18 @@ window.Empire.Map = (() => {
             <div class="drug-lab-slot__meta">
               Recept: ${slot.metalPartsCost} MP + ${slot.techCoreCost} TC • ${formatDurationLabel(slot.effectiveDurationMs || slot.durationMs)} / ks • ${slot.powerLabel || "Síla"} +${Math.max(0, Math.floor(Number(slot.powerValue || 0)))}
             </div>
+            <div class="drug-lab-slot__meta">
+              Nastaveno: ${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))} ks • Ve frontě: ${Math.max(0, Math.floor(Number(slot.remainingUnits || 0)))} ks
+              • Potřeba celkem: ${Math.max(0, Math.floor(Number(slot.queuedUnits || 1))) * Math.max(0, Math.floor(Number(slot.metalPartsCost || 0)))} MP
+              + ${Math.max(0, Math.floor(Number(slot.queuedUnits || 1))) * Math.max(0, Math.floor(Number(slot.techCoreCost || 0)))} TC
+            </div>
             <div class="drug-lab-slot__meta">${slot.specialEffect}</div>
-            <div class="drug-lab-slot__controls">
+            <div class="drug-lab-slot__controls drug-lab-slot__controls--combat">
+              <div class="drug-lab-stepper">
+                <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-armory-slot-id="${slot.id}" data-armory-slot-adjust="-1">-</button>
+                <strong class="drug-lab-stepper__value">${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
+                <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-armory-slot-id="${slot.id}" data-armory-slot-adjust="1">+</button>
+              </div>
               <button class="drug-lab-mini-btn" type="button" data-armory-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
                 Start
               </button>
@@ -7854,7 +8023,6 @@ window.Empire.Map = (() => {
       const attackRows = renderSlotRows(attackSlots);
       const defenseRows = renderSlotRows(defenseSlots);
       const storedWeapons = mechanics.storedWeapons || {};
-      const playerMaterials = mechanics.playerMaterials || {};
       const attackStorageStatusLabel = ARMORY_ATTACK_WEAPON_KEYS
         .map((weaponKey) => {
           const weapon = ARMORY_CONFIG.weapons[weaponKey];
@@ -7918,11 +8086,24 @@ window.Empire.Map = (() => {
               <strong>Slot ${slot.id}</strong>
               <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
             </div>
-            <div class="drug-lab-slot__meta">Vyrobeno v tomto slotu: ${slot.producedAmount}</div>
+            <div class="drug-lab-slot__meta">
+              Vyrobeno v tomto slotu: ${slot.producedAmount} • Ve frontě: ${Math.max(0, Math.floor(Number(slot.queueRemaining || 0)))}
+            </div>
+            <div class="drug-lab-slot__meta">
+              Recept / dávka: C ${Math.max(0, Math.floor(Number(slot.supplyCost?.chemicals || 0)))} •
+              B ${Math.max(0, Math.floor(Number(slot.supplyCost?.biomass || 0)))} •
+              S ${Math.max(0, Math.floor(Number(slot.supplyCost?.stimPack || 0)))} •
+              Nastaveno: ${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))} dávek
+            </div>
             <div class="drug-lab-slot__controls">
               <select data-drug-lab-slot-select="${slot.id}">
                 ${options}
               </select>
+              <div class="drug-lab-stepper">
+                <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-drug-lab-slot-id="${slot.id}" data-drug-lab-slot-adjust="-1">-</button>
+                <strong class="drug-lab-stepper__value">${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
+                <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-drug-lab-slot-id="${slot.id}" data-drug-lab-slot-adjust="1">+</button>
+              </div>
               <button class="drug-lab-mini-btn" type="button" data-drug-lab-slot-start="${slot.id}" ${
                 slot.isProducing ? "disabled" : ""
               }>
@@ -8001,6 +8182,13 @@ window.Empire.Map = (() => {
   }
 
   function handleDrugLabInlineControl(target, activeContext) {
+    const amountBtn = target.closest("[data-drug-lab-slot-adjust][data-drug-lab-slot-id]");
+    if (amountBtn instanceof HTMLElement) {
+      const slotId = Number(amountBtn.dataset.drugLabSlotId || 0);
+      const delta = Number(amountBtn.dataset.drugLabSlotAdjust || 0);
+      return runDrugLabAction("slotAmount", activeContext, { slotId, delta });
+    }
+
     const select = target.closest("[data-drug-lab-slot-select]");
     if (select instanceof HTMLSelectElement) {
       const slotId = Number(select.dataset.drugLabSlotSelect || 0);
@@ -8142,11 +8330,34 @@ window.Empire.Map = (() => {
     const networkProductionBonusPct = Math.max(0, (ownedArmoryCount - 1) * 10);
     const instanceKey = resolveBuildingInstanceKey(context, district);
     const snapshot = getArmoryStateByKey(instanceKey, now);
-    syncArmoryProduction(snapshot, now, {
+    const syncResult = syncArmoryProduction(snapshot, now, {
       applyHeat: true,
       ownedArmoryCount,
       networkProductionBonusPct
     });
+    const autoTransferred = applyArmoryWeaponsToPlayerInventory(syncResult.produced);
+    if (autoTransferred.total > 0) {
+      snapshot.storedWeapons = createArmoryWeaponMap(snapshot.storedWeapons);
+      ARMORY_WEAPON_KEYS.forEach((weaponKey) => {
+        const delta = Math.max(0, Math.floor(Number(autoTransferred.byKey[weaponKey] || 0)));
+        if (!delta) return;
+        snapshot.storedWeapons[weaponKey] = Math.max(0, Math.floor(Number(snapshot.storedWeapons[weaponKey] || 0) - delta));
+      });
+    }
+
+    const adjustBtn = target.closest("[data-armory-slot-adjust][data-armory-slot-id]");
+    if (adjustBtn instanceof HTMLElement) {
+      const slotId = Math.max(1, Math.floor(Number(adjustBtn.dataset.armorySlotId) || 0));
+      const delta = Math.floor(Number(adjustBtn.dataset.armorySlotAdjust) || 0);
+      const slot = (Array.isArray(snapshot.slots) ? snapshot.slots : []).find((entry) => Number(entry.id) === slotId) || null;
+      if (!slot || !delta) {
+        persistArmoryState(instanceKey, snapshot);
+        return { ok: false, message: "Slot Zbrojovky neexistuje." };
+      }
+      slot.queuedUnits = clamp(Math.floor(Number(slot.queuedUnits || 1) + delta), 1, 999);
+      persistArmoryState(instanceKey, snapshot);
+      return { ok: true, message: `Zbrojovka slot ${slotId}: nastaveno ${slot.queuedUnits} ks.` };
+    }
 
     const setSlotState = (slotId, shouldProduce) => {
       const safeSlotId = Math.max(1, Math.floor(Number(slotId) || 0));
@@ -8156,20 +8367,54 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Slot Zbrojovky neexistuje." };
       }
       if (shouldProduce) {
-        if (slot.isProducing) {
+        if (slot.isProducing && Math.max(0, Math.floor(Number(slot.remainingUnits || 0))) > 0) {
           persistArmoryState(instanceKey, snapshot);
           return { ok: false, message: `Slot ${safeSlotId} už běží.` };
         }
+        const config = ARMORY_CONFIG.weapons[String(slot.weaponKey || "").trim()] || null;
+        if (!config) {
+          persistArmoryState(instanceKey, snapshot);
+          return { ok: false, message: "Zbraň pro slot neexistuje." };
+        }
+        const units = clamp(Math.floor(Number(slot.queuedUnits || 1)), 1, 999);
+        const metalCost = Math.max(0, Math.floor(Number(config.metalPartsCost || 0)));
+        const techCost = Math.max(0, Math.floor(Number(config.techCoreCost || 0)));
+        const totalMetalCost = units * metalCost;
+        const totalTechCost = units * techCost;
+        const availableSupplies = createFactoryPlayerSupplyMap(getFactoryPlayerSuppliesSnapshot());
+        if (
+          Number(availableSupplies.metalParts || 0) < totalMetalCost
+          || Number(availableSupplies.techCore || 0) < totalTechCost
+        ) {
+          persistArmoryState(instanceKey, snapshot);
+          return {
+            ok: false,
+            message:
+              `Nedostatek materiálu (potřeba MP ${totalMetalCost}, TC ${totalTechCost}; `
+              + `máš MP ${availableSupplies.metalParts}, TC ${availableSupplies.techCore}).`
+          };
+        }
+        availableSupplies.metalParts = Math.max(0, Math.floor(Number(availableSupplies.metalParts || 0) - totalMetalCost));
+        availableSupplies.techCore = Math.max(0, Math.floor(Number(availableSupplies.techCore || 0) - totalTechCost));
+        persistFactoryPlayerSuppliesSnapshot(availableSupplies);
         slot.isProducing = true;
+        slot.remainingUnits = units;
         slot.lastTick = now;
+        slot.productionRemainder = 0;
         persistArmoryState(instanceKey, snapshot);
-        return { ok: true, message: `Zbrojovka slot ${safeSlotId}: výroba spuštěna.` };
+        return {
+          ok: true,
+          message:
+            `Zbrojovka slot ${safeSlotId}: výroba spuštěna (${units} ks). `
+            + `Spotřeba MP ${totalMetalCost}, TC ${totalTechCost}.`
+        };
       }
       if (!slot.isProducing) {
         persistArmoryState(instanceKey, snapshot);
         return { ok: false, message: `Slot ${safeSlotId} neběží.` };
       }
       slot.isProducing = false;
+      slot.remainingUnits = 0;
       slot.lastTick = now;
       persistArmoryState(instanceKey, snapshot);
       return { ok: true, message: `Zbrojovka slot ${safeSlotId}: výroba zastavena.` };

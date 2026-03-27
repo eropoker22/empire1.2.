@@ -158,6 +158,7 @@ window.Empire.UI = (() => {
 
   const SETTINGS_STORAGE_KEY = "empire_settings";
   const ATTACK_COOLDOWN_STORAGE_KEY = "empire_attack_cooldown_until_v1";
+  const ATTACK_ACTION_DURATION_MS = 20 * 1000;
   const DEFAULT_SETTINGS = Object.freeze({
     sound: true,
     music: true,
@@ -2368,8 +2369,8 @@ window.Empire.UI = (() => {
       weapons: selectedWeapons.length ? selectedWeapons.join(", ") : "Žádná zbraň",
       attackPower,
       members,
-      durationMs: 10 * 1000,
-      durationLabel: formatAttackDurationLabel(10 * 1000),
+      durationMs: ATTACK_ACTION_DURATION_MS,
+      durationLabel: formatAttackDurationLabel(ATTACK_ACTION_DURATION_MS),
       summary: `Spustil jsi útok na hráče ${nick}.`
     };
   }
@@ -2714,7 +2715,7 @@ window.Empire.UI = (() => {
           pushEvent(`Ukázkový útok na ${district.name || `distrikt #${district.id}`} byl spuštěn s ${details.weapons} a ${selectionSummary.totalUsedMembers} členy.`);
           window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
             attackerDistrictId: district.id,
-            durationMs: 10 * 1000,
+            durationMs: ATTACK_ACTION_DURATION_MS,
             source: "scenario-attack"
           });
           openAttackResultModal(details);
@@ -2754,7 +2755,7 @@ window.Empire.UI = (() => {
           }
           window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
             attackerDistrictId: result?.sourceDistrictId ?? result?.attackerDistrictId ?? null,
-            durationMs: 10 * 1000,
+            durationMs: ATTACK_ACTION_DURATION_MS,
             source: "player-attack"
           });
           recordVerifiedIntelEvent({
@@ -6246,6 +6247,7 @@ window.Empire.UI = (() => {
 
     const buttons = Array.from(root.querySelectorAll("[data-market-building-base-name]"));
     if (!buttons.length) return;
+    const lockFlashTimers = new WeakMap();
 
     const normalizeBuildingName = (value) => normalizeOwnerName(String(value || "").replace(/\s+/g, " ").trim());
 
@@ -6333,16 +6335,25 @@ window.Empire.UI = (() => {
     marketBuildingShortcutRefreshHandler = refreshState;
     refreshState();
 
+    const flashLockedShortcut = (button) => {
+      if (!button) return;
+      const existingTimer = lockFlashTimers.get(button);
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+      button.classList.add("is-lock-flash");
+      const timer = window.setTimeout(() => {
+        button.classList.remove("is-lock-flash");
+        lockFlashTimers.delete(button);
+      }, 540);
+      lockFlashTimers.set(button, timer);
+    };
+
     buttons.forEach((button) => {
       button.addEventListener("click", () => {
         refreshState();
         if (button.dataset.marketBuildingUnlocked !== "1") {
-          const label = String(
-            button.dataset.marketBuildingLabel
-            || button.dataset.marketBuildingBaseName
-            || "Budova"
-          );
-          pushEvent(`${label}: budova je zamčená.`);
+          flashLockedShortcut(button);
           return;
         }
 
