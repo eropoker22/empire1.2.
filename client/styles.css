@@ -469,6 +469,36 @@ body::before {
   outline-offset: 1px;
 }
 
+.map-border-neutral-toggle {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.62);
+  background: rgba(15, 23, 42, 0.82);
+  color: #cbd5e1;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+
+.map-border-neutral-toggle:hover {
+  border-color: rgba(224, 242, 254, 0.92);
+  color: #f8fafc;
+}
+
+.map-border-neutral-toggle.is-active {
+  border-color: rgba(125, 250, 255, 0.96);
+  color: #e2e8f0;
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.85), 0 0 12px rgba(34, 211, 238, 0.4);
+}
+
+.map-border-neutral-toggle:focus-visible {
+  outline: 2px solid rgba(224, 242, 254, 0.9);
+  outline-offset: 1px;
+}
+
 .map-boost-btn {
   width: 52px;
   height: 52px;
@@ -3155,9 +3185,18 @@ body::before {
 }
 
 #district-modal .modal__header h3 {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
   text-shadow:
     0 0 14px rgba(var(--district-accent-rgb), 0.52),
     0 0 2px rgba(255, 255, 255, 0.28);
+}
+
+#district-modal .modal-name-income {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(226, 232, 240, 0.88);
 }
 
 #district-modal .modal__close {
@@ -3265,6 +3304,95 @@ body::before {
   overflow-wrap: anywhere;
 }
 
+#district-modal .modal__row--defense strong {
+  text-align: right;
+  max-width: 68%;
+  overflow-wrap: anywhere;
+  color: #d8f6ff;
+  min-height: 1.2em;
+}
+
+#district-modal .modal__row--owner-meta .modal__owner-atmosphere {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 62%;
+}
+
+#district-modal .modal__row--owner-meta .modal__owner-atmosphere img {
+  width: min(260px, 100%);
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.15),
+    0 12px 28px rgba(0, 0, 0, 0.35);
+  background: rgba(8, 14, 26, 0.72);
+  cursor: zoom-in;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#district-modal .modal__row--owner-meta .modal__owner-atmosphere img:hover {
+  transform: translateY(-1px) scale(1.01);
+  border-color: rgba(244, 114, 182, 0.58);
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.22),
+    0 16px 32px rgba(0, 0, 0, 0.42);
+}
+
+.district-atmosphere-lightbox__content {
+  width: min(76vw, 1024px);
+  padding: 13px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.008)),
+    rgba(245, 247, 250, 0.018);
+  backdrop-filter: blur(30px) saturate(1.6);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 12px 30px rgba(2, 6, 23, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+
+.district-atmosphere-lightbox__content img {
+  width: 100%;
+  height: min(62vh, 608px);
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.district-atmosphere-lightbox__caption {
+  min-height: 64px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.district-atmosphere-lightbox__caption .avatar-lightbox__legend-name,
+#district-atmosphere-lightbox-meta {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  background: rgba(0, 0, 0, 0.92);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+
+.district-atmosphere-lightbox__caption .avatar-lightbox__legend-name {
+  color: #ffffff;
+  line-height: 1.45;
+}
+
+#district-atmosphere-lightbox-meta {
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.45;
+}
+
 .modal__header {
   display: flex;
   justify-content: space-between;
@@ -3295,6 +3423,148 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.attack-modal__content {
+  width: min(680px, 96vw);
+}
+
+.attack-modal__body {
+  gap: 10px;
+}
+
+.attack-modal__weapons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.attack-modal__weapon {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 14px 12px;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(34, 211, 238, 0.14), transparent 42%),
+    linear-gradient(180deg, rgba(9, 16, 32, 0.94), rgba(6, 12, 21, 0.92));
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px rgba(244, 114, 182, 0.05),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.attack-modal__weapon-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.attack-modal__weapon.is-selected {
+  border-color: rgba(34, 211, 238, 0.8);
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.18),
+    0 0 20px rgba(34, 211, 238, 0.18),
+    0 0 34px rgba(244, 114, 182, 0.08);
+}
+
+.attack-modal__weapon.is-locked {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.attack-modal__weapon-stepper {
+  display: grid;
+  grid-template-columns: 42px auto 42px;
+  align-items: center;
+  gap: 6px;
+  justify-content: end;
+  margin-left: auto;
+  justify-self: end;
+}
+
+.attack-modal__step-btn {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.2), rgba(6, 12, 21, 0.86));
+  color: #ecfeff;
+  font-size: 24px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.1) inset,
+    0 0 12px rgba(34, 211, 238, 0.12);
+}
+
+.attack-modal__step-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.attack-modal__weapon-name {
+  font-weight: 700;
+}
+
+.attack-modal__weapon-count {
+  min-width: 34px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #67e8f9;
+  white-space: nowrap;
+  text-align: center;
+  text-shadow: 0 0 12px rgba(34, 211, 238, 0.36);
+}
+
+.attack-modal__weapon-meta {
+  font-size: 12px;
+  color: #a5f3fc;
+  line-height: 1.4;
+}
+
+.attack-modal__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.attack-modal__actions {
+  justify-content: flex-end;
+}
+
+.attack-result-modal__content {
+  width: min(720px, 96vw);
+}
+
+.attack-result-modal__body {
+  gap: 10px;
+}
+
+.attack-result-modal__summary {
+  margin: 0 0 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 12px;
+  background: rgba(8, 14, 26, 0.62);
+  color: #dbeafe;
+  line-height: 1.45;
+}
+
+.attack-result-modal__body .modal__row strong {
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .attack-modal__weapons {
+    grid-template-columns: 1fr;
+  }
 }
 
 .modal__row {
@@ -3575,6 +3845,46 @@ body::before {
   margin-left: 6px;
   font-size: 11px;
   color: rgba(165, 243, 252, 0.88);
+}
+
+@media (min-width: 1024px) {
+  #storage-modal .modal__content {
+    width: min(920px, 94vw);
+  }
+
+  #storage-modal .modal__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "attack defense"
+      "pharmacy drugs"
+      "factory factory";
+    gap: 14px;
+  }
+
+  #storage-modal .storage-modal__section + .storage-modal__section {
+    margin-top: 0;
+  }
+
+  #storage-modal .storage-modal__section--attack {
+    grid-area: attack;
+  }
+
+  #storage-modal .storage-modal__section--defense {
+    grid-area: defense;
+  }
+
+  #storage-modal .storage-modal__section--pharmacy {
+    grid-area: pharmacy;
+  }
+
+  #storage-modal .storage-modal__section--drugs {
+    grid-area: drugs;
+  }
+
+  #storage-modal .storage-modal__section--factory {
+    grid-area: factory;
+  }
 }
 
 .modal__actions {
@@ -4389,6 +4699,12 @@ body::before {
   font-size: 12px;
 }
 
+.weapons-modal__item.is-locked {
+  opacity: 0.56;
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(127, 29, 29, 0.18);
+}
+
 .weapons-modal__name {
   font-weight: 600;
 }
@@ -4401,6 +4717,12 @@ body::before {
 .weapons-modal__power {
   color: #fbcfe8;
   font-weight: 600;
+}
+
+.storage-modal__item.is-locked {
+  opacity: 0.6;
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(127, 29, 29, 0.12);
 }
 
 .buildings-modal__content {
@@ -5437,6 +5759,18 @@ body::before {
 }
 
 @media (max-width: 720px) {
+  .main > .map-area {
+    order: 1;
+  }
+
+  .main > .panel--right {
+    order: 2;
+  }
+
+  .main > .panel--left {
+    order: 3;
+  }
+
   .topbar {
     padding: 14px 16px;
   }
@@ -6072,6 +6406,12 @@ body::before {
     height: 16px;
     min-width: 16px;
     border-radius: 4px;
+  }
+
+  .map-border-neutral-toggle {
+    height: 18px;
+    padding: 0 7px;
+    font-size: 9px;
   }
 
   .map-boost-btn {

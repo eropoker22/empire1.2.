@@ -66,6 +66,7 @@
 
       <main class="main">
         <section class="panel panel--left">
+          <div id="city-events-card-anchor" class="hidden" aria-hidden="true"></div>
           <div class="card">
             <p class="muted">Dočasné úkoly s omezenou platností.</p>
             <button class="btn btn--primary events-hero" id="city-events-open">
@@ -74,6 +75,7 @@
             <p class="muted events-hero__note">Vyber si jednu ze tří postav a aktivuj její quest line.</p>
           </div>
 
+          <div id="buildings-card-anchor" class="hidden" aria-hidden="true"></div>
           <div class="card compact-action-card">
             <p class="muted">Správa a přehled městských budov.</p>
             <button class="btn events-hero" id="buildings-open">
@@ -81,6 +83,7 @@
             </button>
           </div>
 
+          <div id="market-card-anchor" class="hidden" aria-hidden="true"></div>
           <div class="card compact-action-card">
             <p class="muted">Obchod, směna a tržní přehled.</p>
             <button class="btn events-hero" id="market-open">
@@ -88,6 +91,7 @@
             </button>
           </div>
 
+          <div id="market-building-shortcuts-anchor" class="hidden" aria-hidden="true"></div>
           <div class="market-building-shortcuts" id="market-building-shortcuts">
             <button
               class="market-building-shortcut"
@@ -184,6 +188,15 @@
                   data-map-border-color="black"
                   aria-label="Černá barva hranic"
                 ></button>
+                <button
+                  class="map-border-neutral-toggle"
+                  id="map-unknown-neutral-fill-toggle"
+                  type="button"
+                  aria-label="Přepnout šedé zvýraznění neznámých neobsazených distriktů"
+                  aria-pressed="false"
+                >
+                  Neznámé
+                </button>
               </div>
               <button class="map-boost-btn" id="map-boost-btn" type="button" aria-label="Map boost">
                 Boost
@@ -242,6 +255,7 @@
               <strong id="profile-alliance">Žádná</strong>
             </div>
           </div>
+          <div id="mobile-market-shortcuts-anchor" class="hidden" aria-hidden="true"></div>
           <div id="scenario-card-anchor" class="hidden" aria-hidden="true"></div>
           <div class="card" id="scenario-card">
             <h2>Ukázkové stavy hráče</h2>
@@ -250,14 +264,8 @@
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="full-map">
                 Hráč ovládá celou mapu
               </button>
-              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="single-district">
-                Hráč má 1 distrikt
-              </button>
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-ten">
                 Aliance 2 hráčů má 10 sektorů
-              </button>
-              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-war">
-                Já 3 sektory • spojenci 8 • nepřátelé 18
               </button>
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-20">
                 20 hráčů • aliance max 4
@@ -289,16 +297,15 @@
 
     <div id="district-modal" class="modal hidden">
       <div id="modal-backdrop" class="modal__backdrop"></div>
-      <div class="modal__content">
+        <div class="modal__content">
         <div class="modal__header">
-          <h3 id="modal-name">Distrikt</h3>
+          <h3>
+            <span id="modal-name">Distrikt</span>
+            <span id="modal-name-income" class="modal-name-income">$0/hod</span>
+          </h3>
           <button class="modal__close" id="modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body">
-          <div class="modal__row">
-            <span>Typ</span>
-            <strong id="modal-type">-</strong>
-          </div>
           <div class="modal__row">
             <span>Vlastník</span>
             <strong id="modal-owner">Neobsazeno</strong>
@@ -307,13 +314,24 @@
             <span>Aliance</span>
             <strong id="modal-owner-alliance">Bez aliance</strong>
           </div>
-          <div class="modal__row">
-            <span>Příjem</span>
-            <strong id="modal-income">$0/hod</strong>
+          <div class="modal__row modal__row--owner-meta hidden" id="modal-owner-faction-row">
+            <span>Frakce</span>
+            <strong id="modal-owner-faction">Neznámá</strong>
           </div>
-          <div class="modal__row">
-            <span>Vliv</span>
-            <strong id="modal-influence">0</strong>
+          <div class="modal__row modal__row--owner-meta hidden" id="modal-owner-atmosphere-row">
+            <span>Atmosféra</span>
+            <div class="modal__owner-atmosphere">
+              <img id="modal-owner-atmosphere-image" alt="Atmosféra distriktu" loading="lazy" />
+              <strong id="modal-owner-atmosphere">Neznámá</strong>
+            </div>
+          </div>
+          <div class="modal__row modal__row--defense" id="modal-defense-self-row">
+            <span>Obrana (Ty)</span>
+            <strong id="modal-defense-self"></strong>
+          </div>
+          <div class="modal__row modal__row--defense" id="modal-defense-ally-row">
+            <span>Obrana (Spojenec)</span>
+            <strong id="modal-defense-ally"></strong>
           </div>
           <div id="modal-buildings" class="modal__gallery hidden">
             <div class="modal__gallery-title" id="modal-buildings-title">Budovy v distriktu</div>
@@ -335,19 +353,127 @@
 
     <div id="district-defense-modal" class="modal hidden">
       <div id="district-defense-modal-backdrop" class="modal__backdrop"></div>
-      <div class="modal__content">
+      <div class="modal__content defense-modal__content attack-modal__content">
         <div class="modal__header">
           <h3>Obrana distriktu</h3>
           <button class="modal__close" id="district-defense-modal-close" aria-label="Zavřít">✕</button>
         </div>
-        <div class="modal__body">
+        <div class="modal__body defense-modal__body attack-modal__body">
           <div class="modal__row">
             <span>Vybraný distrikt</span>
             <strong id="defense-modal-district">-</strong>
           </div>
-          <p class="muted">
-            Tady doplníme nastavení obrany (věže, jednotky, pasti a priority).
+          <div class="modal__row">
+            <span>Zbývá členů gangu</span>
+            <strong id="defense-modal-members-count">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Použito členů</span>
+            <strong id="defense-modal-used-members">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Výsledná síla obrany</span>
+            <strong id="defense-modal-power">-</strong>
+          </div>
+          <div class="attack-modal__weapons defense-modal__weapons" id="defense-modal-weapons"></div>
+          <p class="muted defense-modal__note" id="defense-modal-note">
+            Šipkou doprava přidáváš, šipkou doleva ubíráš. Členové gangu se přepočítají automaticky.
           </p>
+          <div class="modal__actions defense-modal__actions">
+            <button class="btn btn--primary" id="defense-modal-start">Nastavit obranu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="district-atmosphere-lightbox" class="avatar-lightbox hidden">
+      <div id="district-atmosphere-lightbox-backdrop" class="avatar-lightbox__backdrop"></div>
+      <div class="avatar-lightbox__content district-atmosphere-lightbox__content">
+        <button class="avatar-lightbox__close" id="district-atmosphere-lightbox-close" aria-label="Zavřít">✕</button>
+        <img id="district-atmosphere-lightbox-image" alt="Atmosféra distriktu" />
+        <div class="avatar-lightbox__caption district-atmosphere-lightbox__caption" id="district-atmosphere-lightbox-caption">
+          <div class="avatar-lightbox__legend-name" id="district-atmosphere-lightbox-title">Atmosféra distriktu</div>
+          <div class="avatar-lightbox__legend-bio" id="district-atmosphere-lightbox-meta"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="attack-modal" class="modal hidden">
+      <div id="attack-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content attack-modal__content">
+        <div class="modal__header">
+          <h3>Útok</h3>
+          <button class="modal__close" id="attack-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body attack-modal__body">
+          <div class="modal__row">
+            <span>Cíl</span>
+            <strong id="attack-modal-district">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Zbývá členů gangu</span>
+            <strong id="attack-modal-members-count">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Použito členů</span>
+            <strong id="attack-modal-used-members">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Výsledná síla útoku</span>
+            <strong id="attack-modal-power">-</strong>
+          </div>
+          <div class="attack-modal__weapons" id="attack-modal-weapons"></div>
+          <div class="modal__row">
+            <span>Cooldown</span>
+            <strong id="attack-modal-cooldown">Připraveno</strong>
+          </div>
+          <p class="muted attack-modal__note" id="attack-modal-note">
+            V demo stavu můžeš čísla upravit ručně. Ve hře se útok vyhodnocuje podle skutečného profilu.
+          </p>
+          <div class="modal__actions attack-modal__actions">
+            <button class="btn btn--danger" id="attack-modal-start">Spustit útok</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="attack-result-modal" class="modal hidden">
+      <div id="attack-result-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content attack-result-modal__content">
+        <div class="modal__header">
+          <h3>Útok spuštěn</h3>
+          <button class="modal__close" id="attack-result-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body attack-result-modal__body">
+          <p class="attack-result-modal__summary" id="attack-result-modal-summary"></p>
+          <div class="modal__row">
+            <span>Nickname cíle</span>
+            <strong id="attack-result-modal-nickname">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Frakce</span>
+            <strong id="attack-result-modal-faction">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Aliance</span>
+            <strong id="attack-result-modal-alliance">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Použité zbraně</span>
+            <strong id="attack-result-modal-weapons">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Výsledná síla útoku</span>
+            <strong id="attack-result-modal-power">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Zapojených členů</span>
+            <strong id="attack-result-modal-members">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Trvání útoku</span>
+            <strong id="attack-result-modal-duration">-</strong>
+          </div>
         </div>
       </div>
     </div>
@@ -360,15 +486,23 @@
           <button class="modal__close" id="storage-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body">
-          <div class="storage-modal__section">
+          <div class="storage-modal__section storage-modal__section--attack">
             <div class="storage-modal__section-title">Útočné zbraně</div>
             <div class="storage-modal__list" id="storage-modal-attack-list"></div>
           </div>
-          <div class="storage-modal__section">
+          <div class="storage-modal__section storage-modal__section--defense">
             <div class="storage-modal__section-title">Obranné zbraně</div>
             <div class="storage-modal__list" id="storage-modal-defense-list"></div>
           </div>
-          <div class="storage-modal__section">
+          <div class="storage-modal__section storage-modal__section--pharmacy">
+            <div class="storage-modal__section-title">Látky z Lékárny</div>
+            <div class="storage-modal__list" id="storage-modal-pharmacy-list"></div>
+          </div>
+          <div class="storage-modal__section storage-modal__section--factory">
+            <div class="storage-modal__section-title">Suroviny z Továrny</div>
+            <div class="storage-modal__list" id="storage-modal-factory-list"></div>
+          </div>
+          <div class="storage-modal__section storage-modal__section--drugs">
             <div class="storage-modal__section-title">Drogy</div>
             <div class="storage-modal__list" id="storage-modal-drugs-list"></div>
           </div>
@@ -793,7 +927,7 @@
           <button class="modal__close" id="weapons-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body">
-          <div class="weapons-modal__hint">Výběr dostupných kusů a síly útoku.</div>
+          <div class="weapons-modal__hint">Výběr dostupných kusů, síly a minimálního počtu členů gangu.</div>
           <div class="weapons-modal__list" id="weapons-modal-list"></div>
         </div>
       </div>

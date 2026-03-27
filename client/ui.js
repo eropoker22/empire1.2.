@@ -9,12 +9,45 @@ window.Empire.UI = (() => {
     "Bazuka"
   ];
 
+  const BASE_WEAPON_POWER = Object.freeze({
+    attack: Object.freeze({
+      "Baseballová pálka": 10,
+      "Pouliční pistole": 20,
+      Granát: 30,
+      Samopal: 40,
+      Bazuka: 50
+    }),
+    defense: Object.freeze({
+      "Neprůstřelná vesta": 10,
+      "Ocelové barikády": 20,
+      "Bezpečnostní kamery": 30,
+      "Automatické kulometné stanoviště": 40,
+      Alarm: 50
+    })
+  });
+  const BASE_WEAPON_POPULATION_REQUIREMENTS = Object.freeze({
+    attack: Object.freeze({
+      "Baseballová pálka": 50,
+      "Pouliční pistole": 100,
+      Granát: 150,
+      Samopal: 200,
+      Bazuka: 250
+    }),
+    defense: Object.freeze({
+      "Neprůstřelná vesta": 50,
+      "Ocelové barikády": 100,
+      "Bezpečnostní kamery": 150,
+      "Automatické kulometné stanoviště": 200,
+      Alarm: 250
+    })
+  });
+
   const attackWeaponStats = [
-    { name: "Baseballová pálka", power: 5 },
-    { name: "Pouliční pistole", power: 12 },
-    { name: "Granát", power: 20 },
-    { name: "Samopal", power: 30 },
-    { name: "Bazuka", power: 70 }
+    { name: "Baseballová pálka", power: BASE_WEAPON_POWER.attack["Baseballová pálka"], requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.attack["Baseballová pálka"] },
+    { name: "Pouliční pistole", power: BASE_WEAPON_POWER.attack["Pouliční pistole"], requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.attack["Pouliční pistole"] },
+    { name: "Granát", power: BASE_WEAPON_POWER.attack["Granát"], requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.attack["Granát"] },
+    { name: "Samopal", power: BASE_WEAPON_POWER.attack.Samopal, requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.attack.Samopal },
+    { name: "Bazuka", power: BASE_WEAPON_POWER.attack.Bazuka, requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.attack.Bazuka }
   ];
 
   const LEGACY_ATTACK_WEAPON_ALIASES = Object.freeze({
@@ -33,12 +66,77 @@ window.Empire.UI = (() => {
   ];
 
   const defenseWeaponStats = [
-    { name: "Neprůstřelná vesta", power: 6 },
-    { name: "Ocelové barikády", power: 15 },
-    { name: "Bezpečnostní kamery", power: 8 },
-    { name: "Automatické kulometné stanoviště", power: 30 },
-    { name: "Alarm", power: 10 }
+    { name: "Neprůstřelná vesta", power: BASE_WEAPON_POWER.defense["Neprůstřelná vesta"], requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.defense["Neprůstřelná vesta"] },
+    { name: "Ocelové barikády", power: BASE_WEAPON_POWER.defense["Ocelové barikády"], requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.defense["Ocelové barikády"] },
+    { name: "Bezpečnostní kamery", power: BASE_WEAPON_POWER.defense["Bezpečnostní kamery"], requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.defense["Bezpečnostní kamery"] },
+    { name: "Automatické kulometné stanoviště", power: BASE_WEAPON_POWER.defense["Automatické kulometné stanoviště"], requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.defense["Automatické kulometné stanoviště"] },
+    { name: "Alarm", power: BASE_WEAPON_POWER.defense.Alarm, requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.defense.Alarm }
   ];
+  const DEMO_WEAPON_STACK_SIZE = 10;
+  const DEMO_OWNER_AVATAR_POOL = Object.freeze([
+    "../img/avatars/Mafia/2854d1df-0f7c-4fe4-aa85-7a70dfe299db.jpg",
+    "../img/avatars/Mafia/8d2dcbe6-00d3-4b6f-98a0-53dc914346c5.jpg",
+    "../img/avatars/Kartel/0f3d68b6-79b0-4bdd-9856-2491cd66cb78.jpg",
+    "../img/avatars/Kartel/37b9a32a-4710-4060-a1a9-5cf2e2c924c7.jpg",
+    "../img/avatars/Hacker/379f566a-18b8-457e-83ee-ee9ee114cb7a.jpg",
+    "../img/avatars/Hacker/53867e7d-cc7e-4f92-b391-88f44bf7e349.jpg",
+    "../img/avatars/Korporat/094f576f-646f-4ec9-9786-63019d07cdfe.jpg",
+    "../img/avatars/Korporat/2ef61d31-c01c-44a3-bca5-6171166352b0.jpg",
+    "../img/avatars/Motogang/grok_image_1773621173474.jpg",
+    "../img/avatars/Motogang/grok_image_1773621230721.jpg",
+    "../img/avatars/polucnigang/5f1bbe02-e437-43b6-b9ed-c453e34ca622.jpg",
+    "../img/avatars/polucnigang/f9b2211e-30fb-46ab-aa4c-16913d8a92c6.jpg",
+    "../img/avatars/SoukromaArmada/17912d57-dfc8-49fc-9a90-44121c298975.jpg",
+    "../img/avatars/SoukromaArmada/bbe6342a-cf92-4459-af42-dbb7beba19f6.jpg",
+    "../img/avatars/Tajnaorganizace/0099fc13-4774-459a-b1a9-ea507a6c0526.jpg",
+    "../img/avatars/Tajnaorganizace/0870f362-b2ce-4607-ad3f-a96b59afcc8d.jpg",
+    "../img/avatars/Mafia/grok_image_1773619750005.jpg",
+    "../img/avatars/Kartel/f7281b4a-f79f-4d76-b975-5153d414208f.jpg",
+    "../img/avatars/Hacker/grok_image_1773621797044.jpg",
+    "../img/avatars/Korporat/e4286e80-0587-4e0e-afe4-70c348ee59dd.jpg"
+  ]);
+  const DEMO_OWNER_FACTIONS = Object.freeze([
+    "Mafián",
+    "Kartel",
+    "Hackeři",
+    "Korporace",
+    "Motorkářský gang",
+    "Pouliční gang",
+    "Soukromá armáda",
+    "Tajná organizace"
+  ]);
+  const DEMO_DISTRICT_ATMOSPHERES = Object.freeze({
+    downtown: [
+      "Luxusní a pod kontrolou",
+      "Sterilní a vypjatá",
+      "Neonově přepychová"
+    ],
+    commercial: [
+      "Rušná a obchodní",
+      "Přelidněná a hlučná",
+      "Výdělečná a napjatá"
+    ],
+    residential: [
+      "Napjatá a osobní",
+      "Přeplněná a neklidná",
+      "Tichá jen na oko"
+    ],
+    industrial: [
+      "Drsná a kovová",
+      "Špinavá a těžká",
+      "Kouřová a unavená"
+    ],
+    park: [
+      "Temná a podsvětní",
+      "Neonová a opuštěná",
+      "Divoká a neklidná"
+    ],
+    default: [
+      "Neonová a pod kontrolou",
+      "Napjatá a živá",
+      "Chladná a ostražitá"
+    ]
+  });
 
   const storageDrugTypes = [
     { key: "neonDust", resourceKey: "neon_dust", name: "Neon Dust" },
@@ -47,8 +145,19 @@ window.Empire.UI = (() => {
     { key: "ghostSerum", resourceKey: "ghost_serum", name: "Ghost Serum" },
     { key: "overdriveX", resourceKey: "overdrive_x", name: "Overdrive X" }
   ];
+  const pharmacySupplyTypes = [
+    { key: "chemicals", name: "Chemicals" },
+    { key: "biomass", name: "Biomass" },
+    { key: "stimPack", name: "Stim Pack" }
+  ];
+  const factorySupplyTypes = [
+    { key: "metalParts", name: "Metal Parts" },
+    { key: "techCore", name: "Tech Core" },
+    { key: "combatModule", name: "Combat Module" }
+  ];
 
   const SETTINGS_STORAGE_KEY = "empire_settings";
+  const ATTACK_COOLDOWN_STORAGE_KEY = "empire_attack_cooldown_until_v1";
   const DEFAULT_SETTINGS = Object.freeze({
     sound: true,
     music: true,
@@ -1023,17 +1132,26 @@ window.Empire.UI = (() => {
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
   const LOCAL_GANG_MEMBERS_KEY = "empire_local_gang_members";
+  const LOCAL_GANG_MEMBERS_SPENT_KEY = "empire_local_gang_members_spent";
+  const LOCAL_DISTRICT_DEFENSE_ASSIGNMENTS_KEY = "empire_local_district_defense_assignments_v1";
   const MAP_BORDER_MODE_STORAGE_KEY = "empire_map_border_mode";
+  const MAP_UNKNOWN_NEUTRAL_FILL_STORAGE_KEY = "empire_map_unknown_neutral_fill";
   const MAP_BORDER_MODE_PLAYER = "player";
   const MAP_BORDER_MODE_WHITE = "white";
   const MAP_BORDER_MODE_BLACK = "black";
   let scenarioVisionEnabled = false;
   let scenarioUniqueOwnerColors = false;
   let selectedMapBorderMode = MAP_BORDER_MODE_PLAYER;
+  let unknownNeutralFillEnabled = false;
   let liveAllianceOwnerNames = new Set();
   let scenarioAllianceOwnerNames = new Set();
   let scenarioEnemyOwnerNames = new Set();
   let guestModeActive = false;
+  let attackModalRefreshTimer = null;
+  let attackModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
+  let attackResultModalState = { visible: false };
+  let defenseModalRefreshTimer = null;
+  let defenseModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
   const EMPTY_OWNER_NAMES = new Set();
   const WANTED_HEAT_MAX = 1000;
   const WANTED_HEAT_TIERS = [
@@ -1048,9 +1166,12 @@ window.Empire.UI = (() => {
 
   function init() {
     selectedMapBorderMode = resolveStoredMapBorderMode();
+    unknownNeutralFillEnabled = resolveStoredUnknownNeutralFillEnabled();
     bindActions();
     initMobileScenarioCardPlacement();
     initMobileLeaderboardCardPlacement();
+    initMobileMarketBuildingShortcutsPlacement();
+    initMobilePrimaryActionCardsPlacement();
     syncMapVisionContext();
     refreshGangColorDisplays();
   }
@@ -1138,6 +1259,104 @@ window.Empire.UI = (() => {
     window.addEventListener("resize", applyPlacement);
   }
 
+  function initMobileMarketBuildingShortcutsPlacement() {
+    const shortcuts = document.getElementById("market-building-shortcuts");
+    const homeAnchor = document.getElementById("market-building-shortcuts-anchor");
+    const mobileAnchor = document.getElementById("mobile-market-shortcuts-anchor");
+    if (!shortcuts || !homeAnchor || !mobileAnchor) return;
+
+    const media = window.matchMedia("(max-width: 720px)");
+
+    const restoreToLeftPanel = () => {
+      if (
+        shortcuts.parentElement === homeAnchor.parentElement
+        && shortcuts.previousElementSibling === homeAnchor
+      ) {
+        return;
+      }
+      homeAnchor.insertAdjacentElement("afterend", shortcuts);
+    };
+
+    const moveUnderProfile = () => {
+      if (
+        shortcuts.parentElement === mobileAnchor.parentElement
+        && shortcuts.previousElementSibling === mobileAnchor
+      ) {
+        return;
+      }
+      mobileAnchor.insertAdjacentElement("afterend", shortcuts);
+    };
+
+    const applyPlacement = () => {
+      if (media.matches) {
+        moveUnderProfile();
+        return;
+      }
+      restoreToLeftPanel();
+    };
+
+    applyPlacement();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", applyPlacement);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(applyPlacement);
+    }
+    window.addEventListener("resize", applyPlacement);
+  }
+
+  function initMobilePrimaryActionCardsPlacement() {
+    const shortcuts = document.getElementById("market-building-shortcuts");
+    const cityEventsCard = document.getElementById("city-events-open")?.closest(".card");
+    const buildingsCard = document.getElementById("buildings-open")?.closest(".card");
+    const marketCard = document.getElementById("market-open")?.closest(".card");
+    const cityEventsAnchor = document.getElementById("city-events-card-anchor");
+    const buildingsAnchor = document.getElementById("buildings-card-anchor");
+    const marketAnchor = document.getElementById("market-card-anchor");
+    if (
+      !shortcuts
+      || !cityEventsCard
+      || !buildingsCard
+      || !marketCard
+      || !cityEventsAnchor
+      || !buildingsAnchor
+      || !marketAnchor
+    ) {
+      return;
+    }
+
+    const media = window.matchMedia("(max-width: 720px)");
+
+    const restoreToLeftPanel = () => {
+      cityEventsAnchor.insertAdjacentElement("afterend", cityEventsCard);
+      buildingsAnchor.insertAdjacentElement("afterend", buildingsCard);
+      marketAnchor.insertAdjacentElement("afterend", marketCard);
+    };
+
+    const moveUnderShortcuts = () => {
+      let insertAfter = shortcuts;
+      [cityEventsCard, buildingsCard, marketCard].forEach((card) => {
+        insertAfter.insertAdjacentElement("afterend", card);
+        insertAfter = card;
+      });
+    };
+
+    const applyPlacement = () => {
+      if (media.matches) {
+        moveUnderShortcuts();
+        return;
+      }
+      restoreToLeftPanel();
+    };
+
+    applyPlacement();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", applyPlacement);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(applyPlacement);
+    }
+    window.addEventListener("resize", applyPlacement);
+  }
+
   function recordVerifiedIntelEvent(payload = {}) {
     const record = window.Empire.Map?.recordIntelEvent;
     if (typeof record !== "function") return;
@@ -1162,48 +1381,17 @@ window.Empire.UI = (() => {
     initWeaponsModal();
     initWeaponsPopover();
     initDistrictDefenseModal();
+    initAttackModal();
+    initAttackResultModal();
     initPlayerScenarioButtons();
     document.getElementById("attack-btn").addEventListener("click", async () => {
       if (!window.Empire.selectedDistrict) return;
-      const targetDistrictId = window.Empire.selectedDistrict.id;
       const availability = evaluateDistrictActionAvailability(window.Empire.selectedDistrict, "attack");
       if (!availability.allowed) {
         pushEvent(availability.reason);
         return;
       }
-      if (!window.Empire.token) {
-        pushEvent("Pro útok je nutné přihlášení.");
-        return;
-      }
-      const result = await window.Empire.API.attackDistrict(
-        targetDistrictId
-      );
-      if (result?.error) {
-        const errorMessage = formatAttackError(result.error);
-        pushEvent(errorMessage);
-        recordVerifiedIntelEvent({
-          type: "attack_failed",
-          districtId: targetDistrictId,
-          message: errorMessage
-        });
-        return;
-      }
-      if (result?.message) {
-        pushEvent(result.message);
-      }
-      if (result?.destroyed) {
-        pushEvent("Distrikt byl po útoku zničen a je nyní nepoužitelný.");
-      }
-      window.Empire.Map?.markDistrictUnderAttack?.(targetDistrictId, {
-        attackerDistrictId: result?.sourceDistrictId ?? result?.attackerDistrictId ?? null,
-        durationMs: 8 * 60 * 1000,
-        source: "player-attack"
-      });
-      recordVerifiedIntelEvent({
-        type: "attack_success",
-        districtId: targetDistrictId,
-        message: result?.message || ""
-      });
+      openAttackModal(window.Empire.selectedDistrict);
     });
 
     const raidBtn = document.getElementById("raid-btn");
@@ -1254,6 +1442,11 @@ window.Empire.UI = (() => {
         if (!window.Empire.selectedDistrict) return;
         if (!isDistrictDefendableByPlayer(window.Empire.selectedDistrict)) {
           pushEvent("Obranu lze nastavovat jen ve vlastním nebo aliančním distriktu.");
+          return;
+        }
+        const weaponAccess = resolveCombatWeaponAccess("defense");
+        if (!weaponAccess.allowed) {
+          pushEvent("Pro obranu potřebuješ alespoň 50 členů gangu.");
           return;
         }
         openDistrictDefenseModal(window.Empire.selectedDistrict);
@@ -1526,6 +1719,10 @@ window.Empire.UI = (() => {
         return "Útok je na cooldownu.";
       case "insufficient_funds":
         return "Na útok nemáš dostatek prostředků.";
+      case "insufficient_weapons":
+        return "Nemáš žádné zbraně, které by šlo použít.";
+      case "insufficient_members":
+        return "Nemáš dost členů gangu pro odemčení použitelné zbraně.";
       case "not_found":
         return "Cílový distrikt nebyl nalezen.";
       case "own_district":
@@ -1764,15 +1961,34 @@ window.Empire.UI = (() => {
   function hydrateStorageModalValues() {
     const economy = cachedEconomy || {};
     const player = window.Empire.player || {};
+    const currentGangMembers = countPlayerControlledPopulation(cachedProfile || player);
+    const pharmacySnapshot = window.Empire.Map?.getPharmacyBoostSnapshot?.() || null;
+    const factorySnapshot = window.Empire.Map?.getFactoryBoostSnapshot?.() || null;
     const attackCounts = resolveWeaponCounts();
     const defenseCounts = resolveDefenseCounts();
+    const pharmacySupplies = pharmacySnapshot?.supplies || player.labSupplies || {};
+    const factorySupplies = factorySnapshot?.supplies || {};
     const attackEntries = attackWeaponStats.map((item) => ({
       name: item.name,
-      value: findInventoryValueByName(attackCounts, item.name)
+      value: findInventoryValueByName(attackCounts, item.name),
+      metaLabel: `Síla ${item.power}`,
+      requirementLabel: `Min. ${item.requiredMembers} členů`,
+      unlocked: currentGangMembers >= item.requiredMembers
     }));
     const defenseEntries = defenseWeaponStats.map((item) => ({
       name: item.name,
-      value: findInventoryValueByName(defenseCounts, item.name)
+      value: findInventoryValueByName(defenseCounts, item.name),
+      metaLabel: `Síla ${item.power}`,
+      requirementLabel: `Min. ${item.requiredMembers} členů`,
+      unlocked: currentGangMembers >= item.requiredMembers
+    }));
+    const pharmacyEntries = pharmacySupplyTypes.map((item) => ({
+      name: item.name,
+      value: Math.max(0, Math.floor(Number(pharmacySupplies[item.key] || 0)))
+    }));
+    const factoryEntries = factorySupplyTypes.map((item) => ({
+      name: item.name,
+      value: Math.max(0, Math.floor(Number(factorySupplies[item.key] || 0)))
     }));
     const totalDrugs = Number(economy.drugs ?? player.drugs ?? 0);
     const drugInventory = economy.drugInventory || player.drugInventory || null;
@@ -1781,6 +1997,8 @@ window.Empire.UI = (() => {
 
     renderStorageList("storage-modal-attack-list", attackEntries, "ks");
     renderStorageList("storage-modal-defense-list", defenseEntries, "ks");
+    renderStorageList("storage-modal-pharmacy-list", pharmacyEntries, "ks");
+    renderStorageList("storage-modal-factory-list", factoryEntries, "ks");
     renderStorageList("storage-modal-drugs-list", drugEntries, "bal.", { allowDrugUse: true });
   }
 
@@ -1830,13 +2048,17 @@ window.Empire.UI = (() => {
         const valueLabel = suffix
           ? `${entry.value} ${suffix}`
           : `${entry.value}`;
-        const activeLabel = entry.activeLabel ? `<span class="storage-modal__meta">${entry.activeLabel}</span>` : "";
+        const metaParts = [entry.metaLabel, entry.requirementLabel, entry.activeLabel]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+          .map((value) => `<span class="storage-modal__meta">${value}</span>`)
+          .join("");
         const useButton = allowDrugUse && entry.key
           ? `<button class="btn btn--ghost" data-use-drug="${entry.key}" ${entry.value <= 0 ? "disabled" : ""}>Použít</button>`
           : "";
         return `
-          <div class="storage-modal__item">
-            <span>${entry.name} ${activeLabel}</span>
+          <div class="storage-modal__item ${entry.unlocked === false ? "is-locked" : ""}">
+            <span>${entry.name} ${metaParts}</span>
             <strong>${valueLabel}</strong>
             ${useButton}
           </div>
@@ -1849,11 +2071,83 @@ window.Empire.UI = (() => {
     const root = document.getElementById("district-defense-modal");
     const backdrop = document.getElementById("district-defense-modal-backdrop");
     const closeBtn = document.getElementById("district-defense-modal-close");
+    const startBtn = document.getElementById("defense-modal-start");
+    const weaponButtons = document.getElementById("defense-modal-weapons");
     if (!root) return;
-    if (backdrop) backdrop.addEventListener("click", () => root.classList.add("hidden"));
-    if (closeBtn) closeBtn.addEventListener("click", () => root.classList.add("hidden"));
+    if (backdrop) backdrop.addEventListener("click", closeDefenseModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeDefenseModal);
+    if (weaponButtons) {
+      weaponButtons.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const button = target.closest("[data-defense-weapon][data-defense-action]");
+        if (!button) return;
+        const name = String(button.getAttribute("data-defense-weapon") || "").trim();
+        const action = String(button.getAttribute("data-defense-action") || "").trim();
+        if (!name) return;
+        if (action !== "increase" && action !== "decrease") return;
+        const availability = getDefenseModalAvailability();
+        const summary = getDefenseSelectionSummary(availability);
+        const item = defenseWeaponStats.find((entry) => entry.name === name);
+        if (!item) return;
+        const current = Math.max(0, Math.floor(Number(summary.selection[name] || 0)));
+        const maxCount = getDefenseWeaponMaxCount(item, summary, availability);
+        let nextCount = current;
+        if (action === "increase") {
+          nextCount = current < maxCount ? current + 1 : current;
+        } else if (action === "decrease") {
+          nextCount = current > 0 ? current - 1 : 0;
+        }
+        defenseModalState.selectedWeaponCounts = {
+          ...(defenseModalState.selectedWeaponCounts || {}),
+          [name]: nextCount
+        };
+        if (nextCount <= 0) {
+          delete defenseModalState.selectedWeaponCounts[name];
+        }
+        setDefenseModalNote("");
+        renderDefenseModal();
+      });
+    }
+    if (startBtn) {
+      startBtn.addEventListener("click", () => {
+        const district = resolveDistrictById(defenseModalState.districtId);
+        if (!district) {
+          setDefenseModalNote("Nejprve vyber distrikt.");
+          return;
+        }
+        const availability = getDefenseModalAvailability();
+        const selectionSummary = getDefenseSelectionSummary(availability);
+        if (selectionSummary.totalUsedMembers <= 0) {
+          setDefenseModalNote("Pro obranu potřebuješ alespoň 50 členů gangu.");
+          renderDefenseModal();
+          return;
+        }
+        const selectedWeapons = defenseWeaponStats
+          .map((item) => {
+            const count = Math.max(0, Math.floor(Number(selectionSummary.selection?.[item.name] || 0)));
+            return count > 0 ? `${count}× ${item.name}` : "";
+          })
+          .filter(Boolean);
+        const defensePower = defenseWeaponStats.reduce((sum, item) => {
+          const count = Math.max(0, Math.floor(Number(selectionSummary.selection?.[item.name] || 0)));
+          return sum + (count * Number(item.power || 0));
+        }, 0);
+        consumeDefenseWeaponCounts(selectionSummary.selection);
+        consumeGangMembers(selectionSummary.totalUsedMembers);
+        saveDistrictDefenseAssignment(
+          district,
+          selectionSummary.selection,
+          selectionSummary.totalUsedMembers,
+          defensePower
+        );
+        window.Empire.Map?.refreshSelectedDistrictModal?.();
+        pushEvent(`Obrana distriktu ${district.name || `#${district.id}`} byla nastavena. Zbraně: ${selectedWeapons.length ? selectedWeapons.join(", ") : "žádné"}. Členové gangu: ${selectionSummary.totalUsedMembers}. Síla obrany: ${defensePower}.`);
+        closeDefenseModal();
+      });
+    }
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") root.classList.add("hidden");
+      if (event.key === "Escape") closeDefenseModal();
     });
   }
 
@@ -1861,10 +2155,636 @@ window.Empire.UI = (() => {
     const root = document.getElementById("district-defense-modal");
     const districtLabel = document.getElementById("defense-modal-district");
     if (!root) return;
+    defenseModalState = { districtId: district?.id ?? null, message: "", selectedWeaponCounts: {} };
     if (districtLabel) {
       districtLabel.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
     }
     root.classList.remove("hidden");
+    renderDefenseModal();
+    if (defenseModalRefreshTimer) clearInterval(defenseModalRefreshTimer);
+    defenseModalRefreshTimer = setInterval(() => {
+      const modal = document.getElementById("district-defense-modal");
+      if (!modal || modal.classList.contains("hidden")) {
+        closeDefenseModal();
+        return;
+      }
+      renderDefenseModal();
+    }, 250);
+  }
+
+  function setDefenseModalNote(message) {
+    defenseModalState.message = String(message || "");
+    const note = document.getElementById("defense-modal-note");
+    if (!note) return;
+    note.textContent = defenseModalState.message;
+  }
+
+  function renderDefenseModal() {
+    const root = document.getElementById("district-defense-modal");
+    if (!root || root.classList.contains("hidden")) return;
+    const district = resolveDistrictById(defenseModalState.districtId);
+    const districtLabel = document.getElementById("defense-modal-district");
+    const membersCountEl = document.getElementById("defense-modal-members-count");
+    const usedMembersEl = document.getElementById("defense-modal-used-members");
+    const powerEl = document.getElementById("defense-modal-power");
+    const weaponButtons = document.getElementById("defense-modal-weapons");
+    const startBtn = document.getElementById("defense-modal-start");
+    const note = document.getElementById("defense-modal-note");
+    if (!districtLabel || !membersCountEl || !usedMembersEl || !powerEl || !weaponButtons || !startBtn || !note) return;
+
+    const availability = getDefenseModalAvailability();
+    const selectionSummary = getDefenseSelectionSummary(availability);
+    if (district) {
+      districtLabel.textContent = district.name || `Distrikt #${district.id}`;
+    } else {
+      districtLabel.textContent = "-";
+    }
+    membersCountEl.textContent = String(selectionSummary.remainingMembers);
+    usedMembersEl.textContent = String(selectionSummary.totalUsedMembers);
+    powerEl.textContent = String(defenseWeaponStats.reduce((sum, item) => {
+      const count = Math.max(0, Math.floor(Number(selectionSummary.selection[item.name] || 0)));
+      return sum + (count * Number(item.power || 0));
+    }, 0));
+    renderDefenseWeaponButtons(weaponButtons, availability);
+    let noteText = defenseModalState.message || "Šipkou doprava přidáváš, šipkou doleva ubíráš. Členové gangu se přepočítají automaticky.";
+    if (availability.availableWeapons <= 0) {
+      noteText = "Ve skladu nejsou žádné obranné zbraně.";
+    } else if (selectionSummary.totalUsedMembers <= 0) {
+      noteText = "Pro obranu potřebuješ alespoň 50 členů gangu.";
+    } else if (selectionSummary.remainingMembers < 0) {
+      noteText = "Nemáš dost členů gangu pro tuto kombinaci.";
+    }
+    note.textContent = noteText;
+    startBtn.disabled = selectionSummary.totalUsedMembers <= 0;
+  }
+
+  function closeDefenseModal() {
+    const root = document.getElementById("district-defense-modal");
+    if (root) root.classList.add("hidden");
+    defenseModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
+    if (defenseModalRefreshTimer) {
+      clearInterval(defenseModalRefreshTimer);
+      defenseModalRefreshTimer = null;
+    }
+  }
+
+  function getAttackCooldownUntil() {
+    const parsed = Number(localStorage.getItem(ATTACK_COOLDOWN_STORAGE_KEY) || 0);
+    return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+  }
+
+  function setAttackCooldownUntil(value) {
+    const safeValue = Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+    localStorage.setItem(ATTACK_COOLDOWN_STORAGE_KEY, String(safeValue));
+    return safeValue;
+  }
+
+  function getAttackCooldownRemainingMs() {
+    return Math.max(0, getAttackCooldownUntil() - Date.now());
+  }
+
+  function formatAttackCooldownLabel(ms) {
+    const safe = Math.max(0, Math.floor(Number(ms) || 0));
+    const seconds = Math.ceil(safe / 1000);
+    return seconds > 0 ? `${seconds}s` : "Připraveno";
+  }
+
+  function formatAttackDurationLabel(ms) {
+    const safe = Math.max(0, Math.floor(Number(ms) || 0));
+    const seconds = Math.ceil(safe / 1000);
+    if (seconds <= 0) return "0s";
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    if (remainder > 0) return `${minutes}m ${remainder}s`;
+    return `${minutes}m`;
+  }
+
+  function getAttackModalAvailability() {
+    const counts = resolveWeaponCounts();
+    const availableWeapons = getAttackWeaponTotal(counts);
+    const actualMembers = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(cachedProfile || window.Empire.player || {})) || 0));
+    const weaponAccess = resolveCombatWeaponAccess("attack", actualMembers);
+    return {
+      availableWeapons,
+      actualMembers,
+      weaponCounts: counts,
+      weaponAccess,
+      unlockedWeapon: weaponAccess.weapon || null,
+      cooldownMs: getAttackCooldownRemainingMs()
+    };
+  }
+
+  function getAttackSelectionSummary(availability, selectionCounts = attackModalState.selectedWeaponCounts || {}) {
+    const actualMembers = Math.max(0, Math.floor(Number(availability?.actualMembers || 0)));
+    const weaponCounts = availability?.weaponCounts || resolveWeaponCounts();
+    const selection = attackWeaponStats.reduce((acc, item) => {
+      const count = Math.max(0, Math.floor(Number(selectionCounts?.[item.name] || 0)));
+      acc[item.name] = count;
+      return acc;
+    }, {});
+    const totalUsedMembers = attackWeaponStats.reduce((sum, item) => {
+      const count = Number(selection[item.name] || 0);
+      return sum + (Number.isFinite(count) ? count * Number(item.requiredMembers || 0) : 0);
+    }, 0);
+    const remainingMembers = Math.max(0, actualMembers - totalUsedMembers);
+    const remainingWeaponCounts = attackWeaponStats.reduce((acc, item) => {
+      const stock = Math.max(0, Math.floor(Number(weaponCounts[item.name] || 0)));
+      const selected = Math.max(0, Math.floor(Number(selection[item.name] || 0)));
+      acc[item.name] = Math.max(0, stock - selected);
+      return acc;
+    }, {});
+    return {
+      actualMembers,
+      remainingMembers,
+      totalUsedMembers,
+      weaponCounts,
+      remainingWeaponCounts,
+      selection
+    };
+  }
+
+  function getAttackWeaponMaxCount(item, summary, availability) {
+    const stock = Math.max(0, Math.floor(Number(summary?.remainingWeaponCounts?.[item.name] ?? availability?.weaponCounts?.[item.name] ?? 0)));
+    const current = Math.max(0, Math.floor(Number(summary?.selection?.[item.name] || 0)));
+    const otherUsedMembers = Math.max(0, Number(summary?.totalUsedMembers || 0) - current * Number(item.requiredMembers || 0));
+    const remainingForThisWeapon = Math.max(0, Number(summary?.actualMembers || 0) - otherUsedMembers);
+    const byMembers = Math.floor(remainingForThisWeapon / Math.max(1, Number(item.requiredMembers || 0)));
+    return Math.max(0, Math.min(stock, byMembers));
+  }
+
+  function setAttackModalNote(message) {
+    attackModalState.message = String(message || "");
+    const note = document.getElementById("attack-modal-note");
+    if (!note) return;
+    note.textContent = attackModalState.message;
+  }
+
+  function getPopupRoots() {
+    return Array.from(document.querySelectorAll(".modal"));
+  }
+
+  function closeAllPopupWindows() {
+    closeAttackModal();
+    closeAttackResultModal();
+    closeDefenseModal();
+    getPopupRoots().forEach((root) => {
+      if (root instanceof HTMLElement) {
+        root.classList.add("hidden");
+      }
+    });
+    document.querySelectorAll(".stat__popover.is-open").forEach((popover) => {
+      popover.classList.remove("is-open");
+    });
+  }
+
+  function getAttackResultDetails(district, availability) {
+    const nick = String(district?.ownerNick || district?.owner_username || district?.ownerUsername || district?.owner || "Neznámý").trim() || "Neznámý";
+    const factionRaw = String(
+      district?.ownerFaction ||
+      district?.ownerStructure ||
+      district?.owner_structure ||
+      district?.ownerRole ||
+      district?.owner_role ||
+      "Neznámá"
+    ).trim();
+    const alliance = String(district?.ownerAllianceName || district?.owner_alliance_name || "Bez aliance").trim() || "Bez aliance";
+    const selectedWeapons = attackWeaponStats
+      .map((item) => {
+        const count = Math.max(0, Math.floor(Number(availability?.selection?.[item.name] || 0)));
+        return count > 0 ? `${count}× ${item.name}` : "";
+      })
+      .filter(Boolean);
+    const members = Math.max(0, Math.floor(Number(availability?.totalUsedMembers || 0)));
+    const attackPower = attackWeaponStats.reduce((sum, item) => {
+      const count = Math.max(0, Math.floor(Number(availability?.selection?.[item.name] || 0)));
+      return sum + (count * Number(item.power || 0));
+    }, 0);
+    return {
+      nickname: nick,
+      faction: formatFactionLabel(factionRaw),
+      alliance,
+      weapons: selectedWeapons.length ? selectedWeapons.join(", ") : "Žádná zbraň",
+      attackPower,
+      members,
+      durationMs: 10 * 1000,
+      durationLabel: formatAttackDurationLabel(10 * 1000),
+      summary: `Spustil jsi útok na hráče ${nick}.`
+    };
+  }
+
+  function renderAttackResultModal(details) {
+    const summary = document.getElementById("attack-result-modal-summary");
+    const nickname = document.getElementById("attack-result-modal-nickname");
+    const faction = document.getElementById("attack-result-modal-faction");
+    const alliance = document.getElementById("attack-result-modal-alliance");
+    const weapons = document.getElementById("attack-result-modal-weapons");
+    const power = document.getElementById("attack-result-modal-power");
+    const members = document.getElementById("attack-result-modal-members");
+    const duration = document.getElementById("attack-result-modal-duration");
+    if (summary) summary.textContent = details.summary;
+    if (nickname) nickname.textContent = details.nickname;
+    if (faction) faction.textContent = details.faction;
+    if (alliance) alliance.textContent = details.alliance;
+    if (weapons) weapons.textContent = details.weapons;
+    if (power) power.textContent = String(details.attackPower ?? 0);
+    if (members) members.textContent = `${details.members} členů gangu`;
+    if (duration) duration.textContent = details.durationLabel;
+  }
+
+  function renderAttackWeaponButtons(container, availability) {
+    if (!container) return;
+    const summary = getAttackSelectionSummary(availability);
+    container.innerHTML = attackWeaponStats
+      .map((item) => {
+        const amount = Math.max(0, Math.floor(Number(summary.selection[item.name] || 0)));
+        const stock = Math.max(0, Math.floor(Number(summary.remainingWeaponCounts[item.name] || 0)));
+        const maxCount = getAttackWeaponMaxCount(item, summary, availability);
+        const unlocked = stock > 0 && maxCount > 0;
+        return `
+          <div class="attack-modal__weapon ${amount > 0 ? "is-selected" : ""} ${unlocked ? "" : "is-locked"}">
+            <div class="attack-modal__weapon-body">
+              <span class="attack-modal__weapon-name">${item.name}</span>
+              <span class="attack-modal__weapon-meta">Síla ${item.power} • Min. ${item.requiredMembers} členů • ${stock} ks skladem</span>
+            </div>
+            <div class="attack-modal__weapon-stepper">
+              <button
+                type="button"
+                class="attack-modal__step-btn"
+                data-attack-weapon="${item.name}"
+                data-attack-action="decrease"
+                ${amount <= 0 ? "disabled" : ""}
+              >−</button>
+              <strong class="attack-modal__weapon-count">×${amount}</strong>
+              <button
+                type="button"
+                class="attack-modal__step-btn"
+                data-attack-weapon="${item.name}"
+                data-attack-action="increase"
+                ${!unlocked ? "disabled" : ""}
+              >+</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function getDefenseModalAvailability() {
+    const counts = resolveDefenseCounts();
+    const availableWeapons = getDefenseWeaponTotal(counts);
+    const actualMembers = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(cachedProfile || window.Empire.player || {})) || 0));
+    const weaponAccess = resolveCombatWeaponAccess("defense", actualMembers);
+    return {
+      availableWeapons,
+      actualMembers,
+      weaponCounts: counts,
+      weaponAccess,
+      unlockedWeapon: weaponAccess.weapon || null
+    };
+  }
+
+  function getDefenseSelectionSummary(availability, selectionCounts = defenseModalState.selectedWeaponCounts || {}) {
+    const actualMembers = Math.max(0, Math.floor(Number(availability?.actualMembers || 0)));
+    const weaponCounts = availability?.weaponCounts || resolveDefenseCounts();
+    const selection = defenseWeaponStats.reduce((acc, item) => {
+      const count = Math.max(0, Math.floor(Number(selectionCounts?.[item.name] || 0)));
+      acc[item.name] = count;
+      return acc;
+    }, {});
+    const totalUsedMembers = defenseWeaponStats.reduce((sum, item) => {
+      const count = Number(selection[item.name] || 0);
+      return sum + (Number.isFinite(count) ? count * Number(item.requiredMembers || 0) : 0);
+    }, 0);
+    const remainingMembers = Math.max(0, actualMembers - totalUsedMembers);
+    const remainingWeaponCounts = defenseWeaponStats.reduce((acc, item) => {
+      const stock = Math.max(0, Math.floor(Number(weaponCounts[item.name] || 0)));
+      const selected = Math.max(0, Math.floor(Number(selection[item.name] || 0)));
+      acc[item.name] = Math.max(0, stock - selected);
+      return acc;
+    }, {});
+    return {
+      actualMembers,
+      remainingMembers,
+      totalUsedMembers,
+      weaponCounts,
+      remainingWeaponCounts,
+      selection
+    };
+  }
+
+  function getDefenseWeaponMaxCount(item, summary, availability) {
+    const stock = Math.max(0, Math.floor(Number(summary?.remainingWeaponCounts?.[item.name] ?? availability?.weaponCounts?.[item.name] ?? 0)));
+    const current = Math.max(0, Math.floor(Number(summary?.selection?.[item.name] || 0)));
+    const otherUsedMembers = Math.max(0, Number(summary?.totalUsedMembers || 0) - current * Number(item.requiredMembers || 0));
+    const remainingForThisWeapon = Math.max(0, Number(summary?.actualMembers || 0) - otherUsedMembers);
+    const byMembers = Math.floor(remainingForThisWeapon / Math.max(1, Number(item.requiredMembers || 0)));
+    return Math.max(0, Math.min(stock, byMembers));
+  }
+
+  function renderDefenseWeaponButtons(container, availability) {
+    if (!container) return;
+    const summary = getDefenseSelectionSummary(availability);
+    container.innerHTML = defenseWeaponStats
+      .map((item) => {
+        const amount = Math.max(0, Math.floor(Number(summary.selection[item.name] || 0)));
+        const stock = Math.max(0, Math.floor(Number(summary.remainingWeaponCounts[item.name] || 0)));
+        const maxCount = getDefenseWeaponMaxCount(item, summary, availability);
+        const unlocked = stock > 0 && maxCount > 0;
+        return `
+          <div class="attack-modal__weapon ${amount > 0 ? "is-selected" : ""} ${unlocked ? "" : "is-locked"}">
+            <div class="attack-modal__weapon-body">
+              <span class="attack-modal__weapon-name">${item.name}</span>
+              <span class="attack-modal__weapon-meta">Síla ${item.power} • Min. ${item.requiredMembers} členů • ${stock} ks skladem</span>
+            </div>
+            <div class="attack-modal__weapon-stepper">
+              <button
+                type="button"
+                class="attack-modal__step-btn"
+                data-defense-weapon="${item.name}"
+                data-defense-action="decrease"
+                ${amount <= 0 ? "disabled" : ""}
+              >−</button>
+              <strong class="attack-modal__weapon-count">×${amount}</strong>
+              <button
+                type="button"
+                class="attack-modal__step-btn"
+                data-defense-weapon="${item.name}"
+                data-defense-action="increase"
+                ${!unlocked ? "disabled" : ""}
+              >+</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function openAttackResultModal(details) {
+    const root = document.getElementById("attack-result-modal");
+    if (!root) return;
+    const nextState = {
+      ...(details || {}),
+      visible: true
+    };
+    closeAllPopupWindows();
+    attackResultModalState = nextState;
+    renderAttackResultModal(attackResultModalState);
+    root.classList.remove("hidden");
+  }
+
+  function closeAttackResultModal() {
+    const root = document.getElementById("attack-result-modal");
+    if (root) root.classList.add("hidden");
+    attackResultModalState = { visible: false };
+  }
+
+  function renderAttackModal() {
+    const root = document.getElementById("attack-modal");
+    if (!root || root.classList.contains("hidden")) return;
+    const district = resolveDistrictById(attackModalState.districtId);
+    const districtLabel = document.getElementById("attack-modal-district");
+    const membersCountEl = document.getElementById("attack-modal-members-count");
+    const usedMembersEl = document.getElementById("attack-modal-used-members");
+    const powerEl = document.getElementById("attack-modal-power");
+    const weaponButtons = document.getElementById("attack-modal-weapons");
+    const cooldownEl = document.getElementById("attack-modal-cooldown");
+    const startBtn = document.getElementById("attack-modal-start");
+    const note = document.getElementById("attack-modal-note");
+    if (!districtLabel || !membersCountEl || !usedMembersEl || !powerEl || !weaponButtons || !cooldownEl || !startBtn || !note) {
+      return;
+    }
+
+    const availability = getAttackModalAvailability();
+    const demoMode = scenarioVisionEnabled && !window.Empire.token;
+    const selectionSummary = getAttackSelectionSummary(availability);
+
+    if (!attackModalState.districtId && district?.id != null) {
+      attackModalState = { districtId: district.id, message: attackModalState.message || "", selectedWeaponCounts: attackModalState.selectedWeaponCounts || {} };
+    }
+
+    if (district) {
+      districtLabel.textContent = district.name || `Distrikt #${district.id}`;
+    } else {
+      districtLabel.textContent = "-";
+    }
+
+    membersCountEl.textContent = String(selectionSummary.remainingMembers);
+    usedMembersEl.textContent = String(selectionSummary.totalUsedMembers);
+    powerEl.textContent = String(attackWeaponStats.reduce((sum, item) => {
+      const count = Math.max(0, Math.floor(Number(selectionSummary.selection[item.name] || 0)));
+      return sum + (count * Number(item.power || 0));
+    }, 0));
+    renderAttackWeaponButtons(weaponButtons, availability);
+
+    const cooldownMs = availability.cooldownMs;
+    cooldownEl.textContent = cooldownMs > 0
+      ? formatAttackCooldownLabel(cooldownMs)
+      : "Připraveno";
+
+    let noteText = attackModalState.message || (demoMode
+      ? "Šipkou doprava přidáváš, šipkou doleva ubíráš. Členové gangu se přepočítají automaticky."
+      : "Šipkou doprava přidáváš, šipkou doleva ubíráš. Členové gangu se přepočítají automaticky.");
+    if (!window.Empire.token && !demoMode) {
+      noteText = "Bez přihlášení lze v této verzi útok jen připravit.";
+    } else if (cooldownMs > 0) {
+      noteText = `Útok je na cooldownu ještě ${formatAttackCooldownLabel(cooldownMs)}.`;
+    } else if (availability.availableWeapons <= 0) {
+      noteText = "Ve skladu nejsou žádné zbraně.";
+    } else if (selectionSummary.totalUsedMembers <= 0) {
+      noteText = "Pro útok potřebuješ alespoň 50 členů gangu.";
+    } else if (selectionSummary.remainingMembers < 0) {
+      noteText = "Nemáš dost členů gangu pro tuto kombinaci.";
+    }
+    note.textContent = noteText;
+
+    const isReady = cooldownMs <= 0
+      && selectionSummary.totalUsedMembers > 0
+      && (demoMode || Boolean(window.Empire.token));
+    startBtn.disabled = !isReady;
+    startBtn.textContent = demoMode ? "Spustit ukázkový útok" : "Spustit útok";
+  }
+
+  function closeAttackModal() {
+    const root = document.getElementById("attack-modal");
+    if (root) root.classList.add("hidden");
+    attackModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
+    if (attackModalRefreshTimer) {
+      clearInterval(attackModalRefreshTimer);
+      attackModalRefreshTimer = null;
+    }
+  }
+
+  function openAttackModal(district) {
+    const root = document.getElementById("attack-modal");
+    if (!root) return;
+
+    attackModalState = { districtId: district?.id ?? null, message: "", selectedWeaponCounts: {} };
+    setAttackModalNote("");
+    root.classList.remove("hidden");
+    renderAttackModal();
+
+    if (attackModalRefreshTimer) clearInterval(attackModalRefreshTimer);
+    attackModalRefreshTimer = setInterval(() => {
+      const modal = document.getElementById("attack-modal");
+      if (!modal || modal.classList.contains("hidden")) {
+        closeAttackModal();
+        return;
+      }
+      renderAttackModal();
+    }, 250);
+  }
+
+  function initAttackModal() {
+    const root = document.getElementById("attack-modal");
+    const backdrop = document.getElementById("attack-modal-backdrop");
+    const closeBtn = document.getElementById("attack-modal-close");
+    const startBtn = document.getElementById("attack-modal-start");
+    const weaponButtons = document.getElementById("attack-modal-weapons");
+    if (!root) return;
+
+    if (backdrop) backdrop.addEventListener("click", closeAttackModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeAttackModal);
+    if (weaponButtons) {
+      weaponButtons.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const button = target.closest("[data-attack-weapon][data-attack-action]");
+        if (!button) return;
+        const name = String(button.getAttribute("data-attack-weapon") || "").trim();
+        const action = String(button.getAttribute("data-attack-action") || "").trim();
+        if (!name) return;
+        if (action !== "increase" && action !== "decrease") return;
+        const availability = getAttackModalAvailability();
+        const summary = getAttackSelectionSummary(availability);
+        const item = attackWeaponStats.find((entry) => entry.name === name);
+        if (!item) return;
+        const current = Math.max(0, Math.floor(Number(summary.selection[name] || 0)));
+        const maxCount = getAttackWeaponMaxCount(item, summary, availability);
+        let nextCount = current;
+        if (action === "increase") {
+          nextCount = current < maxCount ? current + 1 : current;
+        } else if (action === "decrease") {
+          nextCount = current > 0 ? current - 1 : 0;
+        }
+        attackModalState.selectedWeaponCounts = {
+          ...(attackModalState.selectedWeaponCounts || {}),
+          [name]: nextCount
+        };
+        if (nextCount <= 0) {
+          delete attackModalState.selectedWeaponCounts[name];
+        }
+        setAttackModalNote("");
+        renderAttackModal();
+      });
+    }
+    if (startBtn) {
+      startBtn.addEventListener("click", async () => {
+        const district = resolveDistrictById(attackModalState.districtId);
+        if (!district) {
+          setAttackModalNote("Nejprve vyber cíl útoku.");
+          return;
+        }
+        const availability = getAttackModalAvailability();
+        const demoMode = scenarioVisionEnabled && !window.Empire.token;
+        if (getAttackCooldownRemainingMs() > 0) {
+          setAttackModalNote(`Útok je na cooldownu ještě ${formatAttackCooldownLabel(getAttackCooldownRemainingMs())}.`);
+          renderAttackModal();
+          return;
+        }
+        const selectionSummary = getAttackSelectionSummary(availability);
+        if (selectionSummary.totalUsedMembers <= 0) {
+          setAttackModalNote("Pro útok potřebuješ alespoň 50 členů gangu.");
+          renderAttackModal();
+          return;
+        }
+        const details = getAttackResultDetails(district, {
+          ...availability,
+          ...selectionSummary
+        });
+
+        if (demoMode) {
+          setAttackCooldownUntil(Date.now() + 10 * 1000);
+          consumeAttackWeaponCounts(selectionSummary.selection);
+          consumeGangMembers(selectionSummary.totalUsedMembers);
+          pushEvent(`Ukázkový útok na ${district.name || `distrikt #${district.id}`} byl spuštěn s ${details.weapons} a ${selectionSummary.totalUsedMembers} členy.`);
+          window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
+            attackerDistrictId: district.id,
+            durationMs: 10 * 1000,
+            source: "scenario-attack"
+          });
+          openAttackResultModal(details);
+          return;
+        }
+
+        if (!window.Empire.token) {
+          setAttackModalNote("Bez přihlášení lze útok jen připravit v ukázkovém stavu.");
+          renderAttackModal();
+          return;
+        }
+
+        startBtn.disabled = true;
+        setAttackModalNote("Útok probíhá...");
+        try {
+          const result = await window.Empire.API.attackDistrict(district.id);
+          if (result?.error) {
+            const errorMessage = formatAttackError(result.error);
+            setAttackModalNote(errorMessage);
+            pushEvent(errorMessage);
+            recordVerifiedIntelEvent({
+              type: "attack_failed",
+              districtId: district.id,
+              message: errorMessage
+            });
+            renderAttackModal();
+            return;
+          }
+          consumeAttackWeaponCounts(selectionSummary.selection);
+          consumeGangMembers(selectionSummary.totalUsedMembers);
+          setAttackCooldownUntil(Date.now() + 10 * 1000);
+          if (result?.message) {
+            pushEvent(result.message);
+          }
+          if (result?.destroyed) {
+            pushEvent("Distrikt byl po útoku zničen a je nyní nepoužitelný.");
+          }
+          window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
+            attackerDistrictId: result?.sourceDistrictId ?? result?.attackerDistrictId ?? null,
+            durationMs: 10 * 1000,
+            source: "player-attack"
+          });
+          recordVerifiedIntelEvent({
+            type: "attack_success",
+            districtId: district.id,
+            message: result?.message || ""
+          });
+          openAttackResultModal(details);
+        } catch (error) {
+          const message = error?.message || "Útok se nepodařilo spustit.";
+          setAttackModalNote(message);
+          pushEvent(message);
+          renderAttackModal();
+        }
+      });
+    }
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeAttackModal();
+    });
+  }
+
+  function initAttackResultModal() {
+    const root = document.getElementById("attack-result-modal");
+    const backdrop = document.getElementById("attack-result-modal-backdrop");
+    const closeBtn = document.getElementById("attack-result-modal-close");
+    if (!root) return;
+    if (backdrop) backdrop.addEventListener("click", closeAllPopupWindows);
+    if (closeBtn) closeBtn.addEventListener("click", closeAllPopupWindows);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeAllPopupWindows();
+      }
+    });
   }
 
   function normalizeOwnerName(value) {
@@ -1995,6 +2915,79 @@ window.Empire.UI = (() => {
     return { allowed: false, reason: "Akci nelze provést." };
   }
 
+  function resolveCombatWeaponAccess(mode, gangMembers = countPlayerControlledPopulation(cachedProfile || window.Empire.player || {})) {
+    const stats = mode === "defense" ? defenseWeaponStats : attackWeaponStats;
+    const sorted = Array.isArray(stats) ? stats : [];
+    const currentMembers = Math.max(0, Math.floor(Number(gangMembers) || 0));
+    const unlocked = sorted.filter((item) => currentMembers >= Number(item.requiredMembers || 0));
+    return {
+      allowed: unlocked.length > 0,
+      currentMembers,
+      weapon: unlocked.length ? unlocked[unlocked.length - 1] : null,
+      nextRequiredMembers: unlocked.length < sorted.length ? Number(sorted[unlocked.length]?.requiredMembers || 0) : null
+    };
+  }
+
+  function buildWeaponDetailMap(stats, quantity = DEMO_WEAPON_STACK_SIZE) {
+    return (Array.isArray(stats) ? stats : []).reduce((acc, item) => {
+      if (!item?.name) return acc;
+      acc[item.name] = Math.max(0, Math.floor(Number(quantity) || 0));
+      return acc;
+    }, {});
+  }
+
+  function createDemoWeaponLoadout(quantity = DEMO_WEAPON_STACK_SIZE) {
+    const attackDetail = buildWeaponDetailMap(attackWeaponStats, quantity);
+    const defenseDetail = buildWeaponDetailMap(defenseWeaponStats, quantity);
+    return {
+      weaponsDetail: attackDetail,
+      defenseDetail,
+      weapons: getAttackWeaponTotal(attackDetail),
+      defense: getDefenseWeaponTotal(defenseDetail)
+    };
+  }
+
+  function resolveDemoOwnerFaction(ownerName) {
+    const safeOwner = String(ownerName || "").trim();
+    if (!safeOwner) return DEMO_OWNER_FACTIONS[0];
+    const index = hashDistrictSeed(`${safeOwner}:faction`, safeOwner.length) % DEMO_OWNER_FACTIONS.length;
+    return DEMO_OWNER_FACTIONS[index];
+  }
+
+  function resolveDemoOwnerAvatar(ownerName) {
+    const safeOwner = String(ownerName || "").trim();
+    if (!safeOwner) return DEMO_OWNER_AVATAR_POOL[0];
+    const index = hashDistrictSeed(`${safeOwner}:avatar`, safeOwner.length) % DEMO_OWNER_AVATAR_POOL.length;
+    return DEMO_OWNER_AVATAR_POOL[index];
+  }
+
+  function resolveDemoDistrictAtmosphere(district, ownerName) {
+    const safeType = String(district?.type || "").trim().toLowerCase();
+    const pool = DEMO_DISTRICT_ATMOSPHERES[safeType] || DEMO_DISTRICT_ATMOSPHERES.default;
+    const safeOwner = String(ownerName || district?.owner || "").trim();
+    const index = hashDistrictSeed(`${safeOwner}:${district?.id ?? ""}:${safeType}`, pool.length) % pool.length;
+    return pool[index];
+  }
+
+  function buildDemoDistrictOwnerMeta(ownerName, district) {
+    const safeOwner = String(ownerName || "").trim();
+    if (!safeOwner) {
+      return {
+        ownerStructure: null,
+        ownerFaction: null,
+        ownerAvatar: null,
+        ownerAtmosphere: null
+      };
+    }
+    const faction = resolveDemoOwnerFaction(safeOwner);
+    return {
+      ownerStructure: faction,
+      ownerFaction: faction,
+      ownerAvatar: resolveDemoOwnerAvatar(safeOwner),
+      ownerAtmosphere: resolveDemoDistrictAtmosphere(district, safeOwner)
+    };
+  }
+
   function getActiveAllianceOwnerNames() {
     return scenarioVisionEnabled ? scenarioAllianceOwnerNames : liveAllianceOwnerNames;
   }
@@ -2065,6 +3058,10 @@ window.Empire.UI = (() => {
     return normalizeHexColor(localStorage.getItem("empire_gang_color")) || "#22d3ee";
   }
 
+  function resolveStoredUnknownNeutralFillEnabled() {
+    return localStorage.getItem(MAP_UNKNOWN_NEUTRAL_FILL_STORAGE_KEY) === "1";
+  }
+
   function applyMapBorderSwitchVisuals() {
     const root = document.getElementById("map-border-switch");
     if (root) {
@@ -2077,6 +3074,11 @@ window.Empire.UI = (() => {
       swatch.classList.toggle("is-active", mode === selectedMapBorderMode);
       swatch.setAttribute("aria-pressed", mode === selectedMapBorderMode ? "true" : "false");
     });
+    const neutralToggle = document.getElementById("map-unknown-neutral-fill-toggle");
+    if (neutralToggle) {
+      neutralToggle.classList.toggle("is-active", unknownNeutralFillEnabled);
+      neutralToggle.setAttribute("aria-pressed", unknownNeutralFillEnabled ? "true" : "false");
+    }
   }
 
   function applyMapBorderMode(mode, options = {}) {
@@ -2091,12 +3093,23 @@ window.Empire.UI = (() => {
 
   function initMapBorderModeControls() {
     const swatches = Array.from(document.querySelectorAll("[data-map-border-color]"));
-    if (!swatches.length) return;
     swatches.forEach((swatch) => {
       swatch.addEventListener("click", () => {
         applyMapBorderMode(swatch.dataset.mapBorderColor);
       });
     });
+    const neutralToggle = document.getElementById("map-unknown-neutral-fill-toggle");
+    if (neutralToggle) {
+      neutralToggle.addEventListener("click", () => {
+        unknownNeutralFillEnabled = !unknownNeutralFillEnabled;
+        localStorage.setItem(
+          MAP_UNKNOWN_NEUTRAL_FILL_STORAGE_KEY,
+          unknownNeutralFillEnabled ? "1" : "0"
+        );
+        applyMapBorderSwitchVisuals();
+        syncMapVisionContext();
+      });
+    }
     applyMapBorderMode(selectedMapBorderMode, { persist: false });
   }
 
@@ -2108,7 +3121,8 @@ window.Empire.UI = (() => {
       enemyOwnerNames: Array.from(getActiveEnemyOwnerNames()),
       allowEnemyModalIntelInFog: scenarioVisionEnabled,
       uniqueOwnerColors: scenarioVisionEnabled && scenarioUniqueOwnerColors,
-      districtBorderMode: selectedMapBorderMode
+      districtBorderMode: selectedMapBorderMode,
+      unknownNeutralFillEnabled
     });
   }
 
@@ -2208,8 +3222,31 @@ window.Empire.UI = (() => {
     });
   }
 
-  function applyPlayerScenario(scenarioKey) {
+  function cloneScenarioPolygon(polygon) {
+    return (Array.isArray(polygon) ? polygon : []).map((point) => [
+      Number(point?.[0] || 0),
+      Number(point?.[1] || 0)
+    ]);
+  }
+
+  function resolveScenarioSourceDistricts() {
     const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    return districts
+      .map((district) => {
+        const basePolygon = Array.isArray(district?.basePolygon) && district.basePolygon.length
+          ? cloneScenarioPolygon(district.basePolygon)
+          : cloneScenarioPolygon(district?.polygon);
+        return {
+          ...district,
+          basePolygon,
+          polygon: basePolygon
+        };
+      })
+      .sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0));
+  }
+
+  function applyPlayerScenario(scenarioKey) {
+    const districts = resolveScenarioSourceDistricts();
     if (!districts.length || !window.Empire.Map?.setDistricts) {
       pushEvent("Mapa ještě není připravená.");
       return;
@@ -2225,7 +3262,10 @@ window.Empire.UI = (() => {
       ownerPlayerId: null,
       ownerNick: null,
       ownerAllianceName: null,
-      ownerAvatar: null,
+      ownerStructure: owner ? resolveDemoOwnerFaction(owner) : null,
+      ownerFaction: owner ? resolveDemoOwnerFaction(owner) : null,
+      ownerAvatar: owner ? resolveDemoOwnerAvatar(owner) : null,
+      ownerAtmosphere: owner ? resolveDemoDistrictAtmosphere(district, owner) : null,
       isDestroyed: false,
       destroyedAt: null
     });
@@ -2237,7 +3277,9 @@ window.Empire.UI = (() => {
       gangName: cachedProfile?.gangName || ownerName,
       structure: cachedProfile?.structure || localStorage.getItem("empire_structure") || "-",
       alliance: "Žádná",
-      districts: 0
+      districts: 0,
+      structure: cachedProfile?.structure || localStorage.getItem("empire_structure") || resolveDemoOwnerFaction(ownerName),
+      ...createDemoWeaponLoadout()
     };
     let scenarioAttackIncident = null;
     let scenarioPoliceIncident = null;
@@ -2269,16 +3311,30 @@ window.Empire.UI = (() => {
       baseProfile.alliance = "Žádná";
       pushEvent("Ukázka: hráč drží pouze jeden distrikt.");
     } else if (scenarioKey === "alliance-ten") {
+      const enemyOneName = "Stínoví vlci A";
+      const enemyTwoName = "Stínoví vlci B";
+      const enemyOwners = [enemyOneName, enemyTwoName];
+      const ownAllianceName = `${ownerName} + spojenec`;
+      const enemyAllianceName = "Stínoví vlci";
       setScenarioVisionMode(true);
       setScenarioAllianceOwners([allyName]);
-      setScenarioEnemyOwners([]);
-      nextDistricts = assignAllianceTenScenarioOwnership(districts, ownerName, allyName);
+      setScenarioEnemyOwners(enemyOwners);
+      nextDistricts = assignAllianceTenScenarioOwnership(districts, ownerName, allyName, {
+        ownAllianceName,
+        enemyOwners,
+        enemyAllianceName
+      });
       const ownDistrictCount = countOwnedDistrictsForOwner(nextDistricts, ownerName);
       const allyDistrictCount = countOwnedDistrictsForOwner(nextDistricts, allyName);
+      const enemyDistrictCount = enemyOwners.reduce(
+        (sum, enemyOwner) => sum + countOwnedDistrictsForOwner(nextDistricts, enemyOwner),
+        0
+      );
       const totalOwned = ownDistrictCount + allyDistrictCount;
       baseProfile.districts = ownDistrictCount;
       baseProfile.alliance = `${ownerName} + spojenec (2/4 • ${totalOwned} sektorů)`;
       pushEvent(`Ukázka: ${ownerName} drží ${ownDistrictCount} sektorů, spojenec ${allyDistrictCount}.`);
+      pushEvent(`Hrozba: nepřátelská aliance (${enemyOneName} + ${enemyTwoName}) drží ${enemyDistrictCount} sousedních sektorů.`);
     } else if (scenarioKey === "alliance-war") {
       const allyOneName = `${ownerName} - spojenec A`;
       const allyTwoName = `${ownerName} - spojenec B`;
@@ -2368,9 +3424,14 @@ window.Empire.UI = (() => {
     updateProfile(baseProfile);
   }
 
-  function assignAllianceTenScenarioOwnership(districts, ownerName, allyName) {
+  function assignAllianceTenScenarioOwnership(districts, ownerName, allyName, options = {}) {
     const safeDistricts = Array.isArray(districts) ? districts : [];
     if (!safeDistricts.length) return [];
+    const ownAllianceName = String(options?.ownAllianceName || `${ownerName} + spojenec`).trim();
+    const enemyOwners = Array.isArray(options?.enemyOwners)
+      ? options.enemyOwners.map((value) => String(value || "").trim()).filter(Boolean)
+      : [];
+    const enemyAllianceName = String(options?.enemyAllianceName || "").trim();
 
     const ownersByDistrict = new Map();
     const districtCenters = new Map(
@@ -2436,13 +3497,83 @@ window.Empire.UI = (() => {
       });
     }
 
+    if (enemyOwners.length && available.size) {
+      const friendlyClusterIds = Array.from(ownersByDistrict.keys());
+      const friendlyClusterSet = new Set(friendlyClusterIds);
+      const enemyTarget = Math.min(5, available.size);
+      let enemySeedId = null;
+      if (friendlyClusterIds.length) {
+        enemySeedId = pickNearestToCluster(available, friendlyClusterIds, districtCenters, friendlyClusterSet);
+      }
+      if (!enemySeedId) {
+        enemySeedId = pickClusterSeed(available, districtCenters, 2, 3);
+      }
+      const enemyCluster = growDistrictCluster({
+        seedId: enemySeedId,
+        targetSize: enemyTarget,
+        available,
+        neighborsByDistrict,
+        districtCenters
+      });
+      enemyCluster.forEach((districtId) => {
+        available.delete(districtId);
+      });
+
+      const splitBase = Math.floor(enemyTarget / enemyOwners.length);
+      const splitRemainder = enemyTarget % enemyOwners.length;
+      const targetByEnemy = enemyOwners.map((_, index) => splitBase + (index < splitRemainder ? 1 : 0));
+      const enemyAvailable = new Set(enemyCluster);
+
+      enemyOwners.forEach((enemyOwner, enemyIndex) => {
+        const enemyOwnerTarget = Math.min(targetByEnemy[enemyIndex], enemyAvailable.size);
+        if (enemyOwnerTarget < 1) return;
+        let enemyOwnerSeed = null;
+        if (friendlyClusterIds.length) {
+          enemyOwnerSeed = pickNearestToCluster(enemyAvailable, friendlyClusterIds, districtCenters, new Set());
+        }
+        if (!enemyOwnerSeed && enemyAvailable.size) {
+          enemyOwnerSeed = Array.from(enemyAvailable)[0];
+        }
+        if (!enemyOwnerSeed) return;
+        const enemyOwnerCluster = growDistrictCluster({
+          seedId: enemyOwnerSeed,
+          targetSize: enemyOwnerTarget,
+          available: enemyAvailable,
+          neighborsByDistrict,
+          districtCenters
+        });
+        enemyOwnerCluster.forEach((districtId) => {
+          ownersByDistrict.set(districtId, enemyOwner);
+          enemyAvailable.delete(districtId);
+        });
+      });
+
+      if (enemyAvailable.size) {
+        let ownerIndex = 0;
+        enemyAvailable.forEach((districtId) => {
+          ownersByDistrict.set(districtId, enemyOwners[ownerIndex % enemyOwners.length]);
+          ownerIndex += 1;
+        });
+      }
+    }
+
+    const ownerAllianceByKey = new Map([
+      [normalizeOwnerName(ownerName), ownAllianceName],
+      [normalizeOwnerName(allyName), ownAllianceName]
+    ]);
+    if (enemyAllianceName) {
+      enemyOwners.forEach((enemyOwner) => {
+        ownerAllianceByKey.set(normalizeOwnerName(enemyOwner), enemyAllianceName);
+      });
+    }
+
     return safeDistricts.map((district) => ({
       ...district,
       owner: ownersByDistrict.get(district.id) || null,
       ownerPlayerId: null,
       ownerNick: null,
-      ownerAllianceName: null,
-      ownerAvatar: null
+      ownerAllianceName: ownerAllianceByKey.get(normalizeOwnerName(ownersByDistrict.get(district.id))) || null,
+      ...buildDemoDistrictOwnerMeta(ownersByDistrict.get(district.id), district)
     }));
   }
 
@@ -2490,7 +3621,7 @@ window.Empire.UI = (() => {
       ownerPlayerId: null,
       ownerNick: null,
       ownerAllianceName: null,
-      ownerAvatar: null
+      ...buildDemoDistrictOwnerMeta(ownersByDistrict.get(district.id), district)
     }));
   }
 
@@ -2558,11 +3689,15 @@ window.Empire.UI = (() => {
       const owner = i === 0
         ? claimUniqueNick(ownerName || "Ty", 1)
         : claimUniqueNick(nickPool[(i - 1) % nickPool.length], i + 1);
+      const structure = resolveDemoOwnerFaction(owner);
       players.push({
         owner,
         allianceName,
         allianceIndex,
-        districtCount: 4 + ((i * 11 + 3) % 4)
+        districtCount: 4 + ((i * 11 + 3) % 4),
+        structure,
+        avatar: resolveDemoOwnerAvatar(owner),
+        ...createDemoWeaponLoadout()
       });
     }
 
@@ -2658,13 +3793,19 @@ window.Empire.UI = (() => {
       const owner = ownersByDistrict.get(district.id) || null;
       const ownerKey = normalizeOwnerName(owner);
       const allianceName = ownerKey ? ownerAllianceByKey.get(ownerKey) || null : null;
+      const ownerMeta = owner ? buildDemoDistrictOwnerMeta(owner, district) : {
+        ownerStructure: null,
+        ownerFaction: null,
+        ownerAvatar: null,
+        ownerAtmosphere: null
+      };
       return {
         ...district,
         owner,
         ownerPlayerId: null,
         ownerNick: owner || null,
         ownerAllianceName: allianceName,
-        ownerAvatar: null
+        ...ownerMeta
       };
     });
 
@@ -2673,6 +3814,10 @@ window.Empire.UI = (() => {
       district.owner = player.owner || null;
       district.ownerNick = player.owner || null;
       district.ownerAllianceName = player.allianceName || null;
+      district.ownerStructure = player.structure || null;
+      district.ownerFaction = player.structure || null;
+      district.ownerAvatar = player.avatar || null;
+      district.ownerAtmosphere = resolveDemoDistrictAtmosphere(district, player.owner);
     };
     const findDistrictById = (districtId) => {
       const key = String(districtId);
@@ -2911,6 +4056,125 @@ window.Empire.UI = (() => {
       || localStorage.getItem("empire_guest_username")
       || "Tvůj gang"
     );
+  }
+
+  function resolveCurrentPlayerOwnerLabel() {
+    return String(resolveScenarioOwnerName() || "Ty");
+  }
+
+  function resolveCurrentPlayerOwnerKey() {
+    const normalized = normalizeOwnerName(resolveCurrentPlayerOwnerLabel());
+    return normalized || "player";
+  }
+
+  function readLocalDistrictDefenseAssignments() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(LOCAL_DISTRICT_DEFENSE_ASSIGNMENTS_KEY) || "null");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function writeLocalDistrictDefenseAssignments(store) {
+    localStorage.setItem(LOCAL_DISTRICT_DEFENSE_ASSIGNMENTS_KEY, JSON.stringify(store || {}));
+  }
+
+  function countSelectedDefenseWeapons(selection = {}) {
+    return defenseWeaponStats.reduce((sum, item) => {
+      const count = Math.max(0, Math.floor(Number(selection?.[item.name] || 0)));
+      return sum + count;
+    }, 0);
+  }
+
+  function saveDistrictDefenseAssignment(district, selection = {}, members = 0, power = 0) {
+    if (!district?.id) return null;
+    const districtKey = String(district.id);
+    const ownerKey = resolveCurrentPlayerOwnerKey();
+    const ownerLabel = resolveCurrentPlayerOwnerLabel();
+    const safeMembers = Math.max(0, Math.floor(Number(members) || 0));
+    const safePower = Math.max(0, Math.floor(Number(power) || 0));
+    const safeSelection = defenseWeaponStats.reduce((acc, item) => {
+      const count = Math.max(0, Math.floor(Number(selection?.[item.name] || 0)));
+      if (count > 0) acc[item.name] = count;
+      return acc;
+    }, {});
+    const totalWeapons = countSelectedDefenseWeapons(safeSelection);
+
+    const store = readLocalDistrictDefenseAssignments();
+    const districtStore = store[districtKey] && typeof store[districtKey] === "object"
+      ? { ...store[districtKey] }
+      : {};
+    districtStore[ownerKey] = {
+      ownerLabel,
+      weaponCounts: safeSelection,
+      totalWeapons,
+      members: safeMembers,
+      power: safePower,
+      updatedAt: Date.now()
+    };
+    store[districtKey] = districtStore;
+    writeLocalDistrictDefenseAssignments(store);
+    return districtStore[ownerKey];
+  }
+
+  function resolveDistrictDefenseEntryByKeys(districtStore, ownerKeys = new Set()) {
+    if (!districtStore || typeof districtStore !== "object") return null;
+    for (const key of ownerKeys) {
+      const normalized = normalizeOwnerName(key);
+      if (!normalized) continue;
+      if (districtStore[normalized]) return districtStore[normalized];
+    }
+    return null;
+  }
+
+  function getDistrictDefenseSnapshot(districtId) {
+    if (districtId == null) {
+      return {
+        self: { label: "Ty", weapons: null, members: null, power: null, hasData: false },
+        ally: { label: "Spojenec", weapons: null, members: null, power: null, hasData: false }
+      };
+    }
+    const store = readLocalDistrictDefenseAssignments();
+    const districtStore = store[String(districtId)] && typeof store[String(districtId)] === "object"
+      ? store[String(districtId)]
+      : {};
+    const selfKeys = new Set(getPlayerOwnerNameSet());
+    selfKeys.add(resolveCurrentPlayerOwnerKey());
+    const allyKeys = getActiveAllianceOwnerNames();
+
+    const selfEntry = resolveDistrictDefenseEntryByKeys(districtStore, selfKeys);
+    const allyEntry = resolveDistrictDefenseEntryByKeys(districtStore, allyKeys);
+
+    const mapEntry = (entry, fallbackLabel) => {
+      if (!entry || typeof entry !== "object") {
+        return {
+          label: fallbackLabel,
+          weapons: null,
+          members: null,
+          power: null,
+          hasData: false
+        };
+      }
+      const weapons = Number.isFinite(Number(entry.totalWeapons))
+        ? Math.max(0, Math.floor(Number(entry.totalWeapons)))
+        : countSelectedDefenseWeapons(entry.weaponCounts || {});
+      const members = Math.max(0, Math.floor(Number(entry.members) || 0));
+      const power = Math.max(0, Math.floor(Number(entry.power) || 0));
+      return {
+        label: fallbackLabel,
+        weapons,
+        members,
+        power,
+        hasData: weapons > 0 || members > 0 || power > 0
+      };
+    };
+
+    return {
+      self: mapEntry(selfEntry, "Ty"),
+      ally: mapEntry(allyEntry, "Spojenec")
+    };
   }
 
   function initEventsModal() {
@@ -4070,6 +5334,27 @@ window.Empire.UI = (() => {
     return safeValue;
   }
 
+  function getLocalGangMembersSpent() {
+    const parsed = Number(localStorage.getItem(LOCAL_GANG_MEMBERS_SPENT_KEY) || 0);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.floor(parsed));
+  }
+
+  function setLocalGangMembersSpent(value) {
+    const safeValue = Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+    localStorage.setItem(LOCAL_GANG_MEMBERS_SPENT_KEY, String(safeValue));
+    return safeValue;
+  }
+
+  function consumeGangMembers(amount) {
+    const delta = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (delta <= 0) return countPlayerControlledPopulation(cachedProfile || window.Empire.player || {});
+    const spent = getLocalGangMembersSpent();
+    const nextSpent = setLocalGangMembersSpent(spent + delta);
+    refreshProfilePopulation();
+    return nextSpent;
+  }
+
   function refreshProfilePopulation() {
     const profileSource = cachedProfile || window.Empire.player || {};
     updateProfile(profileSource);
@@ -4081,9 +5366,19 @@ window.Empire.UI = (() => {
     if (delta <= 0) {
       return refreshProfilePopulation();
     }
-    const next = setLocalGangMembersBonus(getLocalGangMembersBonus() + delta);
+    const spent = getLocalGangMembersSpent();
+    if (spent > 0) {
+      const recovered = Math.min(spent, delta);
+      setLocalGangMembersSpent(spent - recovered);
+      const leftover = delta - recovered;
+      if (leftover > 0) {
+        setLocalGangMembersBonus(getLocalGangMembersBonus() + leftover);
+      }
+    } else {
+      setLocalGangMembersBonus(getLocalGangMembersBonus() + delta);
+    }
     refreshProfilePopulation();
-    return next;
+    return countPlayerControlledPopulation(cachedProfile || window.Empire.player || {});
   }
 
   function getCurrentGangMembers() {
@@ -4104,8 +5399,9 @@ window.Empire.UI = (() => {
 
   function countPlayerControlledPopulation(profile) {
     const bonusMembers = getLocalGangMembersBonus();
+    const spentMembers = getLocalGangMembersSpent();
     const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
-    if (!districts.length) return Number(profile?.population || 0) + bonusMembers;
+    if (!districts.length) return Math.max(0, Number(profile?.population || 0) + bonusMembers - spentMembers);
 
     const weights = {
       downtown: 3600,
@@ -4115,7 +5411,7 @@ window.Empire.UI = (() => {
       park: 1300
     };
     const playerOwners = getPlayerOwnerNameSet();
-    if (!playerOwners.size) return Number(profile?.population || 0) + bonusMembers;
+    if (!playerOwners.size) return Math.max(0, Number(profile?.population || 0) + bonusMembers - spentMembers);
 
     const total = districts.reduce((sum, district) => {
       const owner = normalizeOwnerName(district?.owner);
@@ -4129,8 +5425,8 @@ window.Empire.UI = (() => {
       return sum + (weights[typeKey] || fallback);
     }, 0);
 
-    if (total > 0) return total + bonusMembers;
-    return Number(profile?.population || 0) + bonusMembers;
+    if (total > 0) return Math.max(0, total + bonusMembers - spentMembers);
+    return Math.max(0, Number(profile?.population || 0) + bonusMembers - spentMembers);
   }
 
   function formatFactionLabel(value) {
@@ -5586,6 +6882,7 @@ window.Empire.UI = (() => {
     const list = document.getElementById("weapons-modal-list");
     const title = document.getElementById("weapons-modal-title");
     if (!root || !list || !title) return;
+    const currentGangMembers = countPlayerControlledPopulation(cachedProfile || window.Empire.player || {});
     const isAttack = mode === "attack";
     const stats = isAttack ? attackWeaponStats : defenseWeaponStats;
     const counts = isAttack ? resolveWeaponCounts() : resolveDefenseCounts();
@@ -5594,11 +6891,12 @@ window.Empire.UI = (() => {
       .map((item) => {
         const key = Object.keys(counts).find((k) => k.toLowerCase() === item.name.toLowerCase());
         const value = key ? counts[key] : 0;
+        const unlocked = currentGangMembers >= item.requiredMembers;
         return `
-          <div class="weapons-modal__item">
+          <div class="weapons-modal__item ${unlocked ? "" : "is-locked"}">
             <span class="weapons-modal__name">${item.name}</span>
             <span class="weapons-modal__count">${value} ks</span>
-            <span class="weapons-modal__power">Síla ${item.power}</span>
+            <span class="weapons-modal__power">Síla ${item.power} • Min. ${item.requiredMembers} členů${unlocked ? "" : " • Nelze použít"}</span>
           </div>
         `;
       })
@@ -5739,6 +7037,43 @@ window.Empire.UI = (() => {
     localStorage.setItem("empire_weapons_detail", JSON.stringify(store || {}));
   }
 
+  function persistWeaponCounts(store) {
+    const safeStore = store && typeof store === "object" ? { ...store } : {};
+    writeLocalWeaponCounts(safeStore);
+    if (cachedProfile && typeof cachedProfile === "object") {
+      cachedProfile.weaponsDetail = { ...safeStore };
+      cachedProfile.weapons = getAttackWeaponTotal(safeStore);
+    }
+    if (cachedEconomy && typeof cachedEconomy === "object") {
+      cachedEconomy.weaponsDetail = { ...safeStore };
+      cachedEconomy.weapons = getAttackWeaponTotal(safeStore);
+      updateEconomy(cachedEconomy);
+      return;
+    }
+    syncWeaponStatCounter();
+    updateWeaponsPopover();
+    hydrateStorageModalValues();
+  }
+
+  function consumeAttackWeaponCounts(selectionCounts = {}) {
+    const current = resolveWeaponCounts();
+    const next = { ...current };
+    attackWeaponStats.forEach((item) => {
+      const delta = Math.max(0, Math.floor(Number(selectionCounts?.[item.name] || 0)));
+      if (!delta) return;
+      next[item.name] = Math.max(0, Math.floor(Number(next[item.name] || 0) - delta));
+    });
+    persistWeaponCounts(next);
+    updateWeaponsPopover();
+    syncWeaponStatCounter();
+    hydrateStorageModalValues();
+    const weaponsModal = document.getElementById("weapons-modal");
+    if (weaponsModal && !weaponsModal.classList.contains("hidden")) {
+      openWeaponsModal("attack");
+    }
+    return next;
+  }
+
   function readLocalDefenseCounts() {
     try {
       const parsed = JSON.parse(localStorage.getItem("empire_defense_detail") || "null");
@@ -5751,6 +7086,43 @@ window.Empire.UI = (() => {
 
   function writeLocalDefenseCounts(store) {
     localStorage.setItem("empire_defense_detail", JSON.stringify(store || {}));
+  }
+
+  function persistDefenseCounts(store) {
+    const safeStore = store && typeof store === "object" ? { ...store } : {};
+    writeLocalDefenseCounts(safeStore);
+    if (cachedProfile && typeof cachedProfile === "object") {
+      cachedProfile.defenseDetail = { ...safeStore };
+      cachedProfile.defense = getDefenseWeaponTotal(safeStore);
+    }
+    if (cachedEconomy && typeof cachedEconomy === "object") {
+      cachedEconomy.defenseDetail = { ...safeStore };
+      cachedEconomy.defense = getDefenseWeaponTotal(safeStore);
+      updateEconomy(cachedEconomy);
+      return;
+    }
+    syncDefenseStatCounter();
+    updateDefensePopover();
+    hydrateStorageModalValues();
+  }
+
+  function consumeDefenseWeaponCounts(selectionCounts = {}) {
+    const current = resolveDefenseCounts();
+    const next = { ...current };
+    defenseWeaponStats.forEach((item) => {
+      const delta = Math.max(0, Math.floor(Number(selectionCounts?.[item.name] || 0)));
+      if (!delta) return;
+      next[item.name] = Math.max(0, Math.floor(Number(next[item.name] || 0) - delta));
+    });
+    persistDefenseCounts(next);
+    updateDefensePopover();
+    syncDefenseStatCounter();
+    hydrateStorageModalValues();
+    const weaponsModal = document.getElementById("weapons-modal");
+    if (weaponsModal && !weaponsModal.classList.contains("hidden")) {
+      openWeaponsModal("defense");
+    }
+    return next;
   }
 
   function resolveWeaponCounts() {
@@ -5875,19 +7247,16 @@ window.Empire.UI = (() => {
     const fromProfile = cachedProfile?.defenseDetail;
     const fromEconomy = cachedEconomy?.defenseDetail;
     const fromStorage = readLocalDefenseCounts();
-    const rawSources = [fromProfile, fromEconomy, fromStorage];
+    const raw = fromProfile || fromEconomy || fromStorage || {};
     const normalized = {};
 
-    rawSources.forEach((raw) => {
-      if (!raw || typeof raw !== "object") return;
-      Object.entries(raw).forEach(([name, value]) => {
-        const safeName = String(name || "").trim();
-        if (!safeName) return;
-        const parsed = Number(value || 0);
-        const safe = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
-        if (!safe) return;
-        normalized[safeName] = Math.max(0, Math.floor(Number(normalized[safeName] || 0) + safe));
-      });
+    Object.entries(raw).forEach(([name, value]) => {
+      const safeName = String(name || "").trim();
+      if (!safeName) return;
+      const parsed = Number(value || 0);
+      const safe = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+      if (!safe) return;
+      normalized[safeName] = Math.max(0, Math.floor(Number(normalized[safeName] || 0) + safe));
     });
 
     defenseWeaponStats.forEach((item) => {
@@ -5981,6 +7350,7 @@ window.Empire.UI = (() => {
     launderDirtyCash,
     refreshProfilePopulation,
     addCraftedWeapons,
-    addCraftedDefense
+    addCraftedDefense,
+    getDistrictDefenseSnapshot
   };
 })();

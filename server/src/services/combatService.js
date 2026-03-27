@@ -1,5 +1,5 @@
 const { pool } = require("../config/db");
-const { ATTACK_COOLDOWN_MINUTES, MAX_INFLUENCE } = require("../config/constants");
+const { ATTACK_COOLDOWN_SECONDS, MAX_INFLUENCE } = require("../config/constants");
 const { ensureMoneySchema, spendPlayerMoney } = require("./moneyService");
 const { HEAT_BALANCE } = require("../config/drugs");
 const { ensureDistrictDestructionSchema } = require("./districtService");
@@ -10,6 +10,29 @@ const {
 } = require("./drugService");
 
 const DISTRICT_DESTROY_CHANCE = 0.1;
+const COMBAT_WEAPON_TIERS = Object.freeze({
+  attack: [
+    { name: "Baseballová pálka", requiredMembers: 50, power: 10 },
+    { name: "Pouliční pistole", requiredMembers: 100, power: 20 },
+    { name: "Granát", requiredMembers: 150, power: 30 },
+    { name: "Samopal", requiredMembers: 200, power: 40 },
+    { name: "Bazuka", requiredMembers: 250, power: 50 }
+  ],
+  defense: [
+    { name: "Neprůstřelná vesta", requiredMembers: 50, power: 10 },
+    { name: "Ocelové barikády", requiredMembers: 100, power: 20 },
+    { name: "Bezpečnostní kamery", requiredMembers: 150, power: 30 },
+    { name: "Automatické kulometné stanoviště", requiredMembers: 200, power: 40 },
+    { name: "Alarm", requiredMembers: 250, power: 50 }
+  ]
+});
+const DISTRICT_POPULATION_WEIGHTS = Object.freeze({
+  downtown: 3600,
+  commercial: 2600,
+  residential: 5400,
+  industrial: 1900,
+  park: 1300
+});
 
 async function attackDistrict({ playerId, districtId }) {
   await ensureMoneySchema();
@@ -37,6 +60,8 @@ async function attackDistrict({ playerId, districtId }) {
       `SELECT d.id, d.type, d.influence_level, d.owner_player_id, d.is_destroyed,
               p.influence_points AS owner_influence,
               p.alliance_id AS owner_alliance_id,
+              p.weapons AS owner_weapons,
+              p.defense AS owner_defense,
               p.heat AS owner_heat,
               p.drug_neon_dust AS owner_drug_neon_dust,
               p.drug_pulse_shot AS owner_drug_pulse_shot,
@@ -66,7 +91,7 @@ async function attackDistrict({ playerId, districtId }) {
     }
 
     const playerRes = await client.query(
-      `SELECT clean_money, dirty_money, influence_points, alliance_id, heat,
+      `SELECT clean_money, dirty_money, influence_points, alliance_id, heat, weapons, defense,
               drug_neon_dust, drug_pulse_shot, drug_velvet_smoke, drug_ghost_serum, drug_overdrive_x,
               drug_neon_dust_active_until, drug_pulse_shot_active_until, drug_velvet_smoke_active_until, drug_ghost_serum_active_until, drug_overdrive_x_active_until,
               drug_neon_dust_active_dose, drug_pulse_shot_active_dose, drug_velvet_smoke_active_dose, drug_ghost_serum_active_dose, drug_overdrive_x_active_dose
@@ -91,6 +116,24 @@ async function attackDistrict({ playerId, districtId }) {
     const defenderDrugs = district.owner_player_id
       ? getDrugRuntimeFromRow(district, { prefix: "owner_" })
       : null;
+    const attackerGangMembers = await estimateGangMembers(client, playerId);
+    const defenderGangMembers = district.owner_player_id
+      ? await estimateGangMembers(client, district.owner_player_id)
+      : 0;
+    const attackerWeaponTier = resolveCombatWeaponTier("attack", attackerGangMembers);
+    const defenderWeaponTier = district.owner_player_id
+      && Number(district.owner_defense || 0) > 0
+      ? resolveCombatWeaponTier("defense", defenderGangMembers)
+      : null;
+
+    if (Number(player.weapons || 0) <= 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient_weapons" };
+    }
+    if (!attackerWeaponTier) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient_members" };
+    }
 
     if (district.owner_player_id === playerId) {
       await client.query("ROLLBACK");
@@ -127,8 +170,10 @@ async function attackDistrict({ playerId, districtId }) {
     const attackerInfluence = player.influence_points || 0;
 
     const defensePenalty = typeDefensePenalty(district.type);
-    const attackerCombatPower = Number(attackerDrugs.modifiers.attackPowerMultiplier || 1);
-    const defenderCombatPower = Number(defenderDrugs?.modifiers?.defensePowerMultiplier || 1);
+    const attackerCombatPower = Number(attackerDrugs.modifiers.attackPowerMultiplier || 1)
+      * (1 + Number(attackerWeaponTier.power || 0) / 100);
+    const defenderCombatPower = Number(defenderDrugs?.modifiers?.defensePowerMultiplier || 1)
+      * (1 + Number(defenderWeaponTier?.power || 0) / 100);
     const combatPowerDelta = ((attackerCombatPower / Math.max(0.1, defenderCombatPower)) - 1) * 0.25;
     const baseChance = 0.5
       + (attackerInfluence - defenderInfluence) / 200
@@ -200,7 +245,7 @@ async function attackDistrict({ playerId, districtId }) {
       [playerId, districtId, district.owner_player_id, success, attackCost, influenceChange]
     );
 
-    const nextAttackAt = new Date(Date.now() + ATTACK_COOLDOWN_MINUTES * 60 * 1000);
+    const nextAttackAt = new Date(Date.now() + ATTACK_COOLDOWN_SECONDS * 1000);
     await client.query(
       `INSERT INTO cooldowns (player_id, next_attack_at)
        VALUES ($1, $2)
@@ -226,6 +271,20 @@ async function attackDistrict({ playerId, districtId }) {
   } finally {
     client.release();
   }
+}
+
+async function estimateGangMembers(client, playerId) {
+  const result = await client.query(
+    "SELECT type FROM districts WHERE owner_player_id = $1",
+    [playerId]
+  );
+  return result.rows.reduce((sum, row) => sum + (DISTRICT_POPULATION_WEIGHTS[String(row.type || "").trim().toLowerCase()] || 2200), 0);
+}
+
+function resolveCombatWeaponTier(category, gangMembers) {
+  const tiers = COMBAT_WEAPON_TIERS[category] || [];
+  const eligible = tiers.filter((tier) => Number(gangMembers || 0) >= Number(tier.requiredMembers || 0));
+  return eligible.length ? eligible[eligible.length - 1] : null;
 }
 
 function typeDefensePenalty(type) {

@@ -9,6 +9,7 @@ window.Empire.Map = (() => {
     districts: [],
     districtIndexById: new Map(),
     districtAdjacencyById: new Map(),
+    baseDistrictTypeById: new Map(),
     roads: [],
     hoverId: null,
     selectedId: null,
@@ -33,7 +34,8 @@ window.Empire.Map = (() => {
       enemyOwnerNames: new Set(),
       allowEnemyModalIntelInFog: false,
       uniqueOwnerColors: false,
-      districtBorderMode: "player"
+      districtBorderMode: "player",
+      unknownNeutralFillEnabled: false
     },
     alliancePatternCache: new Map(),
     distinctOwnerColorByName: new Map(),
@@ -51,6 +53,10 @@ window.Empire.Map = (() => {
   const DISTRICT_POLICE_ACTION_MIN_DURATION_MS = 30 * 1000;
   const DISTRICT_POLICE_ACTION_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
   const DISTRICT_ATTACK_ANIMATION_INTERVAL_MS = 120;
+  const DISTRICT_TOP_NO_DRAW_RATIO = 0.08;
+  const DOWNTOWN_VERTICAL_OFFSET_RATIO = 0.04;
+  const DOWNTOWN_WARP_RADIUS_X_RATIO = 0.42;
+  const DOWNTOWN_WARP_RADIUS_Y_RATIO = 0.38;
 
   const ownerPalette = [
     "rgba(244,114,182,0.34)",
@@ -593,6 +599,22 @@ window.Empire.Map = (() => {
 
   const ARMORY_BUILDING_NAME = "Zbrojovka";
   const ARMORY_BUILDING_STORAGE_KEY = "empire_armory_building_mechanics_v1";
+  const ARMORY_BASE_WEAPON_POWER = Object.freeze({
+    attack: Object.freeze({
+      baseballBat: 10,
+      streetPistol: 20,
+      grenade: 30,
+      smg: 40,
+      bazooka: 50
+    }),
+    defense: Object.freeze({
+      bulletproofVest: 10,
+      steelBarricades: 20,
+      securityCameras: 30,
+      autoMgNest: 40,
+      alarmSystem: 50
+    })
+  });
   const ARMORY_CONFIG = Object.freeze({
     maxLevel: 14,
     upgradePctPerLevel: 0.1,
@@ -604,7 +626,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 3,
         techCoreCost: 0,
         durationMs: 12 * 60 * 1000,
-        attackPower: 5,
+        attackPower: ARMORY_BASE_WEAPON_POWER.attack.baseballBat,
         specialEffect: "+10 % rychlost útoku",
         drawback: "Slabý damage, slabá proti obranným budovám",
         role: "Early game, rychlé farmení slabých distriktů",
@@ -617,7 +639,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 5,
         techCoreCost: 1,
         durationMs: 22 * 60 * 1000,
-        attackPower: 12,
+        attackPower: ARMORY_BASE_WEAPON_POWER.attack.streetPistol,
         specialEffect: "+5 % šance na úspěšný útok",
         drawback: "Průměrná síla",
         role: "Univerzální zbraň, early-mid game",
@@ -630,7 +652,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 6,
         techCoreCost: 3,
         durationMs: 35 * 60 * 1000,
-        attackPower: 20,
+        attackPower: ARMORY_BASE_WEAPON_POWER.attack.grenade,
         specialEffect: "+15 % damage při prvním útoku, +10 % šance snížit obranu distriktu",
         drawback: "Jednorázově orientovaný efekt, menší dlouhodobá hodnota",
         role: "Burst damage, prolomení obrany",
@@ -643,7 +665,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 10,
         techCoreCost: 4,
         durationMs: 55 * 60 * 1000,
-        attackPower: 30,
+        attackPower: ARMORY_BASE_WEAPON_POWER.attack.smg,
         specialEffect: "+20 % proti slabším hráčům",
         drawback: "Slabší proti silným hráčům",
         role: "Mid game dominance, tlak na slabší hráče",
@@ -656,7 +678,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 18,
         techCoreCost: 8,
         durationMs: 90 * 60 * 1000,
-        attackPower: 70,
+        attackPower: ARMORY_BASE_WEAPON_POWER.attack.bazooka,
         specialEffect: "+25 % šance zničit budovu při útoku, +15 % ignorování obrany",
         drawback: "Extrémně drahá",
         role: "Heavy attack / endgame push",
@@ -669,7 +691,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 3,
         techCoreCost: 1,
         durationMs: 15 * 60 * 1000,
-        defensePower: 6,
+        defensePower: ARMORY_BASE_WEAPON_POWER.defense.bulletproofVest,
         specialEffect: "-10 % damage z lehkých zbraní (pálky, pistole)",
         drawback: "Slabá proti těžkým zbraním",
         role: "Základní ochrana gangu, early game přežití",
@@ -682,7 +704,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 6,
         techCoreCost: 2,
         durationMs: 30 * 60 * 1000,
-        defensePower: 15,
+        defensePower: ARMORY_BASE_WEAPON_POWER.defense.steelBarricades,
         specialEffect: "-15 % incoming attack, -10 % rychlost útoku nepřítele",
         drawback: "Částečně ignorováno granáty a bazukou",
         role: "Obrana districtu, základní wall",
@@ -695,7 +717,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 4,
         techCoreCost: 3,
         durationMs: 35 * 60 * 1000,
-        defensePower: 8,
+        defensePower: ARMORY_BASE_WEAPON_POWER.defense.securityCameras,
         specialEffect: "+20 % šance odhalit útok, -10 % efektivita špehování nepřítele",
         drawback: "Slabý přímý defense",
         role: "Intel / counter spy, ochrana před překvapením",
@@ -708,7 +730,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 10,
         techCoreCost: 5,
         durationMs: 60 * 60 * 1000,
-        defensePower: 30,
+        defensePower: ARMORY_BASE_WEAPON_POWER.defense.autoMgNest,
         specialEffect: "+20 % damage proti útočníkovi, silné proti pálkám/pistolím/samopalům",
         drawback: "Méně efektivní proti granátům a bazuce",
         role: "Hlavní obranný damage dealer",
@@ -721,7 +743,7 @@ window.Empire.Map = (() => {
         metalPartsCost: 5,
         techCoreCost: 4,
         durationMs: 40 * 60 * 1000,
-        defensePower: 10,
+        defensePower: ARMORY_BASE_WEAPON_POWER.defense.alarmSystem,
         specialEffect: "+25 % šance aktivace obranných bonusů, +15 % defense districtu, +20 % šance policejní reakce",
         drawback: "Nechrání přímo (support)",
         role: "Support obrana, propojení s policií",
@@ -874,6 +896,7 @@ window.Empire.Map = (() => {
     generateCity();
     seedDemoDistrictGossip();
     initModal();
+    initDistrictAtmosphereLightbox();
     initBuildingDetailModal();
     bindEvents();
     resizeCanvas();
@@ -8170,9 +8193,7 @@ window.Empire.Map = (() => {
     const enrichedDistricts = window.Empire.UI?.assignDistrictMetadata
       ? window.Empire.UI.assignDistrictMetadata(city.districts)
       : city.districts;
-    state.districts = enrichedDistricts;
-    state.roads = city.roads;
-    window.Empire.districts = enrichedDistricts;
+    setDistricts(enrichedDistricts);
   }
 
   function bindEvents() {
@@ -8425,6 +8446,7 @@ window.Empire.Map = (() => {
   }
 
   function pickDistrict(x, y) {
+    if (y < resolveDistrictTopNoDrawY()) return null;
     for (let i = 0; i < state.districts.length; i += 1) {
       const district = state.districts[i];
       if (pointInPolygon([x, y], district.polygon)) {
@@ -8461,7 +8483,67 @@ window.Empire.Map = (() => {
     ctx.scale(state.scale, state.scale);
 
     drawBackground(ctx);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(
+      0,
+      resolveDistrictTopNoDrawY(),
+      state.mapSize.width,
+      Math.max(0, state.mapSize.height - resolveDistrictTopNoDrawY())
+    );
+    ctx.clip();
     drawDistricts(ctx);
+    ctx.restore();
+    drawDistrictTopCutLine(ctx);
+    ctx.restore();
+  }
+
+  function resolveDistrictTopNoDrawY() {
+    return state.mapSize.height * DISTRICT_TOP_NO_DRAW_RATIO;
+  }
+
+  function drawDistrictTopCutLine(ctx) {
+    const cutY = resolveDistrictTopNoDrawY();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, cutY);
+    ctx.lineTo(state.mapSize.width, cutY);
+    ctx.strokeStyle = resolveDistrictBorderStroke();
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const activeDistrictId = state.selectedId != null ? state.selectedId : state.hoverId;
+    const activeDistrict = activeDistrictId != null
+      ? resolveDistrictById(activeDistrictId)
+      : null;
+    const polygon = Array.isArray(activeDistrict?.polygon) ? activeDistrict.polygon : [];
+    if (polygon.length >= 3) {
+      let minX = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      polygon.forEach(([x]) => {
+        const safeX = Number(x || 0);
+        minX = Math.min(minX, safeX);
+        maxX = Math.max(maxX, safeX);
+      });
+      polygon.forEach(([, y]) => {
+        const safeY = Number(y || 0);
+        minY = Math.min(minY, safeY);
+      });
+      const isTopDistrict = Number.isFinite(minY) && minY <= cutY + 2;
+      if (isTopDistrict && Number.isFinite(minX) && Number.isFinite(maxX)) {
+        const startX = Math.max(0, minX);
+        const endX = Math.min(state.mapSize.width, maxX);
+        if (endX > startX) {
+          ctx.beginPath();
+          ctx.moveTo(startX, cutY);
+          ctx.lineTo(endX, cutY);
+          ctx.strokeStyle = state.selectedId != null ? "#facc15" : "#38bdf8";
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+      }
+    }
     ctx.restore();
   }
 
@@ -8469,14 +8551,7 @@ window.Empire.Map = (() => {
     ctx.fillStyle = "#0b1119";
     ctx.fillRect(-2000, -2000, 6000, 6000);
     if (state.mapImage && state.mapImage.complete) {
-      if (state.vision.fogPreviewMode) {
-        ctx.save();
-        ctx.filter = "grayscale(1) contrast(1.06)";
-        ctx.drawImage(state.mapImage, 0, 0, state.mapSize.width, state.mapSize.height);
-        ctx.restore();
-      } else {
-        ctx.drawImage(state.mapImage, 0, 0, state.mapSize.width, state.mapSize.height);
-      }
+      ctx.drawImage(state.mapImage, 0, 0, state.mapSize.width, state.mapSize.height);
     }
   }
 
@@ -8632,6 +8707,101 @@ window.Empire.Map = (() => {
   function normalizeMapPointForEdge(point) {
     const [x, y] = normalizePolygonPoint(point);
     return `${x.toFixed(3)},${y.toFixed(3)}`;
+  }
+
+  function clonePolygonPoints(points) {
+    return (Array.isArray(points) ? points : []).map(normalizePolygonPoint);
+  }
+
+  function resolveDistrictBasePolygon(district) {
+    const base = Array.isArray(district?.basePolygon) ? district.basePolygon : district?.polygon;
+    return clonePolygonPoints(base);
+  }
+
+  function mapPolygonToBounds(points, sourceBounds, targetBounds) {
+    const safePoints = Array.isArray(points) ? points : [];
+    const srcWidth = Number(sourceBounds?.width || 0);
+    const srcHeight = Number(sourceBounds?.height || 0);
+    const dstWidth = Number(targetBounds?.width || 0);
+    const dstHeight = Number(targetBounds?.height || 0);
+    if (srcWidth <= 0 || srcHeight <= 0 || dstWidth <= 0 || dstHeight <= 0) return safePoints;
+    const srcMinX = Number(sourceBounds.minX || 0);
+    const srcMinY = Number(sourceBounds.minY || 0);
+    const dstMinX = Number(targetBounds.minX || 0);
+    const dstMinY = Number(targetBounds.minY || 0);
+    const scaleX = dstWidth / srcWidth;
+    const scaleY = dstHeight / srcHeight;
+    return safePoints.map(([x, y]) => [
+      dstMinX + (x - srcMinX) * scaleX,
+      dstMinY + (y - srcMinY) * scaleY
+    ]);
+  }
+
+  function fitDistrictPolygonsToMap(districts) {
+    const safeDistricts = Array.isArray(districts) ? districts : [];
+    const allPoints = safeDistricts.flatMap((district) =>
+      clonePolygonPoints(Array.isArray(district?.basePolygon) ? district.basePolygon : district?.polygon)
+    );
+    if (allPoints.length < 3) return safeDistricts;
+
+    const sourceBounds = {
+      minX: 0,
+      minY: 0,
+      width: state.mapSize.width,
+      height: state.mapSize.height
+    };
+    if (sourceBounds.width <= 0 || sourceBounds.height <= 0) return safeDistricts;
+
+    const topCutY = resolveDistrictTopNoDrawY();
+    const targetBounds = {
+      minX: 0,
+      minY: topCutY,
+      width: state.mapSize.width,
+      height: Math.max(1, state.mapSize.height - topCutY)
+    };
+    const mappedDistricts = safeDistricts.map((district) => {
+      const basePolygon = clonePolygonPoints(
+        Array.isArray(district?.basePolygon) ? district.basePolygon : district?.polygon
+      );
+      return {
+        ...district,
+        basePolygon,
+        polygon: mapPolygonToBounds(basePolygon, sourceBounds, targetBounds)
+      };
+    });
+
+    const downtownDistricts = mappedDistricts.filter((district) => district?.type === "downtown");
+    if (!downtownDistricts.length) return mappedDistricts;
+
+    const downtownCenters = downtownDistricts
+      .map((district) => {
+        const poly = Array.isArray(district?.polygon) ? district.polygon : [];
+        if (poly.length < 3) return null;
+        return polygonCentroid(poly);
+      })
+      .filter(Boolean);
+    if (!downtownCenters.length) return mappedDistricts;
+
+    const downtownCenterX = downtownCenters.reduce((sum, [x]) => sum + Number(x || 0), 0) / downtownCenters.length;
+    const downtownCenterY = downtownCenters.reduce((sum, [, y]) => sum + Number(y || 0), 0) / downtownCenters.length;
+    const offsetYMax = state.mapSize.height * DOWNTOWN_VERTICAL_OFFSET_RATIO;
+    const radiusX = Math.max(1, state.mapSize.width * DOWNTOWN_WARP_RADIUS_X_RATIO);
+    const radiusY = Math.max(1, state.mapSize.height * DOWNTOWN_WARP_RADIUS_Y_RATIO);
+
+    return mappedDistricts.map((district) => {
+      const poly = Array.isArray(district?.polygon) ? district.polygon : [];
+      if (poly.length < 3) return district;
+      const warpedPolygon = poly.map(([x, y]) => {
+        const nx = (Number(x || 0) - downtownCenterX) / radiusX;
+        const ny = (Number(y || 0) - downtownCenterY) / radiusY;
+        const influence = Math.max(0, 1 - (nx * nx + ny * ny));
+        return [Number(x || 0), Number(y || 0) - influence * offsetYMax];
+      });
+      return {
+        ...district,
+        polygon: warpedPolygon
+      };
+    });
   }
 
   function normalizeMapEdgeKey(from, to) {
@@ -9867,42 +10037,29 @@ window.Empire.Map = (() => {
       if (ownerDistinctFill) return ownerDistinctFill;
     }
 
-    if (isDistrictOwnedByPlayer(district)) return resolvePlayerOwnedFill();
-    if (isDistrictOwnedByAlly(district)) return allyFill(district.owner);
-    if (isDistrictOwnedByEnemy(district)) return enemyFill(district.owner);
-
-    if (state.vision.fogPreviewMode) {
+      if (isDistrictOwnedByPlayer(district)) return resolvePlayerOwnedFill();
+      if (isDistrictOwnedByAlly(district)) return allyFill(district.owner);
+      if (isDistrictOwnedByEnemy(district)) return enemyFill(district.owner);
+      if (district.owner) return ownerFill(district.owner);
+      if (state.vision.fogPreviewMode) {
+        if (district.type === "downtown") return "rgba(248,113,113,0.28)";
+        if (state.vision.unknownNeutralFillEnabled) return "rgba(148,163,184,0.22)";
+        return "rgba(0,0,0,0)";
+      }
       switch (district.type) {
         case "downtown":
-          return "rgba(248,113,113,0.4)";
+          return "rgba(248,113,113,0.28)";
         case "industrial":
-          return "rgba(165,172,180,0.28)";
+          return "rgba(148,163,184,0.28)";
         case "commercial":
-          return "rgba(152,160,168,0.28)";
+          return "rgba(56,189,248,0.28)";
         case "park":
-          return "rgba(135,145,154,0.26)";
+          return "rgba(34,197,94,0.22)";
         case "residential":
         default:
-          return "rgba(122,130,140,0.26)";
+          return "rgba(253,186,116,0.24)";
       }
     }
-
-    if (district.owner) return ownerFill(district.owner);
-
-    switch (district.type) {
-      case "downtown":
-        return "rgba(248,113,113,0.28)";
-      case "industrial":
-        return "rgba(148,163,184,0.28)";
-      case "commercial":
-        return "rgba(56,189,248,0.28)";
-      case "park":
-        return "rgba(34,197,94,0.22)";
-      case "residential":
-      default:
-        return "rgba(253,186,116,0.24)";
-    }
-  }
 
   function ownerFill(owner) {
     if (state.vision.uniqueOwnerColors) {
@@ -10484,6 +10641,7 @@ window.Empire.Map = (() => {
     state.vision.allowEnemyModalIntelInFog = Boolean(context.allowEnemyModalIntelInFog);
     state.vision.uniqueOwnerColors = Boolean(context.uniqueOwnerColors);
     state.vision.districtBorderMode = normalizeDistrictBorderMode(context.districtBorderMode);
+    state.vision.unknownNeutralFillEnabled = Boolean(context.unknownNeutralFillEnabled);
     state.vision.alliedOwnerNames = new Set(
       allied
         .map((value) => normalizeName(value))
@@ -10498,32 +10656,75 @@ window.Empire.Map = (() => {
     render();
   }
 
+  function buildDistrictTypeOverrides(districts) {
+    const safeDistricts = Array.isArray(districts) ? districts : [];
+    const incomingTypeById = new Map(
+      safeDistricts.map((district) => [
+        normalizeDistrictId(district?.id),
+        String(district?.type || "residential")
+      ])
+    );
+    const shouldRefreshBaseTypes =
+      !state.baseDistrictTypeById.size
+      || state.baseDistrictTypeById.size !== incomingTypeById.size
+      || Array.from(incomingTypeById.keys()).some((districtId) => !state.baseDistrictTypeById.has(districtId));
+    if (shouldRefreshBaseTypes) {
+      state.baseDistrictTypeById = new Map(
+        incomingTypeById
+      );
+    }
+    const byId = new Map(state.baseDistrictTypeById);
+    const swapTypeByDistrictIds = (a, b) => {
+      const firstId = normalizeDistrictId(a);
+      const secondId = normalizeDistrictId(b);
+      if (!byId.has(firstId) || !byId.has(secondId)) return;
+      const firstType = byId.get(firstId);
+      const secondType = byId.get(secondId);
+      byId.set(firstId, secondType);
+      byId.set(secondId, firstType);
+    };
+    swapTypeByDistrictIds(114, 68);
+    swapTypeByDistrictIds(95, 20);
+    return byId;
+  }
+
   function setDistricts(districts) {
     if (!Array.isArray(districts) || districts.length < 1) return;
-    let normalized = districts.map((district, index) => ({
-      id: district.id,
-      name: district.name || `${district.type} #${index + 1}`,
-      type: district.type || "residential",
-      owner: district.owner || null,
-      ownerPlayerId: district.ownerPlayerId || district.owner_player_id || null,
-      ownerNick: district.ownerNick || district.owner_nick || district.ownerUsername || district.owner_username || null,
-      ownerAllianceName: district.ownerAllianceName || district.owner_alliance_name || null,
-      ownerAvatar: district.ownerAvatar || district.owner_avatar || null,
-      influence: Number(district.influence || 0),
-      income: Number(district.income || 0),
-      isDestroyed: Boolean(district.isDestroyed || district.is_destroyed || district.destroyed),
-      destroyedAt: district.destroyedAt || district.destroyed_at || null,
-      polygon: district.polygon,
-      buildings: Array.isArray(district.buildings) ? district.buildings : [],
-      buildingNameOverrides: Array.isArray(district.buildingNameOverrides) ? district.buildingNameOverrides : [],
-      buildingTier: district.buildingTier || null,
-      buildingSetKey: district.buildingSetKey || null,
-      buildingSetTitle: district.buildingSetTitle || null
-    }));
+    const districtTypeOverrides = buildDistrictTypeOverrides(districts);
+    let normalized = districts.map((district, index) => {
+      const districtId = normalizeDistrictId(district?.id);
+      const districtType = districtTypeOverrides.get(districtId) || district.type || "residential";
+      const basePolygon = resolveDistrictBasePolygon(district);
+      return {
+        id: district.id,
+        name: district.name || `${districtType} #${index + 1}`,
+        type: districtType,
+        owner: district.owner || null,
+        ownerPlayerId: district.ownerPlayerId || district.owner_player_id || null,
+        ownerNick: district.ownerNick || district.owner_nick || district.ownerUsername || district.owner_username || null,
+        ownerAllianceName: district.ownerAllianceName || district.owner_alliance_name || null,
+        ownerAvatar: district.ownerAvatar || district.owner_avatar || null,
+        ownerStructure: district.ownerStructure || district.owner_structure || district.faction || null,
+        ownerFaction: district.ownerFaction || district.owner_faction || district.ownerStructure || district.faction || null,
+        ownerAtmosphere: district.ownerAtmosphere || district.owner_atmosphere || null,
+        influence: Number(district.influence || 0),
+        income: Number(district.income || 0),
+        isDestroyed: Boolean(district.isDestroyed || district.is_destroyed || district.destroyed),
+        destroyedAt: district.destroyedAt || district.destroyed_at || null,
+        basePolygon,
+        polygon: basePolygon,
+        buildings: Array.isArray(district.buildings) ? district.buildings : [],
+        buildingNameOverrides: Array.isArray(district.buildingNameOverrides) ? district.buildingNameOverrides : [],
+        buildingTier: district.buildingTier || null,
+        buildingSetKey: district.buildingSetKey || null,
+        buildingSetTitle: district.buildingSetTitle || null
+      };
+    });
 
     if (window.Empire.UI?.assignDistrictMetadata) {
       normalized = window.Empire.UI.assignDistrictMetadata(normalized);
     }
+    normalized = fitDistrictPolygonsToMap(normalized);
 
     const hasPolygons = normalized.every((d) => Array.isArray(d.polygon));
     if (!hasPolygons) return;
@@ -11703,18 +11904,14 @@ window.Empire.Map = (() => {
       && state.vision.allowEnemyModalIntelInFog
       && isEnemyDistrict;
     const revealDistrictDetails = !state.vision.fogPreviewMode || defendableByPlayer || revealEnemyIntelInFog;
-    const showEnemyOwnerProfile = isEnemyDistrict
-      && (!state.vision.fogPreviewMode || revealEnemyIntelInFog);
-
     applyDistrictModalAccent(district);
     updateModalActionsForDistrict(district);
 
     if (isDistrictDestroyed(district)) {
       document.getElementById("modal-name").textContent = district.name || "Distrikt";
-      document.getElementById("modal-type").textContent = `${district.type || "-"} • Zničený`;
+      document.getElementById("modal-name-income").textContent = "0 / nepoužitelný";
       document.getElementById("modal-owner").textContent = "Nikdo";
-      document.getElementById("modal-income").textContent = "0 / nepoužitelný";
-      document.getElementById("modal-influence").textContent = 0;
+      updateDistrictDefenseSummary(null);
       updateDistrictBuildings(null);
       updateDistrictGossip(district);
       updateDistrictOwnerProfile(district, false);
@@ -11724,25 +11921,32 @@ window.Empire.Map = (() => {
 
     if (revealDistrictDetails) {
       document.getElementById("modal-name").textContent = district.name || "Distrikt";
-      document.getElementById("modal-type").textContent = district.type || "-";
+      document.getElementById("modal-name-income").textContent = isEnemyDistrict ? "Skryto" : `$${district.income || 0}/hod`;
       document.getElementById("modal-owner").textContent = district.owner || "Neobsazeno";
-      document.getElementById("modal-income").textContent = isEnemyDistrict ? "Skryto" : `$${district.income || 0}/hod`;
-      document.getElementById("modal-influence").textContent = isEnemyDistrict ? "Skryto" : (district.influence || 0);
       updateDistrictBuildings(defendableByPlayer ? district : null);
       updateDistrictGossip(district);
     } else {
       document.getElementById("modal-name").textContent = isDowntown
         ? `Downtown sektor #${districtNumber}`
         : `District č. ${districtNumber}`;
-      document.getElementById("modal-type").textContent = isDowntown ? "Downtown" : "Skryto";
+      document.getElementById("modal-name-income").textContent = "Skryto";
       document.getElementById("modal-owner").textContent = "Skryto";
-      document.getElementById("modal-income").textContent = "Skryto";
-      document.getElementById("modal-influence").textContent = "Skryto";
+      updateDistrictDefenseSummary(null);
       updateDistrictBuildings(null);
       updateDistrictGossip(district);
     }
 
-    updateDistrictOwnerProfile(district, showEnemyOwnerProfile);
+    if (revealDistrictDetails) {
+      updateDistrictDefenseSummary(district, {
+        knownSelf: defendableByPlayer,
+        knownAlly: defendableByPlayer
+      });
+    }
+
+    updateDistrictOwnerProfile(district, {
+      visible: revealDistrictDetails,
+      isEnemy: isEnemyDistrict
+    });
     state.modal.root.classList.remove("hidden");
   }
 
@@ -11765,6 +11969,41 @@ window.Empire.Map = (() => {
     return districtOwnerAvatarPool[avatarIndex];
   }
 
+  function resolveDistrictAtmosphereImage(district, isEnemy = false) {
+    if (isEnemy) return "";
+    const type = String(district?.type || "").trim().toLowerCase();
+    const imageSets = {
+      park: parkImages,
+      downtown: downtownImages,
+      commercial: commercialImages,
+      residential: residentialImages,
+      industrial: industrialImages
+    };
+    const set = imageSets[type];
+    if (!Array.isArray(set) || !set.length) return "";
+    const overrideKey = `${type}:${district?.id}`;
+    const overrideImages = districtImageOverrides[overrideKey];
+    if (Array.isArray(overrideImages) && overrideImages.length) {
+      return overrideImages[0] || "";
+    }
+    const seedSource = typeof district?.id === "number"
+      ? district.id
+      : String(district?.id || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return set[seedSource % set.length] || "";
+  }
+
+  function resolveDistrictFactionLabel(district, isEnemy = false) {
+    if (isEnemy) return "Neznámá";
+    const explicit = String(
+      district?.ownerStructure ||
+      district?.ownerFaction ||
+      district?.owner_structure ||
+      district?.owner_faction ||
+      ""
+    ).trim();
+    return explicit || "Neznámá";
+  }
+
   function deriveAllianceNameFromOwnerLabel(ownerLabel) {
     const raw = String(ownerLabel || "").trim();
     if (!raw) return "";
@@ -11775,16 +12014,33 @@ window.Empire.Map = (() => {
     return "";
   }
 
-  function updateDistrictOwnerProfile(district, visible) {
+  function updateDistrictOwnerProfile(district, options = {}) {
+    const visible = typeof options === "object" ? Boolean(options.visible) : Boolean(options);
+    const isEnemy = typeof options === "object" ? Boolean(options.isEnemy) : false;
     const content = state.modal?.root?.querySelector(".modal__content");
     const ownerValue = document.getElementById("modal-owner");
     const allianceRow = document.getElementById("modal-owner-alliance-row");
     const allianceValue = document.getElementById("modal-owner-alliance");
-    if (!content || !ownerValue || !allianceRow || !allianceValue) return;
+    const factionRow = document.getElementById("modal-owner-faction-row");
+    const factionValue = document.getElementById("modal-owner-faction");
+    const atmosphereRow = document.getElementById("modal-owner-atmosphere-row");
+    const atmosphereValue = document.getElementById("modal-owner-atmosphere");
+    const atmosphereImage = document.getElementById("modal-owner-atmosphere-image");
+    if (!content || !ownerValue || !allianceRow || !allianceValue || !factionRow || !factionValue || !atmosphereRow || !atmosphereValue || !atmosphereImage) return;
 
     if (!visible) {
       allianceRow.classList.add("hidden");
+      factionRow.classList.add("hidden");
+      atmosphereRow.classList.add("hidden");
       allianceValue.textContent = "Bez aliance";
+      factionValue.textContent = "Neznámá";
+      atmosphereValue.textContent = "Neznámá";
+      atmosphereImage.removeAttribute("src");
+      atmosphereImage.removeAttribute("data-district-name");
+      atmosphereImage.removeAttribute("data-district-type");
+      atmosphereImage.removeAttribute("data-district-owner");
+      atmosphereImage.classList.add("hidden");
+      atmosphereValue.classList.remove("hidden");
       content.classList.remove("district-owner-bg-active");
       content.style.setProperty("--district-owner-avatar-url", "none");
       content.style.setProperty("--district-owner-avatar-opacity", "0");
@@ -11798,11 +12054,32 @@ window.Empire.Map = (() => {
     const ownerNick = explicitOwnerNick || fallbackOwnerNick;
     const ownerAlliance = explicitOwnerAlliance || fallbackAllianceName || "Bez aliance";
     const avatarSrc = resolveDistrictOwnerAvatar(district);
+    const factionLabel = resolveDistrictFactionLabel(district, isEnemy);
+    const atmosphereSrc = resolveDistrictAtmosphereImage(district, isEnemy);
 
     ownerValue.textContent = ownerNick;
     allianceValue.textContent = ownerAlliance;
+    factionValue.textContent = factionLabel;
+    atmosphereValue.textContent = atmosphereSrc ? "" : "Neznámá";
     allianceRow.classList.remove("hidden");
+    factionRow.classList.remove("hidden");
+    atmosphereRow.classList.remove("hidden");
     content.classList.add("district-owner-bg-active");
+    if (atmosphereSrc) {
+      atmosphereImage.src = atmosphereSrc;
+      atmosphereImage.dataset.districtName = district?.name || `Distrikt ${resolveDistrictNumberLabel(district)}`;
+      atmosphereImage.dataset.districtType = String(district?.type || "-");
+      atmosphereImage.dataset.districtOwner = ownerNick;
+      atmosphereImage.classList.remove("hidden");
+      atmosphereValue.classList.add("hidden");
+    } else {
+      atmosphereImage.removeAttribute("src");
+      atmosphereImage.removeAttribute("data-district-name");
+      atmosphereImage.removeAttribute("data-district-type");
+      atmosphereImage.removeAttribute("data-district-owner");
+      atmosphereImage.classList.add("hidden");
+      atmosphereValue.classList.remove("hidden");
+    }
 
     if (!avatarSrc) {
       content.style.setProperty("--district-owner-avatar-url", "none");
@@ -11815,6 +12092,41 @@ window.Empire.Map = (() => {
       .replace(/"/g, "\\\"");
     content.style.setProperty("--district-owner-avatar-url", `url("${safeAvatar}")`);
     content.style.setProperty("--district-owner-avatar-opacity", "0.98");
+  }
+
+  function formatDistrictDefenseSummary(entry) {
+    if (!entry || !entry.hasData) return "";
+    const weapons = Math.max(0, Math.floor(Number(entry.weapons) || 0));
+    const members = Math.max(0, Math.floor(Number(entry.members) || 0));
+    const power = Math.max(0, Math.floor(Number(entry.power) || 0));
+    return `Zbraně: ${weapons} • Lidé: ${members} • Síla: ${power}`;
+  }
+
+  function updateDistrictDefenseSummary(district, options = {}) {
+    const selfValue = document.getElementById("modal-defense-self");
+    const allyValue = document.getElementById("modal-defense-ally");
+    const selfRow = selfValue?.closest(".modal__row");
+    const allyRow = allyValue?.closest(".modal__row");
+    if (!selfValue || !allyValue) return;
+    if (!district?.id) {
+      selfValue.textContent = "";
+      allyValue.textContent = "";
+      if (selfRow) selfRow.classList.add("hidden");
+      if (allyRow) allyRow.classList.add("hidden");
+      return;
+    }
+    const snapshot = window.Empire.UI?.getDistrictDefenseSnapshot?.(district.id) || null;
+    const selfEntry = snapshot?.self || { hasData: false };
+    const allyEntry = snapshot?.ally || { hasData: false };
+    const knownSelf = Boolean(options.knownSelf);
+    const knownAlly = Boolean(options.knownAlly);
+    const showSelf = Boolean(selfEntry.hasData) || knownSelf;
+    const showAlly = Boolean(allyEntry.hasData) || knownAlly;
+
+    selfValue.textContent = selfEntry.hasData ? formatDistrictDefenseSummary(selfEntry) : "Bez obrany";
+    allyValue.textContent = allyEntry.hasData ? formatDistrictDefenseSummary(allyEntry) : "Bez obrany";
+    if (selfRow) selfRow.classList.toggle("hidden", !showSelf);
+    if (allyRow) allyRow.classList.toggle("hidden", !showAlly);
   }
 
   function updateModalActionsForDistrict(district) {
@@ -11859,6 +12171,15 @@ window.Empire.Map = (() => {
   function hideModal() {
     if (!state.modal?.root) return;
     state.modal.root.classList.add("hidden");
+  }
+
+  function refreshSelectedDistrictModal() {
+    if (!state.modal?.root || state.modal.root.classList.contains("hidden")) return;
+    const selected = window.Empire.selectedDistrict?.id != null
+      ? state.districts.find((district) => String(district?.id) === String(window.Empire.selectedDistrict.id)) || null
+      : null;
+    if (!selected) return;
+    showModal(selected);
   }
 
   function updateDistrictBuildings(district) {
@@ -11908,6 +12229,50 @@ window.Empire.Map = (() => {
       });
     });
     root.classList.remove("hidden");
+  }
+
+  function initDistrictAtmosphereLightbox() {
+    const trigger = document.getElementById("modal-owner-atmosphere-image");
+    const root = document.getElementById("district-atmosphere-lightbox");
+    const backdrop = document.getElementById("district-atmosphere-lightbox-backdrop");
+    const closeBtn = document.getElementById("district-atmosphere-lightbox-close");
+    const image = document.getElementById("district-atmosphere-lightbox-image");
+    const title = document.getElementById("district-atmosphere-lightbox-title");
+    const meta = document.getElementById("district-atmosphere-lightbox-meta");
+    if (!trigger || !root || !image || !title || !meta) return;
+
+    const open = () => {
+      const src = String(trigger.getAttribute("src") || "").trim();
+      if (!src) return;
+      image.src = src;
+      title.textContent = trigger.dataset.districtName || "Atmosféra distriktu";
+      const parts = [
+        trigger.dataset.districtType ? `Typ: ${trigger.dataset.districtType}` : "",
+        trigger.dataset.districtOwner ? `Vlastník: ${trigger.dataset.districtOwner}` : ""
+      ].filter(Boolean);
+      meta.textContent = parts.join(" • ");
+      root.classList.remove("hidden");
+    };
+
+    const close = () => {
+      root.classList.add("hidden");
+      image.removeAttribute("src");
+    };
+
+    trigger.addEventListener("click", open);
+    trigger.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      open();
+    });
+    if (backdrop) backdrop.addEventListener("click", close);
+    if (closeBtn) closeBtn.addEventListener("click", close);
+    root.addEventListener("click", (event) => {
+      if (event.target === root) close();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) close();
+    });
   }
 
   function formatDistrictGossipTimestamp(timestamp) {
@@ -12037,7 +12402,7 @@ window.Empire.Map = (() => {
 
   function loadMapImage() {
     const img = new Image();
-    img.src = "../img/mapa.png";
+    img.src = "../img/mapa3.png";
     img.onload = () => render();
     state.mapImage = img;
   }
@@ -12132,6 +12497,7 @@ window.Empire.Map = (() => {
     init,
     render,
     setDistricts,
+    refreshSelectedDistrictModal,
     applyUpdate,
     setVisionContext,
     showBuildingDetail,
