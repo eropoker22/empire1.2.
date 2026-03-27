@@ -7,11 +7,28 @@ CREATE TABLE IF NOT EXISTS players (
   password_hash TEXT NOT NULL,
   gang_name TEXT NOT NULL,
   gang_structure TEXT NULL,
+  gang_color TEXT NULL,
   money BIGINT NOT NULL DEFAULT 0,
   clean_money BIGINT NOT NULL DEFAULT 0,
   dirty_money BIGINT NOT NULL DEFAULT 0,
   influence_points INT NOT NULL DEFAULT 0,
+  heat INT NOT NULL DEFAULT 0,
   drugs INT NOT NULL DEFAULT 0,
+  drug_neon_dust INT NOT NULL DEFAULT 0,
+  drug_pulse_shot INT NOT NULL DEFAULT 0,
+  drug_velvet_smoke INT NOT NULL DEFAULT 0,
+  drug_ghost_serum INT NOT NULL DEFAULT 0,
+  drug_overdrive_x INT NOT NULL DEFAULT 0,
+  drug_neon_dust_active_until TIMESTAMP NULL,
+  drug_pulse_shot_active_until TIMESTAMP NULL,
+  drug_velvet_smoke_active_until TIMESTAMP NULL,
+  drug_ghost_serum_active_until TIMESTAMP NULL,
+  drug_overdrive_x_active_until TIMESTAMP NULL,
+  drug_neon_dust_active_dose INT NOT NULL DEFAULT 0,
+  drug_pulse_shot_active_dose INT NOT NULL DEFAULT 0,
+  drug_velvet_smoke_active_dose INT NOT NULL DEFAULT 0,
+  drug_ghost_serum_active_dose INT NOT NULL DEFAULT 0,
+  drug_overdrive_x_active_dose INT NOT NULL DEFAULT 0,
   weapons INT NOT NULL DEFAULT 0,
   defense INT NOT NULL DEFAULT 0,
   materials INT NOT NULL DEFAULT 0,
@@ -44,10 +61,15 @@ CREATE TABLE IF NOT EXISTS districts (
   base_income INT NOT NULL DEFAULT 10,
   owner_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
   influence_level INT NOT NULL DEFAULT 0,
+  is_destroyed BOOLEAN NOT NULL DEFAULT FALSE,
+  destroyed_at TIMESTAMP NULL,
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_districts_owner ON districts(owner_player_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_players_gang_color_unique
+  ON players (gang_color)
+  WHERE gang_color IS NOT NULL;
 
 -- Combat logs
 CREATE TABLE IF NOT EXISTS combat_logs (

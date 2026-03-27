@@ -3,44 +3,49 @@ window.Empire = window.Empire || {};
 window.Empire.UI = (() => {
   const weaponCatalog = [
     "Baseballová pálka",
-    "Pistole",
-    "Samopal (SMG)",
-    "Útočná puška",
-    "Explozivní nálož"
+    "Pouliční pistole",
+    "Granát",
+    "Samopal",
+    "Bazuka"
   ];
 
   const attackWeaponStats = [
-    { name: "Baseballová pálka", power: 6 },
-    { name: "Pistole", power: 12 },
-    { name: "Samopal (SMG)", power: 18 },
-    { name: "Útočná puška", power: 26 },
-    { name: "Explozivní nálož", power: 40 }
+    { name: "Baseballová pálka", power: 5 },
+    { name: "Pouliční pistole", power: 12 },
+    { name: "Granát", power: 20 },
+    { name: "Samopal", power: 30 },
+    { name: "Bazuka", power: 70 }
   ];
+
+  const LEGACY_ATTACK_WEAPON_ALIASES = Object.freeze({
+    Pistole: "Pouliční pistole",
+    "Samopal (SMG)": "Samopal",
+    "Útočná puška": "Samopal",
+    "Explozivní nálož": "Granát"
+  });
 
   const defenseCatalog = [
     "Neprůstřelná vesta",
     "Ocelové barikády",
     "Bezpečnostní kamery",
     "Automatické kulometné stanoviště",
-    "EMP obranný modul",
-    "Kulometná věž",
-    "Raketová věž"
+    "Alarm"
   ];
 
   const defenseWeaponStats = [
-    { name: "Neprůstřelná vesta", power: 8 },
-    { name: "Ocelové barikády", power: 14 },
-    { name: "Bezpečnostní kamery", power: 6 },
-    { name: "Automatické kulometné stanoviště", power: 22 },
-    { name: "Raketová věž", power: 30 }
+    { name: "Neprůstřelná vesta", power: 6 },
+    { name: "Ocelové barikády", power: 15 },
+    { name: "Bezpečnostní kamery", power: 8 },
+    { name: "Automatické kulometné stanoviště", power: 30 },
+    { name: "Alarm", power: 10 }
   ];
 
   const storageDrugTypes = [
-    { name: "Marihuana", ratio: 0.28 },
-    { name: "Kokain", ratio: 0.22 },
-    { name: "Pervitin", ratio: 0.2 },
-    { name: "Extáze", ratio: 0.17 },
-    { name: "Heroin", ratio: 0.13 }
+    { key: "neonDust", resourceKey: "neon_dust", name: "Neon Dust" },
+    { key: "pulseShot", resourceKey: "pulse_shot", name: "Pulse Shot" },
+    { key: "velvetSmoke", resourceKey: "velvet_smoke", name: "Velvet Smoke" },
+    { key: "ghostSerum", resourceKey: "ghost_serum", name: "Ghost Serum" },
+    { key: "overdriveX", resourceKey: "overdrive_x", name: "Overdrive X" }
   ];
 
   const SETTINGS_STORAGE_KEY = "empire_settings";
@@ -1013,17 +1018,36 @@ window.Empire.UI = (() => {
   let cachedEconomy = null;
   let cachedMarket = null;
   let marketRefreshHandler = null;
+  let marketBuildingShortcutRefreshHandler = null;
   let allianceRefreshHandler = null;
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
   const LOCAL_GANG_MEMBERS_KEY = "empire_local_gang_members";
+  const MAP_BORDER_MODE_STORAGE_KEY = "empire_map_border_mode";
+  const MAP_BORDER_MODE_PLAYER = "player";
+  const MAP_BORDER_MODE_WHITE = "white";
+  const MAP_BORDER_MODE_BLACK = "black";
   let scenarioVisionEnabled = false;
+  let scenarioUniqueOwnerColors = false;
+  let selectedMapBorderMode = MAP_BORDER_MODE_PLAYER;
   let liveAllianceOwnerNames = new Set();
   let scenarioAllianceOwnerNames = new Set();
   let scenarioEnemyOwnerNames = new Set();
+  let guestModeActive = false;
   const EMPTY_OWNER_NAMES = new Set();
+  const WANTED_HEAT_MAX = 1000;
+  const WANTED_HEAT_TIERS = [
+    { stars: 1, min: 0, max: 24 },
+    { stars: 2, min: 25, max: 74 },
+    { stars: 3, min: 75, max: 149 },
+    { stars: 4, min: 150, max: 299 },
+    { stars: 5, min: 300, max: 499 },
+    { stars: 6, min: 500, max: 999 },
+    { stars: 7, min: 1000, max: Number.POSITIVE_INFINITY }
+  ];
 
   function init() {
+    selectedMapBorderMode = resolveStoredMapBorderMode();
     bindActions();
     initMobileScenarioCardPlacement();
     initMobileLeaderboardCardPlacement();
@@ -1130,6 +1154,9 @@ window.Empire.UI = (() => {
     initBuildingsModal();
     initAllianceModal();
     initMarketModal();
+    initBoostModal();
+    initMapBorderModeControls();
+    initMarketBuildingShortcuts();
     initLeaderboardModal();
     initStorageModal();
     initWeaponsModal();
@@ -1164,6 +1191,14 @@ window.Empire.UI = (() => {
       if (result?.message) {
         pushEvent(result.message);
       }
+      if (result?.destroyed) {
+        pushEvent("Distrikt byl po útoku zničen a je nyní nepoužitelný.");
+      }
+      window.Empire.Map?.markDistrictUnderAttack?.(targetDistrictId, {
+        attackerDistrictId: result?.sourceDistrictId ?? result?.attackerDistrictId ?? null,
+        durationMs: 8 * 60 * 1000,
+        source: "player-attack"
+      });
       recordVerifiedIntelEvent({
         type: "attack_success",
         districtId: targetDistrictId,
@@ -1270,6 +1305,221 @@ window.Empire.UI = (() => {
     }
   }
 
+  function initBoostModal() {
+    const openBtn = document.getElementById("map-boost-btn");
+    const root = document.getElementById("boost-modal");
+    const backdrop = document.getElementById("boost-modal-backdrop");
+    const closeBtn = document.getElementById("boost-modal-close");
+    const content = document.getElementById("boost-modal-content");
+    const status = document.getElementById("boost-modal-status");
+    if (!openBtn || !root || !content) return;
+
+    const pharmacyBoostDefinitions = [
+      {
+        key: "recon",
+        label: "Recon Boost",
+        cost: 2,
+        className: "btn btn--primary",
+        description: "+50 % spy speed, +30 % info quality, 2h"
+      },
+      {
+        key: "action",
+        label: "Action Boost",
+        cost: 3,
+        className: "btn btn--primary",
+        description: "+25 % attack speed, +25 % steal speed, 2h"
+      },
+      {
+        key: "neuro",
+        label: "Neuro Boost",
+        cost: 4,
+        className: "btn btn--warn",
+        description: "+20 % aktivní akce, 2h, +3 heat"
+      }
+    ];
+
+    const factoryBoostDefinitions = [
+      {
+        key: "assault",
+        label: "Assault Protocol",
+        cost: 2,
+        className: "btn btn--primary",
+        description: "+30 % attack síla, 2h, +3 heat"
+      },
+      {
+        key: "rapid",
+        label: "Rapid Strike",
+        cost: 3,
+        className: "btn btn--warn",
+        description: "+40 % rychlost útoku, +25 % rychlost vykrádání, 1.5h, +4 heat"
+      },
+      {
+        key: "breach",
+        label: "Breach Mode",
+        cost: 4,
+        className: "btn btn--danger",
+        description: "+20 % šance zničit budovu, +15 % ignorování obrany, 2h, +5 heat"
+      }
+    ];
+
+    const renderPharmacyStatus = (snapshot, stimPack) => {
+      const effective = snapshot?.effective || {};
+      const labels = { recon: "Recon", action: "Action", neuro: "Neuro" };
+      const effectParts = Array.isArray(snapshot?.activeEffects)
+        ? snapshot.activeEffects
+          .slice(0, 4)
+          .map((entry) => `${labels[entry.type] || entry.type}: ${formatDurationLabel(entry.remainingMs)}`)
+        : [];
+      const effectsLabel = effectParts.length ? effectParts.join(", ") : "žádné";
+      return (
+        `Slim Pack: ${stimPack} ks • Aktivní boosty: ${effectsLabel}. `
+        + `Spy +${Math.max(0, Math.round(Number(effective.spySpeedPct || 0)))}%, `
+        + `Info +${Math.max(0, Math.round(Number(effective.infoQualityPct || 0)))}%, `
+        + `Attack +${Math.max(0, Math.round(Number(effective.attackSpeedPct || 0)))}%, `
+        + `Steal +${Math.max(0, Math.round(Number(effective.stealSpeedPct || 0)))}%`
+      );
+    };
+
+    const renderFactoryStatus = (snapshot, modules) => {
+      const effective = snapshot?.effective || {};
+      const labels = { assault: "Assault", rapid: "Rapid", breach: "Breach" };
+      const effectParts = Array.isArray(snapshot?.activeEffects)
+        ? snapshot.activeEffects
+          .slice(0, 4)
+          .map((entry) => `${labels[entry.type] || entry.type}: ${formatDurationLabel(entry.remainingMs)}`)
+        : [];
+      const effectsLabel = effectParts.length ? effectParts.join(", ") : "žádné";
+      return (
+        `Továrna • Combat Module: ${modules} ks • Aktivní: ${effectsLabel}. `
+        + `ATK síla +${Math.max(0, Math.round(Number(effective.attackPowerPct || 0)))}%, `
+        + `ATK rychlost +${Math.max(0, Math.round(Number(effective.attackSpeedPct || 0)))}%, `
+        + `Raid rychlost +${Math.max(0, Math.round(Number(effective.raidSpeedPct || 0)))}%, `
+        + `Destroy +${Math.max(0, Math.round(Number(effective.destroyBuildingChancePct || 0)))}%, `
+        + `Ignore DEF +${Math.max(0, Math.round(Number(effective.defenseIgnorePct || 0)))}%, `
+        + `DEF -${Math.max(0, Math.round(Number(effective.defensePenaltyPct || 0)))}%, `
+        + `Police risk +${Math.max(0, Math.round(Number(effective.policeInterventionRiskPct || 0)))}%`
+      );
+    };
+
+    const render = () => {
+      const pharmacySnapshot = window.Empire.Map?.getPharmacyBoostSnapshot?.();
+      const factorySnapshot = window.Empire.Map?.getFactoryBoostSnapshot?.();
+      if (!pharmacySnapshot && !factorySnapshot) {
+        content.innerHTML = '<div class="boost-modal__empty">Boost panel není dostupný.</div>';
+        if (status) status.textContent = "";
+        return;
+      }
+
+      const stimPack = Math.max(0, Math.floor(Number(pharmacySnapshot?.supplies?.stimPack || 0)));
+      const combatModule = Math.max(0, Math.floor(Number(factorySnapshot?.supplies?.combatModule || 0)));
+      const pharmacyButtons = pharmacyBoostDefinitions
+        .map((entry) => {
+          const canAfford = stimPack >= entry.cost;
+          return `
+            <button
+              class="${entry.className}"
+              type="button"
+              data-boost-building="pharmacy"
+              data-boost-action="${entry.key}"
+              title="${entry.description}"
+              ${canAfford ? "" : "disabled"}
+            >
+              ${entry.label} (${entry.cost})
+            </button>
+          `;
+        })
+        .join("");
+      const factoryButtons = factoryBoostDefinitions
+        .map((entry) => {
+          const canAfford = combatModule >= entry.cost;
+          return `
+            <button
+              class="${entry.className}"
+              type="button"
+              data-boost-building="factory"
+              data-boost-action="${entry.key}"
+              title="${entry.description}"
+              ${canAfford ? "" : "disabled"}
+            >
+              ${entry.label} (${entry.cost})
+            </button>
+          `;
+        })
+        .join("");
+
+      const pharmacyCard = pharmacySnapshot
+        ? `
+          <section class="boost-modal__building">
+            <div class="boost-modal__head">
+              <div class="boost-modal__name">Lékárna</div>
+              <div class="boost-modal__value">Vyrobeno Slim Pack: <strong>${stimPack} ks</strong></div>
+            </div>
+            <div class="boost-modal__actions">
+              ${pharmacyButtons}
+            </div>
+          </section>
+        `
+        : '<div class="boost-modal__empty">Lékárna boosty nejsou dostupné.</div>';
+      const factoryCard = factorySnapshot
+        ? `
+          <section class="boost-modal__building">
+            <div class="boost-modal__head">
+              <div class="boost-modal__name">Továrna</div>
+              <div class="boost-modal__value">Combat Module: <strong>${combatModule} ks</strong></div>
+            </div>
+            <div class="boost-modal__actions">
+              ${factoryButtons}
+            </div>
+          </section>
+        `
+        : '<div class="boost-modal__empty">Továrna boosty nejsou dostupné.</div>';
+
+      content.innerHTML = `${pharmacyCard}${factoryCard}`;
+
+      if (status) {
+        const lines = [];
+        if (pharmacySnapshot) lines.push(renderPharmacyStatus(pharmacySnapshot, stimPack));
+        if (factorySnapshot) lines.push(renderFactoryStatus(factorySnapshot, combatModule));
+        status.textContent = lines.join(" | ");
+      }
+    };
+
+    const close = () => root.classList.add("hidden");
+    const open = () => {
+      render();
+      root.classList.remove("hidden");
+    };
+
+    openBtn.addEventListener("click", open);
+    if (backdrop) backdrop.addEventListener("click", close);
+    if (closeBtn) closeBtn.addEventListener("click", close);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close();
+    });
+
+    root.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const actionBtn = target.closest("[data-boost-action]");
+      if (!(actionBtn instanceof HTMLButtonElement)) return;
+      const boostKey = String(actionBtn.dataset.boostAction || "").trim();
+      const building = String(actionBtn.dataset.boostBuilding || "").trim().toLowerCase();
+      if (!boostKey) return;
+      let result = null;
+      if (building === "factory") {
+        result = window.Empire.Map?.useFactoryBoost?.(boostKey);
+      } else {
+        result = window.Empire.Map?.usePharmacyBoost?.(boostKey);
+      }
+      if (result?.message) {
+        pushEvent(result.message);
+      } else {
+        pushEvent("Boost akce se nepodařila.");
+      }
+      render();
+    });
+  }
+
   function formatAttackError(errorCode) {
     switch (String(errorCode || "").trim().toLowerCase()) {
       case "cooldown":
@@ -1282,6 +1532,8 @@ window.Empire.UI = (() => {
         return "Vlastní distrikt nelze napadnout.";
       case "allied_district":
         return "Alianční distrikt nelze napadnout.";
+      case "destroyed_district":
+        return "Distrikt je zničený a nelze na něj útočit.";
       case "not_adjacent":
         return "Útočit můžeš jen na distrikt, který sousedí s tvým dobytým distriktem.";
       case "attack_failed":
@@ -1300,26 +1552,26 @@ window.Empire.UI = (() => {
     if (!openBtn || !root || !content) return;
 
     const avatarPool = [
-      "../img/avatars/grok_image_1773615281856.jpg",
-      "../img/avatars/grok_image_1773615288781.jpg",
-      "../img/avatars/grok_image_1773615384205.jpg",
-      "../img/avatars/grok_image_1773615486819.jpg",
-      "../img/avatars/grok_image_1773619750005.jpg",
-      "../img/avatars/grok_image_1773619765153.jpg",
-      "../img/avatars/grok_image_1773619828633.jpg",
-      "../img/avatars/grok_image_1773619862866.jpg",
-      "../img/avatars/grok_image_1773619917189.jpg",
-      "../img/avatars/grok_image_1773619952518.jpg",
-      "../img/avatars/grok_image_1773620275790.jpg",
-      "../img/avatars/grok_image_1773620278343.jpg",
-      "../img/avatars/grok_image_1773620295724.jpg",
-      "../img/avatars/grok_image_1773620311309.jpg",
-      "../img/avatars/grok_image_1773620316935.jpg",
-      "../img/avatars/grok_image_1773620321599.jpg",
-      "../img/avatars/grok_image_1773620327962.jpg",
-      "../img/avatars/grok_image_1773620346567.jpg",
-      "../img/avatars/grok_image_1773620360803.jpg",
-      "../img/avatars/grok_image_1773620382664.jpg"
+      "../img/avatars/Mafia/2854d1df-0f7c-4fe4-aa85-7a70dfe299db.jpg",
+      "../img/avatars/Mafia/8d2dcbe6-00d3-4b6f-98a0-53dc914346c5.jpg",
+      "../img/avatars/Kartel/0f3d68b6-79b0-4bdd-9856-2491cd66cb78.jpg",
+      "../img/avatars/Kartel/37b9a32a-4710-4060-a1a9-5cf2e2c924c7.jpg",
+      "../img/avatars/Hacker/379f566a-18b8-457e-83ee-ee9ee114cb7a.jpg",
+      "../img/avatars/Hacker/53867e7d-cc7e-4f92-b391-88f44bf7e349.jpg",
+      "../img/avatars/Korporat/094f576f-646f-4ec9-9786-63019d07cdfe.jpg",
+      "../img/avatars/Korporat/2ef61d31-c01c-44a3-bca5-6171166352b0.jpg",
+      "../img/avatars/Motogang/grok_image_1773621173474.jpg",
+      "../img/avatars/Motogang/grok_image_1773621230721.jpg",
+      "../img/avatars/polucnigang/5f1bbe02-e437-43b6-b9ed-c453e34ca622.jpg",
+      "../img/avatars/polucnigang/f9b2211e-30fb-46ab-aa4c-16913d8a92c6.jpg",
+      "../img/avatars/SoukromaArmada/17912d57-dfc8-49fc-9a90-44121c298975.jpg",
+      "../img/avatars/SoukromaArmada/bbe6342a-cf92-4459-af42-dbb7beba19f6.jpg",
+      "../img/avatars/Tajnaorganizace/0099fc13-4774-459a-b1a9-ea507a6c0526.jpg",
+      "../img/avatars/Tajnaorganizace/0870f362-b2ce-4607-ad3f-a96b59afcc8d.jpg",
+      "../img/avatars/Mafia/grok_image_1773619750005.jpg",
+      "../img/avatars/Kartel/f7281b4a-f79f-4d76-b975-5153d414208f.jpg",
+      "../img/avatars/Hacker/grok_image_1773621797044.jpg",
+      "../img/avatars/Korporat/e4286e80-0587-4e0e-afe4-70c348ee59dd.jpg"
     ];
 
     const nickPool = [
@@ -1480,6 +1732,33 @@ window.Empire.UI = (() => {
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") close();
     });
+    root.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const button = target.closest("[data-use-drug]");
+      if (!(button instanceof HTMLButtonElement)) return;
+      const drugKey = String(button.dataset.useDrug || "").trim();
+      if (!drugKey) return;
+      if (!window.Empire.token) {
+        pushEvent("Použití drog je dostupné jen po přihlášení.");
+        return;
+      }
+      button.disabled = true;
+      try {
+        const result = await window.Empire.API.useDrug(drugKey, 1);
+        if (result?.error) {
+          pushEvent(`Drogy: ${result.error}`);
+          return;
+        }
+        const economy = await window.Empire.API.getEconomy();
+        updateEconomy(economy);
+        const profile = await window.Empire.API.getProfile();
+        updateProfile(profile);
+        pushEvent(`Aktivováno: ${storageDrugTypes.find((item) => item.resourceKey === drugKey)?.name || drugKey}`);
+      } finally {
+        button.disabled = false;
+      }
+    });
   }
 
   function hydrateStorageModalValues() {
@@ -1487,20 +1766,22 @@ window.Empire.UI = (() => {
     const player = window.Empire.player || {};
     const attackCounts = resolveWeaponCounts();
     const defenseCounts = resolveDefenseCounts();
-    const attackEntries = attackWeaponStats.slice(0, 4).map((item) => ({
+    const attackEntries = attackWeaponStats.map((item) => ({
       name: item.name,
       value: findInventoryValueByName(attackCounts, item.name)
     }));
-    const defenseEntries = defenseWeaponStats.slice(0, 4).map((item) => ({
+    const defenseEntries = defenseWeaponStats.map((item) => ({
       name: item.name,
       value: findInventoryValueByName(defenseCounts, item.name)
     }));
     const totalDrugs = Number(economy.drugs ?? player.drugs ?? 0);
-    const drugEntries = resolveStorageDrugEntries(totalDrugs);
+    const drugInventory = economy.drugInventory || player.drugInventory || null;
+    const activeDrugs = economy.activeDrugs || player.activeDrugs || null;
+    const drugEntries = resolveStorageDrugEntries(totalDrugs, drugInventory, activeDrugs);
 
     renderStorageList("storage-modal-attack-list", attackEntries, "ks");
     renderStorageList("storage-modal-defense-list", defenseEntries, "ks");
-    renderStorageList("storage-modal-drugs-list", drugEntries, "bal.");
+    renderStorageList("storage-modal-drugs-list", drugEntries, "bal.", { allowDrugUse: true });
   }
 
   function findInventoryValueByName(source, name) {
@@ -1511,34 +1792,53 @@ window.Empire.UI = (() => {
     return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
   }
 
-  function resolveStorageDrugEntries(totalDrugs) {
+  function resolveStorageDrugEntries(totalDrugs, drugInventory, activeDrugs) {
     const parsedTotal = Number(totalDrugs || 0);
     const safeTotal = Number.isFinite(parsedTotal) ? Math.max(0, Math.floor(parsedTotal)) : 0;
-    const entries = storageDrugTypes.map((item) => ({
-      name: item.name,
-      value: Math.floor(safeTotal * item.ratio)
-    }));
-    const used = entries.reduce((sum, item) => sum + item.value, 0);
+    const safeInventory = drugInventory && typeof drugInventory === "object" ? drugInventory : {};
+    const safeActive = activeDrugs && typeof activeDrugs === "object" ? activeDrugs : {};
+
+    let used = 0;
+    const entries = storageDrugTypes.map((item) => {
+      const count = Math.max(0, Math.floor(Number(safeInventory[item.key] || 0)));
+      used += count;
+      const effect = safeActive[item.key] || {};
+      const remainingSeconds = Math.max(0, Math.floor(Number(effect.remainingSeconds || 0)));
+      return {
+        key: item.resourceKey,
+        name: item.name,
+        value: count,
+        active: Boolean(effect.active),
+        activeLabel: remainingSeconds > 0
+          ? `aktivní ${formatDurationLabel(remainingSeconds * 1000)}`
+          : ""
+      };
+    });
+
     const remainder = Math.max(0, safeTotal - used);
-    if (entries.length > 0 && remainder > 0) {
-      entries[0].value += remainder;
-    }
+    if (entries.length > 0 && remainder > 0) entries[0].value += remainder;
     return entries;
   }
 
-  function renderStorageList(containerId, entries, suffix = "") {
+  function renderStorageList(containerId, entries, suffix = "", options = {}) {
     const container = document.getElementById(containerId);
     if (!container) return;
     const safeEntries = Array.isArray(entries) ? entries : [];
+    const allowDrugUse = Boolean(options.allowDrugUse && window.Empire.token);
     container.innerHTML = safeEntries
       .map((entry) => {
         const valueLabel = suffix
           ? `${entry.value} ${suffix}`
           : `${entry.value}`;
+        const activeLabel = entry.activeLabel ? `<span class="storage-modal__meta">${entry.activeLabel}</span>` : "";
+        const useButton = allowDrugUse && entry.key
+          ? `<button class="btn btn--ghost" data-use-drug="${entry.key}" ${entry.value <= 0 ? "disabled" : ""}>Použít</button>`
+          : "";
         return `
           <div class="storage-modal__item">
-            <span>${entry.name}</span>
+            <span>${entry.name} ${activeLabel}</span>
             <strong>${valueLabel}</strong>
+            ${useButton}
           </div>
         `;
       })
@@ -1575,9 +1875,16 @@ window.Empire.UI = (() => {
     const player = window.Empire.player || {};
     const names = [
       player.gangName,
+      player.gang_name,
+      player.gang,
       player.username,
+      player.name,
       cachedProfile?.gangName,
+      cachedProfile?.gang_name,
+      cachedProfile?.gang,
       cachedProfile?.username,
+      cachedProfile?.name,
+      localStorage.getItem("empire_guest_username"),
       localStorage.getItem("empire_gang_name")
     ]
       .map((value) => normalizeOwnerName(value))
@@ -1585,13 +1892,20 @@ window.Empire.UI = (() => {
     return new Set(names);
   }
 
+  function isDistrictDestroyed(district) {
+    if (!district || typeof district !== "object") return false;
+    return Boolean(district.isDestroyed || district.is_destroyed || district.destroyed);
+  }
+
   function isDistrictOwnedByPlayer(district) {
+    if (isDistrictDestroyed(district)) return false;
     const owner = normalizeOwnerName(district?.owner);
     if (!owner) return false;
     return getPlayerOwnerNameSet().has(owner);
   }
 
   function isDistrictOwnedByAlliance(district) {
+    if (isDistrictDestroyed(district)) return false;
     const owner = normalizeOwnerName(district?.owner);
     if (!owner) return false;
     if (isDistrictOwnedByPlayer(district)) return false;
@@ -1648,6 +1962,9 @@ window.Empire.UI = (() => {
     if (!district) {
       return { allowed: false, reason: "Nejprve vyber distrikt." };
     }
+    if (isDistrictDestroyed(district)) {
+      return { allowed: false, reason: "Distrikt je zničený a nepoužitelný." };
+    }
 
     if (isDistrictDefendableByPlayer(district)) {
       if (action === "attack") {
@@ -1688,6 +2005,9 @@ window.Empire.UI = (() => {
 
   function setScenarioVisionMode(enabled) {
     scenarioVisionEnabled = Boolean(enabled);
+    if (!scenarioVisionEnabled) {
+      scenarioUniqueOwnerColors = false;
+    }
     syncMapVisionContext();
   }
 
@@ -1729,12 +2049,66 @@ window.Empire.UI = (() => {
     syncMapVisionContext();
   }
 
+  function normalizeMapBorderMode(value) {
+    const mode = String(value || "").trim().toLowerCase();
+    if (mode === MAP_BORDER_MODE_WHITE || mode === MAP_BORDER_MODE_BLACK || mode === MAP_BORDER_MODE_PLAYER) {
+      return mode;
+    }
+    return MAP_BORDER_MODE_PLAYER;
+  }
+
+  function resolveStoredMapBorderMode() {
+    return normalizeMapBorderMode(localStorage.getItem(MAP_BORDER_MODE_STORAGE_KEY));
+  }
+
+  function resolveMapBorderPlayerColor() {
+    return normalizeHexColor(localStorage.getItem("empire_gang_color")) || "#22d3ee";
+  }
+
+  function applyMapBorderSwitchVisuals() {
+    const root = document.getElementById("map-border-switch");
+    if (root) {
+      root.style.setProperty("--map-border-player-color", resolveMapBorderPlayerColor());
+    }
+    const swatches = Array.from(document.querySelectorAll("[data-map-border-color]"));
+    if (!swatches.length) return;
+    swatches.forEach((swatch) => {
+      const mode = normalizeMapBorderMode(swatch.dataset.mapBorderColor);
+      swatch.classList.toggle("is-active", mode === selectedMapBorderMode);
+      swatch.setAttribute("aria-pressed", mode === selectedMapBorderMode ? "true" : "false");
+    });
+  }
+
+  function applyMapBorderMode(mode, options = {}) {
+    const nextMode = normalizeMapBorderMode(mode);
+    selectedMapBorderMode = nextMode;
+    if (options.persist !== false) {
+      localStorage.setItem(MAP_BORDER_MODE_STORAGE_KEY, nextMode);
+    }
+    applyMapBorderSwitchVisuals();
+    syncMapVisionContext();
+  }
+
+  function initMapBorderModeControls() {
+    const swatches = Array.from(document.querySelectorAll("[data-map-border-color]"));
+    if (!swatches.length) return;
+    swatches.forEach((swatch) => {
+      swatch.addEventListener("click", () => {
+        applyMapBorderMode(swatch.dataset.mapBorderColor);
+      });
+    });
+    applyMapBorderMode(selectedMapBorderMode, { persist: false });
+  }
+
   function syncMapVisionContext() {
     if (!window.Empire.Map?.setVisionContext) return;
     window.Empire.Map.setVisionContext({
       fogPreviewMode: scenarioVisionEnabled,
       alliedOwnerNames: Array.from(getActiveAllianceOwnerNames()),
-      enemyOwnerNames: Array.from(getActiveEnemyOwnerNames())
+      enemyOwnerNames: Array.from(getActiveEnemyOwnerNames()),
+      allowEnemyModalIntelInFog: scenarioVisionEnabled,
+      uniqueOwnerColors: scenarioVisionEnabled && scenarioUniqueOwnerColors,
+      districtBorderMode: selectedMapBorderMode
     });
   }
 
@@ -1765,6 +2139,17 @@ window.Empire.UI = (() => {
     }
     if (/^#[0-9a-f]{6}$/.test(raw)) return raw;
     return null;
+  }
+
+  function formatDurationLabel(ms) {
+    const safe = Math.max(0, Math.floor(Number(ms) || 0));
+    const totalMinutes = Math.ceil(safe / 60000);
+    if (totalMinutes <= 1) return "1 min";
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h`;
+    return `${minutes}m`;
   }
 
   function resolveStoredGangColor() {
@@ -1804,6 +2189,7 @@ window.Empire.UI = (() => {
 
   function refreshGangColorDisplays() {
     applyProfileModalVisuals(localStorage.getItem("empire_avatar"));
+    applyMapBorderSwitchVisuals();
   }
 
   function initPlayerScenarioButtons() {
@@ -1817,6 +2203,7 @@ window.Empire.UI = (() => {
         scenarioButtons.forEach((candidate) => {
           candidate.classList.toggle("is-active", candidate === button);
         });
+        refreshGuestBannerVisibility();
       });
     });
   }
@@ -1830,7 +2217,19 @@ window.Empire.UI = (() => {
 
     const ownerName = resolveScenarioOwnerName();
     const allyName = `${ownerName} - spojenec`;
-    let nextDistricts = districts.map((district) => ({ ...district, owner: null }));
+    scenarioUniqueOwnerColors = false;
+    syncMapVisionContext();
+    const mapScenarioDistrictOwner = (district, owner = null) => ({
+      ...district,
+      owner: owner || null,
+      ownerPlayerId: null,
+      ownerNick: null,
+      ownerAllianceName: null,
+      ownerAvatar: null,
+      isDestroyed: false,
+      destroyedAt: null
+    });
+    let nextDistricts = districts.map((district) => mapScenarioDistrictOwner(district));
 
     const baseProfile = {
       ...(window.Empire.player || {}),
@@ -1840,12 +2239,15 @@ window.Empire.UI = (() => {
       alliance: "Žádná",
       districts: 0
     };
+    let scenarioAttackIncident = null;
+    let scenarioPoliceIncident = null;
+    let scenarioDestroyedDistrictId = null;
 
     if (scenarioKey === "full-map") {
       setScenarioVisionMode(true);
       setScenarioAllianceOwners([]);
       setScenarioEnemyOwners([]);
-      nextDistricts = districts.map((district) => ({ ...district, owner: ownerName }));
+      nextDistricts = districts.map((district) => mapScenarioDistrictOwner(district, ownerName));
       baseProfile.districts = districts.length;
       baseProfile.alliance = "Žádná";
       pushEvent(`Ukázka: ${ownerName} ovládá celou mapu (${districts.length} sektorů).`);
@@ -1859,7 +2261,7 @@ window.Empire.UI = (() => {
       )[0];
       if (selected) {
         nextDistricts = districts.map((district) => ({
-          ...district,
+          ...mapScenarioDistrictOwner(district),
           owner: district.id === selected.id ? ownerName : null
         }));
         baseProfile.districts = 1;
@@ -1909,12 +2311,60 @@ window.Empire.UI = (() => {
       pushEvent(
         `Ukázka: ty držíš ${ownDistrictCount} sektory, 2 spojenci drží ${allyTotal} a 2 nepřátelské aliance drží ${enemyTotal} sektorů.`
       );
+    } else if (scenarioKey === "alliance-20") {
+      const scenario = buildTwentyPlayerAllianceScenario(districts, ownerName);
+      if (!scenario.districts.length) {
+        pushEvent("Ukázka 20 hráčů se nepodařila připravit.");
+        return;
+      }
+      setScenarioVisionMode(true);
+      scenarioUniqueOwnerColors = true;
+      syncMapVisionContext();
+      setScenarioAllianceOwners(scenario.alliedOwners);
+      setScenarioEnemyOwners(scenario.enemyOwners);
+      nextDistricts = scenario.districts;
+      baseProfile.districts = scenario.ownDistrictCount;
+      baseProfile.alliance = `${scenario.ownAllianceName} (${scenario.ownAllianceMemberCount}/4 • ${scenario.ownAllianceDistrictCount} sektorů)`;
+      scenarioAttackIncident = scenario.attackIncident || null;
+      scenarioPoliceIncident = scenario.policeIncident || null;
+      scenarioDestroyedDistrictId = scenario.destroyedDistrictId ?? null;
+      pushEvent(
+        `Ukázka: ${scenario.playerCount} hráčů ve ${scenario.allianceCount} aliancích. Každý má ${scenario.minPerPlayer}-${scenario.maxPerPlayer} sektorů.`
+      );
+      if (scenarioAttackIncident?.targetDistrictId != null) {
+        pushEvent(
+          `Incident: distrikt ${scenarioAttackIncident.sourceDistrictId} zaútočil na distrikt ${scenarioAttackIncident.targetDistrictId}.`
+        );
+      }
+      if (scenarioPoliceIncident?.targetDistrictId != null) {
+        pushEvent(
+          `Bezpečnost: velká policejní akce probíhá v distriktu ${scenarioPoliceIncident.targetDistrictId}.`
+        );
+      }
+      if (scenarioDestroyedDistrictId != null) {
+        pushEvent(`Katastrofa: distrikt ${scenarioDestroyedDistrictId} je vypálený a nepoužitelný.`);
+      }
     } else {
       return;
     }
 
     window.Empire.player = baseProfile;
+    window.Empire.Map.clearUnderAttackDistricts?.();
+    window.Empire.Map.clearPoliceActions?.();
     window.Empire.Map.setDistricts(nextDistricts);
+    if (scenarioAttackIncident?.targetDistrictId != null) {
+      window.Empire.Map.markDistrictUnderAttack?.(scenarioAttackIncident.targetDistrictId, {
+        attackerDistrictId: scenarioAttackIncident.sourceDistrictId,
+        durationMs: scenarioAttackIncident.durationMs,
+        source: "scenario-alliance-20"
+      });
+    }
+    if (scenarioPoliceIncident?.targetDistrictId != null) {
+      window.Empire.Map.markDistrictPoliceAction?.(scenarioPoliceIncident.targetDistrictId, {
+        durationMs: scenarioPoliceIncident.durationMs,
+        source: "scenario-alliance-20-police"
+      });
+    }
     updateProfile(baseProfile);
   }
 
@@ -1988,7 +2438,11 @@ window.Empire.UI = (() => {
 
     return safeDistricts.map((district) => ({
       ...district,
-      owner: ownersByDistrict.get(district.id) || null
+      owner: ownersByDistrict.get(district.id) || null,
+      ownerPlayerId: null,
+      ownerNick: null,
+      ownerAllianceName: null,
+      ownerAvatar: null
     }));
   }
 
@@ -2032,8 +2486,297 @@ window.Empire.UI = (() => {
 
     return districts.map((district) => ({
       ...district,
-      owner: ownersByDistrict.get(district.id) || null
+      owner: ownersByDistrict.get(district.id) || null,
+      ownerPlayerId: null,
+      ownerNick: null,
+      ownerAllianceName: null,
+      ownerAvatar: null
     }));
+  }
+
+  function buildTwentyPlayerAllianceScenario(districts, ownerName) {
+    const safeDistricts = Array.isArray(districts) ? districts : [];
+    const emptyResult = {
+      districts: [],
+      alliedOwners: [],
+      enemyOwners: [],
+      attackIncident: null,
+      policeIncident: null,
+      destroyedDistrictId: null,
+      ownDistrictCount: 0,
+      ownAllianceName: "Žádná",
+      ownAllianceMemberCount: 0,
+      ownAllianceDistrictCount: 0,
+      playerCount: 0,
+      allianceCount: 0,
+      minPerPlayer: 0,
+      maxPerPlayer: 0
+    };
+    if (!safeDistricts.length) return emptyResult;
+
+    const maxAllianceSize = 4;
+    const maxPlayersByDistricts = Math.max(1, Math.floor(safeDistricts.length / 4));
+    const playerCount = Math.max(1, Math.min(20, maxPlayersByDistricts));
+    const allianceCount = Math.ceil(playerCount / maxAllianceSize);
+
+    const allianceNamePool = [
+      "Neon Syndicate",
+      "Iron Wolves",
+      "Black Harbor",
+      "Vortex Pact",
+      "Shadow Cartel",
+      "Chrome Circuit",
+      "Night Crown",
+      "Urban Serpents"
+    ];
+    const nickPool = [
+      "Razor Vex", "Ghost Mara", "Nyx Prime", "Iron Shade", "Vortex Kane",
+      "Black Comet", "Neon Riot", "Cobra Unit", "Urban Hex", "Steel Drift",
+      "Zero Pulse", "Night Cipher", "Crimson Dot", "Volt Raven", "Silent Brick",
+      "Alpha Dock", "Chrome Lynx", "Delta Wolf", "Shadow Mint", "Metro Hawk",
+      "Apex Nova", "Toxic Ray", "Retro Kane", "Frost Mamba", "Street Rune",
+      "Kilo Ghost", "Rust Queen", "Nova Pilot", "Beta Venom", "Pixel Vandal"
+    ];
+
+    const usedNames = new Set();
+    const claimUniqueNick = (value, fallbackIndex = 1) => {
+      const base = String(value || "").trim() || `Hráč ${fallbackIndex}`;
+      let candidate = base;
+      let suffix = 2;
+      while (usedNames.has(normalizeOwnerName(candidate))) {
+        candidate = `${base} ${suffix}`;
+        suffix += 1;
+      }
+      usedNames.add(normalizeOwnerName(candidate));
+      return candidate;
+    };
+
+    const players = [];
+    for (let i = 0; i < playerCount; i += 1) {
+      const allianceIndex = Math.floor(i / maxAllianceSize);
+      const allianceName = allianceNamePool[allianceIndex % allianceNamePool.length];
+      const owner = i === 0
+        ? claimUniqueNick(ownerName || "Ty", 1)
+        : claimUniqueNick(nickPool[(i - 1) % nickPool.length], i + 1);
+      players.push({
+        owner,
+        allianceName,
+        allianceIndex,
+        districtCount: 4 + ((i * 11 + 3) % 4)
+      });
+    }
+
+    let totalTarget = players.reduce((sum, player) => sum + player.districtCount, 0);
+    if (totalTarget > safeDistricts.length) {
+      let guard = 0;
+      while (totalTarget > safeDistricts.length && guard < 10000) {
+        let reduced = false;
+        for (let i = players.length - 1; i >= 0; i -= 1) {
+          if (players[i].districtCount <= 4) continue;
+          players[i].districtCount -= 1;
+          totalTarget -= 1;
+          reduced = true;
+          if (totalTarget <= safeDistricts.length) break;
+        }
+        if (!reduced) break;
+        guard += 1;
+      }
+    }
+
+    const alliances = Array.from({ length: allianceCount }, (_, index) => {
+      const members = players.filter((player) => player.allianceIndex === index);
+      return {
+        index,
+        name: allianceNamePool[index % allianceNamePool.length],
+        members,
+        targetDistricts: members.reduce((sum, member) => sum + member.districtCount, 0)
+      };
+    });
+
+    const districtCenters = new Map(
+      safeDistricts.map((district) => [district.id, polygonCentroid(district.polygon || [])])
+    );
+    const neighborsByDistrict = buildDistrictAdjacency(safeDistricts);
+    const available = new Set(safeDistricts.map((district) => district.id));
+    const ownersByDistrict = new Map();
+
+    alliances.forEach((alliance, allianceIndex) => {
+      const targetDistricts = Math.min(alliance.targetDistricts, available.size);
+      if (targetDistricts < 1) return;
+      const seedId = pickClusterSeed(available, districtCenters, allianceIndex, alliances.length);
+      if (!seedId) return;
+
+      const allianceCluster = growDistrictCluster({
+        seedId,
+        targetSize: targetDistricts,
+        available,
+        neighborsByDistrict,
+        districtCenters
+      });
+      if (!allianceCluster.length) return;
+      allianceCluster.forEach((districtId) => {
+        available.delete(districtId);
+      });
+
+      const allianceAvailable = new Set(allianceCluster);
+      alliance.members.forEach((member, memberIndex) => {
+        const memberTarget = Math.min(member.districtCount, allianceAvailable.size);
+        if (memberTarget < 1) return;
+        let memberSeed = pickClusterSeed(allianceAvailable, districtCenters, memberIndex, alliance.members.length);
+        if (!memberSeed && allianceAvailable.size) {
+          memberSeed = Array.from(allianceAvailable)[0];
+        }
+        if (!memberSeed) return;
+        const memberCluster = growDistrictCluster({
+          seedId: memberSeed,
+          targetSize: memberTarget,
+          available: allianceAvailable,
+          neighborsByDistrict,
+          districtCenters
+        });
+        memberCluster.forEach((districtId) => {
+          ownersByDistrict.set(districtId, member.owner);
+          allianceAvailable.delete(districtId);
+        });
+      });
+
+      if (allianceAvailable.size) {
+        const memberOwners = alliance.members.map((member) => member.owner);
+        let ownerIndex = 0;
+        allianceAvailable.forEach((districtId) => {
+          ownersByDistrict.set(districtId, memberOwners[ownerIndex % memberOwners.length]);
+          ownerIndex += 1;
+        });
+      }
+    });
+
+    const ownerAllianceByKey = new Map(
+      players.map((player) => [normalizeOwnerName(player.owner), player.allianceName])
+    );
+
+    const nextDistricts = safeDistricts.map((district) => {
+      const owner = ownersByDistrict.get(district.id) || null;
+      const ownerKey = normalizeOwnerName(owner);
+      const allianceName = ownerKey ? ownerAllianceByKey.get(ownerKey) || null : null;
+      return {
+        ...district,
+        owner,
+        ownerPlayerId: null,
+        ownerNick: owner || null,
+        ownerAllianceName: allianceName,
+        ownerAvatar: null
+      };
+    });
+
+    const applyOwnerToDistrict = (district, player) => {
+      if (!district || !player) return;
+      district.owner = player.owner || null;
+      district.ownerNick = player.owner || null;
+      district.ownerAllianceName = player.allianceName || null;
+    };
+    const findDistrictById = (districtId) => {
+      const key = String(districtId);
+      return nextDistricts.find((district) => String(district?.id) === key) || null;
+    };
+    const sourceDistrict = findDistrictById(62)
+      || nextDistricts.find((district) => district?.owner) || null;
+    if (sourceDistrict && !sourceDistrict.owner) {
+      const fallbackSourcePlayer = players[1] || players[0] || null;
+      applyOwnerToDistrict(sourceDistrict, fallbackSourcePlayer);
+    }
+    const sourceOwnerKey = normalizeOwnerName(sourceDistrict?.owner);
+    const sourceAllianceName = sourceOwnerKey ? ownerAllianceByKey.get(sourceOwnerKey) || null : null;
+    const sourceDistrictId = sourceDistrict?.id ?? null;
+
+    let targetDistrict = findDistrictById(107)
+      || nextDistricts.find((district) => String(district?.id) !== String(sourceDistrictId)) || null;
+    if (targetDistrict && !targetDistrict.owner) {
+      const fallbackTargetPlayer = players.find((player) => normalizeOwnerName(player.owner) !== sourceOwnerKey)
+        || players[0]
+        || null;
+      applyOwnerToDistrict(targetDistrict, fallbackTargetPlayer);
+    }
+
+    if (targetDistrict && sourceOwnerKey && normalizeOwnerName(targetDistrict.owner) === sourceOwnerKey) {
+      const forcedTargetPlayer = players.find((player) => {
+        const playerOwnerKey = normalizeOwnerName(player.owner);
+        if (!playerOwnerKey || playerOwnerKey === sourceOwnerKey) return false;
+        if (!sourceAllianceName) return true;
+        return player.allianceName !== sourceAllianceName;
+      }) || players.find((player) => normalizeOwnerName(player.owner) !== sourceOwnerKey) || null;
+      applyOwnerToDistrict(targetDistrict, forcedTargetPlayer);
+    }
+
+    const targetDistrictId = targetDistrict?.id ?? null;
+    const attackIncident = sourceDistrictId != null && targetDistrictId != null
+      ? {
+        sourceDistrictId,
+        targetDistrictId,
+        durationMs: 12 * 60 * 1000
+      }
+      : null;
+    const policeTargetDistrict = findDistrictById(150)
+      || nextDistricts.find((district) => String(district?.id) !== String(targetDistrictId))
+      || null;
+    const policeIncident = policeTargetDistrict?.id != null
+      ? {
+        targetDistrictId: policeTargetDistrict.id,
+        durationMs: 14 * 60 * 1000
+      }
+      : null;
+    const destroyedDistrict = findDistrictById(69)
+      || nextDistricts.find((district) => {
+        const name = String(district?.name || "");
+        const match = name.match(/(^|[^0-9])69([^0-9]|$)/);
+        return Boolean(match);
+      })
+      || null;
+    if (destroyedDistrict) {
+      destroyedDistrict.owner = null;
+      destroyedDistrict.ownerNick = null;
+      destroyedDistrict.ownerAllianceName = null;
+      destroyedDistrict.ownerPlayerId = null;
+      destroyedDistrict.influence = 0;
+      destroyedDistrict.isDestroyed = true;
+      destroyedDistrict.destroyedAt = Date.now() - (40 * 60 * 1000);
+    }
+
+    const ownOwner = players[0]?.owner || String(ownerName || "Ty");
+    const ownOwnerKey = normalizeOwnerName(ownOwner);
+    const ownAllianceName = ownerAllianceByKey.get(ownOwnerKey) || "Žádná";
+    const ownAllianceMembers = players.filter((player) => player.allianceName === ownAllianceName);
+    const alliedOwners = ownAllianceMembers
+      .map((player) => player.owner)
+      .filter((playerOwner) => normalizeOwnerName(playerOwner) !== ownOwnerKey);
+    const enemyOwners = players
+      .filter((player) => player.allianceName !== ownAllianceName)
+      .map((player) => player.owner);
+    const ownDistrictCount = countOwnedDistrictsForOwner(nextDistricts, ownOwner);
+    const ownAllianceDistrictCount = nextDistricts.reduce((sum, district) => {
+      const districtOwnerKey = normalizeOwnerName(district.owner);
+      if (!districtOwnerKey) return sum;
+      return ownerAllianceByKey.get(districtOwnerKey) === ownAllianceName ? sum + 1 : sum;
+    }, 0);
+
+    const minPerPlayer = players.reduce((min, player) => Math.min(min, player.districtCount), Infinity);
+    const maxPerPlayer = players.reduce((max, player) => Math.max(max, player.districtCount), 0);
+
+    return {
+      districts: nextDistricts,
+      alliedOwners,
+      enemyOwners,
+      attackIncident,
+      policeIncident,
+      destroyedDistrictId: destroyedDistrict?.id ?? null,
+      ownDistrictCount,
+      ownAllianceName,
+      ownAllianceMemberCount: ownAllianceMembers.length,
+      ownAllianceDistrictCount,
+      playerCount: players.length,
+      allianceCount: alliances.length,
+      minPerPlayer: Number.isFinite(minPerPlayer) ? minPerPlayer : 0,
+      maxPerPlayer
+    };
   }
 
   function countOwnedDistrictsForOwner(districts, ownerName) {
@@ -3273,6 +4016,8 @@ window.Empire.UI = (() => {
     setLiveAllianceOwnersFromAlliance(allianceData?.alliance || null);
 
     if (districtData && districtData.districts) {
+      window.Empire.Map.clearUnderAttackDistricts?.();
+      window.Empire.Map.clearPoliceActions?.();
       window.Empire.Map.setDistricts(districtData.districts);
     }
 
@@ -3405,6 +4150,32 @@ window.Empire.UI = (() => {
     return labels[normalized] || raw;
   }
 
+  function clampWantedHeat(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.min(WANTED_HEAT_MAX, Math.floor(parsed)));
+  }
+
+  function resolveWantedStars(heatValue) {
+    const heat = clampWantedHeat(heatValue);
+    const tier = WANTED_HEAT_TIERS.find((entry) => heat >= entry.min && heat <= entry.max);
+    return tier ? tier.stars : 7;
+  }
+
+  function updateProfileWantedStars(heatValue) {
+    const root = document.getElementById("profile-wanted-stars");
+    if (!root) return;
+    const stars = Array.from(root.querySelectorAll("[data-profile-wanted-star]"));
+    if (!stars.length) return;
+    const activeStars = resolveWantedStars(heatValue);
+    stars.forEach((star, index) => {
+      star.classList.toggle("is-active", index < activeStars);
+    });
+    const heat = clampWantedHeat(heatValue);
+    root.setAttribute("aria-label", `Stupeň hledanosti ${activeStars}/7 (${heat} heat)`);
+    root.title = `Hledanost: ${activeStars}/7 (${heat} heat)`;
+  }
+
   function resolveWantedLevel(profile) {
     const explicitCandidates = [
       profile?.wantedLevel,
@@ -3413,12 +4184,13 @@ window.Empire.UI = (() => {
       profile?.heat,
       profile?.notoriety,
       profile?.policeHeat,
-      profile?.police_heat
+      profile?.police_heat,
+      window.Empire?.PoliceHeat?.state?.player?.totalHeat
     ];
     for (let i = 0; i < explicitCandidates.length; i += 1) {
       const parsed = Number(explicitCandidates[i]);
       if (Number.isFinite(parsed)) {
-        return Math.max(0, Math.floor(parsed));
+        return clampWantedHeat(parsed);
       }
     }
 
@@ -3436,7 +4208,7 @@ window.Empire.UI = (() => {
       + dirtyMoney / 12000
       + population / 25000
     );
-    return Math.max(0, Math.min(100, score));
+    return clampWantedHeat(score * 10);
   }
 
   function formatAllianceProfileSummary(profile) {
@@ -3455,6 +4227,10 @@ window.Empire.UI = (() => {
 
   function updateProfile(profile) {
     cachedProfile = profile;
+    const profileGangColor = normalizeHexColor(profile?.gangColor || profile?.gang_color);
+    if (profileGangColor) {
+      localStorage.setItem("empire_gang_color", profileGangColor);
+    }
     window.Empire.player = {
       ...(window.Empire.player || {}),
       ...(profile || {})
@@ -3474,6 +4250,7 @@ window.Empire.UI = (() => {
     if (statStructure) {
       statStructure.textContent = `${wantedLevel}`;
     }
+    updateProfileWantedStars(wantedLevel);
     if (faction) {
       faction.textContent = factionLabel;
     }
@@ -3482,13 +4259,13 @@ window.Empire.UI = (() => {
     updateWeaponsPopover();
     updateDefensePopover();
     syncMapVisionContext();
+    refreshMarketBuildingShortcuts();
     window.Empire.Map?.render?.();
   }
 
   function setGuestMode(isGuest) {
-    const banner = document.getElementById("guest-banner");
-    if (!banner) return;
-    banner.classList.toggle("hidden", !isGuest);
+    guestModeActive = Boolean(isGuest);
+    refreshGuestBannerVisibility();
     if (isGuest) {
       const state = getLocalAllianceState();
       renderAllianceChat(state.chat);
@@ -3498,6 +4275,13 @@ window.Empire.UI = (() => {
     } else {
       clearLiveAllianceOwners();
     }
+  }
+
+  function refreshGuestBannerVisibility() {
+    const banner = document.getElementById("guest-banner");
+    if (!banner) return;
+    const hasSelectedScenario = Boolean(document.querySelector("[data-player-scenario].is-active"));
+    banner.classList.toggle("hidden", !guestModeActive || hasSelectedScenario);
   }
 
   function initProfileModal() {
@@ -4106,6 +4890,163 @@ window.Empire.UI = (() => {
     });
   }
 
+  function refreshMarketBuildingShortcuts() {
+    if (typeof marketBuildingShortcutRefreshHandler === "function") {
+      marketBuildingShortcutRefreshHandler();
+    }
+  }
+
+  function initMarketBuildingShortcuts() {
+    const root = document.getElementById("market-building-shortcuts");
+    if (!root) return;
+
+    const buttons = Array.from(root.querySelectorAll("[data-market-building-base-name]"));
+    if (!buttons.length) return;
+
+    const normalizeBuildingName = (value) => normalizeOwnerName(String(value || "").replace(/\s+/g, " ").trim());
+
+    const findBuildingIndexInDistrict = (district, baseName) => {
+      const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+      const target = normalizeBuildingName(baseName);
+      if (!target) return -1;
+      for (let index = 0; index < buildings.length; index += 1) {
+        if (normalizeBuildingName(buildings[index]) === target) {
+          return index;
+        }
+      }
+      return -1;
+    };
+
+    const getOwnedDistricts = () => {
+      const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+      return districts.filter((district) => isDistrictOwnedByPlayer(district));
+    };
+
+    const resolveOwnedBuildingInstance = (baseName, options = {}) => {
+      const ownedDistricts = Array.isArray(options.ownedDistricts) ? options.ownedDistricts : getOwnedDistricts();
+      if (!ownedDistricts.length) return null;
+      const targetBaseName = normalizeBuildingName(baseName);
+      const forceFirstOwnedMatch = targetBaseName === "drug lab" || targetBaseName === "druglab";
+
+      const selectedRaw = window.Empire.selectedDistrict;
+      const selected = selectedRaw?.id != null
+        ? resolveDistrictById(selectedRaw.id, window.Empire.districts) || selectedRaw
+        : selectedRaw;
+      const preferredDistricts = [];
+      const preferredIds = new Set();
+      if (!forceFirstOwnedMatch && selected && isDistrictOwnedByPlayer(selected)) {
+        preferredDistricts.push(selected);
+        preferredIds.add(String(selected.id));
+      }
+      const scanDistricts = [
+        ...preferredDistricts,
+        ...ownedDistricts.filter((district) => !preferredIds.has(String(district?.id)))
+      ];
+
+      for (let i = 0; i < scanDistricts.length; i += 1) {
+        const district = scanDistricts[i];
+        const buildingIndex = findBuildingIndexInDistrict(district, baseName);
+        if (buildingIndex >= 0) {
+          return { district, buildingIndex };
+        }
+      }
+      return null;
+    };
+
+    const refreshState = () => {
+      const ownedDistricts = getOwnedDistricts();
+      const hasOwnedTerritory = ownedDistricts.length > 0;
+
+      buttons.forEach((button) => {
+        const label = String(
+          button.dataset.marketBuildingLabel
+          || button.dataset.marketBuildingBaseName
+          || "Budova"
+        );
+        const baseName = String(button.dataset.marketBuildingBaseName || "").trim();
+        const instance = resolveOwnedBuildingInstance(baseName, { ownedDistricts });
+        const unlocked = Boolean(instance);
+        const buildingIndex = unlocked ? instance.buildingIndex : -1;
+
+        button.disabled = false;
+        button.setAttribute("aria-disabled", unlocked ? "false" : "true");
+        button.classList.toggle("is-unlocked", unlocked);
+        button.classList.toggle("is-locked", !unlocked);
+        button.dataset.marketBuildingUnlocked = unlocked ? "1" : "0";
+        button.dataset.marketBuildingIndex = unlocked ? String(buildingIndex) : "";
+        button.dataset.marketBuildingDistrictId = unlocked ? String(instance.district?.id ?? "") : "";
+
+        if (unlocked) {
+          button.title = `${label}: Otevřít detail budovy z tvého území`;
+        } else if (!hasOwnedTerritory) {
+          button.title = `${label}: Neovládáš žádný distrikt`;
+        } else {
+          button.title = `${label}: Tuto budovu ve svém území nevlastníš`;
+        }
+      });
+    };
+
+    marketBuildingShortcutRefreshHandler = refreshState;
+    refreshState();
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        refreshState();
+        if (button.dataset.marketBuildingUnlocked !== "1") {
+          const label = String(
+            button.dataset.marketBuildingLabel
+            || button.dataset.marketBuildingBaseName
+            || "Budova"
+          );
+          pushEvent(`${label}: budova je zamčená.`);
+          return;
+        }
+
+        const baseName = String(button.dataset.marketBuildingBaseName || "").trim();
+        const cachedDistrictId = String(button.dataset.marketBuildingDistrictId || "").trim();
+        const cachedIndexRaw = Number(button.dataset.marketBuildingIndex);
+        const cachedBuildingIndex = Number.isFinite(cachedIndexRaw)
+          ? Math.max(0, Math.floor(cachedIndexRaw))
+          : -1;
+        let district = cachedDistrictId ? resolveDistrictById(cachedDistrictId, window.Empire.districts) : null;
+        let buildingIndex = cachedBuildingIndex;
+
+        if (!district || buildingIndex < 0) {
+          const instance = resolveOwnedBuildingInstance(baseName);
+          if (instance?.district) {
+            district = instance.district;
+          }
+          if (Number.isFinite(Number(instance?.buildingIndex))) {
+            buildingIndex = Math.max(0, Math.floor(Number(instance.buildingIndex)));
+          }
+        }
+
+        const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+        const resolvedBaseName = String((buildingIndex >= 0 && buildings[buildingIndex]) || baseName || "Neznámá budova");
+        const overrides = Array.isArray(district?.buildingNameOverrides) ? district.buildingNameOverrides : [];
+        const variantRaw = buildingIndex >= 0 ? String(overrides[buildingIndex] || "").trim() : "";
+        const detailInput = {
+          baseName: resolvedBaseName,
+          variantName: variantRaw && variantRaw !== resolvedBaseName ? variantRaw : null,
+          districtId: district?.id ?? null,
+          buildingIndex
+        };
+
+        if (window.Empire.Map?.showBuildingDetail) {
+          try {
+            window.Empire.Map.showBuildingDetail(detailInput, district);
+            return;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "neznámá chyba";
+            pushEvent(`Detail budovy se nepodařilo otevřít: ${message}`);
+            return;
+          }
+        }
+        pushEvent("Detail budovy není dostupný.");
+      });
+    });
+  }
+
   function renderMarketState(resourceKey) {
     const summary = document.getElementById("market-balance-summary");
     const sellOrders = document.getElementById("market-sell-orders");
@@ -4132,6 +5073,11 @@ window.Empire.UI = (() => {
       <div class="market-balance-pill">Špinavé: $${money.dirtyMoney}</div>
       <div class="market-balance-pill">Celkem: $${money.totalMoney}</div>
       <div class="market-balance-pill">Drogy: ${balances.drugs || 0}</div>
+      <div class="market-balance-pill">Neon Dust: ${balances.neonDust || 0}</div>
+      <div class="market-balance-pill">Pulse Shot: ${balances.pulseShot || 0}</div>
+      <div class="market-balance-pill">Velvet Smoke: ${balances.velvetSmoke || 0}</div>
+      <div class="market-balance-pill">Ghost Serum: ${balances.ghostSerum || 0}</div>
+      <div class="market-balance-pill">Overdrive X: ${balances.overdriveX || 0}</div>
       <div class="market-balance-pill">Zbraně: ${balances.weapons || 0}</div>
       <div class="market-balance-pill">Materiály: ${balances.materials || 0}</div>
       <div class="market-balance-pill">Data: ${balances.dataShards || 0}</div>
@@ -4227,13 +5173,21 @@ window.Empire.UI = (() => {
         cleanMoney: 12000,
         dirtyMoney: 0,
         drugs: 80,
+        neonDust: 44,
+        pulseShot: 14,
+        velvetSmoke: 12,
+        ghostSerum: 7,
+        overdriveX: 3,
         weapons: 30,
         materials: 120,
         dataShards: 18
       },
       orderBook: [
-        makeSeedOrder("drugs", "sell", 35, 135, "Neon Vipers"),
-        makeSeedOrder("drugs", "buy", 20, 128, "Black Sun Pact"),
+        makeSeedOrder("neon_dust", "sell", 35, 92, "Neon Vipers"),
+        makeSeedOrder("pulse_shot", "buy", 8, 245, "Black Sun Pact"),
+        makeSeedOrder("velvet_smoke", "sell", 6, 310, "Velvet Circuit"),
+        makeSeedOrder("ghost_serum", "buy", 4, 420, "Ghost Wire"),
+        makeSeedOrder("overdrive_x", "sell", 2, 650, "Crimson Apex"),
         makeSeedOrder("weapons", "sell", 12, 260, "Chrome Cartel"),
         makeSeedOrder("weapons", "buy", 10, 235, "Raven"),
         makeSeedOrder("materials", "sell", 60, 78, "Factory 9"),
@@ -4243,7 +5197,8 @@ window.Empire.UI = (() => {
       ],
       myOrders: [],
       recentTrades: [
-        { resourceKey: "drugs", quantity: 18, pricePerUnit: 132, feePaid: 118, createdAt: Date.now() - 200000 },
+        { resourceKey: "neon_dust", quantity: 18, pricePerUnit: 96, feePaid: 86, createdAt: Date.now() - 200000 },
+        { resourceKey: "pulse_shot", quantity: 3, pricePerUnit: 236, feePaid: 35, createdAt: Date.now() - 150000 },
         { resourceKey: "weapons", quantity: 4, pricePerUnit: 248, feePaid: 49, createdAt: Date.now() - 120000 }
       ],
       marketFeePct: 5
@@ -4263,6 +5218,29 @@ window.Empire.UI = (() => {
     balances.cleanMoney = money.cleanMoney;
     balances.dirtyMoney = money.dirtyMoney;
     balances.money = money.totalMoney;
+    const legacyDrugTotal = Number.isFinite(Number(balances.drugs))
+      ? Math.max(0, Math.floor(Number(balances.drugs)))
+      : 0;
+    storageDrugTypes.forEach((drug) => {
+      const value = Number(balances[drug.key] || 0);
+      balances[drug.key] = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    });
+    let drugTotal = storageDrugTypes.reduce((sum, drug) => sum + Number(balances[drug.key] || 0), 0);
+    if (drugTotal === 0 && legacyDrugTotal > 0) {
+      const split = [0.55, 0.18, 0.15, 0.08, 0.04];
+      let used = 0;
+      storageDrugTypes.forEach((drug, index) => {
+        if (index === storageDrugTypes.length - 1) {
+          balances[drug.key] = Math.max(0, legacyDrugTotal - used);
+          return;
+        }
+        const part = Math.floor(legacyDrugTotal * split[index]);
+        balances[drug.key] = part;
+        used += part;
+      });
+      drugTotal = storageDrugTypes.reduce((sum, drug) => sum + Number(balances[drug.key] || 0), 0);
+    }
+    balances.drugs = Math.max(0, Math.floor(drugTotal));
   }
 
   function spendLocalMoney(balances, amount) {
@@ -4309,6 +5287,7 @@ window.Empire.UI = (() => {
       dirtyMoney: parseMoney("stat-dirty-money"),
       influence: parseStat("stat-influence"),
       drugs: 0,
+      drugInventory: {},
       weapons: 0,
       defense: 0,
       materials: 0
@@ -4319,11 +5298,29 @@ window.Empire.UI = (() => {
     if (!cachedEconomy || typeof cachedEconomy !== "object") {
       cachedEconomy = getEconomySnapshotFromDom();
     }
+    const currentInventory = cachedEconomy.drugInventory && typeof cachedEconomy.drugInventory === "object"
+      ? cachedEconomy.drugInventory
+      : {};
+    const normalizedDrugInventory = storageDrugTypes.reduce((acc, item) => {
+      const value = Number(currentInventory[item.key] ?? cachedEconomy[item.key] ?? 0);
+      acc[item.key] = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+      return acc;
+    }, {});
+    cachedEconomy.drugInventory = normalizedDrugInventory;
+    cachedEconomy.drugs = storageDrugTypes.reduce(
+      (sum, item) => sum + Number(normalizedDrugInventory[item.key] || 0),
+      0
+    );
     const money = resolveMoneyBreakdown(cachedEconomy || {});
     cachedEconomy.cleanMoney = money.cleanMoney;
     cachedEconomy.dirtyMoney = money.dirtyMoney;
     cachedEconomy.balance = money.totalMoney;
     return cachedEconomy;
+  }
+
+  function getEconomySnapshot() {
+    const snapshot = ensureEconomyCache();
+    return JSON.parse(JSON.stringify(snapshot));
   }
 
   function trySpendCash(amount) {
@@ -4411,6 +5408,18 @@ window.Empire.UI = (() => {
     };
   }
 
+  function resourceKeyToBalanceKey(resourceKey) {
+    const mapping = {
+      data_shards: "dataShards",
+      neon_dust: "neonDust",
+      pulse_shot: "pulseShot",
+      velvet_smoke: "velvetSmoke",
+      ghost_serum: "ghostSerum",
+      overdrive_x: "overdriveX"
+    };
+    return mapping[resourceKey] || resourceKey;
+  }
+
   function createLocalMarketOrder({ resourceKey, side, quantity, pricePerUnit }) {
     const state = getLocalMarketState();
     normalizeLocalMarketBalances(state.balances || {});
@@ -4418,7 +5427,7 @@ window.Empire.UI = (() => {
     if (!Number.isInteger(quantity) || quantity <= 0) return { error: "invalid_quantity" };
     if (!Number.isInteger(pricePerUnit) || pricePerUnit <= 0) return { error: "invalid_price" };
 
-    const balanceKey = resourceKey === "data_shards" ? "dataShards" : resourceKey;
+    const balanceKey = resourceKeyToBalanceKey(resourceKey);
     if (side === "sell" && Number(state.balances[balanceKey] || 0) < quantity) {
       return { error: "insufficient_resource" };
     }
@@ -4457,7 +5466,7 @@ window.Empire.UI = (() => {
     const order = state.myOrders.find((item) => item.id === orderId && item.status === "open");
     if (!order) return { error: "order_not_found" };
 
-    const balanceKey = order.resourceKey === "data_shards" ? "dataShards" : order.resourceKey;
+    const balanceKey = resourceKeyToBalanceKey(order.resourceKey);
     if (order.side === "sell") {
       state.balances[balanceKey] += order.remainingQuantity;
     } else {
@@ -4484,7 +5493,7 @@ window.Empire.UI = (() => {
         : b.pricePerUnit - a.pricePerUnit
     );
 
-    const balanceKey = order.resourceKey === "data_shards" ? "dataShards" : order.resourceKey;
+    const balanceKey = resourceKeyToBalanceKey(order.resourceKey);
 
     sorted.forEach((entry) => {
       if (order.remainingQuantity <= 0) return;
@@ -4519,12 +5528,17 @@ window.Empire.UI = (() => {
     if (window.Empire.token) return;
     const state = getLocalMarketState();
     const money = resolveMoneyBreakdown(state.balances || {});
+    const drugInventory = storageDrugTypes.reduce((acc, item) => {
+      acc[item.key] = Number(state.balances[item.key] || 0);
+      return acc;
+    }, {});
     updateEconomy({
       balance: money.totalMoney,
       cleanMoney: money.cleanMoney,
       dirtyMoney: money.dirtyMoney,
       influence: 0,
       drugs: Number(state.balances.drugs || 0),
+      drugInventory,
       weapons: Number(state.balances.weapons || 0),
       defense: 0,
       materials: Number(state.balances.materials || 0),
@@ -4665,51 +5679,178 @@ window.Empire.UI = (() => {
   }
 
   function updateEconomy(economy) {
-    cachedEconomy = economy;
-    const money = resolveMoneyBreakdown(economy || {});
+    const safeEconomy = economy && typeof economy === "object" ? { ...economy } : {};
+    const rawDrugInventory = safeEconomy.drugInventory && typeof safeEconomy.drugInventory === "object"
+      ? safeEconomy.drugInventory
+      : {};
+    const normalizedDrugInventory = storageDrugTypes.reduce((acc, item) => {
+      const directValue = Number(rawDrugInventory[item.key]);
+      const fallbackValue = Number(safeEconomy[item.key]);
+      const value = Number.isFinite(directValue) ? directValue : fallbackValue;
+      acc[item.key] = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+      return acc;
+    }, {});
+    const totalDrugs = storageDrugTypes.reduce((sum, item) => sum + Number(normalizedDrugInventory[item.key] || 0), 0);
+    safeEconomy.drugInventory = normalizedDrugInventory;
+    safeEconomy.drugs = Number.isFinite(Number(safeEconomy.drugs))
+      ? Math.max(0, Math.floor(Number(safeEconomy.drugs)))
+      : totalDrugs;
+    cachedEconomy = safeEconomy;
+
+    const money = resolveMoneyBreakdown(safeEconomy || {});
     const cleanMoney = document.getElementById("stat-clean-money");
     const dirtyMoney = document.getElementById("stat-dirty-money");
     if (cleanMoney) cleanMoney.textContent = `$${money.cleanMoney}`;
     if (dirtyMoney) dirtyMoney.textContent = `$${money.dirtyMoney}`;
-    document.getElementById("stat-influence").textContent = economy.influence || 0;
+    document.getElementById("stat-influence").textContent = safeEconomy.influence || 0;
     const drugs = document.getElementById("stat-drugs");
     const storage = document.getElementById("stat-storage");
     const weapons = document.getElementById("stat-weapons");
     const defense = document.getElementById("stat-defense");
-    if (drugs) drugs.textContent = economy.drugs || 0;
-    if (storage) storage.textContent = economy.materials || 0;
-    if (weapons) weapons.textContent = economy.weapons || 0;
-    if (defense) defense.textContent = economy.defense || 0;
+    if (drugs) drugs.textContent = safeEconomy.drugs || 0;
+    if (storage) storage.textContent = safeEconomy.materials || 0;
+    if (weapons) weapons.textContent = safeEconomy.weapons || 0;
+    syncWeaponStatCounter();
+    if (defense) defense.textContent = safeEconomy.defense || 0;
+    syncDefenseStatCounter();
     hydrateStorageModalValues();
     if (cachedProfile) hydrateProfileModal(cachedProfile);
     updateWeaponsPopover();
     updateDefensePopover();
   }
 
+  function normalizeAttackWeaponLabel(name) {
+    const raw = String(name || "").trim();
+    if (!raw) return "";
+    return LEGACY_ATTACK_WEAPON_ALIASES[raw] || raw;
+  }
+
+  function readLocalWeaponCounts() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("empire_weapons_detail") || "null");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function writeLocalWeaponCounts(store) {
+    localStorage.setItem("empire_weapons_detail", JSON.stringify(store || {}));
+  }
+
+  function readLocalDefenseCounts() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("empire_defense_detail") || "null");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function writeLocalDefenseCounts(store) {
+    localStorage.setItem("empire_defense_detail", JSON.stringify(store || {}));
+  }
+
   function resolveWeaponCounts() {
     const fromProfile = cachedProfile?.weaponsDetail;
     const fromEconomy = cachedEconomy?.weaponsDetail;
-    const fromStorage = (() => {
-      try {
-        return JSON.parse(localStorage.getItem("empire_weapons_detail") || "null");
-      } catch {
-        return null;
+    const fromStorage = readLocalWeaponCounts();
+    const raw = fromProfile || fromEconomy || fromStorage || {};
+    const normalized = {};
+
+    Object.entries(raw).forEach(([name, value]) => {
+      const mappedName = normalizeAttackWeaponLabel(name);
+      if (!mappedName) return;
+      const parsed = Number(value || 0);
+      const safe = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+      if (!safe) return;
+      normalized[mappedName] = Math.max(0, Math.floor(Number(normalized[mappedName] || 0) + safe));
+    });
+
+    attackWeaponStats.forEach((item) => {
+      if (!Number.isFinite(Number(normalized[item.name]))) {
+        normalized[item.name] = Math.max(0, Math.floor(Number(normalized[item.name] || 0)));
       }
-    })();
-    return fromProfile || fromEconomy || fromStorage || {
-      "Baseballová pálka": 7,
-      Pistole: 14,
-      "Samopal (SMG)": 6,
-      "Útočná puška": 3,
-      "Explozivní nálož": 2,
-      "Neprůstřelná vesta": 9,
-      "Ocelové barikády": 4,
-      "Bezpečnostní kamery": 8,
-      "Automatické kulometné stanoviště": 1,
-      "EMP obranný modul": 1,
-      "Kulometná věž": 2,
-      "Raketová věž": 1
-    };
+    });
+
+    return normalized;
+  }
+
+  function getAttackWeaponTotal(counts = {}) {
+    return attackWeaponStats.reduce((sum, item) => {
+      const key = Object.keys(counts).find((name) => name.toLowerCase() === item.name.toLowerCase());
+      const value = key ? Number(counts[key] || 0) : 0;
+      return sum + (Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0);
+    }, 0);
+  }
+
+  function syncWeaponStatCounter() {
+    const weapons = document.getElementById("stat-weapons");
+    if (!weapons) return;
+    const counts = resolveWeaponCounts();
+    const localTotal = getAttackWeaponTotal(counts);
+    const serverTotal = Math.max(0, Math.floor(Number(cachedEconomy?.weapons || 0)));
+    weapons.textContent = Math.max(serverTotal, localTotal);
+  }
+
+  function getDefenseWeaponTotal(counts = {}) {
+    return defenseWeaponStats.reduce((sum, item) => {
+      const key = Object.keys(counts).find((name) => name.toLowerCase() === item.name.toLowerCase());
+      const value = key ? Number(counts[key] || 0) : 0;
+      return sum + (Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0);
+    }, 0);
+  }
+
+  function syncDefenseStatCounter() {
+    const defense = document.getElementById("stat-defense");
+    if (!defense) return;
+    const counts = resolveDefenseCounts();
+    const localTotal = getDefenseWeaponTotal(counts);
+    const serverTotal = Math.max(0, Math.floor(Number(cachedEconomy?.defense || 0)));
+    defense.textContent = Math.max(serverTotal, localTotal);
+  }
+
+  function addCraftedWeapons(weaponMap = {}) {
+    const source = weaponMap && typeof weaponMap === "object" ? weaponMap : {};
+    const store = readLocalWeaponCounts();
+    Object.entries(source).forEach(([rawName, amount]) => {
+      const name = normalizeAttackWeaponLabel(rawName);
+      if (!name) return;
+      const delta = Math.max(0, Math.floor(Number(amount) || 0));
+      if (!delta) return;
+      store[name] = Math.max(0, Math.floor(Number(store[name] || 0) + delta));
+    });
+    writeLocalWeaponCounts(store);
+    updateWeaponsPopover();
+    syncWeaponStatCounter();
+    const weaponsModal = document.getElementById("weapons-modal");
+    if (weaponsModal && !weaponsModal.classList.contains("hidden")) {
+      openWeaponsModal("attack");
+    }
+    return store;
+  }
+
+  function addCraftedDefense(weaponMap = {}) {
+    const source = weaponMap && typeof weaponMap === "object" ? weaponMap : {};
+    const store = readLocalDefenseCounts();
+    Object.entries(source).forEach(([rawName, amount]) => {
+      const name = String(rawName || "").trim();
+      if (!name) return;
+      const delta = Math.max(0, Math.floor(Number(amount) || 0));
+      if (!delta) return;
+      store[name] = Math.max(0, Math.floor(Number(store[name] || 0) + delta));
+    });
+    writeLocalDefenseCounts(store);
+    updateDefensePopover();
+    syncDefenseStatCounter();
+    hydrateStorageModalValues();
+    const weaponsModal = document.getElementById("weapons-modal");
+    if (weaponsModal && !weaponsModal.classList.contains("hidden")) {
+      openWeaponsModal("defense");
+    }
+    return store;
   }
 
   function updateWeaponsPopover() {
@@ -4733,22 +5874,29 @@ window.Empire.UI = (() => {
   function resolveDefenseCounts() {
     const fromProfile = cachedProfile?.defenseDetail;
     const fromEconomy = cachedEconomy?.defenseDetail;
-    const fromStorage = (() => {
-      try {
-        return JSON.parse(localStorage.getItem("empire_defense_detail") || "null");
-      } catch {
-        return null;
+    const fromStorage = readLocalDefenseCounts();
+    const rawSources = [fromProfile, fromEconomy, fromStorage];
+    const normalized = {};
+
+    rawSources.forEach((raw) => {
+      if (!raw || typeof raw !== "object") return;
+      Object.entries(raw).forEach(([name, value]) => {
+        const safeName = String(name || "").trim();
+        if (!safeName) return;
+        const parsed = Number(value || 0);
+        const safe = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+        if (!safe) return;
+        normalized[safeName] = Math.max(0, Math.floor(Number(normalized[safeName] || 0) + safe));
+      });
+    });
+
+    defenseWeaponStats.forEach((item) => {
+      if (!Number.isFinite(Number(normalized[item.name]))) {
+        normalized[item.name] = Math.max(0, Math.floor(Number(normalized[item.name] || 0)));
       }
-    })();
-    return fromProfile || fromEconomy || fromStorage || {
-      "Neprůstřelná vesta": 9,
-      "Ocelové barikády": 4,
-      "Bezpečnostní kamery": 8,
-      "Automatické kulometné stanoviště": 1,
-      "EMP obranný modul": 1,
-      "Kulometná věž": 2,
-      "Raketová věž": 1
-    };
+    });
+
+    return normalized;
   }
 
   function updateDefensePopover() {
@@ -4774,10 +5922,17 @@ window.Empire.UI = (() => {
     const name = document.getElementById("district-name");
     if (!name) return;
     const displayName = district.name || `${district.type} #${district.id}`;
-    document.getElementById("district-owner").textContent = district.owner || "Neobsazeno";
-    document.getElementById("district-income").textContent = `$${district.income || 0}/hod`;
-    document.getElementById("district-influence").textContent = district.influence || 0;
+    if (isDistrictDestroyed(district)) {
+      document.getElementById("district-owner").textContent = "Nikdo (zničený)";
+      document.getElementById("district-income").textContent = "0 / nepoužitelný";
+      document.getElementById("district-influence").textContent = 0;
+    } else {
+      document.getElementById("district-owner").textContent = district.owner || "Neobsazeno";
+      document.getElementById("district-income").textContent = `$${district.income || 0}/hod`;
+      document.getElementById("district-influence").textContent = district.influence || 0;
+    }
     name.textContent = displayName;
+    refreshMarketBuildingShortcuts();
   }
 
   function updateRound(round) {
@@ -4811,17 +5966,21 @@ window.Empire.UI = (() => {
     updateDistrict,
     updateRound,
     pushEvent,
+    refreshMarketBuildingShortcuts,
     handleMarketUpdate,
     setGuestMode,
     initProfileModal,
     initSettingsModal,
     addGangMembers,
     getCurrentGangMembers,
+    getEconomySnapshot,
     trySpendCash,
     addCleanCash,
     addDirtyCash,
     addInfluence,
     launderDirtyCash,
-    refreshProfilePopulation
+    refreshProfilePopulation,
+    addCraftedWeapons,
+    addCraftedDefense
   };
 })();

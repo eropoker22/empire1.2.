@@ -61,7 +61,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const token = localStorage.getItem("empire_token");
+  const API_BASE = "http://localhost:3000";
+  let authToken = localStorage.getItem("empire_token");
 
   const grid = document.getElementById("structure-grid");
   const note = document.getElementById("structure-note");
@@ -96,68 +97,106 @@ document.addEventListener("DOMContentLoaded", () => {
     startX: 0
   };
   let marqueeLoopWidth = 0;
+  let gangColorSyncRevision = 0;
 
-  const allAvatars = [
-    "../img/avatars/grok_image_1773615281856.jpg",
-    "../img/avatars/grok_image_1773615288781.jpg",
-    "../img/avatars/grok_image_1773615384205.jpg",
-    "../img/avatars/grok_image_1773615486819.jpg",
-    "../img/avatars/grok_image_1773619750005.jpg",
-    "../img/avatars/grok_image_1773619765153.jpg",
-    "../img/avatars/grok_image_1773619828633.jpg",
-    "../img/avatars/grok_image_1773619862866.jpg",
-    "../img/avatars/grok_image_1773619917189.jpg",
-    "../img/avatars/grok_image_1773619952518.jpg",
-    "../img/avatars/grok_image_1773620275790.jpg",
-    "../img/avatars/grok_image_1773620278343.jpg",
-    "../img/avatars/grok_image_1773620295724.jpg",
-    "../img/avatars/grok_image_1773620311309.jpg",
-    "../img/avatars/grok_image_1773620316935.jpg",
-    "../img/avatars/grok_image_1773620321599.jpg",
-    "../img/avatars/grok_image_1773620327962.jpg",
-    "../img/avatars/grok_image_1773620346567.jpg",
-    "../img/avatars/grok_image_1773620360803.jpg",
-    "../img/avatars/grok_image_1773620382664.jpg",
-    "../img/avatars/grok_image_1773620392440.jpg",
-    "../img/avatars/grok_image_1773620407010.jpg",
-    "../img/avatars/grok_image_1773620423483.jpg",
-    "../img/avatars/grok_image_1773620455448.jpg",
-    "../img/avatars/grok_image_1773620518258.jpg",
-    "../img/avatars/grok_image_1773620582542.jpg",
-    "../img/avatars/grok_image_1773620589955.jpg",
-    "../img/avatars/grok_image_1773620608055.jpg",
-    "../img/avatars/grok_image_1773620615836.jpg",
-    "../img/avatars/grok_image_1773620629687.jpg",
-    "../img/avatars/grok_image_1773620667715.jpg",
-    "../img/avatars/grok_image_1773620689157.jpg",
-    "../img/avatars/grok_image_1773620695952.jpg",
-    "../img/avatars/grok_image_1773620705790.jpg",
-    "../img/avatars/grok_image_1773620711786.jpg",
-    "../img/avatars/grok_image_1773620750382.jpg",
-    "../img/avatars/grok_image_1773620768402.jpg",
-    "../img/avatars/grok_image_1773620817709.jpg",
-    "../img/avatars/grok_image_1773620842831.jpg",
-    "../img/avatars/grok_image_1773620914229.jpg",
-    "../img/avatars/grok_image_1773620941001.jpg",
-    "../img/avatars/grok_image_1773620945005.jpg",
-    "../img/avatars/grok_image_1773620993530.jpg",
-    "../img/avatars/grok_image_1773621033620.jpg",
-    "../img/avatars/grok_image_1773621108270.jpg",
-    "../img/avatars/grok_image_1773621117526.jpg",
-    "../img/avatars/grok_image_1773621173474.jpg",
-    "../img/avatars/grok_image_1773621230721.jpg",
-    "../img/avatars/grok_image_1773621252715.jpg",
-    "../img/avatars/grok_image_1773621293469.jpg",
-    "../img/avatars/grok_image_1773621379927.jpg",
-    "../img/avatars/grok_image_1773621424855.jpg",
-    "../img/avatars/grok_image_1773621498552.jpg",
-    "../img/avatars/grok_image_1773621517655.jpg",
-    "../img/avatars/grok_image_1773621797044.jpg",
-    "../img/avatars/grok_image_1773621839967.jpg",
-    "../img/avatars/grok_image_1773621943105.jpg",
-    "../img/avatars/grok_image_1773622258558.jpg",
-    "../img/avatars/grok_image_1773622270979.jpg"
-  ];
+  const factionAvatarPools = {
+    "mafián": [
+      "../img/avatars/Mafia/2854d1df-0f7c-4fe4-aa85-7a70dfe299db.jpg",
+      "../img/avatars/Mafia/8d2dcbe6-00d3-4b6f-98a0-53dc914346c5.jpg",
+      "../img/avatars/Mafia/c06f4c9b-2f01-43bc-a085-cd614f5435a9.jpg",
+      "../img/avatars/Mafia/cc2273ef-9175-4422-80ae-3c790f05e233.jpg",
+      "../img/avatars/Mafia/grok_image_1773619750005.jpg",
+      "../img/avatars/Mafia/grok_image_1773619862866.jpg",
+      "../img/avatars/Mafia/grok_image_1773620311309.jpg",
+      "../img/avatars/Mafia/grok_image_1773620518258.jpg",
+      "../img/avatars/Mafia/u6568429269_ultra_realistic_photo_of_a_middle-aged_mafia_boss_6ea45063-7161-4bc9-a6fc-d6272093bdfd_2.png",
+      "../img/avatars/Mafia/u6568429269_ultra_realistic_photo_of_a_middle-aged_mafia_boss_75858821-6f00-4d5d-b505-f4c4718f6793_3.png"
+    ],
+    kartel: [
+      "../img/avatars/Kartel/0f3d68b6-79b0-4bdd-9856-2491cd66cb78.jpg",
+      "../img/avatars/Kartel/37b9a32a-4710-4060-a1a9-5cf2e2c924c7.jpg",
+      "../img/avatars/Kartel/4106b8e4-5832-4e06-80bc-41a8c7f338ba.jpg",
+      "../img/avatars/Kartel/43141dc5-2250-4074-8579-a112abd5e038.jpg",
+      "../img/avatars/Kartel/493a9297-ee18-49ca-a81e-aeca0a214a2b.jpg",
+      "../img/avatars/Kartel/5c31615c-6e38-408c-8d88-b8aea5af6a26.jpg",
+      "../img/avatars/Kartel/6a744996-f511-461a-9921-3cb3df3ad166.jpg",
+      "../img/avatars/Kartel/a02833cd-b493-41aa-b784-b28ae35124b3.jpg",
+      "../img/avatars/Kartel/f1a482b8-44c2-41f1-9e3c-1d4c4cff5d7d.jpg",
+      "../img/avatars/Kartel/f7281b4a-f79f-4d76-b975-5153d414208f.jpg"
+    ],
+    "pouliční gang": [
+      "../img/avatars/polucnigang/5f1bbe02-e437-43b6-b9ed-c453e34ca622.jpg",
+      "../img/avatars/polucnigang/f9b2211e-30fb-46ab-aa4c-16913d8a92c6.jpg",
+      "../img/avatars/polucnigang/grok_image_1773620275790.jpg",
+      "../img/avatars/polucnigang/grok_image_1773620321599.jpg",
+      "../img/avatars/polucnigang/u6568429269_ultra_realistic_photo_of_a_female_underground_dea_52cbb8d9-f907-4f76-95c5-608796e1408f_2.png",
+      "../img/avatars/polucnigang/u6568429269_ultra_realistic_photo_of_a_hacker_real_human_eye__0febf5a6-2d94-462e-8273-7f75ebc9702f_2.png",
+      "../img/avatars/polucnigang/u6568429269_ultra_realistic_photo_of_a_man_standing_in_a_dark_414698ba-5d74-445c-aff4-08db501c9559_1.png",
+      "../img/avatars/polucnigang/u6568429269_ultra_realistic_photo_of_a_young_street_gangster__b24ce8ec-0dd1-4655-9a10-903bd799329b_0.png",
+      "../img/avatars/polucnigang/u6568429269_underground_drug_dealer_shady_look_neon_pills_glo_eb67ef23-8107-4e80-a2b4-5e761a9707a9_0.png",
+      "../img/avatars/polucnigang/u6568429269_underground_drug_dealer_shady_look_neon_pills_glo_eb67ef23-8107-4e80-a2b4-5e761a9707a9_3.png"
+    ],
+    "tajná organizace": [
+      "../img/avatars/Tajnaorganizace/0099fc13-4774-459a-b1a9-ea507a6c0526.jpg",
+      "../img/avatars/Tajnaorganizace/0870f362-b2ce-4607-ad3f-a96b59afcc8d.jpg",
+      "../img/avatars/Tajnaorganizace/0bd44b08-ad68-4404-9530-0522aae3ec60.jpg",
+      "../img/avatars/Tajnaorganizace/66c17176-42d3-4647-8c06-fc6e91f3957f.jpg",
+      "../img/avatars/Tajnaorganizace/90387802-ab09-43dd-b1be-e513584fc020.jpg",
+      "../img/avatars/Tajnaorganizace/9201ecf3-9210-4769-b500-37186590748a.jpg",
+      "../img/avatars/Tajnaorganizace/9d63f447-a2aa-484c-9f5c-6c81f7e164c0.jpg",
+      "../img/avatars/Tajnaorganizace/c145e5c4-81e4-4681-a316-1a4976cf3549.jpg",
+      "../img/avatars/Tajnaorganizace/da2df45b-cb96-4d83-b18c-2c91946bc817.jpg",
+      "../img/avatars/Tajnaorganizace/u6568429269_ultra_realistic_photo_of_an_elegant_man_outside_a_188a7cff-400b-454a-850d-5b64750e328f_0.png"
+    ],
+    "hackeři": [
+      "../img/avatars/Hacker/379f566a-18b8-457e-83ee-ee9ee114cb7a.jpg",
+      "../img/avatars/Hacker/53867e7d-cc7e-4f92-b391-88f44bf7e349.jpg",
+      "../img/avatars/Hacker/b2ca251d-ddc6-43ac-9001-d9b9d2f28203.jpg",
+      "../img/avatars/Hacker/d50c31d1-c395-4f21-8dae-9088c65926cb.jpg",
+      "../img/avatars/Hacker/grok_image_1773620608055.jpg",
+      "../img/avatars/Hacker/grok_image_1773621424855.jpg",
+      "../img/avatars/Hacker/grok_image_1773621797044.jpg",
+      "../img/avatars/Hacker/u6568429269_ultra_realistic_photo_of_a_hacker_real_human_eye__7dc8e46f-f8fc-4957-8366-b556a1cf2dc4_1.png",
+      "../img/avatars/Hacker/u6568429269_ultra_realistic_photo_of_a_hacker_real_human_eye__f876b11b-aba1-4c29-944c-02fa3f726770_2.png",
+      "../img/avatars/Hacker/u6568429269_ultra_realistic_photo_of_a_young_hacker_real_huma_f3554d32-77a2-4073-affb-616f3353f331_1.png"
+    ],
+    "motorkářský gang": [
+      "../img/avatars/Motogang/grok_image_1773621173474.jpg",
+      "../img/avatars/Motogang/grok_image_1773621230721.jpg",
+      "../img/avatars/Motogang/grok_image_1773621252715.jpg",
+      "../img/avatars/Motogang/u6568429269_cyberpunk_biker_leather_jacket_glowing_bike_behin_1da05b1a-019b-4a6a-97d7-8485dff3dc93_3.png",
+      "../img/avatars/Motogang/u6568429269_ultra_realistic_photo_of_a_biker_real_human_imper_5d544f44-0abd-471c-982e-7131336ebe6f_1.png",
+      "../img/avatars/Motogang/u6568429269_ultra_realistic_photo_of_a_biker_real_human_imper_5d544f44-0abd-471c-982e-7131336ebe6f_2.png",
+      "../img/avatars/Motogang/u6568429269_ultra_realistic_photo_of_a_biker_real_human_skin__fa51ff6a-3bb8-4ca1-a43e-9d60d8bc2824_3.png",
+      "../img/avatars/Motogang/u6568429269_ultra_realistic_photo_of_a_female_biker_real_huma_2b692954-b73f-49e4-91d8-dddc78867254_0.png",
+      "../img/avatars/Motogang/u6568429269_ultra_realistic_photo_of_a_female_biker_real_huma_2b692954-b73f-49e4-91d8-dddc78867254_3.png",
+      "../img/avatars/Motogang/u6568429269_ultra_realistic_portrait_of_a_cyberpunk_biker_sym_22eb676a-3364-4a3b-a9f6-48cdad9c87c5_2.png"
+    ],
+    "soukromá armáda": [
+      "../img/avatars/SoukromaArmada/17912d57-dfc8-49fc-9a90-44121c298975.jpg",
+      "../img/avatars/SoukromaArmada/bbe6342a-cf92-4459-af42-dbb7beba19f6.jpg",
+      "../img/avatars/SoukromaArmada/c4f384d2-9cd2-4f78-9145-a8e98dbc02dc.jpg",
+      "../img/avatars/SoukromaArmada/grok_image_1773620629687.jpg",
+      "../img/avatars/SoukromaArmada/grok_image_1773620667715.jpg",
+      "../img/avatars/SoukromaArmada/grok_image_1773620914229.jpg",
+      "../img/avatars/SoukromaArmada/u6568429269_private_military_soldier_futuristic_armor_scars_h_26d14473-69e5-46d8-baf2-e237305257ba_0.png",
+      "../img/avatars/SoukromaArmada/u6568429269_private_military_soldier_futuristic_armor_scars_h_26d14473-69e5-46d8-baf2-e237305257ba_1.png",
+      "../img/avatars/SoukromaArmada/u6568429269_private_military_soldier_futuristic_armor_scars_h_945f0251-cd43-4191-a97a-4997c480ef9e_1.png",
+      "../img/avatars/SoukromaArmada/u6568429269_ultra_realistic_photo_of_a_mercenary_real_human_s_07ad1129-e85f-48b2-b807-b68d3fe0b68d_3.png"
+    ],
+    korporace: [
+      "../img/avatars/Korporat/094f576f-646f-4ec9-9786-63019d07cdfe.jpg",
+      "../img/avatars/Korporat/2ef61d31-c01c-44a3-bca5-6171166352b0.jpg",
+      "../img/avatars/Korporat/350d79e5-06fb-45d4-a5c4-82e0a4c21e51.jpg",
+      "../img/avatars/Korporat/42f30467-a673-4be8-9720-e221144c6286.jpg",
+      "../img/avatars/Korporat/a621b41e-363c-47a5-bbbf-421418d19db1.jpg",
+      "../img/avatars/Korporat/b4f8031a-aa5e-4944-9e35-fc6b666e5f2b.jpg",
+      "../img/avatars/Korporat/daf4be3b-ed24-48ac-baa7-862a08d33a6e.jpg",
+      "../img/avatars/Korporat/e4286e80-0587-4e0e-afe4-70c348ee59dd.jpg",
+      "../img/avatars/Korporat/u6568429269_ultra_realistic_photo_of_a_corporate_businesswoma_346a0601-d784-4262-b627-06f3cd778022_0.png",
+      "../img/avatars/Korporat/u6568429269_ultra_realistic_photo_of_an_elegant_man_outside_a_4264b4bb-afb0-4c14-ab21-81929710b8d4_2.png"
+    ]
+  };
 
   const data = {
     "mafián": {
@@ -367,8 +406,6 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.removeItem("empire_gang_color");
   }
 
-  const factionAvatarPools = buildFactionAvatarPools(allAvatars, factionOrder, 10);
-
   function normalizeHexColor(value) {
     const raw = String(value || "").trim().toLowerCase();
     if (!raw) return null;
@@ -386,26 +423,6 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/>/g, "&gt;")
       .replace(/\"/g, "&quot;")
       .replace(/'/g, "&#39;");
-  }
-
-  function buildFactionAvatarPools(avatarList, factionKeys, maxPerFaction) {
-    const pools = {};
-    const sanitized = Array.isArray(avatarList) ? avatarList.filter(Boolean) : [];
-    const keys = Array.isArray(factionKeys) ? factionKeys.filter(Boolean) : [];
-    if (!keys.length) return pools;
-    const base = Math.floor(sanitized.length / keys.length);
-    let remainder = sanitized.length % keys.length;
-    let cursor = 0;
-
-    keys.forEach((key) => {
-      const desired = base + (remainder > 0 ? 1 : 0);
-      const take = Math.min(maxPerFaction, desired);
-      pools[key] = sanitized.slice(cursor, cursor + take);
-      cursor += take;
-      if (remainder > 0) remainder -= 1;
-    });
-
-    return pools;
   }
 
   function getAvailableAvatars() {
@@ -462,6 +479,55 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!selectedGangColor) missing.push("barvu gangu");
     if (!selectedAvatar) missing.push("avatara");
     note.textContent = `Chybí vybrat: ${missing.join(", ")}.`;
+  }
+
+  function applyAuthToken(nextToken) {
+    const safeToken = String(nextToken || "").trim();
+    if (!safeToken) return;
+    authToken = safeToken;
+    localStorage.setItem("empire_token", safeToken);
+  }
+
+  async function postAuthed(path, body) {
+    if (!authToken) return { error: "missing_token" };
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body || {})
+      });
+      return res.json();
+    } catch {
+      return { error: "network_error" };
+    }
+  }
+
+  function renderGangColorSelectionState(normalizedColor) {
+    if (gangColorGrid) {
+      gangColorGrid.querySelectorAll("[data-gang-color]").forEach((button) => {
+        const buttonColor = normalizeHexColor(button.dataset.gangColor);
+        button.classList.toggle("is-selected", buttonColor === normalizedColor);
+      });
+    }
+    if (!gangColorValue) return;
+    if (normalizedColor) {
+      const colorName = resolveGangColorName(normalizedColor);
+      gangColorValue.textContent = colorName;
+      gangColorValue.style.color = normalizedColor;
+      return;
+    }
+    gangColorValue.textContent = "Nevybráno";
+    gangColorValue.style.color = "";
+  }
+
+  function clearGangColorSelection() {
+    selectedGangColor = null;
+    localStorage.removeItem("empire_gang_color");
+    renderGangColorSelectionState(null);
+    updateContinueState();
   }
 
   function getAvatarLabel(src) {
@@ -538,24 +604,64 @@ document.addEventListener("DOMContentLoaded", () => {
     openLightbox(nextSrc);
   }
 
-  function applyGangColorSelection(color) {
+  async function applyGangColorSelection(color, options = {}) {
     const normalized = normalizeHexColor(color);
-    if (!normalized || !gangColorValueSet.has(normalized)) return;
-    selectedGangColor = normalized;
-    localStorage.setItem("empire_gang_color", normalized);
-    if (gangColorGrid) {
-      gangColorGrid.querySelectorAll("[data-gang-color]").forEach((button) => {
-        const buttonColor = normalizeHexColor(button.dataset.gangColor);
-        button.classList.toggle("is-selected", buttonColor === normalized);
-      });
+    if (!normalized || !gangColorValueSet.has(normalized)) return false;
+    const previousColor = normalizeHexColor(selectedGangColor);
+    const shouldSyncServer = Boolean(authToken) && !options?.skipServerSync;
+    const isSameAsPrevious = previousColor === normalized;
+
+    if (!isSameAsPrevious) {
+      selectedGangColor = normalized;
+      localStorage.setItem("empire_gang_color", normalized);
+      renderGangColorSelectionState(normalized);
+      updateContinueState();
+      updateNote();
+    } else if (!options?.silent) {
+      updateNote();
     }
-    if (gangColorValue) {
-      const colorName = resolveGangColorName(normalized);
-      gangColorValue.textContent = colorName;
-      gangColorValue.style.color = normalized;
+
+    if (!shouldSyncServer) return true;
+
+    if (!isSameAsPrevious || options?.forceServerSync) {
+      const syncRevision = ++gangColorSyncRevision;
+      const result = await postAuthed("/players/gang-color", { color: normalized });
+      if (syncRevision !== gangColorSyncRevision) {
+        return false;
+      }
+      const confirmedColor = normalizeHexColor(result?.gangColor);
+      if (confirmedColor) {
+        selectedGangColor = confirmedColor;
+        localStorage.setItem("empire_gang_color", confirmedColor);
+        renderGangColorSelectionState(confirmedColor);
+        if (result?.token) applyAuthToken(result.token);
+        if (!options?.silent) updateNote();
+        return true;
+      }
+
+      if (previousColor && previousColor !== normalized) {
+        selectedGangColor = previousColor;
+        localStorage.setItem("empire_gang_color", previousColor);
+        renderGangColorSelectionState(previousColor);
+      } else if (previousColor) {
+        selectedGangColor = previousColor;
+        localStorage.setItem("empire_gang_color", previousColor);
+        renderGangColorSelectionState(previousColor);
+      } else {
+        clearGangColorSelection();
+      }
+      updateContinueState();
+      if (!options?.silent && note) {
+        if (result?.error === "gang_color_taken") {
+          note.textContent = `Barva ${resolveGangColorName(normalized)} je už obsazená jiným hráčem. Vyber jinou.`;
+        } else {
+          note.textContent = "Barvu gangu se nepodařilo uložit na server.";
+        }
+      }
+      return false;
     }
-    updateContinueState();
-    updateNote();
+
+    return true;
   }
 
   function applyStructureSelection(choice) {
@@ -590,11 +696,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     updateContinueState();
     updateNote();
-    if (token) {
-      fetch("http://localhost:3000/players/structure", {
+    if (authToken) {
+      fetch(`${API_BASE}/players/structure`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${authToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ structure: choice })
@@ -602,7 +708,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .then((res) => res.json())
         .then((data) => {
           if (data?.token) {
-            localStorage.setItem("empire_token", data.token);
+            applyAuthToken(data.token);
           }
         })
         .catch(() => {});
@@ -713,7 +819,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (gangColorGrid) {
     gangColorGrid.querySelectorAll("[data-gang-color]").forEach((swatch) => {
-      const selectColor = () => applyGangColorSelection(swatch.dataset.gangColor);
+      const selectColor = () => {
+        void applyGangColorSelection(swatch.dataset.gangColor);
+      };
       swatch.addEventListener("click", selectColor);
       swatch.addEventListener("touchend", (event) => {
         event.preventDefault();
@@ -842,7 +950,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (selectedGangColor) {
-    applyGangColorSelection(selectedGangColor);
+    void applyGangColorSelection(selectedGangColor, {
+      silent: true,
+      forceServerSync: Boolean(authToken)
+    });
   } else if (gangColorValue) {
     gangColorValue.textContent = "Nevybráno";
     gangColorValue.style.color = "";
@@ -925,10 +1036,21 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   if (goGame) {
-    goGame.addEventListener("click", (event) => {
+    goGame.addEventListener("click", async (event) => {
       if (!selectedStructure || !selectedAvatar || !selectedGangColor) {
         event.preventDefault();
+        return;
       }
+      if (!authToken) return;
+      event.preventDefault();
+      const ok = await applyGangColorSelection(selectedGangColor, {
+        forceServerSync: true
+      });
+      if (!ok) return;
+      const targetHref = String(goGame.getAttribute("href") || "index.html");
+      window.location.href = targetHref;
     });
   }
 });
+
+

@@ -1,9 +1,20 @@
 const { pool } = require("../config/db");
 const { ATTACK_COOLDOWN_MINUTES, MAX_INFLUENCE } = require("../config/constants");
 const { ensureMoneySchema, spendPlayerMoney } = require("./moneyService");
+const { HEAT_BALANCE } = require("../config/drugs");
+const { ensureDistrictDestructionSchema } = require("./districtService");
+const {
+  ensureDrugSchema,
+  getDrugRuntimeFromRow,
+  projectHeatGain
+} = require("./drugService");
+
+const DISTRICT_DESTROY_CHANCE = 0.1;
 
 async function attackDistrict({ playerId, districtId }) {
   await ensureMoneySchema();
+  await ensureDrugSchema();
+  await ensureDistrictDestructionSchema();
   const client = await pool.connect();
 
   try {
@@ -23,7 +34,25 @@ async function attackDistrict({ playerId, districtId }) {
     }
 
     const districtRes = await client.query(
-      `SELECT d.id, d.type, d.influence_level, d.owner_player_id, p.influence_points AS owner_influence, p.alliance_id AS owner_alliance_id
+      `SELECT d.id, d.type, d.influence_level, d.owner_player_id, d.is_destroyed,
+              p.influence_points AS owner_influence,
+              p.alliance_id AS owner_alliance_id,
+              p.heat AS owner_heat,
+              p.drug_neon_dust AS owner_drug_neon_dust,
+              p.drug_pulse_shot AS owner_drug_pulse_shot,
+              p.drug_velvet_smoke AS owner_drug_velvet_smoke,
+              p.drug_ghost_serum AS owner_drug_ghost_serum,
+              p.drug_overdrive_x AS owner_drug_overdrive_x,
+              p.drug_neon_dust_active_until AS owner_drug_neon_dust_active_until,
+              p.drug_pulse_shot_active_until AS owner_drug_pulse_shot_active_until,
+              p.drug_velvet_smoke_active_until AS owner_drug_velvet_smoke_active_until,
+              p.drug_ghost_serum_active_until AS owner_drug_ghost_serum_active_until,
+              p.drug_overdrive_x_active_until AS owner_drug_overdrive_x_active_until,
+              p.drug_neon_dust_active_dose AS owner_drug_neon_dust_active_dose,
+              p.drug_pulse_shot_active_dose AS owner_drug_pulse_shot_active_dose,
+              p.drug_velvet_smoke_active_dose AS owner_drug_velvet_smoke_active_dose,
+              p.drug_ghost_serum_active_dose AS owner_drug_ghost_serum_active_dose,
+              p.drug_overdrive_x_active_dose AS owner_drug_overdrive_x_active_dose
        FROM districts d
        LEFT JOIN players p ON p.id = d.owner_player_id
        WHERE d.id = $1
@@ -37,7 +66,13 @@ async function attackDistrict({ playerId, districtId }) {
     }
 
     const playerRes = await client.query(
-      "SELECT clean_money, dirty_money, influence_points, alliance_id FROM players WHERE id = $1 FOR UPDATE",
+      `SELECT clean_money, dirty_money, influence_points, alliance_id, heat,
+              drug_neon_dust, drug_pulse_shot, drug_velvet_smoke, drug_ghost_serum, drug_overdrive_x,
+              drug_neon_dust_active_until, drug_pulse_shot_active_until, drug_velvet_smoke_active_until, drug_ghost_serum_active_until, drug_overdrive_x_active_until,
+              drug_neon_dust_active_dose, drug_pulse_shot_active_dose, drug_velvet_smoke_active_dose, drug_ghost_serum_active_dose, drug_overdrive_x_active_dose
+         FROM players
+        WHERE id = $1
+        FOR UPDATE`,
       [playerId]
     );
 
@@ -48,6 +83,14 @@ async function attackDistrict({ playerId, districtId }) {
 
     const player = playerRes.rows[0];
     const district = districtRes.rows[0];
+    if (district.is_destroyed) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "destroyed_district" };
+    }
+    const attackerDrugs = getDrugRuntimeFromRow(player);
+    const defenderDrugs = district.owner_player_id
+      ? getDrugRuntimeFromRow(district, { prefix: "owner_" })
+      : null;
 
     if (district.owner_player_id === playerId) {
       await client.query("ROLLBACK");
@@ -63,13 +106,13 @@ async function attackDistrict({ playerId, districtId }) {
       "SELECT id, owner_player_id, polygon FROM districts"
     );
 
-    const isAdjacent = isAttackTargetAdjacentToOwnedDistrict({
+    const sourceDistrictId = resolveOwnedAdjacentDistrictId({
       districts: mapRes.rows,
       targetDistrictId: district.id,
       playerId
     });
 
-    if (!isAdjacent) {
+    if (sourceDistrictId == null) {
       await client.query("ROLLBACK");
       return { ok: false, error: "not_adjacent" };
     }
@@ -84,8 +127,14 @@ async function attackDistrict({ playerId, districtId }) {
     const attackerInfluence = player.influence_points || 0;
 
     const defensePenalty = typeDefensePenalty(district.type);
-    const baseChance = 0.5 + (attackerInfluence - defenderInfluence) / 200 - defensePenalty;
-    const successChance = Math.min(0.9, Math.max(0.1, baseChance));
+    const attackerCombatPower = Number(attackerDrugs.modifiers.attackPowerMultiplier || 1);
+    const defenderCombatPower = Number(defenderDrugs?.modifiers?.defensePowerMultiplier || 1);
+    const combatPowerDelta = ((attackerCombatPower / Math.max(0.1, defenderCombatPower)) - 1) * 0.25;
+    const baseChance = 0.5
+      + (attackerInfluence - defenderInfluence) / 200
+      - defensePenalty
+      + combatPowerDelta;
+    const successChance = Math.min(0.95, Math.max(0.1, baseChance));
     const success = Math.random() < successChance;
     const influenceChange = Math.floor((10 + Math.random() * 16) * typeInfluenceMultiplier(district.type));
 
@@ -103,18 +152,47 @@ async function attackDistrict({ playerId, districtId }) {
         newOwner = null;
       }
     }
+    const destroyed = Math.random() < DISTRICT_DESTROY_CHANCE;
+    if (destroyed) {
+      newInfluence = 0;
+      newOwner = null;
+    }
 
     await client.query(
-      "UPDATE districts SET influence_level = $1, owner_player_id = $2, updated_at = NOW() WHERE id = $3",
-      [newInfluence, newOwner, districtId]
+      `UPDATE districts
+          SET influence_level = $1,
+              owner_player_id = $2,
+              is_destroyed = $3,
+              destroyed_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
+              updated_at = NOW()
+        WHERE id = $4`,
+      [newInfluence, newOwner, destroyed, districtId]
     );
 
-    const influenceGain = success ? Math.ceil(influenceChange / 4) : Math.floor(influenceChange / 8);
+    const baseInfluenceGain = success ? Math.ceil(influenceChange / 4) : Math.floor(influenceChange / 8);
+    const influenceGain = Math.max(
+      0,
+      Math.floor(baseInfluenceGain * Number(attackerDrugs.modifiers.influenceGainMultiplier || 1))
+    );
     await spendPlayerMoney(client, { playerId, amount: attackCost, preferDirty: true });
     await client.query(
       "UPDATE players SET influence_points = influence_points + $1 WHERE id = $2",
       [influenceGain, playerId]
     );
+
+    const attackHeatBase = attackerDrugs.activeByKey.overdrive_x?.active
+      ? Number(HEAT_BALANCE.overdriveAttackHeatGain || 5)
+      : Number(HEAT_BALANCE.baseAttackHeatGain || 2);
+    const attackHeatGain = projectHeatGain(attackHeatBase, attackerDrugs);
+    if (attackHeatGain > 0) {
+      await client.query(
+        `UPDATE players
+            SET heat = heat + $1,
+                updated_at = NOW()
+          WHERE id = $2`,
+        [attackHeatGain, playerId]
+      );
+    }
 
     await client.query(
       `INSERT INTO combat_logs (attacker_player_id, district_id, defender_player_id, success, attack_cost, influence_change)
@@ -135,7 +213,10 @@ async function attackDistrict({ playerId, districtId }) {
     return {
       ok: true,
       success,
+      destroyed,
       influenceChange,
+      heatGain: attackHeatGain,
+      sourceDistrictId,
       newOwnerId: newOwner,
       newInfluence
     };
@@ -180,28 +261,44 @@ function typeInfluenceMultiplier(type) {
 }
 
 function isAttackTargetAdjacentToOwnedDistrict({ districts, targetDistrictId, playerId }) {
+  return resolveOwnedAdjacentDistrictId({ districts, targetDistrictId, playerId }) != null;
+}
+
+function resolveOwnedAdjacentDistrictId({ districts, targetDistrictId, playerId }) {
   const safeDistricts = Array.isArray(districts) ? districts : [];
-  if (!safeDistricts.length || !targetDistrictId || !playerId) return false;
+  if (!safeDistricts.length || !targetDistrictId || !playerId) return null;
 
   const targetKey = String(targetDistrictId);
+  const playerKey = String(playerId);
   const districtsById = new Map(
     safeDistricts.map((district) => [String(district.id), district])
   );
-  if (!districtsById.has(targetKey)) return false;
+  if (!districtsById.has(targetKey)) return null;
 
   const adjacency = buildDistrictAdjacency(safeDistricts);
   const neighbors = adjacency.get(targetKey);
-  if (!neighbors || !neighbors.size) return false;
+  if (!neighbors || !neighbors.size) return null;
+
+  const ownedNeighbors = [];
 
   for (const neighborKey of neighbors) {
     const neighbor = districtsById.get(neighborKey);
     if (!neighbor) continue;
-    if (neighbor.owner_player_id === playerId) {
-      return true;
+    if (String(neighbor.owner_player_id) === playerKey) {
+      ownedNeighbors.push(neighbor.id);
     }
   }
 
-  return false;
+  if (!ownedNeighbors.length) return null;
+
+  const numericOwned = ownedNeighbors
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  if (numericOwned.length) {
+    numericOwned.sort((a, b) => a - b);
+    return numericOwned[0];
+  }
+  return String(ownedNeighbors[0]);
 }
 
 function buildDistrictAdjacency(districts) {

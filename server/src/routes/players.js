@@ -1,6 +1,6 @@
 const express = require("express");
 const { auth } = require("../middleware/auth");
-const { getPlayerProfile, setPlayerStructure } = require("../services/playerService");
+const { getPlayerProfile, setPlayerStructure, setPlayerGangColor } = require("../services/playerService");
 const { createToken } = require("../services/authService");
 
 const router = express.Router();
@@ -14,10 +14,15 @@ router.get("/me", auth, async (req, res) => {
     username: profile.username,
     gangName: profile.gang_name,
     structure: profile.gang_structure || null,
+    gangColor: profile.gang_color || null,
     money: Number(profile.clean_money || 0) + Number(profile.dirty_money || 0),
     cleanMoney: Number(profile.clean_money || 0),
     dirtyMoney: Number(profile.dirty_money || 0),
     influence: Number(profile.influence_points),
+    heat: Number(profile.heat || 0),
+    drugs: Number(profile.drugs || 0),
+    drugInventory: profile.drugInventory || {},
+    activeDrugs: profile.activeDrugs || {},
     alliance: profile.alliance_name,
     districts: Number(profile.district_count)
   });
@@ -31,6 +36,20 @@ router.post("/structure", auth, async (req, res) => {
   const profile = await getPlayerProfile(req.user.id);
   const token = createToken(profile);
   res.json({ structure: saved, token });
+});
+
+router.post("/gang-color", auth, async (req, res) => {
+  const { color } = req.body || {};
+  const result = await setPlayerGangColor(req.user.id, color);
+  if (!result?.ok) {
+    if (result?.error === "invalid_color") return res.status(400).json({ error: "invalid_color" });
+    if (result?.error === "gang_color_taken") return res.status(409).json({ error: "gang_color_taken" });
+    if (result?.error === "not_found") return res.status(404).json({ error: "not_found" });
+    return res.status(400).json({ error: "gang_color_update_failed" });
+  }
+  const profile = await getPlayerProfile(req.user.id);
+  const token = createToken(profile);
+  res.json({ gangColor: result.gangColor, token });
 });
 
 module.exports = router;

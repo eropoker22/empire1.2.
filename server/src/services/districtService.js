@@ -2,7 +2,16 @@ const { pool } = require("../config/db");
 const { CityGen } = require("./mapGen");
 const { MAP_SEED } = require("../config/constants");
 
+async function ensureDistrictDestructionSchema() {
+  await pool.query(`
+    ALTER TABLE districts
+      ADD COLUMN IF NOT EXISTS is_destroyed BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS destroyed_at TIMESTAMP NULL
+  `);
+}
+
 async function ensureDistricts() {
+  await ensureDistrictDestructionSchema();
   const existing = await pool.query("SELECT COUNT(*) FROM districts");
   const count = Number(existing.rows[0].count);
   if (count > 0) return;
@@ -33,12 +42,17 @@ async function ensureDistricts() {
 }
 
 async function listDistricts() {
+  await ensureDistrictDestructionSchema();
   await ensureDistricts();
   const result = await pool.query(
     `SELECT d.id, d.name, d.type, d.base_income, d.influence_level, d.polygon,
-            p.gang_name AS owner_name
+            d.owner_player_id, d.is_destroyed, d.destroyed_at,
+            p.gang_name AS owner_name,
+            p.username AS owner_username,
+            a.name AS owner_alliance_name
      FROM districts d
-     LEFT JOIN players p ON p.id = d.owner_player_id
+      LEFT JOIN players p ON p.id = d.owner_player_id
+      LEFT JOIN alliances a ON a.id = p.alliance_id
      ORDER BY d.name ASC`
   );
 
@@ -47,10 +61,15 @@ async function listDistricts() {
     name: row.name,
     type: row.type,
     owner: row.owner_name,
+    ownerPlayerId: row.owner_player_id || null,
+    ownerNick: row.owner_username || null,
+    ownerAllianceName: row.owner_alliance_name || null,
     influence: row.influence_level,
     income: row.base_income,
+    isDestroyed: Boolean(row.is_destroyed),
+    destroyedAt: row.destroyed_at || null,
     polygon: typeof row.polygon === "string" ? JSON.parse(row.polygon) : row.polygon
   }));
 }
 
-module.exports = { listDistricts, ensureDistricts };
+module.exports = { listDistricts, ensureDistricts, ensureDistrictDestructionSchema };

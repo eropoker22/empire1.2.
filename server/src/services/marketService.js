@@ -6,9 +6,17 @@ const {
   addCleanMoney,
   addDirtyMoney
 } = require("./moneyService");
+const {
+  ensureDrugSchema,
+  getDrugInventoryFromRow,
+  sumDrugInventory,
+  toApiDrugInventory
+} = require("./drugService");
+const { DRUG_RESOURCE_COLUMN_MAP } = require("../config/drugs");
 const MARKET_FEE_BPS = 500;
 
 const RESOURCE_COLUMNS = {
+  ...DRUG_RESOURCE_COLUMN_MAP,
   drugs: "drugs",
   weapons: "weapons",
   materials: "materials",
@@ -19,6 +27,7 @@ let marketSchemaReady = false;
 
 async function ensureMarketSchema() {
   if (marketSchemaReady) return;
+  await ensureDrugSchema();
   await ensureMoneySchema();
   await pool.query(`
     ALTER TABLE players
@@ -83,11 +92,16 @@ function assertPositiveInt(value, field) {
   }
 }
 
+function isSpecificDrugResource(resourceKey) {
+  return Boolean(DRUG_RESOURCE_COLUMN_MAP[resourceKey]);
+}
+
 async function getMarketState(playerId) {
   await ensureMarketSchema();
 
   const balancesRes = await pool.query(
-    `SELECT money, clean_money, dirty_money, drugs, weapons, materials, data_shards
+    `SELECT money, clean_money, dirty_money, weapons, materials, data_shards,
+            drug_neon_dust, drug_pulse_shot, drug_velvet_smoke, drug_ghost_serum, drug_overdrive_x
        FROM players
       WHERE id = $1`,
     [playerId]
@@ -125,12 +139,18 @@ async function getMarketState(playerId) {
 
   const balances = balancesRes.rows[0] || {};
   const money = normalizeMoneyRow(balances);
+  const drugInventory = getDrugInventoryFromRow(balances);
+  const drugInventoryApi = toApiDrugInventory(drugInventory);
+  const totalDrugs = sumDrugInventory(drugInventory);
+
   return {
     balances: {
       money: money.totalMoney,
       cleanMoney: money.cleanMoney,
       dirtyMoney: money.dirtyMoney,
-      drugs: Number(balances.drugs || 0),
+      drugs: totalDrugs,
+      drugInventory: drugInventoryApi,
+      ...drugInventoryApi,
       weapons: Number(balances.weapons || 0),
       materials: Number(balances.materials || 0),
       dataShards: Number(balances.data_shards || 0)
@@ -267,10 +287,14 @@ async function reserveOrderEscrow(client, { playerId, resourceKey, side, quantit
       error.status = 400;
       throw error;
     }
+    const legacyDrugSync = isSpecificDrugResource(resourceKey)
+      ? ", drugs = GREATEST(0, COALESCE(drugs, 0) - $1)"
+      : "";
     await client.query(
       `UPDATE players
           SET ${resourceColumn} = ${resourceColumn} - $1,
               updated_at = NOW()
+              ${legacyDrugSync}
         WHERE id = $2`,
       [quantity, playerId]
     );
@@ -292,10 +316,14 @@ async function refundOrderEscrow(client, order) {
 
   if (order.side === "sell") {
     const resourceColumn = RESOURCE_COLUMNS[order.resource_key];
+    const legacyDrugSync = isSpecificDrugResource(order.resource_key)
+      ? ", drugs = COALESCE(drugs, 0) + $1"
+      : "";
     await client.query(
       `UPDATE players
           SET ${resourceColumn} = ${resourceColumn} + $1,
               updated_at = NOW()
+              ${legacyDrugSync}
         WHERE id = $2`,
       [remainingQuantity, order.player_id]
     );
@@ -357,10 +385,15 @@ async function matchOrder(client, order) {
     const buyOrderId = activeOrder.side === "buy" ? activeOrder.id : counter.id;
     const sellOrderId = activeOrder.side === "sell" ? activeOrder.id : counter.id;
 
+    const buyerLegacyDrugSync = isSpecificDrugResource(activeOrder.resource_key)
+      ? ", drugs = COALESCE(drugs, 0) + $1"
+      : "";
+
     await client.query(
       `UPDATE players
           SET ${resourceColumn} = ${resourceColumn} + $1,
               updated_at = NOW()
+              ${buyerLegacyDrugSync}
         WHERE id = $2`,
       [tradeQuantity, buyerId]
     );

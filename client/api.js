@@ -60,6 +60,25 @@ window.Empire.API = (() => {
     return res.json();
   }
 
+  async function getDrugsStatus() {
+    const res = await fetch(`${baseUrl}/economy/drugs`, {
+      headers: authHeaders()
+    });
+    return res.json();
+  }
+
+  async function useDrug(drugKey, amount = 1) {
+    const res = await fetch(`${baseUrl}/economy/drugs/use`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ drugKey, amount })
+    });
+    return res.json();
+  }
+
   async function getAlliance() {
     const res = await fetch(`${baseUrl}/alliances/mine`, {
       headers: authHeaders()
@@ -167,6 +186,8 @@ window.Empire.API = (() => {
     getProfile,
     setStructure,
     getEconomy,
+    getDrugsStatus,
+    useDrug,
     getAlliance,
     listAlliances,
     createAlliance,

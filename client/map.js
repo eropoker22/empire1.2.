@@ -7,6 +7,8 @@ window.Empire.Map = (() => {
     tooltip: null,
     modal: null,
     districts: [],
+    districtIndexById: new Map(),
+    districtAdjacencyById: new Map(),
     roads: [],
     hoverId: null,
     selectedId: null,
@@ -28,10 +30,27 @@ window.Empire.Map = (() => {
     vision: {
       fogPreviewMode: false,
       alliedOwnerNames: new Set(),
-      enemyOwnerNames: new Set()
+      enemyOwnerNames: new Set(),
+      allowEnemyModalIntelInFog: false,
+      uniqueOwnerColors: false,
+      districtBorderMode: "player"
     },
-    activeBuildingDetail: null
+    alliancePatternCache: new Map(),
+    distinctOwnerColorByName: new Map(),
+    attackedDistricts: new Map(),
+    policeDistrictActions: new Map(),
+    attackAnimationIntervalId: null,
+    activeBuildingDetail: null,
+    activeBuildingDetailTab: "stats"
   };
+
+  const DISTRICT_ATTACK_MARKER_DEFAULT_DURATION_MS = 8 * 60 * 1000;
+  const DISTRICT_ATTACK_MARKER_MIN_DURATION_MS = 15 * 1000;
+  const DISTRICT_ATTACK_MARKER_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+  const DISTRICT_POLICE_ACTION_DEFAULT_DURATION_MS = 10 * 60 * 1000;
+  const DISTRICT_POLICE_ACTION_MIN_DURATION_MS = 30 * 1000;
+  const DISTRICT_POLICE_ACTION_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+  const DISTRICT_ATTACK_ANIMATION_INTERVAL_MS = 120;
 
   const ownerPalette = [
     "rgba(244,114,182,0.34)",
@@ -54,6 +73,29 @@ window.Empire.Map = (() => {
     "rgba(34,197,94,0.46)",
     "rgba(250,204,21,0.46)",
     "rgba(168,85,247,0.46)"
+  ];
+
+  const districtOwnerAvatarPool = [
+    "../img/avatars/Mafia/2854d1df-0f7c-4fe4-aa85-7a70dfe299db.jpg",
+    "../img/avatars/Mafia/8d2dcbe6-00d3-4b6f-98a0-53dc914346c5.jpg",
+    "../img/avatars/Kartel/0f3d68b6-79b0-4bdd-9856-2491cd66cb78.jpg",
+    "../img/avatars/Kartel/37b9a32a-4710-4060-a1a9-5cf2e2c924c7.jpg",
+    "../img/avatars/Hacker/379f566a-18b8-457e-83ee-ee9ee114cb7a.jpg",
+    "../img/avatars/Hacker/53867e7d-cc7e-4f92-b391-88f44bf7e349.jpg",
+    "../img/avatars/Korporat/094f576f-646f-4ec9-9786-63019d07cdfe.jpg",
+    "../img/avatars/Korporat/2ef61d31-c01c-44a3-bca5-6171166352b0.jpg",
+    "../img/avatars/Motogang/grok_image_1773621173474.jpg",
+    "../img/avatars/Motogang/grok_image_1773621230721.jpg",
+    "../img/avatars/polucnigang/5f1bbe02-e437-43b6-b9ed-c453e34ca622.jpg",
+    "../img/avatars/polucnigang/f9b2211e-30fb-46ab-aa4c-16913d8a92c6.jpg",
+    "../img/avatars/SoukromaArmada/17912d57-dfc8-49fc-9a90-44121c298975.jpg",
+    "../img/avatars/SoukromaArmada/bbe6342a-cf92-4459-af42-dbb7beba19f6.jpg",
+    "../img/avatars/Tajnaorganizace/0099fc13-4774-459a-b1a9-ea507a6c0526.jpg",
+    "../img/avatars/Tajnaorganizace/0870f362-b2ce-4607-ad3f-a96b59afcc8d.jpg",
+    "../img/avatars/Mafia/grok_image_1773619750005.jpg",
+    "../img/avatars/Kartel/f7281b4a-f79f-4d76-b975-5153d414208f.jpg",
+    "../img/avatars/Hacker/grok_image_1773621797044.jpg",
+    "../img/avatars/Korporat/e4286e80-0587-4e0e-afe4-70c348ee59dd.jpg"
   ];
 
   const parkImages = [
@@ -464,6 +506,339 @@ window.Empire.Map = (() => {
     upgradePctPerLevel: 0.1
   });
 
+  const PHARMACY_BUILDING_NAME = "Lékárna";
+  const PHARMACY_BUILDING_STORAGE_KEY = "empire_pharmacy_building_mechanics_v1";
+  const PHARMACY_CONFIG = Object.freeze({
+    maxLevel: 14,
+    baseProductionPerHour: Object.freeze({
+      chemicals: 10,
+      biomass: 6,
+      stimPack: 2
+    }),
+    baseHeatPerDay: 3,
+    upgradePctPerLevel: 0.1,
+    boostDurationMs: 2 * 60 * 60 * 1000,
+    boosts: Object.freeze({
+      recon: Object.freeze({
+        stimCost: 2,
+        spySpeedPct: 50,
+        infoQualityPct: 30
+      }),
+      action: Object.freeze({
+        stimCost: 3,
+        attackSpeedPct: 25,
+        stealSpeedPct: 25
+      }),
+      neuro: Object.freeze({
+        stimCost: 4,
+        activeActionsPct: 20,
+        heatAdded: 3
+      })
+    })
+  });
+  const PHARMACY_RESOURCE_KEYS = Object.freeze(["chemicals", "biomass", "stimPack"]);
+  const PHARMACY_SLOT_CONFIG = Object.freeze([
+    Object.freeze({ id: 1, resourceKey: "chemicals", label: "Chemicals", basePerHour: PHARMACY_CONFIG.baseProductionPerHour.chemicals }),
+    Object.freeze({ id: 2, resourceKey: "biomass", label: "Biomass", basePerHour: PHARMACY_CONFIG.baseProductionPerHour.biomass }),
+    Object.freeze({ id: 3, resourceKey: "stimPack", label: "Stim Pack", basePerHour: PHARMACY_CONFIG.baseProductionPerHour.stimPack })
+  ]);
+
+  const FACTORY_BUILDING_NAME = "Továrna";
+  const FACTORY_BUILDING_STORAGE_KEY = "empire_factory_building_mechanics_v1";
+  const FACTORY_PLAYER_STORAGE_KEY = "empire_factory_player_supplies_v1";
+  const FACTORY_CONFIG = Object.freeze({
+    maxLevel: 14,
+    baseProductionPerHour: Object.freeze({
+      metalParts: 12,
+      techCore: 4
+    }),
+    upgradePctPerLevel: 0.1,
+    combatModule: Object.freeze({
+      metalPartsCost: 4,
+      techCoreCost: 3,
+      durationMs: 15 * 60 * 1000,
+      heatPerUnit: 1
+    })
+  });
+  const FACTORY_COMBAT_BOOSTS = Object.freeze({
+    assault: Object.freeze({
+      combatModuleCost: 2,
+      durationMs: 2 * 60 * 60 * 1000,
+      attackPowerPct: 30,
+      heatAdded: 3
+    }),
+    rapid: Object.freeze({
+      combatModuleCost: 3,
+      durationMs: 90 * 60 * 1000,
+      attackSpeedPct: 40,
+      raidSpeedPct: 25,
+      defensePenaltyPct: 10,
+      heatAdded: 4
+    }),
+    breach: Object.freeze({
+      combatModuleCost: 4,
+      durationMs: 2 * 60 * 60 * 1000,
+      destroyBuildingChancePct: 20,
+      defenseIgnorePct: 15,
+      policeInterventionRiskPct: 35,
+      heatAdded: 5
+    })
+  });
+  const FACTORY_RESOURCE_KEYS = Object.freeze(["metalParts", "techCore", "combatModule"]);
+  const FACTORY_SLOT_CONFIG = Object.freeze([
+    Object.freeze({ id: 1, resourceKey: "metalParts", label: "Metal Parts", mode: "produce" }),
+    Object.freeze({ id: 2, resourceKey: "techCore", label: "Tech Core", mode: "produce" }),
+    Object.freeze({ id: 3, resourceKey: "combatModule", label: "Combat Module", mode: "craft" })
+  ]);
+
+  const ARMORY_BUILDING_NAME = "Zbrojovka";
+  const ARMORY_BUILDING_STORAGE_KEY = "empire_armory_building_mechanics_v1";
+  const ARMORY_CONFIG = Object.freeze({
+    maxLevel: 14,
+    upgradePctPerLevel: 0.1,
+    weapons: Object.freeze({
+      baseballBat: Object.freeze({
+        id: "baseballBat",
+        category: "attack",
+        name: "Baseballová pálka",
+        metalPartsCost: 3,
+        techCoreCost: 0,
+        durationMs: 12 * 60 * 1000,
+        attackPower: 5,
+        specialEffect: "+10 % rychlost útoku",
+        drawback: "Slabý damage, slabá proti obranným budovám",
+        role: "Early game, rychlé farmení slabých distriktů",
+        heatPerUnit: 0
+      }),
+      streetPistol: Object.freeze({
+        id: "streetPistol",
+        category: "attack",
+        name: "Pouliční pistole",
+        metalPartsCost: 5,
+        techCoreCost: 1,
+        durationMs: 22 * 60 * 1000,
+        attackPower: 12,
+        specialEffect: "+5 % šance na úspěšný útok",
+        drawback: "Průměrná síla",
+        role: "Univerzální zbraň, early-mid game",
+        heatPerUnit: 0
+      }),
+      grenade: Object.freeze({
+        id: "grenade",
+        category: "attack",
+        name: "Granát",
+        metalPartsCost: 6,
+        techCoreCost: 3,
+        durationMs: 35 * 60 * 1000,
+        attackPower: 20,
+        specialEffect: "+15 % damage při prvním útoku, +10 % šance snížit obranu distriktu",
+        drawback: "Jednorázově orientovaný efekt, menší dlouhodobá hodnota",
+        role: "Burst damage, prolomení obrany",
+        heatPerUnit: 0
+      }),
+      smg: Object.freeze({
+        id: "smg",
+        category: "attack",
+        name: "Samopal",
+        metalPartsCost: 10,
+        techCoreCost: 4,
+        durationMs: 55 * 60 * 1000,
+        attackPower: 30,
+        specialEffect: "+20 % proti slabším hráčům",
+        drawback: "Slabší proti silným hráčům",
+        role: "Mid game dominance, tlak na slabší hráče",
+        heatPerUnit: 0
+      }),
+      bazooka: Object.freeze({
+        id: "bazooka",
+        category: "attack",
+        name: "Bazuka",
+        metalPartsCost: 18,
+        techCoreCost: 8,
+        durationMs: 90 * 60 * 1000,
+        attackPower: 70,
+        specialEffect: "+25 % šance zničit budovu při útoku, +15 % ignorování obrany",
+        drawback: "Extrémně drahá",
+        role: "Heavy attack / endgame push",
+        heatPerUnit: 4
+      }),
+      bulletproofVest: Object.freeze({
+        id: "bulletproofVest",
+        category: "defense",
+        name: "Neprůstřelná vesta",
+        metalPartsCost: 3,
+        techCoreCost: 1,
+        durationMs: 15 * 60 * 1000,
+        defensePower: 6,
+        specialEffect: "-10 % damage z lehkých zbraní (pálky, pistole)",
+        drawback: "Slabá proti těžkým zbraním",
+        role: "Základní ochrana gangu, early game přežití",
+        heatPerUnit: 0
+      }),
+      steelBarricades: Object.freeze({
+        id: "steelBarricades",
+        category: "defense",
+        name: "Ocelové barikády",
+        metalPartsCost: 6,
+        techCoreCost: 2,
+        durationMs: 30 * 60 * 1000,
+        defensePower: 15,
+        specialEffect: "-15 % incoming attack, -10 % rychlost útoku nepřítele",
+        drawback: "Částečně ignorováno granáty a bazukou",
+        role: "Obrana districtu, základní wall",
+        heatPerUnit: 0
+      }),
+      securityCameras: Object.freeze({
+        id: "securityCameras",
+        category: "defense",
+        name: "Bezpečnostní kamery",
+        metalPartsCost: 4,
+        techCoreCost: 3,
+        durationMs: 35 * 60 * 1000,
+        defensePower: 8,
+        specialEffect: "+20 % šance odhalit útok, -10 % efektivita špehování nepřítele",
+        drawback: "Slabý přímý defense",
+        role: "Intel / counter spy, ochrana před překvapením",
+        heatPerUnit: 0
+      }),
+      autoMgNest: Object.freeze({
+        id: "autoMgNest",
+        category: "defense",
+        name: "Automatické kulometné stanoviště",
+        metalPartsCost: 10,
+        techCoreCost: 5,
+        durationMs: 60 * 60 * 1000,
+        defensePower: 30,
+        specialEffect: "+20 % damage proti útočníkovi, silné proti pálkám/pistolím/samopalům",
+        drawback: "Méně efektivní proti granátům a bazuce",
+        role: "Hlavní obranný damage dealer",
+        heatPerUnit: 0
+      }),
+      alarmSystem: Object.freeze({
+        id: "alarmSystem",
+        category: "defense",
+        name: "Alarm",
+        metalPartsCost: 5,
+        techCoreCost: 4,
+        durationMs: 40 * 60 * 1000,
+        defensePower: 10,
+        specialEffect: "+25 % šance aktivace obranných bonusů, +15 % defense districtu, +20 % šance policejní reakce",
+        drawback: "Nechrání přímo (support)",
+        role: "Support obrana, propojení s policií",
+        heatPerUnit: 0
+      })
+    })
+  });
+  const ARMORY_WEAPON_KEYS = Object.freeze(Object.keys(ARMORY_CONFIG.weapons));
+  const ARMORY_ATTACK_WEAPON_KEYS = Object.freeze(
+    ARMORY_WEAPON_KEYS.filter((key) => ARMORY_CONFIG.weapons[key]?.category !== "defense")
+  );
+  const ARMORY_DEFENSE_WEAPON_KEYS = Object.freeze(
+    ARMORY_WEAPON_KEYS.filter((key) => ARMORY_CONFIG.weapons[key]?.category === "defense")
+  );
+  const ARMORY_SLOT_CONFIG = Object.freeze(
+    ARMORY_WEAPON_KEYS.map((weaponKey, index) =>
+      Object.freeze({
+        id: index + 1,
+        weaponKey,
+        label: ARMORY_CONFIG.weapons[weaponKey].name,
+        category: ARMORY_CONFIG.weapons[weaponKey]?.category === "defense" ? "defense" : "attack"
+      })
+    )
+  );
+
+  const DRUG_LAB_BUILDING_NAME = "Drug lab";
+  const DRUG_LAB_BUILDING_STORAGE_KEY = "empire_drug_lab_building_mechanics_v1";
+  const DRUG_LAB_PLAYER_STORAGE_KEY = "empire_drug_lab_player_v1";
+  const DRUG_LAB_EVENT_LOG_LIMIT = 80;
+  const DRUG_LAB_SUPPLY_KEYS = Object.freeze(["chemicals", "biomass", "stimPack"]);
+  const DRUG_LAB_CONFIG = Object.freeze({
+    maxLevel: 4,
+    maxSlots: 4,
+    baseStorageCapacity: 100,
+    storageBonusPerWarehousePct: 20,
+    productionBonusPerWarehousePct: 3,
+    upgradePctPerLevel: 0.1,
+    upgradeCosts: {
+      2: 5000,
+      3: 15000,
+      4: 40000
+    },
+    specialActions: {
+      overclock: {
+        cooldownMs: 6 * 60 * 60 * 1000,
+        durationMs: 2 * 60 * 60 * 1000,
+        productionBoostPct: 50,
+        immediateHeat: 3
+      },
+      cleanBatch: {
+        cooldownMs: 5 * 60 * 60 * 1000,
+        durationMs: 2 * 60 * 60 * 1000,
+        effectBoostPct: 20
+      },
+      hiddenOperation: {
+        cooldownMs: 6 * 60 * 60 * 1000,
+        durationMs: 2 * 60 * 60 * 1000,
+        heatReductionPct: 30,
+        productionPenaltyPct: 20
+      }
+    },
+    pulseShotProductionBoostPct: 15,
+    ghostSerumHeatReductionPct: 15,
+    overdriveUseImmediateHeat: 8,
+    overdriveCrashDurationMs: 60 * 60 * 1000,
+    overdriveCrashPenaltyPct: 10
+  });
+
+  const DRUG_CONFIG = Object.freeze({
+    neonDust: Object.freeze({
+      id: "neonDust",
+      name: "Neon Dust",
+      productionPerHour: 20,
+      heatPerHour: 1,
+      useAmount: 5,
+      effectDurationMs: 2 * 60 * 60 * 1000,
+      description: "+10 % income z Pouličních dealerů, +5 % dirty cash z Heren a Večerek"
+    }),
+    pulseShot: Object.freeze({
+      id: "pulseShot",
+      name: "Pulse Shot",
+      productionPerHour: 10,
+      heatPerHour: 2,
+      useAmount: 3,
+      effectDurationMs: 2 * 60 * 60 * 1000,
+      description: "+15 % rychlost produkce všech budov"
+    }),
+    velvetSmoke: Object.freeze({
+      id: "velvetSmoke",
+      name: "Velvet Smoke",
+      productionPerHour: 6,
+      heatPerHour: 3,
+      useAmount: 2,
+      effectDurationMs: 2 * 60 * 60 * 1000,
+      description: "+20 % vliv ze všech budov, +10 % income z restaurací a klubů"
+    }),
+    ghostSerum: Object.freeze({
+      id: "ghostSerum",
+      name: "Ghost Serum",
+      productionPerHour: 3,
+      heatPerHour: 4,
+      useAmount: 1,
+      effectDurationMs: 2 * 60 * 60 * 1000,
+      description: "-20 % šance na policejní razii, -15 % heat gain"
+    }),
+    overdriveX: Object.freeze({
+      id: "overdriveX",
+      name: "Overdrive X",
+      productionPerHour: 1,
+      heatPerHour: 6,
+      useAmount: 1,
+      effectDurationMs: 2 * 60 * 60 * 1000,
+      description: "+25 % síla gangu, +20 % všechny příjmy; po konci crash -10 % výkon"
+    })
+  });
+  const DRUG_LAB_DRUG_KEYS = Object.freeze(Object.keys(DRUG_CONFIG));
+
   const DISTRICT_GOSSIP_STORAGE_KEY = "empire_district_gossip_history_v1";
   const DISTRICT_GOSSIP_MAX_PER_DISTRICT = 40;
   const DISTRICT_GOSSIP_DEMO_SEED_KEY = "empire_district_gossip_demo_seed_v1";
@@ -481,6 +856,12 @@ window.Empire.Map = (() => {
   let exchangeBuildingStore = loadExchangeBuildingStore();
   let restaurantBuildingStore = loadRestaurantBuildingStore();
   let convenienceStoreBuildingStore = loadConvenienceStoreBuildingStore();
+  let pharmacyBuildingStore = loadPharmacyBuildingStore();
+  let factoryBuildingStore = loadFactoryBuildingStore();
+  let armoryBuildingStore = loadArmoryBuildingStore();
+  let factoryPlayerSupplies = loadFactoryPlayerSupplies();
+  let drugLabBuildingStore = loadDrugLabBuildingStore();
+  let drugLabPlayerState = loadDrugLabPlayerState();
   let districtGossipStore = loadDistrictGossipStore();
 
   function init() {
@@ -622,6 +1003,90 @@ window.Empire.Map = (() => {
 
   function saveConvenienceStoreBuildingStore() {
     localStorage.setItem(CONVENIENCE_STORE_BUILDING_STORAGE_KEY, JSON.stringify(convenienceStoreBuildingStore));
+  }
+
+  function loadPharmacyBuildingStore() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PHARMACY_BUILDING_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function savePharmacyBuildingStore() {
+    localStorage.setItem(PHARMACY_BUILDING_STORAGE_KEY, JSON.stringify(pharmacyBuildingStore));
+  }
+
+  function loadFactoryBuildingStore() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FACTORY_BUILDING_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function saveFactoryBuildingStore() {
+    localStorage.setItem(FACTORY_BUILDING_STORAGE_KEY, JSON.stringify(factoryBuildingStore));
+  }
+
+  function loadArmoryBuildingStore() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(ARMORY_BUILDING_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function saveArmoryBuildingStore() {
+    localStorage.setItem(ARMORY_BUILDING_STORAGE_KEY, JSON.stringify(armoryBuildingStore));
+  }
+
+  function loadFactoryPlayerSupplies() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FACTORY_PLAYER_STORAGE_KEY) || "null");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function saveFactoryPlayerSupplies() {
+    localStorage.setItem(FACTORY_PLAYER_STORAGE_KEY, JSON.stringify(factoryPlayerSupplies));
+  }
+
+  function loadDrugLabBuildingStore() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DRUG_LAB_BUILDING_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function saveDrugLabBuildingStore() {
+    localStorage.setItem(DRUG_LAB_BUILDING_STORAGE_KEY, JSON.stringify(drugLabBuildingStore));
+  }
+
+  function loadDrugLabPlayerState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DRUG_LAB_PLAYER_STORAGE_KEY) || "null");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function saveDrugLabPlayerState() {
+    localStorage.setItem(DRUG_LAB_PLAYER_STORAGE_KEY, JSON.stringify(drugLabPlayerState));
   }
 
   function loadDistrictGossipStore() {
@@ -1297,6 +1762,1511 @@ window.Empire.Map = (() => {
     return convenienceStoreBuildingStore[instanceKey];
   }
 
+  function createPharmacyResourceMap(rawMap = {}, floorValues = true) {
+    return PHARMACY_RESOURCE_KEYS.reduce((acc, key) => {
+      const parsed = Number(rawMap?.[key] || 0);
+      const safeValue = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+      acc[key] = floorValues ? Math.floor(safeValue) : safeValue;
+      return acc;
+    }, {});
+  }
+
+  function createPharmacyDefaultSlot(slotId, resourceKey, now = Date.now()) {
+    return {
+      id: Math.max(1, Math.floor(Number(slotId) || 0)),
+      resourceKey: String(resourceKey || "").trim(),
+      isProducing: false,
+      producedAmount: 0,
+      lastTick: now,
+      productionRemainder: 0
+    };
+  }
+
+  function sanitizePharmacySlot(rawSlot, fallbackSlot, now = Date.now()) {
+    const id = Math.max(1, Math.floor(Number(rawSlot?.id ?? fallbackSlot?.id ?? 1) || 1));
+    const expectedResourceKey = String(fallbackSlot?.resourceKey || "").trim();
+    const resourceKeyRaw = String(rawSlot?.resourceKey || expectedResourceKey).trim();
+    const resourceKey = PHARMACY_RESOURCE_KEYS.includes(resourceKeyRaw) ? resourceKeyRaw : expectedResourceKey;
+    const producedAmountRaw = Number(rawSlot?.producedAmount || 0);
+    const lastTickRaw = Number(rawSlot?.lastTick || now);
+    const remainderRaw = Number(rawSlot?.productionRemainder || 0);
+    return {
+      id,
+      resourceKey,
+      isProducing: Boolean(rawSlot?.isProducing),
+      producedAmount: Number.isFinite(producedAmountRaw) ? Math.max(0, Math.floor(producedAmountRaw)) : 0,
+      lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : now,
+      productionRemainder: Number.isFinite(remainderRaw) ? Math.max(0, remainderRaw) : 0
+    };
+  }
+
+  function createPharmacyDefaultSlots(now = Date.now()) {
+    return PHARMACY_SLOT_CONFIG.map((slot) => createPharmacyDefaultSlot(slot.id, slot.resourceKey, now));
+  }
+
+  function createPharmacyDefaultState(now = Date.now()) {
+    return {
+      level: 1,
+      slots: createPharmacyDefaultSlots(now),
+      resources: createPharmacyResourceMap(),
+      cooldowns: {
+        recon: 0,
+        action: 0,
+        neuro: 0
+      },
+      effects: {
+        reconUntil: 0,
+        actionUntil: 0,
+        neuroUntil: 0
+      }
+    };
+  }
+
+  function sanitizePharmacyState(rawState, now = Date.now()) {
+    const fallback = createPharmacyDefaultState(now);
+    const levelRaw = Number(rawState?.level);
+    const level = Number.isFinite(levelRaw)
+      ? clamp(Math.floor(levelRaw), 1, PHARMACY_CONFIG.maxLevel)
+      : 1;
+    const cooldownsRaw = rawState?.cooldowns || {};
+    const effectsRaw = rawState?.effects || {};
+    const slotsRaw = Array.isArray(rawState?.slots) ? rawState.slots : [];
+    const fallbackSlots = createPharmacyDefaultSlots(now);
+    const slots = fallbackSlots.map((fallbackSlot, index) =>
+      sanitizePharmacySlot(slotsRaw[index], fallbackSlot, now)
+    );
+    const resources = createPharmacyResourceMap(rawState?.resources);
+
+    if (!slotsRaw.length && rawState?.resources && typeof rawState.resources === "object") {
+      // Backward compatibility with older pharmacy state without slot system.
+      slots.forEach((slot) => {
+        slot.producedAmount = Math.max(0, Math.floor(Number(resources[slot.resourceKey] || 0)));
+      });
+    }
+
+    return {
+      level,
+      slots,
+      resources,
+      cooldowns: {
+        recon: Math.max(0, Number(cooldownsRaw.recon || 0)),
+        action: Math.max(0, Number(cooldownsRaw.action || 0)),
+        neuro: Math.max(0, Number(cooldownsRaw.neuro || 0))
+      },
+      effects: {
+        reconUntil: Math.max(0, Number(effectsRaw.reconUntil || 0)),
+        actionUntil: Math.max(0, Number(effectsRaw.actionUntil || 0)),
+        neuroUntil: Math.max(0, Number(effectsRaw.neuroUntil || 0))
+      }
+    };
+  }
+
+  function getPharmacyStateByKey(instanceKey, now = Date.now()) {
+    const current = pharmacyBuildingStore[instanceKey];
+    const sanitized = sanitizePharmacyState(current, now);
+    pharmacyBuildingStore[instanceKey] = sanitized;
+    return sanitized;
+  }
+
+  function persistPharmacyState(instanceKey, nextState) {
+    pharmacyBuildingStore[instanceKey] = sanitizePharmacyState(nextState, Date.now());
+    savePharmacyBuildingStore();
+    return pharmacyBuildingStore[instanceKey];
+  }
+
+  function getPharmacyUpgradeCost(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 2, PHARMACY_CONFIG.maxLevel);
+    const rawCost = 5000 * Math.pow(1.47, safeLevel - 2);
+    return Math.max(1000, Math.round(rawCost / 100) * 100);
+  }
+
+  function getPharmacyLevelMultiplier(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 1, PHARMACY_CONFIG.maxLevel);
+    return 1 + (safeLevel - 1) * PHARMACY_CONFIG.upgradePctPerLevel;
+  }
+
+  function calculatePharmacyProductionRates(levelMultiplier = 1) {
+    const multiplier = Math.max(0, Number(levelMultiplier) || 0);
+    return {
+      chemicalsPerHour: PHARMACY_CONFIG.baseProductionPerHour.chemicals * multiplier,
+      biomassPerHour: PHARMACY_CONFIG.baseProductionPerHour.biomass * multiplier,
+      stimPackPerHour: PHARMACY_CONFIG.baseProductionPerHour.stimPack * multiplier
+    };
+  }
+
+  function syncPharmacyProduction(instanceState, now = Date.now()) {
+    const stateRef = instanceState;
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const levelMultiplier = getPharmacyLevelMultiplier(stateRef.level);
+    const rates = calculatePharmacyProductionRates(levelMultiplier);
+    const produced = createPharmacyResourceMap({}, false);
+    const safeSlots = Array.isArray(stateRef.slots) && stateRef.slots.length
+      ? stateRef.slots
+      : createPharmacyDefaultSlots(nowMs);
+    const defaultSlots = createPharmacyDefaultSlots(nowMs);
+
+    stateRef.slots = safeSlots.map((rawSlot, index) =>
+      sanitizePharmacySlot(rawSlot, defaultSlots[index], nowMs)
+    );
+
+    const rateByResource = {
+      chemicals: rates.chemicalsPerHour,
+      biomass: rates.biomassPerHour,
+      stimPack: rates.stimPackPerHour
+    };
+
+    stateRef.slots.forEach((slot) => {
+      let from = Number(slot.lastTick || nowMs);
+      if (!Number.isFinite(from) || from > nowMs) {
+        from = nowMs;
+      }
+      if (!slot.isProducing) {
+        slot.lastTick = nowMs;
+        return;
+      }
+      const elapsedMs = Math.max(0, nowMs - from);
+      if (elapsedMs <= 0) {
+        slot.lastTick = nowMs;
+        return;
+      }
+      const resourceKey = PHARMACY_RESOURCE_KEYS.includes(slot.resourceKey) ? slot.resourceKey : null;
+      if (!resourceKey) {
+        slot.lastTick = nowMs;
+        slot.productionRemainder = 0;
+        return;
+      }
+      const perHour = Math.max(0, Number(rateByResource[resourceKey] || 0));
+      const raw = (elapsedMs / 3600000) * perHour + Number(slot.productionRemainder || 0);
+      const gained = Math.max(0, Math.floor(raw));
+      slot.productionRemainder = Math.max(0, raw - gained);
+      if (gained > 0) {
+        slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + gained));
+        stateRef.resources[resourceKey] = Math.max(0, Math.floor(Number(stateRef.resources[resourceKey] || 0) + gained));
+        produced[resourceKey] = Math.max(0, Math.floor(Number(produced[resourceKey] || 0) + gained));
+      }
+      slot.lastTick = nowMs;
+    });
+
+    const activeSlots = stateRef.slots.reduce((sum, slot) => sum + (slot.isProducing ? 1 : 0), 0);
+    return { rates, produced, levelMultiplier, activeSlots };
+  }
+
+  function createFactoryResourceMap(rawMap = {}, floorValues = true) {
+    return FACTORY_RESOURCE_KEYS.reduce((acc, key) => {
+      const parsed = Number(rawMap?.[key] || 0);
+      const safeValue = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+      acc[key] = floorValues ? Math.floor(safeValue) : safeValue;
+      return acc;
+    }, {});
+  }
+
+  function createFactoryPlayerSupplyMap(rawMap = {}) {
+    return createFactoryResourceMap(rawMap, true);
+  }
+
+  function createFactoryDefaultSlot(slotId, resourceKey, mode, now = Date.now()) {
+    return {
+      id: Math.max(1, Math.floor(Number(slotId) || 0)),
+      resourceKey: String(resourceKey || "").trim(),
+      mode: String(mode || "produce").trim(),
+      isProducing: false,
+      producedAmount: 0,
+      lastTick: now,
+      productionRemainder: 0
+    };
+  }
+
+  function sanitizeFactorySlot(rawSlot, fallbackSlot, now = Date.now()) {
+    const id = Math.max(1, Math.floor(Number(rawSlot?.id ?? fallbackSlot?.id ?? 1) || 1));
+    const expectedResourceKey = String(fallbackSlot?.resourceKey || "").trim();
+    const resourceKeyRaw = String(rawSlot?.resourceKey || expectedResourceKey).trim();
+    const resourceKey = FACTORY_RESOURCE_KEYS.includes(resourceKeyRaw) ? resourceKeyRaw : expectedResourceKey;
+    const expectedMode = String(fallbackSlot?.mode || "produce").trim();
+    const modeRaw = String(rawSlot?.mode || expectedMode).trim().toLowerCase();
+    const mode = modeRaw === "craft" ? "craft" : "produce";
+    const producedAmountRaw = Number(rawSlot?.producedAmount || 0);
+    const lastTickRaw = Number(rawSlot?.lastTick || now);
+    const remainderRaw = Number(rawSlot?.productionRemainder || 0);
+    return {
+      id,
+      resourceKey,
+      mode,
+      isProducing: Boolean(rawSlot?.isProducing),
+      producedAmount: Number.isFinite(producedAmountRaw) ? Math.max(0, Math.floor(producedAmountRaw)) : 0,
+      lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : now,
+      productionRemainder: Number.isFinite(remainderRaw) ? Math.max(0, remainderRaw) : 0
+    };
+  }
+
+  function createFactoryDefaultSlots(now = Date.now()) {
+    return FACTORY_SLOT_CONFIG.map((slot) =>
+      createFactoryDefaultSlot(slot.id, slot.resourceKey, slot.mode, now)
+    );
+  }
+
+  function createFactoryDefaultState(now = Date.now()) {
+    return {
+      level: 1,
+      slots: createFactoryDefaultSlots(now),
+      resources: createFactoryResourceMap(),
+      cooldowns: {
+        assault: 0,
+        rapid: 0,
+        breach: 0
+      },
+      effects: {
+        assaultUntil: 0,
+        rapidUntil: 0,
+        breachUntil: 0
+      }
+    };
+  }
+
+  function sanitizeFactoryState(rawState, now = Date.now()) {
+    const levelRaw = Number(rawState?.level);
+    const level = Number.isFinite(levelRaw)
+      ? clamp(Math.floor(levelRaw), 1, FACTORY_CONFIG.maxLevel)
+      : 1;
+    const slotsRaw = Array.isArray(rawState?.slots) ? rawState.slots : [];
+    const fallbackSlots = createFactoryDefaultSlots(now);
+    const slots = fallbackSlots.map((fallbackSlot, index) =>
+      sanitizeFactorySlot(slotsRaw[index], fallbackSlot, now)
+    );
+    const resources = createFactoryResourceMap(rawState?.resources);
+    const cooldownsRaw = rawState?.cooldowns || {};
+    const effectsRaw = rawState?.effects || {};
+
+    if (!slotsRaw.length && rawState?.resources && typeof rawState.resources === "object") {
+      slots.forEach((slot) => {
+        slot.producedAmount = Math.max(0, Math.floor(Number(resources[slot.resourceKey] || 0)));
+      });
+    }
+
+    return {
+      level,
+      slots,
+      resources,
+      cooldowns: {
+        assault: Math.max(0, Number(cooldownsRaw.assault || 0)),
+        rapid: Math.max(0, Number(cooldownsRaw.rapid || 0)),
+        breach: Math.max(0, Number(cooldownsRaw.breach || 0))
+      },
+      effects: {
+        assaultUntil: Math.max(0, Number(effectsRaw.assaultUntil || 0)),
+        rapidUntil: Math.max(0, Number(effectsRaw.rapidUntil || 0)),
+        breachUntil: Math.max(0, Number(effectsRaw.breachUntil || 0))
+      }
+    };
+  }
+
+  function getFactoryStateByKey(instanceKey, now = Date.now()) {
+    const current = factoryBuildingStore[instanceKey];
+    const sanitized = sanitizeFactoryState(current, now);
+    factoryBuildingStore[instanceKey] = sanitized;
+    return sanitized;
+  }
+
+  function persistFactoryState(instanceKey, nextState) {
+    factoryBuildingStore[instanceKey] = sanitizeFactoryState(nextState, Date.now());
+    saveFactoryBuildingStore();
+    return factoryBuildingStore[instanceKey];
+  }
+
+  function getFactoryPlayerSuppliesSnapshot() {
+    factoryPlayerSupplies = createFactoryPlayerSupplyMap(factoryPlayerSupplies);
+    return factoryPlayerSupplies;
+  }
+
+  function persistFactoryPlayerSuppliesSnapshot(nextState) {
+    factoryPlayerSupplies = createFactoryPlayerSupplyMap(nextState);
+    saveFactoryPlayerSupplies();
+    return factoryPlayerSupplies;
+  }
+
+  function getFactoryUpgradeCost(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 2, FACTORY_CONFIG.maxLevel);
+    const rawCost = 5000 * Math.pow(1.47, safeLevel - 2);
+    return Math.max(1000, Math.round(rawCost / 100) * 100);
+  }
+
+  function getFactoryLevelMultiplier(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 1, FACTORY_CONFIG.maxLevel);
+    return 1 + (safeLevel - 1) * FACTORY_CONFIG.upgradePctPerLevel;
+  }
+
+  function calculateFactoryProductionRates(levelMultiplier = 1) {
+    const multiplier = Math.max(0, Number(levelMultiplier) || 0);
+    return {
+      metalPartsPerHour: FACTORY_CONFIG.baseProductionPerHour.metalParts * multiplier,
+      techCorePerHour: FACTORY_CONFIG.baseProductionPerHour.techCore * multiplier,
+      combatModulePerHour: ((60 * 60 * 1000) / FACTORY_CONFIG.combatModule.durationMs) * multiplier
+    };
+  }
+
+  function syncFactoryProduction(instanceState, now = Date.now(), options = {}) {
+    const stateRef = instanceState;
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const levelMultiplier = getFactoryLevelMultiplier(stateRef.level);
+    const ownedFactoryCountRaw = Number(options?.ownedFactoryCount);
+    const ownedFactoryCount = Number.isFinite(ownedFactoryCountRaw)
+      ? Math.max(1, Math.floor(ownedFactoryCountRaw))
+      : Math.max(1, collectOwnedFactoryEntries().length || 1);
+    const networkBonusRaw = Number(options?.networkProductionBonusPct);
+    const networkProductionBonusPct = Number.isFinite(networkBonusRaw)
+      ? Math.max(0, networkBonusRaw)
+      : Math.max(0, (ownedFactoryCount - 1) * 10);
+    const totalProductionMultiplier = Math.max(
+      0.1,
+      levelMultiplier * (1 + networkProductionBonusPct / 100)
+    );
+    const rates = calculateFactoryProductionRates(totalProductionMultiplier);
+    const produced = createFactoryResourceMap({}, false);
+    const applyHeat = options?.applyHeat !== false;
+    let heatAdded = 0;
+
+    stateRef.resources = createFactoryResourceMap(stateRef.resources);
+    const safeSlots = Array.isArray(stateRef.slots) && stateRef.slots.length
+      ? stateRef.slots
+      : createFactoryDefaultSlots(nowMs);
+    const defaultSlots = createFactoryDefaultSlots(nowMs);
+    stateRef.slots = safeSlots.map((rawSlot, index) =>
+      sanitizeFactorySlot(rawSlot, defaultSlots[index], nowMs)
+    );
+
+    stateRef.slots.forEach((slot) => {
+      let from = Number(slot.lastTick || nowMs);
+      if (!Number.isFinite(from) || from > nowMs) {
+        from = nowMs;
+      }
+      if (!slot.isProducing) {
+        slot.lastTick = nowMs;
+        return;
+      }
+      const elapsedMs = Math.max(0, nowMs - from);
+      if (elapsedMs <= 0) {
+        slot.lastTick = nowMs;
+        return;
+      }
+
+      if (slot.mode === "craft" || slot.resourceKey === "combatModule") {
+        const scaledDurationMs = Math.max(
+          1,
+          Math.round(FACTORY_CONFIG.combatModule.durationMs / totalProductionMultiplier)
+        );
+        const cycleRaw =
+          elapsedMs / scaledDurationMs
+          + Number(slot.productionRemainder || 0);
+        const cycles = Math.max(0, Math.floor(cycleRaw));
+        slot.productionRemainder = Math.max(0, cycleRaw - cycles);
+        if (cycles > 0) {
+          const maxFromMetal = Math.floor(
+            Number(stateRef.resources.metalParts || 0) / FACTORY_CONFIG.combatModule.metalPartsCost
+          );
+          const maxFromTech = Math.floor(
+            Number(stateRef.resources.techCore || 0) / FACTORY_CONFIG.combatModule.techCoreCost
+          );
+          const crafted = Math.max(0, Math.min(cycles, maxFromMetal, maxFromTech));
+          if (crafted > 0) {
+            stateRef.resources.metalParts = Math.max(
+              0,
+              Math.floor(
+                Number(stateRef.resources.metalParts || 0)
+                - crafted * FACTORY_CONFIG.combatModule.metalPartsCost
+              )
+            );
+            stateRef.resources.techCore = Math.max(
+              0,
+              Math.floor(
+                Number(stateRef.resources.techCore || 0)
+                - crafted * FACTORY_CONFIG.combatModule.techCoreCost
+              )
+            );
+            stateRef.resources.combatModule = Math.max(
+              0,
+              Math.floor(Number(stateRef.resources.combatModule || 0) + crafted)
+            );
+            slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + crafted));
+            produced.combatModule = Math.max(0, Math.floor(Number(produced.combatModule || 0) + crafted));
+            heatAdded += crafted * FACTORY_CONFIG.combatModule.heatPerUnit;
+          }
+        }
+      } else {
+        const perHour = slot.resourceKey === "metalParts"
+          ? rates.metalPartsPerHour
+          : rates.techCorePerHour;
+        const raw = (elapsedMs / 3600000) * Math.max(0, Number(perHour || 0)) + Number(slot.productionRemainder || 0);
+        const gained = Math.max(0, Math.floor(raw));
+        slot.productionRemainder = Math.max(0, raw - gained);
+        if (gained > 0) {
+          slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + gained));
+          stateRef.resources[slot.resourceKey] = Math.max(
+            0,
+            Math.floor(Number(stateRef.resources[slot.resourceKey] || 0) + gained)
+          );
+          produced[slot.resourceKey] = Math.max(
+            0,
+            Math.floor(Number(produced[slot.resourceKey] || 0) + gained)
+          );
+        }
+      }
+      slot.lastTick = nowMs;
+    });
+
+    const activeSlots = stateRef.slots.reduce((sum, slot) => sum + (slot.isProducing ? 1 : 0), 0);
+    let nextHeat = null;
+    if (applyHeat && heatAdded > 0) {
+      nextHeat = addPlayerHeatFromBuilding(heatAdded);
+    }
+
+    return {
+      rates,
+      produced,
+      levelMultiplier,
+      totalProductionMultiplier,
+      ownedFactoryCount,
+      networkProductionBonusPct,
+      activeSlots,
+      heatAdded,
+      nextHeat
+    };
+  }
+
+  function createArmoryWeaponMap(rawMap = {}, floorValues = true) {
+    return ARMORY_WEAPON_KEYS.reduce((acc, key) => {
+      const parsed = Number(rawMap?.[key] || 0);
+      const safeValue = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+      acc[key] = floorValues ? Math.floor(safeValue) : safeValue;
+      return acc;
+    }, {});
+  }
+
+  function createArmoryDefaultSlot(slotId, weaponKey, now = Date.now()) {
+    const safeWeaponKey = String(weaponKey || "").trim();
+    const config = ARMORY_CONFIG.weapons[safeWeaponKey] || null;
+    const category = config?.category === "defense" ? "defense" : "attack";
+    return {
+      id: Math.max(1, Math.floor(Number(slotId) || 0)),
+      weaponKey: safeWeaponKey,
+      category,
+      isProducing: false,
+      producedAmount: 0,
+      lastTick: now,
+      productionRemainder: 0
+    };
+  }
+
+  function sanitizeArmorySlot(rawSlot, fallbackSlot, now = Date.now()) {
+    const id = Math.max(1, Math.floor(Number(rawSlot?.id ?? fallbackSlot?.id ?? 1) || 1));
+    const expectedWeaponKey = String(fallbackSlot?.weaponKey || "").trim();
+    const weaponKeyRaw = String(rawSlot?.weaponKey || expectedWeaponKey).trim();
+    const weaponKey = ARMORY_WEAPON_KEYS.includes(weaponKeyRaw) ? weaponKeyRaw : expectedWeaponKey;
+    const config = ARMORY_CONFIG.weapons[weaponKey] || null;
+    const category = config?.category === "defense" ? "defense" : "attack";
+    const producedAmountRaw = Number(rawSlot?.producedAmount || 0);
+    const lastTickRaw = Number(rawSlot?.lastTick || now);
+    const remainderRaw = Number(rawSlot?.productionRemainder || 0);
+    return {
+      id,
+      weaponKey,
+      category,
+      isProducing: Boolean(rawSlot?.isProducing),
+      producedAmount: Number.isFinite(producedAmountRaw) ? Math.max(0, Math.floor(producedAmountRaw)) : 0,
+      lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : now,
+      productionRemainder: Number.isFinite(remainderRaw) ? Math.max(0, remainderRaw) : 0
+    };
+  }
+
+  function createArmoryDefaultSlots(now = Date.now()) {
+    return ARMORY_SLOT_CONFIG.map((slot) => createArmoryDefaultSlot(slot.id, slot.weaponKey, now));
+  }
+
+  function createArmoryDefaultState(now = Date.now()) {
+    return {
+      level: 1,
+      slots: createArmoryDefaultSlots(now),
+      storedWeapons: createArmoryWeaponMap()
+    };
+  }
+
+  function sanitizeArmoryState(rawState, now = Date.now()) {
+    const levelRaw = Number(rawState?.level);
+    const level = Number.isFinite(levelRaw)
+      ? clamp(Math.floor(levelRaw), 1, ARMORY_CONFIG.maxLevel)
+      : 1;
+    const slotsRaw = Array.isArray(rawState?.slots) ? rawState.slots : [];
+    const fallbackSlots = createArmoryDefaultSlots(now);
+    const slots = fallbackSlots.map((fallbackSlot, index) =>
+      sanitizeArmorySlot(slotsRaw[index], fallbackSlot, now)
+    );
+    const storedWeapons = createArmoryWeaponMap(rawState?.storedWeapons || rawState?.resources || {});
+
+    if (!slotsRaw.length && rawState?.storedWeapons && typeof rawState.storedWeapons === "object") {
+      slots.forEach((slot) => {
+        slot.producedAmount = Math.max(0, Math.floor(Number(storedWeapons[slot.weaponKey] || 0)));
+      });
+    }
+
+    return {
+      level,
+      slots,
+      storedWeapons
+    };
+  }
+
+  function getArmoryStateByKey(instanceKey, now = Date.now()) {
+    const current = armoryBuildingStore[instanceKey];
+    const sanitized = sanitizeArmoryState(current, now);
+    armoryBuildingStore[instanceKey] = sanitized;
+    return sanitized;
+  }
+
+  function persistArmoryState(instanceKey, nextState) {
+    armoryBuildingStore[instanceKey] = sanitizeArmoryState(nextState, Date.now());
+    saveArmoryBuildingStore();
+    return armoryBuildingStore[instanceKey];
+  }
+
+  function getArmoryUpgradeCost(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 2, ARMORY_CONFIG.maxLevel);
+    const rawCost = 5000 * Math.pow(1.47, safeLevel - 2);
+    return Math.max(1000, Math.round(rawCost / 100) * 100);
+  }
+
+  function getArmoryLevelMultiplier(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 1, ARMORY_CONFIG.maxLevel);
+    return 1 + (safeLevel - 1) * ARMORY_CONFIG.upgradePctPerLevel;
+  }
+
+  function calculateArmoryProductionRates(levelMultiplier = 1) {
+    const multiplier = Math.max(0.1, Number(levelMultiplier) || 1);
+    return ARMORY_WEAPON_KEYS.reduce((acc, key) => {
+      const weapon = ARMORY_CONFIG.weapons[key];
+      const basePerHour = 3600000 / Math.max(1, Number(weapon.durationMs || 1));
+      acc[key] = basePerHour * multiplier;
+      return acc;
+    }, {});
+  }
+
+  function syncArmoryProduction(instanceState, now = Date.now(), options = {}) {
+    const stateRef = instanceState;
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const levelMultiplier = getArmoryLevelMultiplier(stateRef.level);
+    const ownedArmoryCountRaw = Number(options?.ownedArmoryCount);
+    const ownedArmoryCount = Number.isFinite(ownedArmoryCountRaw)
+      ? Math.max(1, Math.floor(ownedArmoryCountRaw))
+      : Math.max(1, collectOwnedArmoryEntries().length || 1);
+    const networkBonusRaw = Number(options?.networkProductionBonusPct);
+    const networkProductionBonusPct = Number.isFinite(networkBonusRaw)
+      ? Math.max(0, networkBonusRaw)
+      : Math.max(0, (ownedArmoryCount - 1) * 10);
+    const totalProductionMultiplier = Math.max(
+      0.1,
+      levelMultiplier * (1 + networkProductionBonusPct / 100)
+    );
+    const rates = calculateArmoryProductionRates(totalProductionMultiplier);
+    const produced = createArmoryWeaponMap({}, false);
+    const applyHeat = options?.applyHeat !== false;
+    let heatAdded = 0;
+
+    stateRef.storedWeapons = createArmoryWeaponMap(stateRef.storedWeapons);
+    const safeSlots = Array.isArray(stateRef.slots) && stateRef.slots.length
+      ? stateRef.slots
+      : createArmoryDefaultSlots(nowMs);
+    const defaultSlots = createArmoryDefaultSlots(nowMs);
+    stateRef.slots = safeSlots.map((rawSlot, index) =>
+      sanitizeArmorySlot(rawSlot, defaultSlots[index], nowMs)
+    );
+
+    const factorySupplies = createFactoryPlayerSupplyMap(getFactoryPlayerSuppliesSnapshot());
+    let factorySuppliesChanged = false;
+
+    stateRef.slots.forEach((slot) => {
+      let from = Number(slot.lastTick || nowMs);
+      if (!Number.isFinite(from) || from > nowMs) {
+        from = nowMs;
+      }
+      if (!slot.isProducing) {
+        slot.lastTick = nowMs;
+        return;
+      }
+      const elapsedMs = Math.max(0, nowMs - from);
+      if (elapsedMs <= 0) {
+        slot.lastTick = nowMs;
+        return;
+      }
+      const weaponKey = ARMORY_WEAPON_KEYS.includes(slot.weaponKey) ? slot.weaponKey : null;
+      const weapon = weaponKey ? ARMORY_CONFIG.weapons[weaponKey] : null;
+      if (!weapon) {
+        slot.lastTick = nowMs;
+        slot.productionRemainder = 0;
+        return;
+      }
+
+      const scaledDurationMs = Math.max(1, Math.round(Number(weapon.durationMs || 1) / totalProductionMultiplier));
+      const rawCycles = (elapsedMs / scaledDurationMs) + Number(slot.productionRemainder || 0);
+      const cycles = Math.max(0, Math.floor(rawCycles));
+      slot.productionRemainder = Math.max(0, rawCycles - cycles);
+      if (cycles > 0) {
+        const metalCost = Math.max(0, Math.floor(Number(weapon.metalPartsCost || 0)));
+        const techCost = Math.max(0, Math.floor(Number(weapon.techCoreCost || 0)));
+        const maxFromMetal = metalCost > 0
+          ? Math.floor(Number(factorySupplies.metalParts || 0) / metalCost)
+          : cycles;
+        const maxFromTech = techCost > 0
+          ? Math.floor(Number(factorySupplies.techCore || 0) / techCost)
+          : cycles;
+        const crafted = Math.max(0, Math.min(cycles, maxFromMetal, maxFromTech));
+        if (crafted > 0) {
+          if (metalCost > 0) {
+            factorySupplies.metalParts = Math.max(
+              0,
+              Math.floor(Number(factorySupplies.metalParts || 0) - crafted * metalCost)
+            );
+          }
+          if (techCost > 0) {
+            factorySupplies.techCore = Math.max(
+              0,
+              Math.floor(Number(factorySupplies.techCore || 0) - crafted * techCost)
+            );
+          }
+          factorySuppliesChanged = true;
+          stateRef.storedWeapons[weaponKey] = Math.max(
+            0,
+            Math.floor(Number(stateRef.storedWeapons[weaponKey] || 0) + crafted)
+          );
+          slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + crafted));
+          produced[weaponKey] = Math.max(0, Math.floor(Number(produced[weaponKey] || 0) + crafted));
+          heatAdded += crafted * Math.max(0, Math.floor(Number(weapon.heatPerUnit || 0)));
+        }
+      }
+      slot.lastTick = nowMs;
+    });
+
+    if (factorySuppliesChanged) {
+      persistFactoryPlayerSuppliesSnapshot(factorySupplies);
+    }
+
+    const activeSlots = stateRef.slots.reduce((sum, slot) => sum + (slot.isProducing ? 1 : 0), 0);
+    let nextHeat = null;
+    if (applyHeat && heatAdded > 0) {
+      nextHeat = addPlayerHeatFromBuilding(heatAdded);
+    }
+
+    return {
+      rates,
+      produced,
+      levelMultiplier,
+      totalProductionMultiplier,
+      ownedArmoryCount,
+      networkProductionBonusPct,
+      activeSlots,
+      heatAdded,
+      nextHeat,
+      factorySupplies: createFactoryPlayerSupplyMap(factorySupplies)
+    };
+  }
+
+  function createDrugLabAmountMap(rawMap = {}) {
+    return DRUG_LAB_DRUG_KEYS.reduce((acc, key) => {
+      const value = Number(rawMap?.[key] || 0);
+      acc[key] = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+      return acc;
+    }, {});
+  }
+
+  function createDrugLabSupplyMap(rawMap = {}) {
+    return DRUG_LAB_SUPPLY_KEYS.reduce((acc, key) => {
+      const value = Number(rawMap?.[key] || 0);
+      acc[key] = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+      return acc;
+    }, {});
+  }
+
+  function createDefaultDrugLabEffectState() {
+    return { active: false, endsAt: 0, potencyMultiplier: 1 };
+  }
+
+  function createDefaultDrugLabActiveEffects() {
+    return {
+      neonDust: createDefaultDrugLabEffectState(),
+      pulseShot: createDefaultDrugLabEffectState(),
+      velvetSmoke: createDefaultDrugLabEffectState(),
+      ghostSerum: createDefaultDrugLabEffectState(),
+      overdriveX: createDefaultDrugLabEffectState(),
+      overdriveCrash: createDefaultDrugLabEffectState()
+    };
+  }
+
+  function sanitizeDrugLabEffectState(raw) {
+    const active = Boolean(raw?.active);
+    const endsAtRaw = Number(raw?.endsAt || 0);
+    const potencyRaw = Number(raw?.potencyMultiplier || 1);
+    return {
+      active,
+      endsAt: Number.isFinite(endsAtRaw) ? Math.max(0, Math.floor(endsAtRaw)) : 0,
+      potencyMultiplier: Number.isFinite(potencyRaw) ? Math.max(1, potencyRaw) : 1
+    };
+  }
+
+  function sanitizeDrugLabEventLogEntry(rawEntry) {
+    const text = String(rawEntry?.text || "").trim();
+    if (!text) return null;
+    const createdAt = Math.max(0, Math.floor(Number(rawEntry?.createdAt) || Date.now()));
+    const id = String(rawEntry?.id || `${createdAt}-${Math.floor(Math.random() * 1000000)}`);
+    return { id, text, createdAt };
+  }
+
+  function createDrugLabDefaultSlot(slotId, now = Date.now()) {
+    return {
+      id: slotId,
+      activeDrugType: "neonDust",
+      isProducing: false,
+      producedAmount: 0,
+      lastTick: now,
+      startedAt: 0,
+      productionRemainder: 0
+    };
+  }
+
+  function sanitizeDrugLabSlot(rawSlot, slotId, now = Date.now()) {
+    const activeDrugTypeRaw = String(rawSlot?.activeDrugType || "").trim();
+    const activeDrugType = DRUG_CONFIG[activeDrugTypeRaw] ? activeDrugTypeRaw : "neonDust";
+    const producedAmountRaw = Number(rawSlot?.producedAmount || 0);
+    const lastTickRaw = Number(rawSlot?.lastTick || now);
+    const startedAtRaw = Number(rawSlot?.startedAt || 0);
+    const remainderRaw = Number(rawSlot?.productionRemainder || 0);
+    return {
+      id: slotId,
+      activeDrugType,
+      isProducing: Boolean(rawSlot?.isProducing),
+      producedAmount: Number.isFinite(producedAmountRaw) ? Math.max(0, Math.floor(producedAmountRaw)) : 0,
+      lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : now,
+      startedAt: Number.isFinite(startedAtRaw) ? Math.max(0, Math.floor(startedAtRaw)) : 0,
+      productionRemainder: Number.isFinite(remainderRaw) ? Math.max(0, remainderRaw) : 0
+    };
+  }
+
+  function createDrugLabDefaultState(now = Date.now()) {
+    return {
+      level: 1,
+      slots: Array.from({ length: DRUG_LAB_CONFIG.maxSlots }, (_, index) => createDrugLabDefaultSlot(index + 1, now)),
+      storage: createDrugLabAmountMap(),
+      storageEnhanced: createDrugLabAmountMap(),
+      heatRemainder: 0,
+      lastHeatAt: now,
+      cooldowns: {
+        overclock: 0,
+        cleanBatch: 0,
+        hiddenOperation: 0
+      },
+      effects: {
+        overclockUntil: 0,
+        cleanBatchUntil: 0,
+        hiddenOperationUntil: 0
+      }
+    };
+  }
+
+  function sanitizeDrugLabState(rawState, now = Date.now()) {
+    const fallback = createDrugLabDefaultState(now);
+    const levelRaw = Number(rawState?.level);
+    const level = Number.isFinite(levelRaw)
+      ? clamp(Math.floor(levelRaw), 1, DRUG_LAB_CONFIG.maxLevel)
+      : 1;
+
+    const slotsRaw = Array.isArray(rawState?.slots) ? rawState.slots : [];
+    const slots = Array.from({ length: DRUG_LAB_CONFIG.maxSlots }, (_, index) =>
+      sanitizeDrugLabSlot(slotsRaw[index], index + 1, now)
+    );
+
+    const cooldownsRaw = rawState?.cooldowns || {};
+    const effectsRaw = rawState?.effects || {};
+    const heatRemainderRaw = Number(rawState?.heatRemainder || 0);
+    const lastHeatAtRaw = Number(rawState?.lastHeatAt || now);
+
+    return {
+      level,
+      slots,
+      storage: createDrugLabAmountMap(rawState?.storage),
+      storageEnhanced: createDrugLabAmountMap(rawState?.storageEnhanced),
+      heatRemainder: Number.isFinite(heatRemainderRaw) ? Math.max(0, heatRemainderRaw) : 0,
+      lastHeatAt: Number.isFinite(lastHeatAtRaw) ? Math.max(0, Math.floor(lastHeatAtRaw)) : fallback.lastHeatAt,
+      cooldowns: {
+        overclock: Math.max(0, Number(cooldownsRaw.overclock || 0)),
+        cleanBatch: Math.max(0, Number(cooldownsRaw.cleanBatch || 0)),
+        hiddenOperation: Math.max(0, Number(cooldownsRaw.hiddenOperation || 0))
+      },
+      effects: {
+        overclockUntil: Math.max(0, Number(effectsRaw.overclockUntil || 0)),
+        cleanBatchUntil: Math.max(0, Number(effectsRaw.cleanBatchUntil || 0)),
+        hiddenOperationUntil: Math.max(0, Number(effectsRaw.hiddenOperationUntil || 0))
+      }
+    };
+  }
+
+  function createDrugLabPlayerDefaultState(now = Date.now()) {
+    return {
+      totalHeat: 0,
+      hasWarehouse: false,
+      activeDrugEffects: createDefaultDrugLabActiveEffects(),
+      enhancedDrugs: createDrugLabAmountMap(),
+      labSupplies: createDrugLabSupplyMap(),
+      eventLog: [],
+      lastUpdatedAt: now
+    };
+  }
+
+  function sanitizeDrugLabPlayerState(rawState, now = Date.now()) {
+    const fallback = createDrugLabPlayerDefaultState(now);
+    const effectsRaw = rawState?.activeDrugEffects || {};
+    const activeDrugEffects = createDefaultDrugLabActiveEffects();
+    Object.keys(activeDrugEffects).forEach((key) => {
+      activeDrugEffects[key] = sanitizeDrugLabEffectState(effectsRaw[key]);
+    });
+    const rawLog = Array.isArray(rawState?.eventLog) ? rawState.eventLog : [];
+    const eventLog = rawLog
+      .map((entry) => sanitizeDrugLabEventLogEntry(entry))
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, DRUG_LAB_EVENT_LOG_LIMIT);
+    const totalHeatRaw = Number(rawState?.totalHeat || 0);
+    const lastUpdatedAtRaw = Number(rawState?.lastUpdatedAt || now);
+
+    return {
+      totalHeat: Number.isFinite(totalHeatRaw) ? Math.max(0, Math.floor(totalHeatRaw)) : 0,
+      hasWarehouse: Boolean(rawState?.hasWarehouse),
+      activeDrugEffects,
+      enhancedDrugs: createDrugLabAmountMap(rawState?.enhancedDrugs),
+      labSupplies: createDrugLabSupplyMap(rawState?.labSupplies || rawState?.pharmacyResources || {}),
+      eventLog,
+      lastUpdatedAt: Number.isFinite(lastUpdatedAtRaw) ? Math.max(0, Math.floor(lastUpdatedAtRaw)) : fallback.lastUpdatedAt
+    };
+  }
+
+  function getDrugLabStateByKey(instanceKey, now = Date.now()) {
+    const current = drugLabBuildingStore[instanceKey];
+    const sanitized = sanitizeDrugLabState(current, now);
+    drugLabBuildingStore[instanceKey] = sanitized;
+    return sanitized;
+  }
+
+  function persistDrugLabState(instanceKey, nextState) {
+    drugLabBuildingStore[instanceKey] = sanitizeDrugLabState(nextState, Date.now());
+    saveDrugLabBuildingStore();
+    return drugLabBuildingStore[instanceKey];
+  }
+
+  function getDrugLabPlayerSnapshot(now = Date.now()) {
+    drugLabPlayerState = sanitizeDrugLabPlayerState(drugLabPlayerState, now);
+    return drugLabPlayerState;
+  }
+
+  function persistDrugLabPlayerSnapshot(nextState) {
+    drugLabPlayerState = sanitizeDrugLabPlayerState(nextState, Date.now());
+    saveDrugLabPlayerState();
+    return drugLabPlayerState;
+  }
+
+  function isWarehouseBaseName(value) {
+    const normalized = normalizeBuildingTypeName(value);
+    return normalized === "sklad" || normalized === "warehouse";
+  }
+
+  function getOwnedWarehouseCountForDrugLab() {
+    const districts = Array.isArray(state.districts) ? state.districts : [];
+    let total = 0;
+    districts.forEach((district) => {
+      if (!isDistrictOwnedByPlayer(district)) return;
+      const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+      buildings.forEach((building) => {
+        if (isWarehouseBaseName(building)) {
+          total += 1;
+        }
+      });
+    });
+    return Math.max(0, total);
+  }
+
+  function getDrugLabStorageCapacityMultiplier() {
+    const warehouseCount = getOwnedWarehouseCountForDrugLab();
+    if (warehouseCount <= 0) return 1;
+    return Math.pow(1 + DRUG_LAB_CONFIG.storageBonusPerWarehousePct / 100, warehouseCount);
+  }
+
+  function getDrugLabStorageCapacityBonusPct() {
+    return Math.max(0, (getDrugLabStorageCapacityMultiplier() - 1) * 100);
+  }
+
+  function getDrugLabProductionBonusPct() {
+    const warehouseCount = getOwnedWarehouseCountForDrugLab();
+    return Math.max(0, warehouseCount * DRUG_LAB_CONFIG.productionBonusPerWarehousePct);
+  }
+
+  function getSafeDrugLabEconomySnapshot() {
+    const getSnapshot = window.Empire.UI?.getEconomySnapshot;
+    if (typeof getSnapshot === "function") {
+      return getSnapshot();
+    }
+    return {
+      cleanMoney: 0,
+      dirtyMoney: 0,
+      influence: 0,
+      drugs: 0,
+      drugInventory: createDrugLabAmountMap(),
+      activeDrugs: {}
+    };
+  }
+
+  function normalizeDrugLabInventoryFromEconomy(economy) {
+    return createDrugLabAmountMap(economy?.drugInventory || economy || {});
+  }
+
+  function mapDrugLabEffectsToUiPayload(activeDrugEffects, now = Date.now()) {
+    const safeEffects = activeDrugEffects && typeof activeDrugEffects === "object"
+      ? activeDrugEffects
+      : createDefaultDrugLabActiveEffects();
+    return DRUG_LAB_DRUG_KEYS.reduce((acc, key) => {
+      const stateRef = sanitizeDrugLabEffectState(safeEffects[key]);
+      const remainingSeconds = stateRef.active
+        ? Math.max(0, Math.ceil((Number(stateRef.endsAt || 0) - now) / 1000))
+        : 0;
+      acc[key] = { active: stateRef.active && remainingSeconds > 0, remainingSeconds };
+      return acc;
+    }, {});
+  }
+
+  function applyDrugLabEconomySnapshot(economy, inventory, playerState, now = Date.now()) {
+    const safeEconomy = economy && typeof economy === "object" ? { ...economy } : {};
+    const safeInventory = createDrugLabAmountMap(inventory);
+    const totalDrugs = DRUG_LAB_DRUG_KEYS.reduce((sum, key) => sum + Number(safeInventory[key] || 0), 0);
+    safeEconomy.drugInventory = {
+      ...(safeEconomy.drugInventory && typeof safeEconomy.drugInventory === "object" ? safeEconomy.drugInventory : {}),
+      ...safeInventory
+    };
+    safeEconomy.drugs = totalDrugs;
+    safeEconomy.activeDrugs = mapDrugLabEffectsToUiPayload(playerState?.activeDrugEffects, now);
+    const updateEconomy = window.Empire.UI?.updateEconomy;
+    if (typeof updateEconomy === "function") {
+      updateEconomy(safeEconomy);
+    }
+    return safeEconomy;
+  }
+
+  function resolveDrugLabSchoolBoostPct(instanceKey, now = Date.now()) {
+    const districtPart = String(instanceKey || "").split(":")[0] || "";
+    if (!districtPart) {
+      return { passivePct: 0, chemistryPct: 0, totalPct: 0 };
+    }
+    let passivePct = 0;
+    let chemistryPct = 0;
+    Object.entries(schoolBuildingStore || {}).forEach(([key, rawState]) => {
+      const keyDistrictPart = String(key || "").split(":")[0] || "";
+      if (keyDistrictPart !== districtPart) return;
+      const snapshot = sanitizeSchoolState(rawState, now);
+      const levelMultiplier = getSchoolLevelMultiplier(snapshot.level);
+      passivePct += SCHOOL_BUILDING_CONFIG.baseDrugLabPassiveBonusPct * levelMultiplier;
+      if (now < Number(snapshot.effects.chemistryUntil || 0)) {
+        chemistryPct += SCHOOL_BUILDING_CONFIG.chemistryBoostPct;
+      }
+    });
+    const totalPct = Math.max(0, passivePct + chemistryPct);
+    return { passivePct: Math.max(0, passivePct), chemistryPct: Math.max(0, chemistryPct), totalPct };
+  }
+
+  function getDrugLabEffectLabel(drugType) {
+    if (drugType === "neonDust") return "Neon Dust";
+    if (drugType === "pulseShot") return "Pulse Shot";
+    if (drugType === "velvetSmoke") return "Velvet Smoke";
+    if (drugType === "ghostSerum") return "Ghost Serum";
+    if (drugType === "overdriveX") return "Overdrive X";
+    if (drugType === "overdriveCrash") return "Overdrive Crash";
+    return drugType;
+  }
+
+  function pushDrugLabLog(playerState, text, now = Date.now()) {
+    const entry = sanitizeDrugLabEventLogEntry({
+      id: `${now}-${Math.floor(Math.random() * 1000000)}`,
+      text,
+      createdAt: now
+    });
+    if (!entry) return null;
+    const existing = Array.isArray(playerState?.eventLog) ? playerState.eventLog : [];
+    existing.unshift(entry);
+    playerState.eventLog = existing
+      .map((item) => sanitizeDrugLabEventLogEntry(item))
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, DRUG_LAB_EVENT_LOG_LIMIT);
+    window.Empire.UI?.pushEvent?.(`Drug Lab: ${text}`);
+    return entry;
+  }
+
+  class DrugLabCore {
+    constructor({ instanceKey, district, buildingState, playerState, inventory }) {
+      this.instanceKey = instanceKey;
+      this.district = district || null;
+      this.building = buildingState;
+      this.player = playerState;
+      this.inventory = inventory;
+    }
+
+    getScaledStat(baseValue, level = this.building.level) {
+      const safeBase = Number(baseValue || 0);
+      const safeLevel = clamp(Math.floor(Number(level) || 1), 1, DRUG_LAB_CONFIG.maxLevel);
+      return safeBase * (1 + (safeLevel - 1) * DRUG_LAB_CONFIG.upgradePctPerLevel);
+    }
+
+    getUnlockedSlotCount() {
+      return clamp(Math.floor(Number(this.building.level) || 1), 1, DRUG_LAB_CONFIG.maxSlots);
+    }
+
+    getStorageCapacity() {
+      return Math.max(1, Math.floor(DRUG_LAB_CONFIG.baseStorageCapacity * getDrugLabStorageCapacityMultiplier()));
+    }
+
+    getCurrentStoredTotal() {
+      const normalTotal = DRUG_LAB_DRUG_KEYS.reduce((sum, key) => sum + Number(this.building.storage[key] || 0), 0);
+      const enhancedTotal = DRUG_LAB_DRUG_KEYS.reduce(
+        (sum, key) => sum + Number(this.building.storageEnhanced[key] || 0),
+        0
+      );
+      return Math.max(0, Math.floor(normalTotal + enhancedTotal));
+    }
+
+    canStoreMore(amount) {
+      const requested = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+      return this.getCurrentStoredTotal() + requested <= this.getStorageCapacity();
+    }
+
+    getSlotById(slotId) {
+      const safeId = Math.max(1, Math.floor(Number(slotId) || 0));
+      return this.building.slots.find((slot) => Number(slot.id) === safeId) || null;
+    }
+
+    isOverclockActive(now = Date.now()) {
+      return now < Number(this.building.effects.overclockUntil || 0);
+    }
+
+    isCleanBatchActive(now = Date.now()) {
+      return now < Number(this.building.effects.cleanBatchUntil || 0);
+    }
+
+    isHiddenOperationActive(now = Date.now()) {
+      return now < Number(this.building.effects.hiddenOperationUntil || 0);
+    }
+
+    getSchoolProductionBoostPct(now = Date.now()) {
+      return resolveDrugLabSchoolBoostPct(this.instanceKey, now).totalPct;
+    }
+
+    getProductionMultiplier(now = Date.now()) {
+      let multiplier = this.getScaledStat(1, this.building.level);
+      const warehouseProductionBonusPct = getDrugLabProductionBonusPct();
+      if (warehouseProductionBonusPct > 0) {
+        multiplier *= 1 + warehouseProductionBonusPct / 100;
+      }
+      const schoolBoostPct = this.getSchoolProductionBoostPct(now);
+      if (schoolBoostPct > 0) {
+        multiplier *= 1 + schoolBoostPct / 100;
+      }
+      const networkBonusPct = getOwnedDrugLabNetworkProductionBonusPct();
+      if (networkBonusPct > 0) {
+        multiplier *= 1 + networkBonusPct / 100;
+      }
+      if (this.isOverclockActive(now)) {
+        multiplier *= 1 + DRUG_LAB_CONFIG.specialActions.overclock.productionBoostPct / 100;
+      }
+      if (this.isHiddenOperationActive(now)) {
+        multiplier *= 1 - DRUG_LAB_CONFIG.specialActions.hiddenOperation.productionPenaltyPct / 100;
+      }
+      if (this.player.activeDrugEffects.pulseShot.active && now < Number(this.player.activeDrugEffects.pulseShot.endsAt || 0)) {
+        multiplier *= 1 + DRUG_LAB_CONFIG.pulseShotProductionBoostPct / 100;
+      }
+      if (
+        this.player.activeDrugEffects.overdriveCrash.active
+        && now < Number(this.player.activeDrugEffects.overdriveCrash.endsAt || 0)
+      ) {
+        multiplier *= 1 - DRUG_LAB_CONFIG.overdriveCrashPenaltyPct / 100;
+      }
+      return Math.max(0, multiplier);
+    }
+
+    getHeatMultiplier(now = Date.now()) {
+      let multiplier = 1;
+      if (this.isHiddenOperationActive(now)) {
+        multiplier *= 1 - DRUG_LAB_CONFIG.specialActions.hiddenOperation.heatReductionPct / 100;
+      }
+      if (
+        this.player.activeDrugEffects.ghostSerum.active
+        && now < Number(this.player.activeDrugEffects.ghostSerum.endsAt || 0)
+      ) {
+        multiplier *= 1 - DRUG_LAB_CONFIG.ghostSerumHeatReductionPct / 100;
+      }
+      return Math.max(0, multiplier);
+    }
+
+    startProduction(slotId, drugType, now = Date.now()) {
+      const slot = this.getSlotById(slotId);
+      if (!slot) {
+        return { ok: false, message: "Slot neexistuje." };
+      }
+      if (Number(slot.id) > this.getUnlockedSlotCount()) {
+        return { ok: false, message: "Slot je zatím zamčený." };
+      }
+      const safeDrugType = String(drugType || slot.activeDrugType || "").trim();
+      if (!DRUG_CONFIG[safeDrugType]) {
+        return { ok: false, message: "Vyber drogu pro produkci." };
+      }
+      slot.activeDrugType = safeDrugType;
+      slot.isProducing = true;
+      slot.startedAt = slot.startedAt > 0 ? slot.startedAt : now;
+      slot.lastTick = now;
+      return { ok: true, message: `Slot ${slot.id}: produkce ${DRUG_CONFIG[safeDrugType].name} spuštěna.` };
+    }
+
+    stopProduction(slotId, now = Date.now()) {
+      const slot = this.getSlotById(slotId);
+      if (!slot) {
+        return { ok: false, message: "Slot neexistuje." };
+      }
+      if (!slot.isProducing) {
+        return { ok: false, message: `Slot ${slot.id}: produkce neběží.` };
+      }
+      slot.isProducing = false;
+      slot.lastTick = now;
+      return { ok: true, message: `Slot ${slot.id}: produkce zastavena.` };
+    }
+
+    updateProduction(now = Date.now()) {
+      const unlockedSlots = this.getUnlockedSlotCount();
+      const storageCapacity = this.getStorageCapacity();
+      const productionMultiplier = this.getProductionMultiplier(now);
+      const producedByDrug = createDrugLabAmountMap();
+
+      this.building.slots.forEach((slot) => {
+        if (Number(slot.id) > unlockedSlots) {
+          slot.isProducing = false;
+          slot.lastTick = now;
+          slot.productionRemainder = 0;
+          return;
+        }
+        if (!slot.isProducing) {
+          slot.lastTick = now;
+          return;
+        }
+        const drug = DRUG_CONFIG[slot.activeDrugType];
+        if (!drug) {
+          slot.isProducing = false;
+          slot.lastTick = now;
+          slot.productionRemainder = 0;
+          return;
+        }
+        const previousTick = Number(slot.lastTick || now);
+        const elapsedMs = Math.max(0, now - previousTick);
+        if (elapsedMs <= 0) {
+          slot.lastTick = now;
+          return;
+        }
+
+        const totalStored = this.getCurrentStoredTotal();
+        if (totalStored >= storageCapacity) {
+          slot.lastTick = now;
+          slot.productionRemainder = 0;
+          return;
+        }
+
+        const hoursElapsed = elapsedMs / 3600000;
+        const productionPerHour = drug.productionPerHour * productionMultiplier;
+        const rawProduced = hoursElapsed * productionPerHour + Number(slot.productionRemainder || 0);
+        const producedWhole = Math.max(0, Math.floor(rawProduced));
+        slot.productionRemainder = Math.max(0, rawProduced - producedWhole);
+
+        if (producedWhole > 0) {
+          const freeSpace = Math.max(0, storageCapacity - this.getCurrentStoredTotal());
+          const storable = Math.max(0, Math.min(producedWhole, freeSpace));
+          if (storable > 0) {
+            const targetStorage = this.isCleanBatchActive(now) ? this.building.storageEnhanced : this.building.storage;
+            targetStorage[drug.id] = Math.max(0, Number(targetStorage[drug.id] || 0) + storable);
+            slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + storable));
+            producedByDrug[drug.id] += storable;
+          }
+          if (storable < producedWhole && this.getCurrentStoredTotal() >= storageCapacity) {
+            slot.productionRemainder = 0;
+          }
+        }
+
+        slot.lastTick = now;
+      });
+
+      return producedByDrug;
+    }
+
+    collectDrugs() {
+      const collected = createDrugLabAmountMap();
+      const collectedEnhanced = createDrugLabAmountMap();
+      let total = 0;
+
+      DRUG_LAB_DRUG_KEYS.forEach((key) => {
+        const normalAmount = Math.max(0, Math.floor(Number(this.building.storage[key] || 0)));
+        const enhancedAmount = Math.max(0, Math.floor(Number(this.building.storageEnhanced[key] || 0)));
+        const fullAmount = normalAmount + enhancedAmount;
+        this.building.storage[key] = 0;
+        this.building.storageEnhanced[key] = 0;
+        collected[key] = fullAmount;
+        collectedEnhanced[key] = enhancedAmount;
+        total += fullAmount;
+      });
+
+      return { total, collected, collectedEnhanced };
+    }
+
+    applyDrugEffect(drugType, now = Date.now(), potencyMultiplier = 1) {
+      if (!DRUG_CONFIG[drugType]) {
+        return { ok: false, message: "Neznámý efekt drogy." };
+      }
+      const stateRef = sanitizeDrugLabEffectState(this.player.activeDrugEffects[drugType] || {});
+      stateRef.active = true;
+      stateRef.endsAt = now + DRUG_CONFIG[drugType].effectDurationMs;
+      stateRef.potencyMultiplier = Math.max(1, Number(potencyMultiplier) || 1);
+      this.player.activeDrugEffects[drugType] = stateRef;
+      return {
+        ok: true,
+        message: `${DRUG_CONFIG[drugType].name} aktivován na ${formatDurationLabel(DRUG_CONFIG[drugType].effectDurationMs)}.`
+      };
+    }
+
+    useDrug(drugType, now = Date.now()) {
+      const drug = DRUG_CONFIG[drugType];
+      if (!drug) {
+        return { ok: false, message: "Neznámá droga." };
+      }
+      const available = Math.max(0, Math.floor(Number(this.inventory[drugType] || 0)));
+      if (available < drug.useAmount) {
+        return { ok: false, message: `${drug.name}: nedostatek kusů (${available}/${drug.useAmount}).` };
+      }
+
+      const enhancedAvailable = Math.max(0, Math.floor(Number(this.player.enhancedDrugs[drugType] || 0)));
+      const enhancedUsed = Math.min(drug.useAmount, enhancedAvailable);
+      const potencyMultiplier = enhancedUsed > 0
+        ? 1 + DRUG_LAB_CONFIG.specialActions.cleanBatch.effectBoostPct / 100
+        : 1;
+
+      this.inventory[drugType] = Math.max(0, available - drug.useAmount);
+      this.player.enhancedDrugs[drugType] = Math.max(0, enhancedAvailable - enhancedUsed);
+
+      const effectResult = this.applyDrugEffect(drugType, now, potencyMultiplier);
+      if (!effectResult.ok) {
+        return effectResult;
+      }
+
+      if (drugType === "overdriveX") {
+        this.player.totalHeat = Math.max(0, Number(this.player.totalHeat || 0) + DRUG_LAB_CONFIG.overdriveUseImmediateHeat);
+      }
+
+      const messageParts = [`${drug.name} použita (${drug.useAmount} ks).`];
+      if (enhancedUsed > 0) {
+        messageParts.push("Čistá várka: +20 % síla efektu.");
+      }
+      if (drugType === "overdriveX") {
+        messageParts.push(`Heat +${DRUG_LAB_CONFIG.overdriveUseImmediateHeat}.`);
+      }
+      return {
+        ok: true,
+        message: messageParts.join(" ")
+      };
+    }
+
+    updateDrugEffects(now = Date.now()) {
+      return this.updateTimedEffects(now);
+    }
+
+    calculateCurrentHeatPerHour(now = Date.now()) {
+      const unlockedSlots = this.getUnlockedSlotCount();
+      const baseHeatPerHour = this.building.slots.reduce((sum, slot) => {
+        if (Number(slot.id) > unlockedSlots) return sum;
+        if (!slot.isProducing) return sum;
+        const drug = DRUG_CONFIG[slot.activeDrugType];
+        if (!drug) return sum;
+        return sum + Number(drug.heatPerHour || 0);
+      }, 0);
+      return Math.max(0, baseHeatPerHour * this.getHeatMultiplier(now));
+    }
+
+    applyPassiveHeat(now = Date.now()) {
+      let from = Number(this.building.lastHeatAt || now);
+      if (!Number.isFinite(from) || from > now) {
+        from = now;
+      }
+      let gained = 0;
+      if (from < now) {
+        const hoursElapsed = (now - from) / 3600000;
+        const rawHeat = hoursElapsed * this.calculateCurrentHeatPerHour(now) + Number(this.building.heatRemainder || 0);
+        gained = Math.max(0, Math.floor(rawHeat));
+        this.building.heatRemainder = Math.max(0, rawHeat - gained);
+      }
+      this.building.lastHeatAt = now;
+      if (gained > 0) {
+        this.player.totalHeat = Math.max(0, Math.floor(Number(this.player.totalHeat || 0) + gained));
+      }
+      return gained;
+    }
+
+    upgradeBuilding(player) {
+      const nextLevel = Math.max(1, Math.floor(Number(this.building.level || 1)) + 1);
+      if (nextLevel > DRUG_LAB_CONFIG.maxLevel) {
+        return { ok: false, message: "Drug Lab je na maximálním levelu." };
+      }
+      const cost = Math.max(0, Number(DRUG_LAB_CONFIG.upgradeCosts[nextLevel] || 0));
+      const spend = window.Empire.UI?.trySpendCash;
+      if (typeof spend !== "function") {
+        return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
+      }
+      const spendResult = spend(cost);
+      if (!spendResult?.ok) {
+        return { ok: false, message: `Nedostatek cash na upgrade (potřeba $${cost}).` };
+      }
+      this.building.level = nextLevel;
+      return { ok: true, message: `Drug Lab vylepšen na level ${nextLevel} za $${cost}.` };
+    }
+
+    useOverclock(player, now = Date.now()) {
+      const cooldownLeft = Math.max(0, Number(this.building.cooldowns.overclock || 0) - now);
+      if (cooldownLeft > 0) {
+        return { ok: false, message: `Overclock je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+      }
+      this.building.effects.overclockUntil = now + DRUG_LAB_CONFIG.specialActions.overclock.durationMs;
+      this.building.cooldowns.overclock = now + DRUG_LAB_CONFIG.specialActions.overclock.cooldownMs;
+      this.player.totalHeat = Math.max(
+        0,
+        Math.floor(Number(this.player.totalHeat || 0) + DRUG_LAB_CONFIG.specialActions.overclock.immediateHeat)
+      );
+      return {
+        ok: true,
+        message:
+          `Overclock aktivní na ${formatDurationLabel(DRUG_LAB_CONFIG.specialActions.overclock.durationMs)}. `
+          + `Produkce +${DRUG_LAB_CONFIG.specialActions.overclock.productionBoostPct} %, `
+          + `heat +${DRUG_LAB_CONFIG.specialActions.overclock.immediateHeat}.`
+      };
+    }
+
+    useCleanBatch(player, now = Date.now()) {
+      const cooldownLeft = Math.max(0, Number(this.building.cooldowns.cleanBatch || 0) - now);
+      if (cooldownLeft > 0) {
+        return { ok: false, message: `Čistá várka je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+      }
+      this.building.effects.cleanBatchUntil = now + DRUG_LAB_CONFIG.specialActions.cleanBatch.durationMs;
+      this.building.cooldowns.cleanBatch = now + DRUG_LAB_CONFIG.specialActions.cleanBatch.cooldownMs;
+      return {
+        ok: true,
+        message:
+          `Čistá várka aktivní na ${formatDurationLabel(DRUG_LAB_CONFIG.specialActions.cleanBatch.durationMs)}. `
+          + `Nové dávky budou mít +${DRUG_LAB_CONFIG.specialActions.cleanBatch.effectBoostPct} % sílu efektu.`
+      };
+    }
+
+    useHiddenOperation(player, now = Date.now()) {
+      const cooldownLeft = Math.max(0, Number(this.building.cooldowns.hiddenOperation || 0) - now);
+      if (cooldownLeft > 0) {
+        return { ok: false, message: `Skrytý provoz je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+      }
+      this.building.effects.hiddenOperationUntil = now + DRUG_LAB_CONFIG.specialActions.hiddenOperation.durationMs;
+      this.building.cooldowns.hiddenOperation = now + DRUG_LAB_CONFIG.specialActions.hiddenOperation.cooldownMs;
+      return {
+        ok: true,
+        message:
+          `Skrytý provoz aktivní na ${formatDurationLabel(DRUG_LAB_CONFIG.specialActions.hiddenOperation.durationMs)}. `
+          + `Heat z výroby -${DRUG_LAB_CONFIG.specialActions.hiddenOperation.heatReductionPct} %, `
+          + `produkce -${DRUG_LAB_CONFIG.specialActions.hiddenOperation.productionPenaltyPct} %.`
+      };
+    }
+
+    updateTimedEffects(now = Date.now()) {
+      const expiredEffects = [];
+      Object.keys(this.player.activeDrugEffects || {}).forEach((effectKey) => {
+        const stateRef = this.player.activeDrugEffects[effectKey];
+        if (!stateRef?.active) return;
+        const endsAt = Number(stateRef.endsAt || 0);
+        if (now < endsAt) return;
+        stateRef.active = false;
+        stateRef.endsAt = 0;
+        stateRef.potencyMultiplier = 1;
+        expiredEffects.push(effectKey);
+        if (effectKey === "overdriveX") {
+          const crashRef = this.player.activeDrugEffects.overdriveCrash || createDefaultDrugLabEffectState();
+          crashRef.active = true;
+          crashRef.endsAt = now + DRUG_LAB_CONFIG.overdriveCrashDurationMs;
+          crashRef.potencyMultiplier = 1;
+          this.player.activeDrugEffects.overdriveCrash = crashRef;
+          expiredEffects.push("overdriveCrash_started");
+        }
+      });
+      return { expiredEffects };
+    }
+  }
+
+  function persistDrugLabRuntime(sync, now = Date.now()) {
+    persistDrugLabState(sync.instanceKey, sync.building);
+    persistDrugLabPlayerSnapshot(sync.player);
+    sync.economy = applyDrugLabEconomySnapshot(sync.economy, sync.inventory, sync.player, now);
+    return sync;
+  }
+
+  function runDrugLabTick(context, district, now = Date.now()) {
+    const instanceKey = resolveBuildingInstanceKey(context, district);
+    const building = getDrugLabStateByKey(instanceKey, now);
+    const player = getDrugLabPlayerSnapshot(now);
+    const economy = getSafeDrugLabEconomySnapshot();
+    const inventory = normalizeDrugLabInventoryFromEconomy(economy);
+    const core = new DrugLabCore({
+      instanceKey,
+      district,
+      buildingState: building,
+      playerState: player,
+      inventory
+    });
+    const timed = core.updateTimedEffects(now);
+    const producedByDrug = core.updateProduction(now);
+    const heatAdded = core.applyPassiveHeat(now);
+
+    if (Array.isArray(timed.expiredEffects) && timed.expiredEffects.length) {
+      timed.expiredEffects.forEach((effectKey) => {
+        if (effectKey === "overdriveCrash_started") {
+          pushDrugLabLog(player, "Overdrive Crash aktivní: výkon -10 % na 1 hodinu.", now);
+          return;
+        }
+        pushDrugLabLog(player, `Efekt ${getDrugLabEffectLabel(effectKey)} vypršel.`, now);
+      });
+    }
+
+    persistDrugLabRuntime({ instanceKey, building, player, economy, inventory }, now);
+
+    return {
+      instanceKey,
+      building,
+      player,
+      economy,
+      inventory,
+      core,
+      timed,
+      producedByDrug,
+      heatAdded
+    };
+  }
+
+  function formatDrugLabTimeLabel(timestampMs) {
+    const safeTs = Math.max(0, Math.floor(Number(timestampMs) || 0));
+    if (safeTs <= 0) return "-";
+    try {
+      return new Date(safeTs).toLocaleTimeString("cs-CZ", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    } catch {
+      return "-";
+    }
+  }
+
   function getApartmentLevelMultiplier(level) {
     const safeLevel = clamp(Math.floor(Number(level) || 1), 1, APARTMENT_BLOCK_CONFIG.maxLevel);
     return 1 + (safeLevel - 1) * APARTMENT_BLOCK_CONFIG.upgradePctPerLevel;
@@ -1340,6 +3310,11 @@ window.Empire.Map = (() => {
   function getConvenienceStoreLevelMultiplier(level) {
     const safeLevel = clamp(Math.floor(Number(level) || 1), 1, CONVENIENCE_STORE_BUILDING_CONFIG.maxLevel);
     return 1 + (safeLevel - 1) * CONVENIENCE_STORE_BUILDING_CONFIG.upgradePctPerLevel;
+  }
+
+  function getDrugLabLevelMultiplier(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 1, DRUG_LAB_CONFIG.maxLevel);
+    return 1 + (safeLevel - 1) * DRUG_LAB_CONFIG.upgradePctPerLevel;
   }
 
   function formatDecimalValue(value, maxFractions = 2) {
@@ -1455,6 +3430,532 @@ window.Empire.Map = (() => {
   function isConvenienceStoreBaseName(value) {
     const normalized = normalizeBuildingTypeName(value);
     return normalized === "vecerka" || normalized === "convenience store";
+  }
+
+  function isPharmacyBaseName(value) {
+    const normalized = normalizeBuildingTypeName(value);
+    return normalized === "lekarna" || normalized === "pharmacy";
+  }
+
+  function isFactoryBaseName(value) {
+    const normalized = normalizeBuildingTypeName(value);
+    return normalized === "tovarna" || normalized === "factory";
+  }
+
+  function isArmoryBaseName(value) {
+    const normalized = normalizeBuildingTypeName(value);
+    return normalized === "zbrojovka" || normalized === "armory";
+  }
+
+  function isDrugLabBaseName(value) {
+    const normalized = normalizeBuildingTypeName(value);
+    return normalized === "drug lab" || normalized === "druglab";
+  }
+
+  function collectOwnedPharmacyEntries() {
+    const districts = Array.isArray(state.districts) ? state.districts : [];
+    const entries = [];
+    districts.forEach((district) => {
+      if (!isDistrictOwnedByPlayer(district)) return;
+      const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+      const overrides = Array.isArray(district?.buildingNameOverrides) ? district.buildingNameOverrides : [];
+      const districtLabel = String(district?.name || `Distrikt #${district?.id ?? "-"}`);
+      buildings.forEach((building, index) => {
+        if (!isPharmacyBaseName(building)) return;
+        const baseName = String(building || PHARMACY_BUILDING_NAME);
+        const overrideRaw = String(overrides[index] || "").trim();
+        const variantName = overrideRaw && overrideRaw !== baseName ? overrideRaw : null;
+        const displayName = variantName || `${baseName} • ${districtLabel}`;
+        entries.push({
+          district,
+          districtId: district?.id ?? null,
+          buildingIndex: Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : null,
+          baseName,
+          variantName,
+          displayName,
+          context: {
+            baseName,
+            variantName,
+            districtId: district?.id ?? null,
+            buildingIndex: Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : null
+          }
+        });
+      });
+    });
+    return entries;
+  }
+
+  function collectOwnedFactoryEntries() {
+    const districts = Array.isArray(state.districts) ? state.districts : [];
+    const entries = [];
+    districts.forEach((district) => {
+      if (!isDistrictOwnedByPlayer(district)) return;
+      const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+      const overrides = Array.isArray(district?.buildingNameOverrides) ? district.buildingNameOverrides : [];
+      const districtLabel = String(district?.name || `Distrikt #${district?.id ?? "-"}`);
+      buildings.forEach((building, index) => {
+        if (!isFactoryBaseName(building)) return;
+        const baseName = String(building || FACTORY_BUILDING_NAME);
+        const overrideRaw = String(overrides[index] || "").trim();
+        const variantName = overrideRaw && overrideRaw !== baseName ? overrideRaw : null;
+        const displayName = variantName || `${baseName} • ${districtLabel}`;
+        entries.push({
+          district,
+          districtId: district?.id ?? null,
+          buildingIndex: Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : null,
+          baseName,
+          variantName,
+          displayName,
+          context: {
+            baseName,
+            variantName,
+            districtId: district?.id ?? null,
+            buildingIndex: Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : null
+          }
+        });
+      });
+    });
+    return entries;
+  }
+
+  function collectOwnedArmoryEntries() {
+    const districts = Array.isArray(state.districts) ? state.districts : [];
+    const entries = [];
+    districts.forEach((district) => {
+      if (!isDistrictOwnedByPlayer(district)) return;
+      const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+      const overrides = Array.isArray(district?.buildingNameOverrides) ? district.buildingNameOverrides : [];
+      const districtLabel = String(district?.name || `Distrikt #${district?.id ?? "-"}`);
+      buildings.forEach((building, index) => {
+        if (!isArmoryBaseName(building)) return;
+        const baseName = String(building || ARMORY_BUILDING_NAME);
+        const overrideRaw = String(overrides[index] || "").trim();
+        const variantName = overrideRaw && overrideRaw !== baseName ? overrideRaw : null;
+        const displayName = variantName || `${baseName} • ${districtLabel}`;
+        entries.push({
+          district,
+          districtId: district?.id ?? null,
+          buildingIndex: Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : null,
+          baseName,
+          variantName,
+          displayName,
+          context: {
+            baseName,
+            variantName,
+            districtId: district?.id ?? null,
+            buildingIndex: Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : null
+          }
+        });
+      });
+    });
+    return entries;
+  }
+
+  function resolvePrimaryOwnedPharmacyTarget(context, district) {
+    const ownedEntries = collectOwnedPharmacyEntries();
+    if (ownedEntries.length) {
+      const primary = ownedEntries[0];
+      return {
+        entries: ownedEntries,
+        primary,
+        context: primary.context,
+        district: primary.district
+      };
+    }
+
+    return {
+      entries: [],
+      primary: null,
+      context,
+      district: resolveDistrictRecord(district || context?.districtId) || district || null
+    };
+  }
+
+  function resolvePrimaryOwnedFactoryTarget(context, district) {
+    const ownedEntries = collectOwnedFactoryEntries();
+    if (ownedEntries.length) {
+      const primary = ownedEntries[0];
+      return {
+        entries: ownedEntries,
+        primary,
+        context: primary.context,
+        district: primary.district
+      };
+    }
+
+    return {
+      entries: [],
+      primary: null,
+      context,
+      district: resolveDistrictRecord(district || context?.districtId) || district || null
+    };
+  }
+
+  function resolvePrimaryOwnedArmoryTarget(context, district) {
+    const ownedEntries = collectOwnedArmoryEntries();
+    if (ownedEntries.length) {
+      const primary = ownedEntries[0];
+      return {
+        entries: ownedEntries,
+        primary,
+        context: primary.context,
+        district: primary.district
+      };
+    }
+
+    return {
+      entries: [],
+      primary: null,
+      context,
+      district: resolveDistrictRecord(district || context?.districtId) || district || null
+    };
+  }
+
+  function collectOwnedDrugLabEntries() {
+    const districts = Array.isArray(state.districts) ? state.districts : [];
+    const entries = [];
+    districts.forEach((district) => {
+      if (!isDistrictOwnedByPlayer(district)) return;
+      const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+      const overrides = Array.isArray(district?.buildingNameOverrides) ? district.buildingNameOverrides : [];
+      const districtLabel = String(district?.name || `Distrikt #${district?.id ?? "-"}`);
+      buildings.forEach((building, index) => {
+        if (!isDrugLabBaseName(building)) return;
+        const baseName = String(building || DRUG_LAB_BUILDING_NAME);
+        const overrideRaw = String(overrides[index] || "").trim();
+        const variantName = overrideRaw && overrideRaw !== baseName ? overrideRaw : null;
+        const displayName = variantName || `${baseName} • ${districtLabel}`;
+        entries.push({
+          district,
+          districtId: district?.id ?? null,
+          buildingIndex: Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : null,
+          baseName,
+          variantName,
+          displayName,
+          context: {
+            baseName,
+            variantName,
+            districtId: district?.id ?? null,
+            buildingIndex: Number.isFinite(Number(index)) ? Math.max(0, Math.floor(Number(index))) : null
+          }
+        });
+      });
+    });
+    return entries;
+  }
+
+  function getOwnedDrugLabNetworkProductionBonusPct() {
+    const ownedCount = collectOwnedDrugLabEntries().length;
+    const extraLabs = Math.max(0, ownedCount - 1);
+    return extraLabs * 5;
+  }
+
+  function resolvePrimaryOwnedDrugLabTarget(context, district) {
+    const ownedEntries = collectOwnedDrugLabEntries();
+    if (ownedEntries.length) {
+      const primary = ownedEntries[0];
+      return {
+        entries: ownedEntries,
+        primary,
+        context: primary.context,
+        district: primary.district
+      };
+    }
+
+    return {
+      entries: [],
+      primary: null,
+      context,
+      district: resolveDistrictRecord(district || context?.districtId) || district || null
+    };
+  }
+
+  function readCurrentPlayerHeatValue() {
+    const profile = window.Empire.player || {};
+    const candidates = [
+      profile?.wantedLevel,
+      profile?.wanted_level,
+      profile?.wanted,
+      profile?.heat,
+      profile?.notoriety,
+      profile?.policeHeat,
+      profile?.police_heat,
+      window.Empire?.PoliceHeat?.state?.player?.totalHeat
+    ];
+    for (let i = 0; i < candidates.length; i += 1) {
+      const parsed = Number(candidates[i]);
+      if (Number.isFinite(parsed)) {
+        return Math.max(0, Math.floor(parsed));
+      }
+    }
+    return 0;
+  }
+
+  function addPlayerHeatFromBuilding(amount) {
+    const delta = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!delta) return readCurrentPlayerHeatValue();
+    const nextHeat = Math.max(0, readCurrentPlayerHeatValue() + delta);
+    const currentProfile = window.Empire.player && typeof window.Empire.player === "object"
+      ? window.Empire.player
+      : {};
+    const nextProfile = {
+      ...currentProfile,
+      heat: nextHeat,
+      wantedLevel: nextHeat,
+      wanted: nextHeat,
+      policeHeat: nextHeat,
+      police_heat: nextHeat
+    };
+
+    const updateProfile = window.Empire.UI?.updateProfile;
+    if (typeof updateProfile === "function") {
+      updateProfile(nextProfile);
+    } else {
+      window.Empire.player = nextProfile;
+    }
+
+    const setExternalHeat = window.Empire.PoliceHeat?.setExternalHeat;
+    if (typeof setExternalHeat === "function") {
+      setExternalHeat(nextHeat, nextProfile);
+    }
+
+    return nextHeat;
+  }
+
+  function getPharmacyBoostSnapshot(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const activeEffects = [];
+    const totals = {
+      spySpeedPct: 0,
+      infoQualityPct: 0,
+      attackSpeedPct: 0,
+      stealSpeedPct: 0,
+      activeActionsPct: 0
+    };
+    const counts = {
+      recon: 0,
+      action: 0,
+      neuro: 0
+    };
+    const playerSnapshot = getDrugLabPlayerSnapshot(nowMs);
+    const supplies = createDrugLabSupplyMap(playerSnapshot.labSupplies || {});
+
+    Object.entries(pharmacyBuildingStore || {}).forEach(([instanceKey, rawState]) => {
+      const snapshot = sanitizePharmacyState(rawState, nowMs);
+      pharmacyBuildingStore[instanceKey] = snapshot;
+      const reconRemaining = Math.max(0, Number(snapshot.effects.reconUntil || 0) - nowMs);
+      if (reconRemaining > 0) {
+        counts.recon += 1;
+        totals.spySpeedPct += PHARMACY_CONFIG.boosts.recon.spySpeedPct;
+        totals.infoQualityPct += PHARMACY_CONFIG.boosts.recon.infoQualityPct;
+        activeEffects.push({ type: "recon", remainingMs: reconRemaining });
+      }
+      const actionRemaining = Math.max(0, Number(snapshot.effects.actionUntil || 0) - nowMs);
+      if (actionRemaining > 0) {
+        counts.action += 1;
+        totals.attackSpeedPct += PHARMACY_CONFIG.boosts.action.attackSpeedPct;
+        totals.stealSpeedPct += PHARMACY_CONFIG.boosts.action.stealSpeedPct;
+        activeEffects.push({ type: "action", remainingMs: actionRemaining });
+      }
+      const neuroRemaining = Math.max(0, Number(snapshot.effects.neuroUntil || 0) - nowMs);
+      if (neuroRemaining > 0) {
+        counts.neuro += 1;
+        totals.activeActionsPct += PHARMACY_CONFIG.boosts.neuro.activeActionsPct;
+        activeEffects.push({ type: "neuro", remainingMs: neuroRemaining });
+      }
+    });
+
+    return {
+      activeCount: activeEffects.length,
+      activeEffects,
+      counts,
+      supplies,
+      bonuses: {
+        ...totals
+      },
+      effective: {
+        spySpeedPct: totals.spySpeedPct + totals.activeActionsPct,
+        infoQualityPct: totals.infoQualityPct,
+        attackSpeedPct: totals.attackSpeedPct + totals.activeActionsPct,
+        stealSpeedPct: totals.stealSpeedPct + totals.activeActionsPct,
+        activeActionsPct: totals.activeActionsPct
+      }
+    };
+  }
+
+  function usePharmacyBoost(boostType, now = Date.now()) {
+    const type = String(boostType || "").trim().toLowerCase();
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const target = resolvePrimaryOwnedPharmacyTarget(null, null);
+    if (!target?.context) {
+      return { ok: false, message: "Boost nelze aktivovat: nevlastníš žádnou Lékárnu." };
+    }
+
+    const instanceKey = resolveBuildingInstanceKey(target.context, target.district);
+    const snapshot = getPharmacyStateByKey(instanceKey, nowMs);
+    syncPharmacyProduction(snapshot, nowMs);
+    const player = getDrugLabPlayerSnapshot(nowMs);
+    player.labSupplies = createDrugLabSupplyMap(player.labSupplies || {});
+
+    const config = PHARMACY_CONFIG.boosts[type] || null;
+    if (!config) {
+      persistPharmacyState(instanceKey, snapshot);
+      persistDrugLabPlayerSnapshot(player);
+      return { ok: false, message: "Neznámý boost." };
+    }
+
+    const untilKey = type === "recon" ? "reconUntil" : type === "action" ? "actionUntil" : "neuroUntil";
+    const cooldownLeft = Math.max(0, Number(snapshot.cooldowns[type] || 0) - nowMs);
+    if (cooldownLeft > 0) {
+      persistPharmacyState(instanceKey, snapshot);
+      persistDrugLabPlayerSnapshot(player);
+      return { ok: false, message: `${type === "recon" ? "Recon" : type === "action" ? "Action" : "Neuro"} Boost je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+    }
+
+    const stimCost = Math.max(0, Math.floor(Number(config.stimCost || 0)));
+    const availableStim = Math.max(0, Math.floor(Number(player.labSupplies.stimPack || 0)));
+    if (availableStim < stimCost) {
+      persistPharmacyState(instanceKey, snapshot);
+      persistDrugLabPlayerSnapshot(player);
+      return { ok: false, message: `Nedostatek Stim Pack (${availableStim}/${stimCost}).` };
+    }
+
+    player.labSupplies.stimPack = Math.max(0, availableStim - stimCost);
+    snapshot.effects[untilKey] = nowMs + PHARMACY_CONFIG.boostDurationMs;
+    snapshot.cooldowns[type] = nowMs + PHARMACY_CONFIG.boostDurationMs;
+
+    let heatNote = "";
+    if (type === "neuro") {
+      const nextHeat = addPlayerHeatFromBuilding(PHARMACY_CONFIG.boosts.neuro.heatAdded);
+      heatNote = ` Heat +${PHARMACY_CONFIG.boosts.neuro.heatAdded} (celkem ${nextHeat}).`;
+    }
+
+    persistPharmacyState(instanceKey, snapshot);
+    persistDrugLabPlayerSnapshot(player);
+
+    const boostLabel = type === "recon" ? "Recon Boost" : type === "action" ? "Action Boost" : "Neuro Boost";
+    return {
+      ok: true,
+      message:
+        `${boostLabel} aktivní na ${formatDurationLabel(PHARMACY_CONFIG.boostDurationMs)}. `
+        + `Spotřeba ${stimCost} Stim Pack (zbývá ${player.labSupplies.stimPack}).${heatNote}`
+    };
+  }
+
+  function getFactoryBoostSnapshot(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const activeEffects = [];
+    const totals = {
+      attackPowerPct: 0,
+      attackSpeedPct: 0,
+      raidSpeedPct: 0,
+      destroyBuildingChancePct: 0,
+      defenseIgnorePct: 0,
+      defensePenaltyPct: 0,
+      policeInterventionRiskPct: 0
+    };
+    const counts = {
+      assault: 0,
+      rapid: 0,
+      breach: 0
+    };
+    const supplies = createFactoryPlayerSupplyMap(getFactoryPlayerSuppliesSnapshot());
+
+    Object.entries(factoryBuildingStore || {}).forEach(([instanceKey, rawState]) => {
+      const snapshot = sanitizeFactoryState(rawState, nowMs);
+      factoryBuildingStore[instanceKey] = snapshot;
+      const assaultRemaining = Math.max(0, Number(snapshot.effects.assaultUntil || 0) - nowMs);
+      if (assaultRemaining > 0) {
+        counts.assault += 1;
+        totals.attackPowerPct += FACTORY_COMBAT_BOOSTS.assault.attackPowerPct;
+        activeEffects.push({ type: "assault", remainingMs: assaultRemaining });
+      }
+      const rapidRemaining = Math.max(0, Number(snapshot.effects.rapidUntil || 0) - nowMs);
+      if (rapidRemaining > 0) {
+        counts.rapid += 1;
+        totals.attackSpeedPct += FACTORY_COMBAT_BOOSTS.rapid.attackSpeedPct;
+        totals.raidSpeedPct += FACTORY_COMBAT_BOOSTS.rapid.raidSpeedPct;
+        totals.defensePenaltyPct += FACTORY_COMBAT_BOOSTS.rapid.defensePenaltyPct;
+        activeEffects.push({ type: "rapid", remainingMs: rapidRemaining });
+      }
+      const breachRemaining = Math.max(0, Number(snapshot.effects.breachUntil || 0) - nowMs);
+      if (breachRemaining > 0) {
+        counts.breach += 1;
+        totals.destroyBuildingChancePct += FACTORY_COMBAT_BOOSTS.breach.destroyBuildingChancePct;
+        totals.defenseIgnorePct += FACTORY_COMBAT_BOOSTS.breach.defenseIgnorePct;
+        totals.policeInterventionRiskPct += FACTORY_COMBAT_BOOSTS.breach.policeInterventionRiskPct;
+        activeEffects.push({ type: "breach", remainingMs: breachRemaining });
+      }
+    });
+
+    return {
+      activeCount: activeEffects.length,
+      activeEffects,
+      counts,
+      supplies,
+      bonuses: {
+        ...totals
+      },
+      effective: {
+        ...totals
+      }
+    };
+  }
+
+  function useFactoryBoost(boostType, now = Date.now()) {
+    const type = String(boostType || "").trim().toLowerCase();
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const target = resolvePrimaryOwnedFactoryTarget(null, null);
+    if (!target?.context) {
+      return { ok: false, message: "Boost nelze aktivovat: nevlastníš žádnou Továrnu." };
+    }
+
+    const instanceKey = resolveBuildingInstanceKey(target.context, target.district);
+    const snapshot = getFactoryStateByKey(instanceKey, nowMs);
+    syncFactoryProduction(snapshot, nowMs, { applyHeat: true });
+    const player = createFactoryPlayerSupplyMap(getFactoryPlayerSuppliesSnapshot());
+    const config = FACTORY_COMBAT_BOOSTS[type] || null;
+    if (!config) {
+      persistFactoryState(instanceKey, snapshot);
+      persistFactoryPlayerSuppliesSnapshot(player);
+      return { ok: false, message: "Neznámý combat boost." };
+    }
+
+    const untilKey = type === "assault" ? "assaultUntil" : type === "rapid" ? "rapidUntil" : "breachUntil";
+    const activeLeft = Math.max(0, Number(snapshot.effects[untilKey] || 0) - nowMs);
+    if (activeLeft > 0) {
+      persistFactoryState(instanceKey, snapshot);
+      persistFactoryPlayerSuppliesSnapshot(player);
+      return {
+        ok: false,
+        message: `${type === "assault" ? "Assault Protocol" : type === "rapid" ? "Rapid Strike" : "Breach Mode"} je už aktivní (${formatDurationLabel(activeLeft)}).`
+      };
+    }
+
+    const moduleCost = Math.max(0, Math.floor(Number(config.combatModuleCost || 0)));
+    const availableModules = Math.max(0, Math.floor(Number(player.combatModule || 0)));
+    if (availableModules < moduleCost) {
+      persistFactoryState(instanceKey, snapshot);
+      persistFactoryPlayerSuppliesSnapshot(player);
+      return { ok: false, message: `Nedostatek Combat Module (${availableModules}/${moduleCost}).` };
+    }
+
+    player.combatModule = Math.max(0, availableModules - moduleCost);
+    snapshot.effects[untilKey] = nowMs + config.durationMs;
+    snapshot.cooldowns[type] = nowMs + config.durationMs;
+    const nextHeat = addPlayerHeatFromBuilding(config.heatAdded);
+
+    persistFactoryState(instanceKey, snapshot);
+    persistFactoryPlayerSuppliesSnapshot(player);
+
+    const boostLabel = type === "assault" ? "Assault Protocol" : type === "rapid" ? "Rapid Strike" : "Breach Mode";
+    return {
+      ok: true,
+      message:
+        `${boostLabel} aktivní na ${formatDurationLabel(config.durationMs)}. `
+        + `Spotřeba ${moduleCost} Combat Module (zbývá ${player.combatModule}). `
+        + `Heat +${config.heatAdded} (celkem ${nextHeat}).`
+    };
   }
 
   function resolveDistrictRecord(districtOrId) {
@@ -4340,6 +6841,1326 @@ window.Empire.Map = (() => {
     return null;
   }
 
+  function resolveFactoryBuildingDetails(context, district, fallback) {
+    const now = Date.now();
+    const primaryTarget = resolvePrimaryOwnedFactoryTarget(context, district);
+    const activeContext = primaryTarget.context || context;
+    const activeDistrict = primaryTarget.district || district || null;
+    const key = resolveBuildingInstanceKey(activeContext, activeDistrict);
+    const ownedFactoryCount = Math.max(1, primaryTarget.entries.length || 1);
+    const networkProductionBonusPct = Math.max(0, (ownedFactoryCount - 1) * 10);
+    const snapshot = getFactoryStateByKey(key, now);
+    const syncResult = syncFactoryProduction(snapshot, now, {
+      applyHeat: true,
+      ownedFactoryCount,
+      networkProductionBonusPct
+    });
+    persistFactoryState(key, snapshot);
+
+    const levelMultiplier = getFactoryLevelMultiplier(snapshot.level);
+    const totalProductionMultiplier = levelMultiplier * (1 + networkProductionBonusPct / 100);
+    const rates = calculateFactoryProductionRates(totalProductionMultiplier);
+    const nextLevel = snapshot.level < FACTORY_CONFIG.maxLevel ? snapshot.level + 1 : null;
+    const nextUpgradeCost = nextLevel ? getFactoryUpgradeCost(nextLevel) : 0;
+    const resources = createFactoryResourceMap(snapshot.resources);
+    const playerSupplies = getFactoryPlayerSuppliesSnapshot();
+    const boostSnapshot = getFactoryBoostSnapshot(now);
+    const slots = (Array.isArray(snapshot.slots) ? snapshot.slots : []).map((slot) => {
+      const config = FACTORY_SLOT_CONFIG.find((entry) => Number(entry.id) === Number(slot.id)) || null;
+      const isCraftSlot = String(config?.mode || slot.mode || "").trim() === "craft";
+      const perHour = slot.resourceKey === "metalParts"
+        ? rates.metalPartsPerHour
+        : slot.resourceKey === "techCore"
+          ? rates.techCorePerHour
+          : rates.combatModulePerHour;
+      return {
+        id: Number(slot.id),
+        resourceKey: slot.resourceKey,
+        resourceLabel: config?.label || slot.resourceKey,
+        mode: config?.mode || slot.mode || "produce",
+        isProducing: Boolean(slot.isProducing),
+        producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
+        perHour: Math.max(0, Number(perHour || 0)),
+        effectiveDurationMs: isCraftSlot
+          ? Math.max(1, Math.round(FACTORY_CONFIG.combatModule.durationMs / totalProductionMultiplier))
+          : 0
+      };
+    });
+    const activeSlots = Math.max(0, Math.floor(Number(syncResult.activeSlots || 0)));
+    const storedTotal = FACTORY_RESOURCE_KEYS.reduce((sum, resourceKey) => sum + Number(resources[resourceKey] || 0), 0);
+    const effects = [
+      `Craft Combat Module: ${FACTORY_CONFIG.combatModule.metalPartsCost} Metal Parts + ${FACTORY_CONFIG.combatModule.techCoreCost} Tech Core • ${formatDurationLabel(FACTORY_CONFIG.combatModule.durationMs)} / ks • +${FACTORY_CONFIG.combatModule.heatPerUnit} heat / ks`,
+      `Sklad hráče: MP ${playerSupplies.metalParts}, TC ${playerSupplies.techCore}, CM ${playerSupplies.combatModule}`
+    ];
+    if (boostSnapshot.activeCount > 0) {
+      const activeLabels = boostSnapshot.activeEffects
+        .slice(0, 4)
+        .map((entry) => `${entry.type} ${formatDurationLabel(entry.remainingMs)}`)
+        .join(", ");
+      effects.push(`Combat boosty: ${activeLabels}`);
+    }
+    if (networkProductionBonusPct > 0) {
+      effects.push(
+        `Síť Továren: ${ownedFactoryCount} budov (+${formatDecimalValue(networkProductionBonusPct, 2)}% rychlost výroby)`
+      );
+    }
+
+    const primaryDisplayName = primaryTarget.primary?.displayName || activeContext?.variantName || activeContext?.baseName;
+    const otherDisplayNames = primaryTarget.entries.slice(1).map((entry) => entry.displayName);
+    const combinedDisplayName = otherDisplayNames.length
+      ? `${primaryDisplayName} | Další: ${otherDisplayNames.join(", ")}`
+      : primaryDisplayName;
+
+    return {
+      ...fallback,
+      baseName: activeContext.baseName,
+      displayName: combinedDisplayName || activeContext.baseName,
+      hourlyIncome: 0,
+      dailyIncome: 0,
+      info:
+        "Továrna je produkční budova základních zbraňových materiálů. "
+        + "Vyrábí Metal Parts a Tech Core, z nich následně craftí Combat Module. Combat boosty aktivuješ přes Boost tlačítko nad mapou.",
+      specialActions: [
+        "Slot 1: Metal Parts (rychlá základní výroba).",
+        "Slot 2: Tech Core (pomalejší pokročilá výroba).",
+        `Slot 3: Combat Module (${FACTORY_CONFIG.combatModule.metalPartsCost} MP + ${FACTORY_CONFIG.combatModule.techCoreCost} TC, ${formatDurationLabel(FACTORY_CONFIG.combatModule.durationMs)}, +${FACTORY_CONFIG.combatModule.heatPerUnit} heat / ks).`,
+        "Combat boosty: Assault Protocol (2 CM), Rapid Strike (3 CM), Breach Mode (4 CM) přes Boost tlačítko."
+      ],
+      mechanics: {
+        type: "factory",
+        instanceKey: key,
+        level: snapshot.level,
+        nextLevel,
+        nextUpgradeCost,
+        heatPerDay: 0,
+        effectsLabel: effects.join(" • "),
+        resources,
+        playerSupplies,
+        slots,
+        activeSlots,
+        storedTotal,
+        ratesPerHour: {
+          metalParts: rates.metalPartsPerHour,
+          techCore: rates.techCorePerHour,
+          combatModule: rates.combatModulePerHour
+        },
+        producedSinceLastTick: createFactoryResourceMap(syncResult.produced),
+        heatAddedSinceLastTick: Math.max(0, Math.floor(Number(syncResult.heatAdded || 0))),
+        ownedFactoryCount,
+        networkProductionBonusPct,
+        productionMultiplier: totalProductionMultiplier,
+        primaryContext: activeContext,
+        primaryDistrictId: activeDistrict?.id ?? null
+      }
+    };
+  }
+
+  function handleFactoryBuildingAction(actionId, activeContext) {
+    const inputDistrict = activeContext?.district || null;
+    const inputContext = activeContext?.context || null;
+    if (!inputContext) {
+      return { ok: false, message: "Továrna: není aktivní detail budovy." };
+    }
+    const primaryTarget = resolvePrimaryOwnedFactoryTarget(inputContext, inputDistrict);
+    const context = primaryTarget.context || inputContext;
+    const district = primaryTarget.district || inputDistrict;
+    const ownedFactoryCount = Math.max(1, primaryTarget.entries.length || 1);
+    const networkProductionBonusPct = Math.max(0, (ownedFactoryCount - 1) * 10);
+    const now = Date.now();
+    const key = resolveBuildingInstanceKey(context, district);
+    const snapshot = getFactoryStateByKey(key, now);
+    syncFactoryProduction(snapshot, now, {
+      applyHeat: true,
+      ownedFactoryCount,
+      networkProductionBonusPct
+    });
+
+    if (actionId === "1" || actionId === "2" || actionId === "3") {
+      persistFactoryState(key, snapshot);
+      return { ok: false, message: "Combat boosty z Combat Module budou napojené v dalším kroku." };
+    }
+
+    if (actionId === "collect") {
+      const collected = createFactoryResourceMap(snapshot.resources);
+      const totalCollected = FACTORY_RESOURCE_KEYS.reduce((sum, resourceKey) => sum + Number(collected[resourceKey] || 0), 0);
+      if (totalCollected <= 0) {
+        persistFactoryState(key, snapshot);
+        return { ok: false, message: "Továrna: není co vybrat." };
+      }
+      snapshot.resources = createFactoryResourceMap();
+      const player = getFactoryPlayerSuppliesSnapshot();
+      FACTORY_RESOURCE_KEYS.forEach((resourceKey) => {
+        player[resourceKey] = Math.max(
+          0,
+          Math.floor(Number(player[resourceKey] || 0) + Number(collected[resourceKey] || 0))
+        );
+      });
+      persistFactoryState(key, snapshot);
+      persistFactoryPlayerSuppliesSnapshot(player);
+      return {
+        ok: true,
+        message:
+          `Továrna -> Sklad hráče: MP ${collected.metalParts}, TC ${collected.techCore}, CM ${collected.combatModule}. `
+          + `Stav skladu: MP ${player.metalParts}, TC ${player.techCore}, CM ${player.combatModule}.`
+      };
+    }
+
+    if (actionId === "upgrade") {
+      const nextLevel = Math.floor(snapshot.level || 1) + 1;
+      if (nextLevel > FACTORY_CONFIG.maxLevel) {
+        persistFactoryState(key, snapshot);
+        return { ok: false, message: "Továrna je na maximálním levelu." };
+      }
+      const cost = getFactoryUpgradeCost(nextLevel);
+      const spend = window.Empire.UI?.trySpendCash;
+      if (typeof spend !== "function") {
+        persistFactoryState(key, snapshot);
+        return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
+      }
+      const result = spend(cost);
+      if (!result?.ok) {
+        persistFactoryState(key, snapshot);
+        return { ok: false, message: `Nedostatek cash na upgrade (potřeba $${cost}).` };
+      }
+      snapshot.level = nextLevel;
+      persistFactoryState(key, snapshot);
+      return { ok: true, message: `Továrna vylepšena na level ${nextLevel} za $${cost}.` };
+    }
+
+    persistFactoryState(key, snapshot);
+    return null;
+  }
+
+  function resolveArmoryBuildingDetails(context, district, fallback) {
+    const now = Date.now();
+    const primaryTarget = resolvePrimaryOwnedArmoryTarget(context, district);
+    const activeContext = primaryTarget.context || context;
+    const activeDistrict = primaryTarget.district || district || null;
+    const key = resolveBuildingInstanceKey(activeContext, activeDistrict);
+    const ownedArmoryCount = Math.max(1, primaryTarget.entries.length || 1);
+    const networkProductionBonusPct = Math.max(0, (ownedArmoryCount - 1) * 10);
+    const snapshot = getArmoryStateByKey(key, now);
+    const syncResult = syncArmoryProduction(snapshot, now, {
+      applyHeat: true,
+      ownedArmoryCount,
+      networkProductionBonusPct
+    });
+    persistArmoryState(key, snapshot);
+
+    const levelMultiplier = getArmoryLevelMultiplier(snapshot.level);
+    const totalProductionMultiplier = levelMultiplier * (1 + networkProductionBonusPct / 100);
+    const rates = calculateArmoryProductionRates(totalProductionMultiplier);
+    const nextLevel = snapshot.level < ARMORY_CONFIG.maxLevel ? snapshot.level + 1 : null;
+    const nextUpgradeCost = nextLevel ? getArmoryUpgradeCost(nextLevel) : 0;
+    const storedWeapons = createArmoryWeaponMap(snapshot.storedWeapons);
+    const playerMaterials = syncResult.factorySupplies || createFactoryPlayerSupplyMap(getFactoryPlayerSuppliesSnapshot());
+    const slots = (Array.isArray(snapshot.slots) ? snapshot.slots : []).map((slot) => {
+      const config = ARMORY_CONFIG.weapons[slot.weaponKey] || null;
+      const category = config?.category === "defense" ? "defense" : "attack";
+      const powerValue = category === "defense"
+        ? Math.max(0, Math.floor(Number(config?.defensePower || 0)))
+        : Math.max(0, Math.floor(Number(config?.attackPower || 0)));
+      return {
+        id: Number(slot.id),
+        weaponKey: slot.weaponKey,
+        category,
+        weaponName: config?.name || slot.weaponKey,
+        isProducing: Boolean(slot.isProducing),
+        producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
+        perHour: Math.max(0, Number(rates[slot.weaponKey] || 0)),
+        powerLabel: category === "defense" ? "Defense" : "Attack",
+        powerValue,
+        metalPartsCost: Math.max(0, Math.floor(Number(config?.metalPartsCost || 0))),
+        techCoreCost: Math.max(0, Math.floor(Number(config?.techCoreCost || 0))),
+        durationMs: Math.max(1, Math.floor(Number(config?.durationMs || 60000))),
+        effectiveDurationMs: Math.max(1, Math.round(Number(config?.durationMs || 60000) / totalProductionMultiplier)),
+        specialEffect: String(config?.specialEffect || ""),
+        drawback: String(config?.drawback || ""),
+        role: String(config?.role || ""),
+        heatPerUnit: Math.max(0, Math.floor(Number(config?.heatPerUnit || 0)))
+      };
+    });
+    const attackSlots = slots.filter((slot) => slot.category !== "defense");
+    const defenseSlots = slots.filter((slot) => slot.category === "defense");
+    const activeAttackSlots = attackSlots.reduce((sum, slot) => sum + (slot.isProducing ? 1 : 0), 0);
+    const activeDefenseSlots = defenseSlots.reduce((sum, slot) => sum + (slot.isProducing ? 1 : 0), 0);
+    const activeSlots = Math.max(0, Math.floor(Number(syncResult.activeSlots || 0)));
+    const storedTotal = ARMORY_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(storedWeapons[weaponKey] || 0), 0);
+    const storedAttackTotal = ARMORY_ATTACK_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(storedWeapons[weaponKey] || 0), 0);
+    const storedDefenseTotal = ARMORY_DEFENSE_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(storedWeapons[weaponKey] || 0), 0);
+    const effects = [
+      `Materiály pro výrobu: MP ${playerMaterials.metalParts}, TC ${playerMaterials.techCore}`,
+      `Sklad Zbrojovky: útok ${storedAttackTotal} ks, obrana ${storedDefenseTotal} ks`
+    ];
+    if (Math.max(0, Number(syncResult.heatAdded || 0)) > 0) {
+      effects.push(`Poslední tick výroby: +${Math.max(0, Math.floor(Number(syncResult.heatAdded || 0)))} heat`);
+    }
+    if (networkProductionBonusPct > 0) {
+      effects.push(
+        `Síť Zbrojovek: ${ownedArmoryCount} budov (+${formatDecimalValue(networkProductionBonusPct, 2)}% rychlost výroby)`
+      );
+    }
+
+    const primaryDisplayName = primaryTarget.primary?.displayName || activeContext?.variantName || activeContext?.baseName;
+    const otherDisplayNames = primaryTarget.entries.slice(1).map((entry) => entry.displayName);
+    const combinedDisplayName = otherDisplayNames.length
+      ? `${primaryDisplayName} | Další: ${otherDisplayNames.join(", ")}`
+      : primaryDisplayName;
+
+    return {
+      ...fallback,
+      baseName: activeContext.baseName,
+      displayName: combinedDisplayName || activeContext.baseName,
+      hourlyIncome: 0,
+      dailyIncome: 0,
+      info:
+        "Zbrojovka vyrábí útočné i obranné vybavení z Metal Parts a Tech Core. "
+        + "Výroba je oddělená do dvou sekcí (útok/obrana), každá položka má vlastní slot, recept a čas.",
+      specialActions: [
+        "Útok (sloty 1-5): Baseballová pálka, Pouliční pistole, Granát, Samopal, Bazuka.",
+        "Obrana (sloty 6-10): Neprůstřelná vesta, Ocelové barikády, Bezpečnostní kamery, Automatické kulometné stanoviště, Alarm.",
+        "Vybrat zbraně: přesune vyrobené kusy do inventáře útoku i obrany."
+      ],
+      mechanics: {
+        type: "armory",
+        instanceKey: key,
+        level: snapshot.level,
+        nextLevel,
+        nextUpgradeCost,
+        heatPerDay: 0,
+        effectsLabel: effects.join(" • "),
+        storedWeapons,
+        playerMaterials,
+        slots,
+        attackSlots,
+        defenseSlots,
+        activeSlots,
+        activeAttackSlots,
+        activeDefenseSlots,
+        storedTotal,
+        storedAttackTotal,
+        storedDefenseTotal,
+        ratesPerHour: rates,
+        producedSinceLastTick: createArmoryWeaponMap(syncResult.produced),
+        heatAddedSinceLastTick: Math.max(0, Math.floor(Number(syncResult.heatAdded || 0))),
+        ownedArmoryCount,
+        networkProductionBonusPct,
+        productionMultiplier: totalProductionMultiplier,
+        primaryContext: activeContext,
+        primaryDistrictId: activeDistrict?.id ?? null
+      }
+    };
+  }
+
+  function handleArmoryBuildingAction(actionId, activeContext) {
+    const inputDistrict = activeContext?.district || null;
+    const inputContext = activeContext?.context || null;
+    if (!inputContext) {
+      return { ok: false, message: "Zbrojovka: není aktivní detail budovy." };
+    }
+    const primaryTarget = resolvePrimaryOwnedArmoryTarget(inputContext, inputDistrict);
+    const context = primaryTarget.context || inputContext;
+    const district = primaryTarget.district || inputDistrict;
+    const ownedArmoryCount = Math.max(1, primaryTarget.entries.length || 1);
+    const networkProductionBonusPct = Math.max(0, (ownedArmoryCount - 1) * 10);
+    const now = Date.now();
+    const key = resolveBuildingInstanceKey(context, district);
+    const snapshot = getArmoryStateByKey(key, now);
+    syncArmoryProduction(snapshot, now, {
+      applyHeat: true,
+      ownedArmoryCount,
+      networkProductionBonusPct
+    });
+
+    if (actionId === "1" || actionId === "2" || actionId === "3") {
+      persistArmoryState(key, snapshot);
+      return { ok: false, message: "Speciální bojové nasazení zbraní bude napojené v další fázi." };
+    }
+
+    if (actionId === "collect") {
+      const collected = createArmoryWeaponMap(snapshot.storedWeapons);
+      const totalCollected = ARMORY_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(collected[weaponKey] || 0), 0);
+      if (totalCollected <= 0) {
+        persistArmoryState(key, snapshot);
+        return { ok: false, message: "Zbrojovka: není co vybrat." };
+      }
+
+      snapshot.storedWeapons = createArmoryWeaponMap();
+      persistArmoryState(key, snapshot);
+
+      const attackPayloadByName = {};
+      const defensePayloadByName = {};
+      ARMORY_WEAPON_KEYS.forEach((weaponKey) => {
+        const config = ARMORY_CONFIG.weapons[weaponKey];
+        if (!config) return;
+        const amount = Math.max(0, Math.floor(Number(collected[weaponKey] || 0)));
+        if (amount <= 0) return;
+        if (config.category === "defense") {
+          defensePayloadByName[config.name] = amount;
+        } else {
+          attackPayloadByName[config.name] = amount;
+        }
+      });
+      const addCraftedWeapons = window.Empire.UI?.addCraftedWeapons;
+      if (typeof addCraftedWeapons === "function" && Object.keys(attackPayloadByName).length) {
+        addCraftedWeapons(attackPayloadByName);
+      } else {
+        try {
+          const current = JSON.parse(localStorage.getItem("empire_weapons_detail") || "{}");
+          const merged = current && typeof current === "object" && !Array.isArray(current) ? current : {};
+          Object.entries(attackPayloadByName).forEach(([name, amount]) => {
+            const delta = Math.max(0, Math.floor(Number(amount) || 0));
+            if (!delta) return;
+            merged[name] = Math.max(0, Math.floor(Number(merged[name] || 0) + delta));
+          });
+          localStorage.setItem("empire_weapons_detail", JSON.stringify(merged));
+        } catch {}
+      }
+
+      const addCraftedDefense = window.Empire.UI?.addCraftedDefense;
+      if (typeof addCraftedDefense === "function" && Object.keys(defensePayloadByName).length) {
+        addCraftedDefense(defensePayloadByName);
+      } else {
+        try {
+          const current = JSON.parse(localStorage.getItem("empire_defense_detail") || "{}");
+          const merged = current && typeof current === "object" && !Array.isArray(current) ? current : {};
+          Object.entries(defensePayloadByName).forEach(([name, amount]) => {
+            const delta = Math.max(0, Math.floor(Number(amount) || 0));
+            if (!delta) return;
+            merged[name] = Math.max(0, Math.floor(Number(merged[name] || 0) + delta));
+          });
+          localStorage.setItem("empire_defense_detail", JSON.stringify(merged));
+        } catch {}
+      }
+
+      const attackSummary = ARMORY_ATTACK_WEAPON_KEYS
+        .map((weaponKey) => {
+          const config = ARMORY_CONFIG.weapons[weaponKey];
+          const short = config?.name || weaponKey;
+          const amount = Math.max(0, Math.floor(Number(collected[weaponKey] || 0)));
+          return `${short} ${amount}`;
+        })
+        .join(", ");
+      const defenseSummary = ARMORY_DEFENSE_WEAPON_KEYS
+        .map((weaponKey) => {
+          const config = ARMORY_CONFIG.weapons[weaponKey];
+          const short = config?.name || weaponKey;
+          const amount = Math.max(0, Math.floor(Number(collected[weaponKey] || 0)));
+          return `${short} ${amount}`;
+        })
+        .join(", ");
+
+      return {
+        ok: true,
+        message: `Zbrojovka -> Inventář | Útok: ${attackSummary}. Obrana: ${defenseSummary}.`
+      };
+    }
+
+    if (actionId === "upgrade") {
+      const nextLevel = Math.floor(snapshot.level || 1) + 1;
+      if (nextLevel > ARMORY_CONFIG.maxLevel) {
+        persistArmoryState(key, snapshot);
+        return { ok: false, message: "Zbrojovka je na maximálním levelu." };
+      }
+      const cost = getArmoryUpgradeCost(nextLevel);
+      const spend = window.Empire.UI?.trySpendCash;
+      if (typeof spend !== "function") {
+        persistArmoryState(key, snapshot);
+        return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
+      }
+      const result = spend(cost);
+      if (!result?.ok) {
+        persistArmoryState(key, snapshot);
+        return { ok: false, message: `Nedostatek cash na upgrade (potřeba $${cost}).` };
+      }
+      snapshot.level = nextLevel;
+      persistArmoryState(key, snapshot);
+      return { ok: true, message: `Zbrojovka vylepšena na level ${nextLevel} za $${cost}.` };
+    }
+
+    persistArmoryState(key, snapshot);
+    return null;
+  }
+
+  function resolvePharmacyBuildingDetails(context, district, fallback) {
+    const now = Date.now();
+    const key = resolveBuildingInstanceKey(context, district);
+    const snapshot = getPharmacyStateByKey(key, now);
+    const syncResult = syncPharmacyProduction(snapshot, now);
+    persistPharmacyState(key, snapshot);
+
+    const levelMultiplier = getPharmacyLevelMultiplier(snapshot.level);
+    const rates = calculatePharmacyProductionRates(levelMultiplier);
+    const nextLevel = snapshot.level < PHARMACY_CONFIG.maxLevel ? snapshot.level + 1 : null;
+    const nextUpgradeCost = nextLevel ? getPharmacyUpgradeCost(nextLevel) : 0;
+    const boostSnapshot = getPharmacyBoostSnapshot(now);
+    const resources = createPharmacyResourceMap(snapshot.resources);
+    const slots = (Array.isArray(snapshot.slots) ? snapshot.slots : []).map((slot) => {
+      const config = PHARMACY_SLOT_CONFIG.find((entry) => Number(entry.id) === Number(slot.id)) || null;
+      return {
+        id: Number(slot.id),
+        resourceKey: slot.resourceKey,
+        resourceLabel: config?.label || slot.resourceKey,
+        isProducing: Boolean(slot.isProducing),
+        producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
+        perHour: Math.max(0, Number(
+          slot.resourceKey === "chemicals"
+            ? rates.chemicalsPerHour
+            : slot.resourceKey === "biomass"
+              ? rates.biomassPerHour
+              : rates.stimPackPerHour
+        ))
+      };
+    });
+    const activeSlots = Math.max(0, Math.floor(Number(syncResult.activeSlots || 0)));
+    const storedTotal = PHARMACY_RESOURCE_KEYS.reduce((sum, resourceKey) => sum + Number(resources[resourceKey] || 0), 0);
+
+    const effects = [];
+    if (boostSnapshot.activeCount > 0) {
+      effects.push(
+        `Globální boost: spy +${formatDecimalValue(boostSnapshot.effective.spySpeedPct, 2)}%, `
+        + `attack +${formatDecimalValue(boostSnapshot.effective.attackSpeedPct, 2)}%, `
+        + `steal +${formatDecimalValue(boostSnapshot.effective.stealSpeedPct, 2)}%`
+      );
+      const activeLabels = boostSnapshot.activeEffects
+        .slice(0, 3)
+        .map((entry) => `${entry.type} ${formatDurationLabel(entry.remainingMs)}`)
+        .join(", ");
+      if (activeLabels) {
+        effects.push(`Aktivní boosty: ${activeLabels}`);
+      }
+    }
+    effects.push(`Zásoby v Drug Labu: C ${boostSnapshot.supplies.chemicals}, B ${boostSnapshot.supplies.biomass}, S ${boostSnapshot.supplies.stimPack}`);
+
+    return {
+      ...fallback,
+      baseName: context.baseName,
+      displayName: context.variantName || context.baseName,
+      hourlyIncome: 0,
+      dailyIncome: 0,
+      info:
+        "Lékárna je support budova se 3 sloty (Chemicals, Biomass, Stim Pack). "
+        + "Po vybrání surovin se vše převede do Drug Lab zásob. Boosty se aktivují přes tlačítko Boost nad mapou.",
+      specialActions: [
+        "Vybrat suroviny: přesune Chemicals/Biomass/Stim Pack z Lékárny do zásob Drug Labu.",
+        "Boost tlačítko (nad mapou): Recon (2 Stim), Action (3 Stim), Neuro (4 Stim +3 heat), každý na 2h."
+      ],
+      mechanics: {
+        type: "pharmacy",
+        instanceKey: key,
+        level: snapshot.level,
+        nextLevel,
+        nextUpgradeCost,
+        heatPerDay: PHARMACY_CONFIG.baseHeatPerDay,
+        effectsLabel: effects.length ? effects.join(" • ") : "Žádné",
+        cooldowns: {
+          recon: Math.max(0, Number(snapshot.cooldowns.recon || 0) - now),
+          action: Math.max(0, Number(snapshot.cooldowns.action || 0) - now),
+          neuro: Math.max(0, Number(snapshot.cooldowns.neuro || 0) - now)
+        },
+        resources,
+        slots,
+        activeSlots,
+        storedTotal,
+        ratesPerHour: {
+          chemicals: rates.chemicalsPerHour,
+          biomass: rates.biomassPerHour,
+          stimPack: rates.stimPackPerHour
+        },
+        producedSinceLastTick: createPharmacyResourceMap(syncResult.produced),
+        globalBoost: boostSnapshot.effective,
+        drugLabSupplies: createDrugLabSupplyMap(boostSnapshot.supplies || {}),
+        boostActiveCount: Math.max(0, Number(boostSnapshot.activeCount || 0))
+      }
+    };
+  }
+
+  function handlePharmacyBuildingAction(actionId, activeContext) {
+    const { district, context } = activeContext;
+    const now = Date.now();
+    const key = resolveBuildingInstanceKey(context, district);
+    const snapshot = getPharmacyStateByKey(key, now);
+    syncPharmacyProduction(snapshot, now);
+    if (actionId === "1" || actionId === "2" || actionId === "3") {
+      persistPharmacyState(key, snapshot);
+      return { ok: false, message: "Boosty aktivuješ přes tlačítko Boost nad mapou." };
+    }
+
+    if (actionId === "collect") {
+      const collected = createPharmacyResourceMap(snapshot.resources);
+      const totalCollected = PHARMACY_RESOURCE_KEYS.reduce((sum, resourceKey) => sum + Number(collected[resourceKey] || 0), 0);
+      if (totalCollected <= 0) {
+        persistPharmacyState(key, snapshot);
+        return { ok: false, message: "Lékárna: není co vybrat." };
+      }
+      snapshot.resources = createPharmacyResourceMap();
+      const player = getDrugLabPlayerSnapshot(now);
+      player.labSupplies = createDrugLabSupplyMap(player.labSupplies || {});
+      PHARMACY_RESOURCE_KEYS.forEach((resourceKey) => {
+        player.labSupplies[resourceKey] = Math.max(
+          0,
+          Math.floor(Number(player.labSupplies[resourceKey] || 0) + Number(collected[resourceKey] || 0))
+        );
+      });
+      persistPharmacyState(key, snapshot);
+      persistDrugLabPlayerSnapshot(player);
+      return {
+        ok: true,
+        message:
+          `Lékárna -> Drug Lab: vybráno C ${collected.chemicals}, B ${collected.biomass}, S ${collected.stimPack}. `
+          + `Stav zásob DL: C ${player.labSupplies.chemicals}, B ${player.labSupplies.biomass}, S ${player.labSupplies.stimPack}.`
+      };
+    }
+
+    if (actionId === "upgrade") {
+      const nextLevel = Math.floor(snapshot.level || 1) + 1;
+      if (nextLevel > PHARMACY_CONFIG.maxLevel) {
+        persistPharmacyState(key, snapshot);
+        return { ok: false, message: "Lékárna je na maximálním levelu." };
+      }
+      const cost = getPharmacyUpgradeCost(nextLevel);
+      const spend = window.Empire.UI?.trySpendCash;
+      if (typeof spend !== "function") {
+        persistPharmacyState(key, snapshot);
+        return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
+      }
+      const result = spend(cost);
+      if (!result?.ok) {
+        persistPharmacyState(key, snapshot);
+        return { ok: false, message: `Nedostatek cash na upgrade (potřeba $${cost}).` };
+      }
+      snapshot.level = nextLevel;
+      persistPharmacyState(key, snapshot);
+      return { ok: true, message: `Lékárna vylepšena na level ${nextLevel} za $${cost}.` };
+    }
+
+    persistPharmacyState(key, snapshot);
+    return null;
+  }
+
+  function resolveDrugLabBuildingDetails(context, district, fallback) {
+    const now = Date.now();
+    const primaryTarget = resolvePrimaryOwnedDrugLabTarget(context, district);
+    const activeContext = primaryTarget.context || context;
+    const activeDistrict = primaryTarget.district || district || null;
+    const sync = runDrugLabTick(activeContext, activeDistrict, now);
+    const { core, building, player, instanceKey } = sync;
+    const unlockedSlots = core.getUnlockedSlotCount();
+    const storageCapacity = core.getStorageCapacity();
+    const storedTotal = core.getCurrentStoredTotal();
+    const heatPerHour = core.calculateCurrentHeatPerHour(now);
+    const heatPerDay = heatPerHour * 24;
+    const nextLevel = building.level < DRUG_LAB_CONFIG.maxLevel ? building.level + 1 : null;
+    const nextUpgradeCost = nextLevel ? Number(DRUG_LAB_CONFIG.upgradeCosts[nextLevel] || 0) : 0;
+    const schoolBoost = resolveDrugLabSchoolBoostPct(instanceKey, now);
+    const ownedLabCount = Math.max(1, primaryTarget.entries.length || 1);
+    const networkProductionBonusPct = Math.max(0, (ownedLabCount - 1) * 5);
+    const ownedWarehouseCount = getOwnedWarehouseCountForDrugLab();
+    const storageCapacityBonusPct = getDrugLabStorageCapacityBonusPct();
+    const warehouseProductionBonusPct = getDrugLabProductionBonusPct();
+    const pharmacySupplies = createDrugLabSupplyMap(player.labSupplies || {});
+
+    const slots = building.slots.map((slot) => {
+      const unlocked = Number(slot.id) <= unlockedSlots;
+      const activeDrug = DRUG_CONFIG[slot.activeDrugType] || DRUG_CONFIG.neonDust;
+      return {
+        id: Number(slot.id),
+        unlocked,
+        activeDrugType: activeDrug.id,
+        activeDrugName: activeDrug.name,
+        isProducing: unlocked && Boolean(slot.isProducing),
+        producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
+        lastTick: Math.max(0, Number(slot.lastTick || 0)),
+        startedAt: Math.max(0, Number(slot.startedAt || 0))
+      };
+    });
+    const activeSlots = slots.filter((slot) => slot.unlocked && slot.isProducing).length;
+
+    const effects = [];
+    if (ownedWarehouseCount > 0) {
+      effects.push(
+        `Sklady v území: ${ownedWarehouseCount} (+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita, +${formatDecimalValue(warehouseProductionBonusPct, 2)}% produkce)`
+      );
+    }
+    effects.push(
+      `Vstup z Lékárny: C ${pharmacySupplies.chemicals}, B ${pharmacySupplies.biomass}, S ${pharmacySupplies.stimPack}`
+    );
+    if (schoolBoost.totalPct > 0) {
+      effects.push(`Škola v districtu: boost produkce +${formatDecimalValue(schoolBoost.totalPct, 2)}%`);
+    }
+    if (networkProductionBonusPct > 0) {
+      effects.push(`Síť Drug Labů: +${formatDecimalValue(networkProductionBonusPct, 2)}% produkce`);
+    }
+    if (core.isOverclockActive(now)) {
+      effects.push(`Overclock (${formatDurationLabel(building.effects.overclockUntil - now)})`);
+    }
+    if (core.isCleanBatchActive(now)) {
+      effects.push(`Čistá várka (${formatDurationLabel(building.effects.cleanBatchUntil - now)})`);
+    }
+    if (core.isHiddenOperationActive(now)) {
+      effects.push(`Skrytý provoz (${formatDurationLabel(building.effects.hiddenOperationUntil - now)})`);
+    }
+    Object.entries(player.activeDrugEffects || {}).forEach(([key, stateRef]) => {
+      if (!stateRef?.active) return;
+      if (now >= Number(stateRef.endsAt || 0)) return;
+      effects.push(
+        `${getDrugLabEffectLabel(key)} (${formatDurationLabel(Number(stateRef.endsAt || 0) - now)}${
+          Number(stateRef.potencyMultiplier || 1) > 1
+            ? `, síla x${formatDecimalValue(stateRef.potencyMultiplier, 2)}`
+            : ""
+        })`
+      );
+    });
+
+    const primaryDisplayName = primaryTarget.primary?.displayName || activeContext?.variantName || activeContext?.baseName;
+    const otherDisplayNames = primaryTarget.entries.slice(1).map((entry) => entry.displayName);
+    const combinedDisplayName = otherDisplayNames.length
+      ? `${primaryDisplayName} | Další: ${otherDisplayNames.join(", ")}`
+      : primaryDisplayName;
+
+    return {
+      ...fallback,
+      baseName: activeContext.baseName,
+      displayName: combinedDisplayName || activeContext.baseName,
+      hourlyIncome: 0,
+      dailyIncome: 0,
+      info:
+        "Drug Lab je produkční core budova: každý slot vyrábí zvolenou drogu v reálném čase, produkce generuje heat, "
+        + "výstup jde do interního skladu a až po vybrání do hráčových zásob. Speciální akce mění riziko/výkon "
+        + "a kapacitu skladu zvyšují budovy Sklad v tvém území.",
+      specialActions: [
+        "Overclock výroby: cooldown 6h, trvání 2h, +50 % produkce všech slotů, okamžitě +3 heat.",
+        "Čistá várka: cooldown 5h, trvání 2h, nově vyrobené dávky jsou enhanced (+20 % síla efektu při použití).",
+        "Skrytý provoz: cooldown 6h, trvání 2h, heat z výroby -30 %, produkce -20 %."
+      ],
+      mechanics: {
+        type: "drug-lab",
+        instanceKey,
+        level: building.level,
+        nextLevel,
+        nextUpgradeCost,
+        cooldowns: {
+          overclock: Math.max(0, Number(building.cooldowns.overclock || 0) - now),
+          cleanBatch: Math.max(0, Number(building.cooldowns.cleanBatch || 0) - now),
+          hiddenOperation: Math.max(0, Number(building.cooldowns.hiddenOperation || 0) - now)
+        },
+        heatPerDay,
+        heatPerHour,
+        effectsLabel: effects.length ? effects.join(" • ") : "Žádné",
+        unlockedSlots,
+        activeSlots,
+        slots,
+        storage: createDrugLabAmountMap(building.storage),
+        storageEnhanced: createDrugLabAmountMap(building.storageEnhanced),
+        storedTotal,
+        storageCapacity,
+        pharmacySupplies,
+        currentProductionMultiplier: core.getProductionMultiplier(now),
+        ownedWarehouseCount,
+        storageCapacityBonusPct,
+        warehouseProductionBonusPct,
+        playerActiveEffects: Object.entries(player.activeDrugEffects || {})
+          .map(([key, effect]) => {
+            const active = Boolean(effect?.active && now < Number(effect?.endsAt || 0));
+            return {
+              key,
+              name: getDrugLabEffectLabel(key),
+              active,
+              remainingMs: active ? Math.max(0, Number(effect.endsAt || 0) - now) : 0,
+              potencyMultiplier: Number(effect?.potencyMultiplier || 1)
+            };
+          })
+          .filter((entry) => entry.active),
+        playerStats: {
+          totalHeat: Math.max(0, Math.floor(Number(player.totalHeat || 0)))
+        },
+        ownedLabCount,
+        networkProductionBonusPct,
+        primaryContext: activeContext,
+        primaryDistrictId: activeDistrict?.id ?? null
+      }
+    };
+  }
+
+  function runDrugLabAction(action, activeContext, payload = {}) {
+    const inputDistrict = activeContext?.district || null;
+    const inputContext = activeContext?.context || null;
+    if (!inputContext) {
+      return { ok: false, message: "Drug Lab: není aktivní detail budovy." };
+    }
+    const primaryTarget = resolvePrimaryOwnedDrugLabTarget(inputContext, inputDistrict);
+    const context = primaryTarget.context || inputContext;
+    const district = primaryTarget.district || inputDistrict;
+    const now = Date.now();
+    const sync = runDrugLabTick(context, district, now);
+    const { core, player, building, inventory } = sync;
+    let result = null;
+
+    if (action === "collect") {
+      const collected = core.collectDrugs();
+      if (collected.total <= 0) {
+        result = { ok: false, message: "Drug Lab: ve skladu není nic k vybrání." };
+      } else {
+        DRUG_LAB_DRUG_KEYS.forEach((key) => {
+          inventory[key] = Math.max(0, Math.floor(Number(inventory[key] || 0) + Number(collected.collected[key] || 0)));
+          player.enhancedDrugs[key] = Math.max(
+            0,
+            Math.floor(Number(player.enhancedDrugs[key] || 0) + Number(collected.collectedEnhanced[key] || 0))
+          );
+        });
+        result = {
+          ok: true,
+          message:
+            `Drug Lab: vybráno ${collected.total} dávek do zásob hráče`
+            + ` (${DRUG_LAB_DRUG_KEYS.map((key) => `${DRUG_CONFIG[key].name} ${collected.collected[key] || 0}`).join(", ")}).`
+        };
+      }
+    } else if (action === "overclock") {
+      result = core.useOverclock(player, now);
+    } else if (action === "cleanBatch") {
+      result = core.useCleanBatch(player, now);
+    } else if (action === "hiddenOperation") {
+      result = core.useHiddenOperation(player, now);
+    } else if (action === "upgrade") {
+      result = core.upgradeBuilding(player);
+    } else if (action === "slotSelect") {
+      const slotId = Math.max(1, Math.floor(Number(payload.slotId) || 0));
+      const slot = core.getSlotById(slotId);
+      const drugType = String(payload.drugType || "").trim();
+      if (!slot) {
+        result = { ok: false, message: "Slot neexistuje." };
+      } else if (Number(slot.id) > core.getUnlockedSlotCount()) {
+        result = { ok: false, message: "Slot je zamčený." };
+      } else if (!DRUG_CONFIG[drugType]) {
+        result = { ok: false, message: "Neznámá droga." };
+      } else {
+        slot.activeDrugType = drugType;
+        slot.lastTick = now;
+        slot.productionRemainder = 0;
+        result = { ok: true, message: `Slot ${slot.id}: nastavena droga ${DRUG_CONFIG[drugType].name}.` };
+      }
+    } else if (action === "slotStart") {
+      const slotId = Math.max(1, Math.floor(Number(payload.slotId) || 0));
+      const slot = core.getSlotById(slotId);
+      const selectedDrug = String(payload.drugType || slot?.activeDrugType || "").trim();
+      result = core.startProduction(slotId, selectedDrug, now);
+    } else if (action === "slotStop") {
+      const slotId = Math.max(1, Math.floor(Number(payload.slotId) || 0));
+      result = core.stopProduction(slotId, now);
+    } else if (action === "useDrug") {
+      const drugType = String(payload.drugType || "").trim();
+      result = core.useDrug(drugType, now);
+    } else {
+      result = { ok: false, message: "Neznámá akce Drug Labu." };
+    }
+
+    if (result?.ok) {
+      pushDrugLabLog(player, result.message, now);
+    }
+    persistDrugLabRuntime(sync, now);
+    return result;
+  }
+
+  function handleDrugLabBuildingAction(actionId, activeContext) {
+    if (actionId === "1") return runDrugLabAction("overclock", activeContext);
+    if (actionId === "2") return runDrugLabAction("cleanBatch", activeContext);
+    if (actionId === "3") return runDrugLabAction("hiddenOperation", activeContext);
+    if (actionId === "collect") return runDrugLabAction("collect", activeContext);
+    if (actionId === "upgrade") return runDrugLabAction("upgrade", activeContext);
+    return { ok: false, message: "Neznámá akce Drug Labu." };
+  }
+
+  function renderDrugLabDetailPanel(details) {
+    const root = document.getElementById("building-detail-drug-lab");
+    if (!root) return;
+    const mechanics = details?.mechanics;
+    const mechanicsType = String(mechanics?.type || "").trim();
+    if (mechanicsType !== "drug-lab" && mechanicsType !== "pharmacy" && mechanicsType !== "factory" && mechanicsType !== "armory") {
+      root.innerHTML = "";
+      root.classList.add("hidden");
+      return;
+    }
+
+    if (mechanicsType === "pharmacy") {
+      const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
+        .map((slot) => `
+          <div class="drug-lab-slot${slot.isProducing ? "" : " drug-lab-slot--locked"}">
+            <div class="drug-lab-slot__head">
+              <strong>Slot ${slot.id} • ${slot.resourceLabel}</strong>
+              <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
+            </div>
+            <div class="drug-lab-slot__meta">
+              Rychlost: ${formatDecimalValue(slot.perHour || 0, 2)}/h • Vyrobeno: ${Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}
+            </div>
+            <div class="drug-lab-slot__controls">
+              <button class="drug-lab-mini-btn" type="button" data-pharmacy-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
+                Start
+              </button>
+              <button class="drug-lab-mini-btn" type="button" data-pharmacy-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
+                Stop
+              </button>
+            </div>
+          </div>
+        `)
+        .join("");
+
+      const resources = mechanics.resources || {};
+      const drugLabSupplies = mechanics.drugLabSupplies || {};
+      const storageStatusLabel =
+        `Interní sklad Lékárny: C ${Math.max(0, Math.floor(Number(resources.chemicals || 0)))} • `
+        + `B ${Math.max(0, Math.floor(Number(resources.biomass || 0)))} • `
+        + `S ${Math.max(0, Math.floor(Number(resources.stimPack || 0)))}`;
+      const transferStatusLabel =
+        `Zásoby Drug Labu: C ${Math.max(0, Math.floor(Number(drugLabSupplies.chemicals || 0)))} • `
+        + `B ${Math.max(0, Math.floor(Number(drugLabSupplies.biomass || 0)))} • `
+        + `S ${Math.max(0, Math.floor(Number(drugLabSupplies.stimPack || 0)))}`;
+
+      root.innerHTML = `
+        <div class="drug-lab-card">
+          <h4 class="drug-lab-card__title">Produkční sloty Lékárny (${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))})</h4>
+          <p class="drug-lab-card__meta"><strong>${storageStatusLabel}</strong></p>
+          <p class="drug-lab-card__meta">${transferStatusLabel}</p>
+          <div class="drug-lab-grid">
+            ${slotRows}
+          </div>
+        </div>
+        <div class="drug-lab-card">
+          <p class="drug-lab-card__meta">
+            Boosty z Lékárny aktivuješ přes tlačítko Boost nad mapou. Stim Pack se bere ze zásob Drug Labu.
+          </p>
+        </div>
+      `;
+      root.classList.remove("hidden");
+      return;
+    }
+
+    if (mechanicsType === "factory") {
+      const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
+        .map((slot) => {
+          const isCraftSlot = String(slot.mode || "").trim() === "craft";
+          const metaLabel = isCraftSlot
+            ? `Recept: ${FACTORY_CONFIG.combatModule.metalPartsCost} MP + ${FACTORY_CONFIG.combatModule.techCoreCost} TC • ${formatDurationLabel(slot.effectiveDurationMs || FACTORY_CONFIG.combatModule.durationMs)}/ks • Vyrobeno: ${Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}`
+            : `Rychlost: ${formatDecimalValue(slot.perHour || 0, 2)}/h • Vyrobeno: ${Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}`;
+          return `
+            <div class="drug-lab-slot">
+              <div class="drug-lab-slot__head">
+                <strong>Slot ${slot.id} • ${slot.resourceLabel}</strong>
+                <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
+              </div>
+              <div class="drug-lab-slot__meta">${metaLabel}</div>
+              <div class="drug-lab-slot__controls">
+                <button class="drug-lab-mini-btn" type="button" data-factory-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
+                  Start
+                </button>
+                <button class="drug-lab-mini-btn" type="button" data-factory-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
+                  Stop
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      const resources = mechanics.resources || {};
+      const playerSupplies = mechanics.playerSupplies || {};
+      const storageStatusLabel =
+        `Interní sklad Továrny: MP ${Math.max(0, Math.floor(Number(resources.metalParts || 0)))} • `
+        + `TC ${Math.max(0, Math.floor(Number(resources.techCore || 0)))} • `
+        + `CM ${Math.max(0, Math.floor(Number(resources.combatModule || 0)))}`;
+      const playerStockLabel =
+        `Sklad hráče: MP ${Math.max(0, Math.floor(Number(playerSupplies.metalParts || 0)))} • `
+        + `TC ${Math.max(0, Math.floor(Number(playerSupplies.techCore || 0)))} • `
+        + `CM ${Math.max(0, Math.floor(Number(playerSupplies.combatModule || 0)))}`;
+
+      root.innerHTML = `
+        <div class="drug-lab-card">
+          <h4 class="drug-lab-card__title">Produkční sloty Továrny (${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))})</h4>
+          <p class="drug-lab-card__meta"><strong>${storageStatusLabel}</strong></p>
+          <p class="drug-lab-card__meta">${playerStockLabel}</p>
+          <div class="drug-lab-grid">
+            ${slotRows}
+          </div>
+        </div>
+        <div class="drug-lab-card">
+          <p class="drug-lab-card__meta">
+            Combat Module: ${FACTORY_CONFIG.combatModule.metalPartsCost} MP + ${FACTORY_CONFIG.combatModule.techCoreCost} TC, ${formatDurationLabel(FACTORY_CONFIG.combatModule.durationMs)} / ks, +${FACTORY_CONFIG.combatModule.heatPerUnit} heat / ks.
+          </p>
+          <p class="drug-lab-card__meta">
+            Combat boosty aktivuješ přes tlačítko Boost nad mapou (Assault Protocol, Rapid Strike, Breach Mode).
+          </p>
+        </div>
+      `;
+      root.classList.remove("hidden");
+      return;
+    }
+
+    if (mechanicsType === "armory") {
+      const sourceSlots = Array.isArray(mechanics.slots) ? mechanics.slots : [];
+      const attackSlots = Array.isArray(mechanics.attackSlots)
+        ? mechanics.attackSlots
+        : sourceSlots.filter((slot) => String(slot.category || "").trim() !== "defense");
+      const defenseSlots = Array.isArray(mechanics.defenseSlots)
+        ? mechanics.defenseSlots
+        : sourceSlots.filter((slot) => String(slot.category || "").trim() === "defense");
+      const renderSlotRows = (slots) => slots
+        .map((slot) => `
+          <div class="drug-lab-slot${slot.isProducing ? "" : " drug-lab-slot--locked"}">
+            <div class="drug-lab-slot__head">
+              <strong>Slot ${slot.id} • ${slot.weaponName}</strong>
+              <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
+            </div>
+            <div class="drug-lab-slot__meta">
+              Recept: ${slot.metalPartsCost} MP + ${slot.techCoreCost} TC • ${formatDurationLabel(slot.effectiveDurationMs || slot.durationMs)} / ks • ${slot.powerLabel || "Síla"} +${Math.max(0, Math.floor(Number(slot.powerValue || 0)))}
+            </div>
+            <div class="drug-lab-slot__meta">${slot.specialEffect}</div>
+            <div class="drug-lab-slot__controls">
+              <button class="drug-lab-mini-btn" type="button" data-armory-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
+                Start
+              </button>
+              <button class="drug-lab-mini-btn" type="button" data-armory-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
+                Stop
+              </button>
+            </div>
+          </div>
+        `)
+        .join("");
+      const attackRows = renderSlotRows(attackSlots);
+      const defenseRows = renderSlotRows(defenseSlots);
+      const storedWeapons = mechanics.storedWeapons || {};
+      const playerMaterials = mechanics.playerMaterials || {};
+      const attackStorageStatusLabel = ARMORY_ATTACK_WEAPON_KEYS
+        .map((weaponKey) => {
+          const weapon = ARMORY_CONFIG.weapons[weaponKey];
+          const amount = Math.max(0, Math.floor(Number(storedWeapons[weaponKey] || 0)));
+          return `${weapon.name}: ${amount}`;
+        })
+        .join(" • ");
+      const defenseStorageStatusLabel = ARMORY_DEFENSE_WEAPON_KEYS
+        .map((weaponKey) => {
+          const weapon = ARMORY_CONFIG.weapons[weaponKey];
+          const amount = Math.max(0, Math.floor(Number(storedWeapons[weaponKey] || 0)));
+          return `${weapon.name}: ${amount}`;
+        })
+        .join(" • ");
+      const materialsLabel =
+        `Materiály ze Skladu: MP ${Math.max(0, Math.floor(Number(playerMaterials.metalParts || 0)))} • `
+        + `TC ${Math.max(0, Math.floor(Number(playerMaterials.techCore || 0)))}`;
+
+      root.innerHTML = `
+        <div class="drug-lab-card">
+          <h4 class="drug-lab-card__title">Zbrojovka: Útočné zbraně (${Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0)))}/${Math.max(1, Math.floor(Number(attackSlots.length || 0)))})</h4>
+          <p class="drug-lab-card__meta"><strong>${attackStorageStatusLabel || "Bez zásob útoku"}</strong></p>
+          <div class="drug-lab-grid">
+            ${attackRows}
+          </div>
+        </div>
+        <div class="drug-lab-card">
+          <h4 class="drug-lab-card__title">Zbrojovka: Obranné zbraně (${Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)))}/${Math.max(1, Math.floor(Number(defenseSlots.length || 0)))})</h4>
+          <p class="drug-lab-card__meta"><strong>${defenseStorageStatusLabel || "Bez zásob obrany"}</strong></p>
+          <p class="drug-lab-card__meta">${materialsLabel}</p>
+          <div class="drug-lab-grid">
+            ${defenseRows}
+          </div>
+        </div>
+      `;
+      root.classList.remove("hidden");
+      return;
+    }
+
+    const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
+      .map((slot) => {
+        const options = DRUG_LAB_DRUG_KEYS
+          .map((key) =>
+            `<option value="${key}" ${slot.activeDrugType === key ? "selected" : ""}>${DRUG_CONFIG[key].name}</option>`
+          )
+          .join("");
+        if (!slot.unlocked) {
+          return `
+            <div class="drug-lab-slot drug-lab-slot--locked">
+              <div class="drug-lab-slot__head">
+                <strong>Slot ${slot.id}</strong>
+                <span>Zamčeno</span>
+              </div>
+              <div class="drug-lab-slot__meta">Odemkneš na vyšším levelu Drug Labu.</div>
+            </div>
+          `;
+        }
+        return `
+          <div class="drug-lab-slot">
+            <div class="drug-lab-slot__head">
+              <strong>Slot ${slot.id}</strong>
+              <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
+            </div>
+            <div class="drug-lab-slot__meta">Vyrobeno v tomto slotu: ${slot.producedAmount}</div>
+            <div class="drug-lab-slot__controls">
+              <select data-drug-lab-slot-select="${slot.id}">
+                ${options}
+              </select>
+              <button class="drug-lab-mini-btn" type="button" data-drug-lab-slot-start="${slot.id}" ${
+                slot.isProducing ? "disabled" : ""
+              }>
+                Start
+              </button>
+              <button class="drug-lab-mini-btn" type="button" data-drug-lab-slot-stop="${slot.id}" ${
+                !slot.isProducing ? "disabled" : ""
+              }>
+                Stop
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+    const ownedLabCount = Math.max(1, Math.floor(Number(mechanics.ownedLabCount || 1)));
+    const networkProductionBonusPct = Math.max(0, Number(mechanics.networkProductionBonusPct || 0));
+    const ownedLabLabel = ownedLabCount === 1
+      ? "budova"
+      : (ownedLabCount >= 2 && ownedLabCount <= 4 ? "budovy" : "budov");
+    const networkStatusLabel =
+      `Síť Drug Labů: ${ownedLabCount} ${ownedLabLabel} (+${formatDecimalValue(networkProductionBonusPct, 2)}% produkce)`;
+    const ownedWarehouseCount = Math.max(0, Math.floor(Number(mechanics.ownedWarehouseCount || 0)));
+    const storageCapacityBonusPct = Math.max(0, Number(mechanics.storageCapacityBonusPct || 0));
+    const warehouseProductionBonusPct = Math.max(0, Number(mechanics.warehouseProductionBonusPct || 0));
+    const ownedWarehouseLabel = ownedWarehouseCount === 1
+      ? "sklad"
+      : (ownedWarehouseCount >= 2 && ownedWarehouseCount <= 4 ? "sklady" : "skladů");
+    const warehouseStatusLabel = ownedWarehouseCount > 0
+      ? `Sklady v území: ${ownedWarehouseCount} ${ownedWarehouseLabel} (+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita, +${formatDecimalValue(warehouseProductionBonusPct, 2)}% produkce)`
+      : "Sklady v území: 0 (bez bonusu kapacity/produkce)";
+    const pharmacySupplies = mechanics.pharmacySupplies || {};
+    const supplyStatusLabel =
+      `Vstup z Lékárny: C ${Math.max(0, Math.floor(Number(pharmacySupplies.chemicals || 0)))} • `
+      + `B ${Math.max(0, Math.floor(Number(pharmacySupplies.biomass || 0)))} • `
+      + `S ${Math.max(0, Math.floor(Number(pharmacySupplies.stimPack || 0)))}`;
+    const storageStatusLabel =
+      `Interní sklad: ${Math.max(0, Math.floor(Number(mechanics.storedTotal || 0)))}/${Math.max(1, Math.floor(Number(mechanics.storageCapacity || 0)))}`;
+
+    const effectsRows = Array.isArray(mechanics.playerActiveEffects) && mechanics.playerActiveEffects.length
+      ? mechanics.playerActiveEffects
+        .map((effect) => `
+          <div class="drug-lab-list__item">
+            <span>${effect.name}</span>
+            <span class="drug-lab-list__value">${formatDurationLabel(effect.remainingMs)}</span>
+            <small>${effect.potencyMultiplier > 1 ? `síla x${formatDecimalValue(effect.potencyMultiplier, 2)}` : "standard"}</small>
+          </div>
+        `)
+        .join("")
+      : `<div class="drug-lab-list__item"><span>Žádné aktivní efekty</span><span class="drug-lab-list__value">-</span><small>-</small></div>`;
+
+    root.innerHTML = `
+      <div class="drug-lab-card">
+        <h4 class="drug-lab-card__title">Produkční sloty (${mechanics.unlockedSlots}/${DRUG_LAB_CONFIG.maxSlots})</h4>
+        <p class="drug-lab-card__meta"><strong>${networkStatusLabel}</strong></p>
+        <p class="drug-lab-card__meta"><strong>${storageStatusLabel}</strong></p>
+        <p class="drug-lab-card__meta">${supplyStatusLabel}</p>
+        <p class="drug-lab-card__meta">${warehouseStatusLabel}</p>
+        <div class="drug-lab-grid">
+          ${slotRows}
+        </div>
+      </div>
+
+      <div class="drug-lab-card">
+        <h4 class="drug-lab-card__title">Aktivní efekty</h4>
+        <div class="drug-lab-list">${effectsRows}</div>
+      </div>
+      <div class="drug-lab-card">
+        <p class="drug-lab-card__meta">
+          Výroba se zastaví po naplnění interního skladu, potom je potřeba použít tlačítko Vybrat drogy.
+        </p>
+      </div>
+    `;
+
+    root.classList.remove("hidden");
+  }
+
+  function handleDrugLabInlineControl(target, activeContext) {
+    const select = target.closest("[data-drug-lab-slot-select]");
+    if (select instanceof HTMLSelectElement) {
+      const slotId = Number(select.dataset.drugLabSlotSelect || 0);
+      const drugType = String(select.value || "").trim();
+      return runDrugLabAction("slotSelect", activeContext, { slotId, drugType });
+    }
+
+    const startBtn = target.closest("[data-drug-lab-slot-start]");
+    if (startBtn instanceof HTMLElement) {
+      const slotId = Number(startBtn.dataset.drugLabSlotStart || 0);
+      return runDrugLabAction("slotStart", activeContext, { slotId });
+    }
+
+    const stopBtn = target.closest("[data-drug-lab-slot-stop]");
+    if (stopBtn instanceof HTMLElement) {
+      const slotId = Number(stopBtn.dataset.drugLabSlotStop || 0);
+      return runDrugLabAction("slotStop", activeContext, { slotId });
+    }
+
+    return null;
+  }
+
+  function handlePharmacyInlineControl(target, activeContext) {
+    const now = Date.now();
+    const context = activeContext?.context || null;
+    const district = activeContext?.district || null;
+    if (!context) return null;
+    const instanceKey = resolveBuildingInstanceKey(context, district);
+    const snapshot = getPharmacyStateByKey(instanceKey, now);
+    syncPharmacyProduction(snapshot, now);
+
+    const setSlotState = (slotId, shouldProduce) => {
+      const safeSlotId = Math.max(1, Math.floor(Number(slotId) || 0));
+      const slot = (Array.isArray(snapshot.slots) ? snapshot.slots : []).find((entry) => Number(entry.id) === safeSlotId) || null;
+      if (!slot) {
+        persistPharmacyState(instanceKey, snapshot);
+        return { ok: false, message: "Slot Lékárny neexistuje." };
+      }
+      if (shouldProduce) {
+        if (slot.isProducing) {
+          persistPharmacyState(instanceKey, snapshot);
+          return { ok: false, message: `Slot ${safeSlotId} už běží.` };
+        }
+        slot.isProducing = true;
+        slot.lastTick = now;
+        persistPharmacyState(instanceKey, snapshot);
+        return { ok: true, message: `Lékárna slot ${safeSlotId}: výroba spuštěna.` };
+      }
+      if (!slot.isProducing) {
+        persistPharmacyState(instanceKey, snapshot);
+        return { ok: false, message: `Slot ${safeSlotId} neběží.` };
+      }
+      slot.isProducing = false;
+      slot.lastTick = now;
+      persistPharmacyState(instanceKey, snapshot);
+      return { ok: true, message: `Lékárna slot ${safeSlotId}: výroba zastavena.` };
+    };
+
+    const startBtn = target.closest("[data-pharmacy-slot-start]");
+    if (startBtn instanceof HTMLElement) {
+      const slotId = Number(startBtn.dataset.pharmacySlotStart || 0);
+      return setSlotState(slotId, true);
+    }
+    const stopBtn = target.closest("[data-pharmacy-slot-stop]");
+    if (stopBtn instanceof HTMLElement) {
+      const slotId = Number(stopBtn.dataset.pharmacySlotStop || 0);
+      return setSlotState(slotId, false);
+    }
+    return null;
+  }
+
+  function handleFactoryInlineControl(target, activeContext) {
+    const now = Date.now();
+    const inputContext = activeContext?.context || null;
+    const inputDistrict = activeContext?.district || null;
+    if (!inputContext) return null;
+    const primaryTarget = resolvePrimaryOwnedFactoryTarget(inputContext, inputDistrict);
+    const context = primaryTarget.context || inputContext;
+    const district = primaryTarget.district || inputDistrict;
+    const ownedFactoryCount = Math.max(1, primaryTarget.entries.length || 1);
+    const networkProductionBonusPct = Math.max(0, (ownedFactoryCount - 1) * 10);
+    const instanceKey = resolveBuildingInstanceKey(context, district);
+    const snapshot = getFactoryStateByKey(instanceKey, now);
+    syncFactoryProduction(snapshot, now, {
+      applyHeat: true,
+      ownedFactoryCount,
+      networkProductionBonusPct
+    });
+
+    const setSlotState = (slotId, shouldProduce) => {
+      const safeSlotId = Math.max(1, Math.floor(Number(slotId) || 0));
+      const slot = (Array.isArray(snapshot.slots) ? snapshot.slots : []).find((entry) => Number(entry.id) === safeSlotId) || null;
+      if (!slot) {
+        persistFactoryState(instanceKey, snapshot);
+        return { ok: false, message: "Slot Továrny neexistuje." };
+      }
+      if (shouldProduce) {
+        if (slot.isProducing) {
+          persistFactoryState(instanceKey, snapshot);
+          return { ok: false, message: `Slot ${safeSlotId} už běží.` };
+        }
+        slot.isProducing = true;
+        slot.lastTick = now;
+        persistFactoryState(instanceKey, snapshot);
+        return { ok: true, message: `Továrna slot ${safeSlotId}: výroba spuštěna.` };
+      }
+      if (!slot.isProducing) {
+        persistFactoryState(instanceKey, snapshot);
+        return { ok: false, message: `Slot ${safeSlotId} neběží.` };
+      }
+      slot.isProducing = false;
+      slot.lastTick = now;
+      persistFactoryState(instanceKey, snapshot);
+      return { ok: true, message: `Továrna slot ${safeSlotId}: výroba zastavena.` };
+    };
+
+    const startBtn = target.closest("[data-factory-slot-start]");
+    if (startBtn instanceof HTMLElement) {
+      const slotId = Number(startBtn.dataset.factorySlotStart || 0);
+      return setSlotState(slotId, true);
+    }
+    const stopBtn = target.closest("[data-factory-slot-stop]");
+    if (stopBtn instanceof HTMLElement) {
+      const slotId = Number(stopBtn.dataset.factorySlotStop || 0);
+      return setSlotState(slotId, false);
+    }
+    return null;
+  }
+
+  function handleArmoryInlineControl(target, activeContext) {
+    const now = Date.now();
+    const inputContext = activeContext?.context || null;
+    const inputDistrict = activeContext?.district || null;
+    if (!inputContext) return null;
+    const primaryTarget = resolvePrimaryOwnedArmoryTarget(inputContext, inputDistrict);
+    const context = primaryTarget.context || inputContext;
+    const district = primaryTarget.district || inputDistrict;
+    const ownedArmoryCount = Math.max(1, primaryTarget.entries.length || 1);
+    const networkProductionBonusPct = Math.max(0, (ownedArmoryCount - 1) * 10);
+    const instanceKey = resolveBuildingInstanceKey(context, district);
+    const snapshot = getArmoryStateByKey(instanceKey, now);
+    syncArmoryProduction(snapshot, now, {
+      applyHeat: true,
+      ownedArmoryCount,
+      networkProductionBonusPct
+    });
+
+    const setSlotState = (slotId, shouldProduce) => {
+      const safeSlotId = Math.max(1, Math.floor(Number(slotId) || 0));
+      const slot = (Array.isArray(snapshot.slots) ? snapshot.slots : []).find((entry) => Number(entry.id) === safeSlotId) || null;
+      if (!slot) {
+        persistArmoryState(instanceKey, snapshot);
+        return { ok: false, message: "Slot Zbrojovky neexistuje." };
+      }
+      if (shouldProduce) {
+        if (slot.isProducing) {
+          persistArmoryState(instanceKey, snapshot);
+          return { ok: false, message: `Slot ${safeSlotId} už běží.` };
+        }
+        slot.isProducing = true;
+        slot.lastTick = now;
+        persistArmoryState(instanceKey, snapshot);
+        return { ok: true, message: `Zbrojovka slot ${safeSlotId}: výroba spuštěna.` };
+      }
+      if (!slot.isProducing) {
+        persistArmoryState(instanceKey, snapshot);
+        return { ok: false, message: `Slot ${safeSlotId} neběží.` };
+      }
+      slot.isProducing = false;
+      slot.lastTick = now;
+      persistArmoryState(instanceKey, snapshot);
+      return { ok: true, message: `Zbrojovka slot ${safeSlotId}: výroba zastavena.` };
+    };
+
+    const startBtn = target.closest("[data-armory-slot-start]");
+    if (startBtn instanceof HTMLElement) {
+      const slotId = Number(startBtn.dataset.armorySlotStart || 0);
+      return setSlotState(slotId, true);
+    }
+    const stopBtn = target.closest("[data-armory-slot-stop]");
+    if (stopBtn instanceof HTMLElement) {
+      const slotId = Number(stopBtn.dataset.armorySlotStop || 0);
+      return setSlotState(slotId, false);
+    }
+    return null;
+  }
+
   function generateCity() {
     const seed = "empire-city-v1";
     const width = state.mapSize.width;
@@ -4431,6 +8252,13 @@ window.Empire.Map = (() => {
     state.canvas.style.cursor = "grabbing";
   }
 
+  function notifySelectedDistrictChange() {
+    const refreshShortcuts = window.Empire.UI?.refreshMarketBuildingShortcuts;
+    if (typeof refreshShortcuts === "function") {
+      refreshShortcuts();
+    }
+  }
+
   function onMouseUp(event) {
     if (isTouchGhost()) return;
     if (event.button !== 0) return;
@@ -4449,6 +8277,7 @@ window.Empire.Map = (() => {
     if (picked) {
       state.selectedId = picked.id;
       window.Empire.selectedDistrict = picked;
+      notifySelectedDistrictChange();
       showModal(picked);
       render();
     }
@@ -4579,6 +8408,7 @@ window.Empire.Map = (() => {
       if (picked) {
         state.selectedId = picked.id;
         window.Empire.selectedDistrict = picked;
+        notifySelectedDistrictChange();
         showModal(picked);
         render();
       }
@@ -4651,10 +8481,20 @@ window.Empire.Map = (() => {
   }
 
   function drawDistricts(ctx) {
+    const now = Date.now();
+    const borderStroke = resolveDistrictBorderStroke();
+    pruneExpiredAttackMarkers(now);
+    pruneExpiredPoliceActions(now);
+    syncAttackAnimationTicker();
+
     state.districts.forEach((district) => {
       const fill = districtFill(district);
+      const destroyed = isDistrictDestroyed(district);
+      const districtKey = normalizeDistrictId(district?.id);
+      const attackMarker = districtKey ? state.attackedDistricts.get(districtKey) : null;
+      const policeAction = districtKey ? state.policeDistrictActions.get(districtKey) : null;
       ctx.fillStyle = fill;
-      ctx.strokeStyle = "rgba(15,23,42,0.7)";
+      ctx.strokeStyle = destroyed ? "rgba(24, 24, 27, 0.94)" : borderStroke;
       ctx.lineWidth = 1;
 
       ctx.beginPath();
@@ -4664,6 +8504,15 @@ window.Empire.Map = (() => {
       });
       ctx.closePath();
       ctx.fill();
+      const alliancePattern = destroyed ? null : resolveAlliancePattern(ctx, district);
+      if (alliancePattern) {
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = resolveAlliancePatternOpacity(district);
+        ctx.fillStyle = alliancePattern;
+        ctx.fill();
+        ctx.restore();
+      }
       ctx.stroke();
 
       if (district.id === state.hoverId || district.id === state.selectedId) {
@@ -4671,10 +8520,1353 @@ window.Empire.Map = (() => {
         ctx.lineWidth = 3;
         ctx.stroke();
       }
+
+      if (destroyed) {
+        drawDestroyedDistrictEffect(ctx, district, now);
+      }
+
+      if (attackMarker) {
+        drawDistrictAttackEffect(ctx, district, attackMarker, now);
+      }
+      if (policeAction) {
+        drawDistrictPoliceActionEffect(ctx, district, policeAction, now);
+      }
     });
   }
 
+  function normalizeDistrictId(value) {
+    if (value == null) return "";
+    return String(value).trim();
+  }
+
+  function resolveAttackMarkerDurationMs(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DISTRICT_ATTACK_MARKER_DEFAULT_DURATION_MS;
+    return Math.max(
+      DISTRICT_ATTACK_MARKER_MIN_DURATION_MS,
+      Math.min(DISTRICT_ATTACK_MARKER_MAX_DURATION_MS, Math.floor(parsed))
+    );
+  }
+
+  function resolvePoliceActionDurationMs(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DISTRICT_POLICE_ACTION_DEFAULT_DURATION_MS;
+    return Math.max(
+      DISTRICT_POLICE_ACTION_MIN_DURATION_MS,
+      Math.min(DISTRICT_POLICE_ACTION_MAX_DURATION_MS, Math.floor(parsed))
+    );
+  }
+
+  function pruneExpiredAttackMarkers(now = Date.now()) {
+    if (!state.attackedDistricts.size) return false;
+    let changed = false;
+    for (const [districtKey, marker] of state.attackedDistricts.entries()) {
+      if (!marker || !Number.isFinite(Number(marker.expiresAt)) || Number(marker.expiresAt) <= now) {
+        state.attackedDistricts.delete(districtKey);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  function pruneExpiredPoliceActions(now = Date.now()) {
+    if (!state.policeDistrictActions.size) return false;
+    let changed = false;
+    for (const [districtKey, marker] of state.policeDistrictActions.entries()) {
+      if (!marker || !Number.isFinite(Number(marker.expiresAt)) || Number(marker.expiresAt) <= now) {
+        state.policeDistrictActions.delete(districtKey);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  function hasDestroyedDistricts() {
+    return state.districts.some((district) => isDistrictDestroyed(district));
+  }
+
+  function syncAttackAnimationTicker() {
+    if (state.attackedDistricts.size > 0 || state.policeDistrictActions.size > 0 || hasDestroyedDistricts()) {
+      if (state.attackAnimationIntervalId != null) return;
+      state.attackAnimationIntervalId = setInterval(() => {
+        const now = Date.now();
+        const attackChanged = pruneExpiredAttackMarkers(now);
+        const policeChanged = pruneExpiredPoliceActions(now);
+        if (state.attackedDistricts.size < 1 && state.policeDistrictActions.size < 1 && !hasDestroyedDistricts()) {
+          syncAttackAnimationTicker();
+          if (attackChanged || policeChanged) render();
+          return;
+        }
+        render();
+      }, DISTRICT_ATTACK_ANIMATION_INTERVAL_MS);
+      return;
+    }
+
+    if (state.attackAnimationIntervalId != null) {
+      clearInterval(state.attackAnimationIntervalId);
+      state.attackAnimationIntervalId = null;
+    }
+  }
+
+  function mapDistrictIdSet() {
+    if (state.districtIndexById instanceof Map && state.districtIndexById.size) {
+      return new Set(state.districtIndexById.keys());
+    }
+    return new Set(
+      state.districts
+        .map((district) => normalizeDistrictId(district?.id))
+        .filter(Boolean)
+    );
+  }
+
+  function normalizePolygonPoint(point) {
+    if (Array.isArray(point)) {
+      return [Number(point[0] || 0), Number(point[1] || 0)];
+    }
+    if (point && typeof point === "object") {
+      return [Number(point.x || 0), Number(point.y || 0)];
+    }
+    return [0, 0];
+  }
+
+  function normalizeMapPointForEdge(point) {
+    const [x, y] = normalizePolygonPoint(point);
+    return `${x.toFixed(3)},${y.toFixed(3)}`;
+  }
+
+  function normalizeMapEdgeKey(from, to) {
+    const a = normalizeMapPointForEdge(from);
+    const b = normalizeMapPointForEdge(to);
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+  }
+
+  function buildDistrictAdjacencyIndex(districts) {
+    const adjacency = new Map();
+    const edgeOwners = new Map();
+    const safeDistricts = Array.isArray(districts) ? districts : [];
+
+    safeDistricts.forEach((district) => {
+      const districtKey = normalizeDistrictId(district?.id);
+      if (!districtKey) return;
+      if (!adjacency.has(districtKey)) {
+        adjacency.set(districtKey, new Set());
+      }
+      const polygon = Array.isArray(district?.polygon) ? district.polygon : [];
+      if (polygon.length < 2) return;
+      for (let i = 0; i < polygon.length; i += 1) {
+        const from = polygon[i];
+        const to = polygon[(i + 1) % polygon.length];
+        const edgeKey = normalizeMapEdgeKey(from, to);
+        if (!edgeOwners.has(edgeKey)) {
+          edgeOwners.set(edgeKey, []);
+        }
+        edgeOwners.get(edgeKey).push(districtKey);
+      }
+    });
+
+    edgeOwners.forEach((owners) => {
+      const unique = Array.from(new Set(owners));
+      for (let i = 0; i < unique.length; i += 1) {
+        for (let j = i + 1; j < unique.length; j += 1) {
+          const a = unique[i];
+          const b = unique[j];
+          adjacency.get(a)?.add(b);
+          adjacency.get(b)?.add(a);
+        }
+      }
+    });
+
+    return adjacency;
+  }
+
+  function resolveDistrictById(districtId) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) return null;
+    return state.districtIndexById.get(districtKey) || null;
+  }
+
+  function resolveNeighborDistricts(districtId, limit = 4) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) return [];
+    const neighbors = state.districtAdjacencyById.get(districtKey);
+    if (!neighbors || !neighbors.size) return [];
+    const ownDistrict = resolveDistrictById(districtKey);
+    const ownCenter = ownDistrict?.polygon ? polygonCentroid(ownDistrict.polygon) : [0, 0];
+    const safeLimit = Math.max(0, Math.floor(Number(limit) || 0));
+    const ranked = Array.from(neighbors)
+      .map((neighborKey) => resolveDistrictById(neighborKey))
+      .filter(Boolean)
+      .map((neighborDistrict) => {
+        const [nx, ny] = polygonCentroid(neighborDistrict.polygon || []);
+        const dx = nx - ownCenter[0];
+        const dy = ny - ownCenter[1];
+        return {
+          district: neighborDistrict,
+          distance: Math.sqrt(dx * dx + dy * dy)
+        };
+      })
+      .sort((a, b) => a.distance - b.distance)
+      .map((entry) => entry.district);
+    if (!safeLimit) return ranked;
+    return ranked.slice(0, safeLimit);
+  }
+
+  function hslToRgbChannels(hueDegrees, saturation, lightness) {
+    const hue = (((Number(hueDegrees) || 0) % 360) + 360) % 360 / 360;
+    const sat = clampUnit(saturation);
+    const light = clampUnit(lightness);
+
+    if (sat === 0) {
+      const channel = clampColorChannel(light * 255);
+      return [channel, channel, channel];
+    }
+
+    const q = light < 0.5
+      ? light * (1 + sat)
+      : light + sat - light * sat;
+    const p = 2 * light - q;
+    const hueToChannel = (tRaw) => {
+      let t = tRaw;
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+
+    return [
+      clampColorChannel(hueToChannel(hue + 1 / 3) * 255),
+      clampColorChannel(hueToChannel(hue) * 255),
+      clampColorChannel(hueToChannel(hue - 1 / 3) * 255)
+    ];
+  }
+
+  function rebuildDistinctOwnerColorIndex() {
+    state.distinctOwnerColorByName.clear();
+    if (!state.vision.uniqueOwnerColors) return;
+
+    const ownerKeys = Array.from(new Set(
+      state.districts
+        .map((district) => normalizeName(district?.owner))
+        .filter(Boolean)
+    )).sort();
+    if (!ownerKeys.length) return;
+
+    const playerOwnerKeys = getPlayerOwnerNames();
+    const preferredPlayerColor = normalizeHexColor(localStorage.getItem("empire_gang_color"));
+    const usedColorKeys = new Set();
+    const colorKey = (channels) => Array.isArray(channels) ? channels.join(",") : "";
+
+    const preferredPlayerChannels = preferredPlayerColor
+      ? parseCssColorChannels(preferredPlayerColor)
+      : null;
+    if (preferredPlayerChannels) {
+      ownerKeys.forEach((ownerKey) => {
+        if (!playerOwnerKeys.has(ownerKey)) return;
+        state.distinctOwnerColorByName.set(ownerKey, preferredPlayerChannels);
+      });
+      usedColorKeys.add(colorKey(preferredPlayerChannels));
+    }
+
+    const unassignedOwners = ownerKeys.filter((ownerKey) => !state.distinctOwnerColorByName.has(ownerKey));
+    const unassignedCount = unassignedOwners.length;
+    if (!unassignedCount) return;
+
+    const hueOffset = hashOwner(`${ownerKeys.join("|")}:unique-owner-colors`) % 360;
+    unassignedOwners.forEach((ownerKey, index) => {
+      let hue = (hueOffset + (index * 360) / unassignedCount) % 360;
+      let light = 0.55 + (((index % 4) - 1.5) * 0.025);
+      let channels = hslToRgbChannels(hue, 0.82, light);
+      let guard = 0;
+      while (usedColorKeys.has(colorKey(channels)) && guard < 96) {
+        hue = (hue + 11.25) % 360;
+        light = 0.54 + ((guard % 5) - 2) * 0.018;
+        channels = hslToRgbChannels(hue, 0.82, light);
+        guard += 1;
+      }
+      state.distinctOwnerColorByName.set(ownerKey, channels);
+      usedColorKeys.add(colorKey(channels));
+    });
+  }
+
+  function resolveDistinctOwnerChannels(owner) {
+    const ownerKey = normalizeName(owner);
+    if (!ownerKey) return null;
+    const channels = state.distinctOwnerColorByName.get(ownerKey);
+    if (!Array.isArray(channels) || channels.length !== 3) return null;
+    return channels;
+  }
+
+  function resolveDistinctOwnerFill(owner, alpha = 0.4) {
+    const channels = resolveDistinctOwnerChannels(owner);
+    if (!channels) return null;
+    const safeAlpha = Number.isFinite(Number(alpha)) ? Math.max(0, Math.min(1, Number(alpha))) : 0.4;
+    return `rgba(${channels[0]},${channels[1]},${channels[2]},${safeAlpha})`;
+  }
+
+  function reconcileAttackMarkersWithDistricts() {
+    if (!state.attackedDistricts.size) return;
+    const districtIdSet = mapDistrictIdSet();
+    let changed = false;
+    for (const districtKey of state.attackedDistricts.keys()) {
+      if (!districtIdSet.has(districtKey)) {
+        state.attackedDistricts.delete(districtKey);
+        changed = true;
+      }
+    }
+    if (changed) {
+      syncAttackAnimationTicker();
+    }
+  }
+
+  function reconcilePoliceActionsWithDistricts() {
+    if (!state.policeDistrictActions.size) return;
+    const districtIdSet = mapDistrictIdSet();
+    let changed = false;
+    for (const districtKey of state.policeDistrictActions.keys()) {
+      if (!districtIdSet.has(districtKey)) {
+        state.policeDistrictActions.delete(districtKey);
+        changed = true;
+      }
+    }
+    if (changed) {
+      syncAttackAnimationTicker();
+    }
+  }
+
+  function markDistrictUnderAttack(districtId, options = {}) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) {
+      return { ok: false, reason: "invalid_district" };
+    }
+    const districtExists = Boolean(resolveDistrictById(districtKey));
+    if (!districtExists) {
+      return { ok: false, reason: "district_not_found" };
+    }
+
+    const now = Date.now();
+    const durationMs = resolveAttackMarkerDurationMs(options?.durationMs);
+    const attackerDistrictKey = normalizeDistrictId(options?.attackerDistrictId);
+    const markerSeed = hashOwner(`${attackerDistrictKey || "unknown"}:${districtKey}:attack-marker`);
+
+    state.attackedDistricts.set(districtKey, {
+      districtId: districtKey,
+      attackerDistrictId: attackerDistrictKey || null,
+      source: String(options?.source || "combat").trim() || "combat",
+      startedAt: now,
+      expiresAt: now + durationMs,
+      seed: markerSeed,
+      flameAnchors: null
+    });
+    syncAttackAnimationTicker();
+    render();
+
+    return { ok: true };
+  }
+
+  function setUnderAttackDistricts(markers, options = {}) {
+    const safeMarkers = Array.isArray(markers) ? markers : [];
+    const replace = options?.replace !== false;
+    if (replace) {
+      state.attackedDistricts.clear();
+    }
+    safeMarkers.forEach((item) => {
+      const districtId = item?.districtId ?? item?.id;
+      if (districtId == null) return;
+      markDistrictUnderAttack(districtId, {
+        attackerDistrictId: item?.attackerDistrictId,
+        durationMs: item?.durationMs,
+        source: item?.source
+      });
+    });
+    if (!safeMarkers.length && replace) {
+      syncAttackAnimationTicker();
+      render();
+    }
+  }
+
+  function markDistrictPoliceAction(districtId, options = {}) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) {
+      return { ok: false, reason: "invalid_district" };
+    }
+    const districtExists = Boolean(resolveDistrictById(districtKey));
+    if (!districtExists) {
+      return { ok: false, reason: "district_not_found" };
+    }
+
+    const now = Date.now();
+    const durationMs = resolvePoliceActionDurationMs(options?.durationMs);
+    const markerSeed = hashOwner(`${districtKey}:${String(options?.source || "police-action")}:police-action`);
+
+    state.policeDistrictActions.set(districtKey, {
+      districtId: districtKey,
+      source: String(options?.source || "police-action").trim() || "police-action",
+      startedAt: now,
+      expiresAt: now + durationMs,
+      seed: markerSeed
+    });
+    syncAttackAnimationTicker();
+    render();
+
+    return { ok: true };
+  }
+
+  function setPoliceActionDistricts(markers, options = {}) {
+    const safeMarkers = Array.isArray(markers) ? markers : [];
+    const replace = options?.replace !== false;
+    if (replace) {
+      state.policeDistrictActions.clear();
+    }
+    safeMarkers.forEach((item) => {
+      const districtId = item?.districtId ?? item?.id;
+      if (districtId == null) return;
+      markDistrictPoliceAction(districtId, {
+        durationMs: item?.durationMs,
+        source: item?.source
+      });
+    });
+    if (!safeMarkers.length && replace) {
+      syncAttackAnimationTicker();
+      render();
+    }
+  }
+
+  function clearDistrictUnderAttack(districtId) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) return;
+    if (!state.attackedDistricts.delete(districtKey)) return;
+    syncAttackAnimationTicker();
+    render();
+  }
+
+  function clearAllUnderAttackDistricts() {
+    if (!state.attackedDistricts.size) return;
+    state.attackedDistricts.clear();
+    syncAttackAnimationTicker();
+    render();
+  }
+
+  function clearDistrictPoliceAction(districtId) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) return;
+    if (!state.policeDistrictActions.delete(districtKey)) return;
+    syncAttackAnimationTicker();
+    render();
+  }
+
+  function clearAllPoliceActions() {
+    if (!state.policeDistrictActions.size) return;
+    state.policeDistrictActions.clear();
+    syncAttackAnimationTicker();
+    render();
+  }
+
+  function drawDistrictPolygonPath(ctx, polygon) {
+    if (!Array.isArray(polygon) || polygon.length < 3) return false;
+    ctx.beginPath();
+    polygon.forEach(([x, y], index) => {
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    return true;
+  }
+
+  function polygonBounds(poly) {
+    const points = Array.isArray(poly) ? poly : [];
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    points.forEach((point) => {
+      const x = Number(point?.[0] || 0);
+      const y = Number(point?.[1] || 0);
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    });
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+      return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+    }
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: Math.max(0, maxX - minX),
+      height: Math.max(0, maxY - minY)
+    };
+  }
+
+  function createSeededRandom(seed) {
+    let value = (Math.floor(Number(seed) || 0) >>> 0) || 1;
+    return () => {
+      value = (value * 1664525 + 1013904223) >>> 0;
+      return value / 4294967296;
+    };
+  }
+
+  function clampUnit(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.max(0, Math.min(1, numeric));
+  }
+
+  function resolveAttackFlameAnchorCount(bounds) {
+    const width = Math.max(20, Number(bounds?.width || 0));
+    const height = Math.max(20, Number(bounds?.height || 0));
+    const area = width * height;
+    return Math.max(3, Math.min(8, Math.round(area / 8800) + 3));
+  }
+
+  function createAttackFlameAnchors(district, marker, bounds) {
+    const polygon = Array.isArray(district?.polygon) ? district.polygon : [];
+    if (polygon.length < 3) return [];
+    const safeBounds = bounds && Number.isFinite(bounds.width) ? bounds : polygonBounds(polygon);
+    const width = Math.max(20, safeBounds.width || 0);
+    const height = Math.max(20, safeBounds.height || 0);
+    const targetCount = resolveAttackFlameAnchorCount(safeBounds);
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 1;
+    const random = createSeededRandom(safeSeed ^ 0x4c7f9d1b);
+    const anchors = [];
+    const aspectRatio = width / Math.max(1, height);
+    const cols = Math.max(1, Math.ceil(Math.sqrt(targetCount * aspectRatio)));
+    const rows = Math.max(1, Math.ceil(targetCount / cols));
+    const cellWidth = width / cols;
+    const cellHeight = height / rows;
+    const minDistance = Math.max(4, Math.min(cellWidth, cellHeight) * 0.45);
+    const candidatePoints = [];
+    const probeOffsets = [
+      [0, 0],
+      [0.22, -0.18],
+      [-0.2, 0.2],
+      [0.18, 0.24],
+      [-0.18, -0.18],
+      [0.36, 0],
+      [-0.36, 0],
+      [0, 0.34],
+      [0, -0.34]
+    ];
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const centerX = safeBounds.minX + (col + 0.5) * cellWidth;
+        const centerY = safeBounds.minY + (row + 0.5) * cellHeight;
+        const jitterX = (random() - 0.5) * cellWidth * 0.28;
+        const jitterY = (random() - 0.5) * cellHeight * 0.28;
+        let accepted = null;
+
+        for (let i = 0; i < probeOffsets.length; i += 1) {
+          const [ox, oy] = probeOffsets[(i + col + row) % probeOffsets.length];
+          const x = centerX + jitterX + ox * cellWidth * 0.32;
+          const y = centerY + jitterY + oy * cellHeight * 0.32;
+          if (pointInPolygon([x, y], polygon)) {
+            accepted = { x, y };
+            break;
+          }
+        }
+
+        if (accepted) {
+          candidatePoints.push(accepted);
+        }
+      }
+    }
+
+    if (candidatePoints.length > targetCount) {
+      const stride = candidatePoints.length / targetCount;
+      for (let i = 0; i < targetCount; i += 1) {
+        const index = Math.min(candidatePoints.length - 1, Math.floor((i + 0.5) * stride));
+        anchors.push(candidatePoints[index]);
+      }
+    } else {
+      anchors.push(...candidatePoints);
+    }
+
+    const pointTooClose = (point, points, distance) => points.some((existing) =>
+      Math.hypot(point.x - existing.x, point.y - existing.y) < distance
+    );
+
+    let tries = 0;
+    const maxTries = targetCount * 120;
+    while (anchors.length < targetCount && tries < maxTries) {
+      const candidate = {
+        x: safeBounds.minX + random() * width,
+        y: safeBounds.minY + random() * height
+      };
+      if (!pointInPolygon([candidate.x, candidate.y], polygon)) {
+        tries += 1;
+        continue;
+      }
+      if (pointTooClose(candidate, anchors, minDistance * 0.72)) {
+        tries += 1;
+        continue;
+      }
+      anchors.push(candidate);
+      tries += 1;
+    }
+
+    const [cx, cy] = polygonCentroid(polygon);
+    while (anchors.length < targetCount) {
+      const angle = random() * Math.PI * 2;
+      const radius = Math.min(width, height) * (0.1 + random() * 0.24);
+      anchors.push({
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius
+      });
+    }
+
+    return anchors.slice(0, targetCount).map((point) => ({
+      x: point.x,
+      y: point.y,
+      scale: 0.56 + random() * 0.62,
+      phase: random() * Math.PI * 2,
+      jitter: 0.5 + random() * 0.9
+    }));
+  }
+
+  function getAttackFlameAnchors(district, marker, bounds) {
+    if (!marker || typeof marker !== "object") return [];
+    if (!Array.isArray(marker.flameAnchors) || !marker.flameAnchors.length) {
+      marker.flameAnchors = createAttackFlameAnchors(district, marker, bounds);
+    }
+    return marker.flameAnchors;
+  }
+
+  function samplePointInsidePolygon(polygon, bounds, random, maxTries = 140) {
+    const safePolygon = Array.isArray(polygon) ? polygon : [];
+    if (safePolygon.length < 3) return { x: 0, y: 0 };
+    const safeBounds = bounds && Number.isFinite(bounds.width) ? bounds : polygonBounds(safePolygon);
+    const width = Math.max(1, Number(safeBounds.width || 1));
+    const height = Math.max(1, Number(safeBounds.height || 1));
+    const tries = Math.max(20, Math.floor(Number(maxTries) || 140));
+    for (let i = 0; i < tries; i += 1) {
+      const x = safeBounds.minX + random() * width;
+      const y = safeBounds.minY + random() * height;
+      if (pointInPolygon([x, y], safePolygon)) {
+        return { x, y };
+      }
+    }
+    const [cx, cy] = polygonCentroid(safePolygon);
+    return { x: cx, y: cy };
+  }
+
+  function resolveDestroyedCrackCount(bounds) {
+    const width = Math.max(20, Number(bounds?.width || 0));
+    const height = Math.max(20, Number(bounds?.height || 0));
+    const area = width * height;
+    return Math.max(22, Math.min(64, Math.round(area / 4200)));
+  }
+
+  function createDestroyedCrackPolyline(startPoint, direction, length, random, polygon) {
+    const points = [{ x: startPoint.x, y: startPoint.y }];
+    const safeLength = Math.max(10, Number(length || 0));
+    const minStep = Math.max(4, safeLength * 0.09);
+    const maxStep = Math.max(minStep + 2, safeLength * 0.25);
+    const stepCount = Math.max(2, Math.floor(2 + random() * 3));
+    let remaining = safeLength;
+    let angle = direction;
+    let current = startPoint;
+
+    for (let step = 0; step < stepCount && remaining > 2; step += 1) {
+      const stepLength = Math.min(remaining, minStep + random() * (maxStep - minStep));
+      const nextAngle = angle + (random() - 0.5) * 0.72;
+      const candidate = {
+        x: current.x + Math.cos(nextAngle) * stepLength,
+        y: current.y + Math.sin(nextAngle) * stepLength
+      };
+      if (!pointInPolygon([candidate.x, candidate.y], polygon)) {
+        angle = nextAngle + Math.PI * (0.7 + random() * 0.4);
+        continue;
+      }
+      points.push(candidate);
+      current = candidate;
+      angle = nextAngle;
+      remaining -= stepLength;
+    }
+
+    return points;
+  }
+
+  function buildDestroyedCrackSegments(district, safeSeed, bounds) {
+    const polygon = Array.isArray(district?.polygon) ? district.polygon : [];
+    if (polygon.length < 3) return [];
+    const random = createSeededRandom(safeSeed ^ 0x5a7b3c1d);
+    const crackCount = resolveDestroyedCrackCount(bounds);
+    const minDimension = Math.max(20, Math.min(bounds.width || 20, bounds.height || 20));
+    const segments = [];
+
+    for (let i = 0; i < crackCount; i += 1) {
+      const start = samplePointInsidePolygon(polygon, bounds, random);
+      const angle = random() * Math.PI * 2;
+      const length = minDimension * (0.16 + random() * 0.5);
+      const primary = createDestroyedCrackPolyline(start, angle, length, random, polygon);
+      if (primary.length > 1) {
+        segments.push({
+          points: primary,
+          width: 0.7 + random() * 1.1,
+          alpha: 0.08 + random() * 0.12
+        });
+      }
+
+      if (primary.length > 2 && random() < 0.45) {
+        const branchOrigin = primary[Math.max(1, Math.floor(random() * (primary.length - 1)))];
+        const branchAngle = angle + (random() < 0.5 ? -1 : 1) * (0.5 + random() * 0.9);
+        const branchLength = length * (0.25 + random() * 0.35);
+        const branch = createDestroyedCrackPolyline(branchOrigin, branchAngle, branchLength, random, polygon);
+        if (branch.length > 1) {
+          segments.push({
+            points: branch,
+            width: 0.5 + random() * 0.8,
+            alpha: 0.06 + random() * 0.08
+          });
+        }
+      }
+    }
+
+    return segments;
+  }
+
+  function getDestroyedCrackSegments(district, safeSeed, bounds) {
+    if (!district || typeof district !== "object") return [];
+    const cachedSeed = Number(district.__destroyedCrackSeed);
+    const cachedSegments = district.__destroyedCrackSegments;
+    if (cachedSeed === safeSeed && Array.isArray(cachedSegments) && cachedSegments.length) {
+      return cachedSegments;
+    }
+    const next = buildDestroyedCrackSegments(district, safeSeed, bounds);
+    district.__destroyedCrackSeed = safeSeed;
+    district.__destroyedCrackSegments = next;
+    return next;
+  }
+
+  function drawAttackSmokeInDistrict(ctx, district, marker, now, cx, cy, bounds, pulse, lifeRatio) {
+    if (!drawDistrictPolygonPath(ctx, district.polygon)) return;
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
+    const random = createSeededRandom(safeSeed ^ 0x1e3d5a77);
+    const baseRadius = Math.max(16, Math.min(52, Math.min(bounds.width || 16, bounds.height || 16) * 0.42));
+    const smokeStrength = Math.max(0.24, 0.52 - lifeRatio * 0.17);
+
+    ctx.save();
+    drawDistrictPolygonPath(ctx, district.polygon);
+    ctx.clip();
+    ctx.globalCompositeOperation = "source-over";
+
+    for (let i = 0; i < 8; i += 1) {
+      const drift = Math.sin(now / 820 + i * 0.62 + safeSeed * 0.00013);
+      const x = cx + (random() - 0.5) * baseRadius * 1.6 + drift * baseRadius * 0.14;
+      const y = cy - baseRadius * (0.32 + random() * 0.3) - Math.abs(drift) * baseRadius * 0.18;
+      const radius = baseRadius * (0.65 + random() * 0.85 + pulse * 0.16);
+      const alphaCore = smokeStrength * (0.7 + random() * 0.3);
+      const alphaMid = alphaCore * 0.62;
+      const gradient = ctx.createRadialGradient(x, y, radius * 0.16, x, y, radius);
+      gradient.addColorStop(0, `rgba(28, 28, 32, ${alphaCore.toFixed(3)})`);
+      gradient.addColorStop(0.58, `rgba(20, 20, 24, ${alphaMid.toFixed(3)})`);
+      gradient.addColorStop(1, "rgba(12, 12, 14, 0)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function drawAttackSmokeInNeighborDistricts(ctx, district, marker, now, cx, cy, bounds, pulse, lifeRatio) {
+    const neighbors = resolveNeighborDistricts(district?.id, 5);
+    if (!neighbors.length) return;
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
+
+    neighbors.forEach((neighbor, index) => {
+      if (!Array.isArray(neighbor?.polygon) || neighbor.polygon.length < 3) return;
+      const [nx, ny] = polygonCentroid(neighbor.polygon);
+      const mix = 0.58 + index * 0.03;
+      const smokeX = cx + (nx - cx) * mix;
+      const smokeY = cy + (ny - cy) * mix - (bounds.height || 20) * 0.06;
+      const baseRadius = Math.max(14, Math.min(40, Math.min(bounds.width || 14, bounds.height || 14) * 0.34));
+      const radius = baseRadius * (1.24 + pulse * 0.16 + index * 0.08);
+      const strength = Math.max(0.08, (0.24 - index * 0.03) * (1 - lifeRatio * 0.3));
+      if (strength <= 0.01) return;
+
+      ctx.save();
+      drawDistrictPolygonPath(ctx, neighbor.polygon);
+      ctx.clip();
+      ctx.globalCompositeOperation = "source-over";
+      const sway = Math.sin((now / 900) + index + safeSeed * 0.00009) * radius * 0.06;
+      const gradient = ctx.createRadialGradient(smokeX + sway, smokeY, radius * 0.14, smokeX + sway, smokeY, radius);
+      gradient.addColorStop(0, `rgba(24, 24, 28, ${strength.toFixed(3)})`);
+      gradient.addColorStop(0.62, `rgba(18, 18, 22, ${(strength * 0.55).toFixed(3)})`);
+      gradient.addColorStop(1, "rgba(10, 10, 12, 0)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(smokeX + sway, smokeY, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  function drawAttackAmbientSmokeAroundDistrict(ctx, marker, now, cx, cy, bounds, pulse, lifeRatio) {
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
+    const spreadBase = Math.max(34, Math.min(120, Math.max(bounds.width || 34, bounds.height || 34) * 0.6));
+    const intensity = Math.max(0.06, 0.18 - lifeRatio * 0.06);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+
+    for (let i = 0; i < 4; i += 1) {
+      const angle = (Math.PI * 2 * i) / 4 + (safeSeed % 31) * 0.04;
+      const drift = Math.sin(now / 980 + i * 0.7 + safeSeed * 0.00007);
+      const centerX = cx + Math.cos(angle) * spreadBase * (0.42 + i * 0.08) + drift * spreadBase * 0.08;
+      const centerY = cy + Math.sin(angle) * spreadBase * (0.26 + i * 0.06) - spreadBase * 0.14;
+      const radius = spreadBase * (0.95 + pulse * 0.2 + i * 0.18);
+      const coreAlpha = intensity * (0.65 - i * 0.1);
+      if (coreAlpha <= 0.01) continue;
+      const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.12, centerX, centerY, radius);
+      gradient.addColorStop(0, `rgba(26, 26, 30, ${coreAlpha.toFixed(3)})`);
+      gradient.addColorStop(0.6, `rgba(18, 18, 22, ${(coreAlpha * 0.55).toFixed(3)})`);
+      gradient.addColorStop(1, "rgba(10, 10, 12, 0)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function drawDestroyedDistrictSmoke(ctx, district, now, safeSeed, cx, cy, bounds) {
+    if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      drawDistrictPolygonPath(ctx, district.polygon);
+      ctx.clip();
+      for (let i = 0; i < 3; i += 1) {
+        const angle = (Math.PI * 2 * i) / 3 + (safeSeed % 37) * 0.01;
+        const drift = Math.sin(now / (5200 + i * 900) + i + safeSeed * 0.00007) * 4;
+        const smokeX = cx + Math.cos(angle) * (bounds.width * (0.1 + i * 0.05)) + drift;
+        const smokeY = cy + Math.sin(angle) * (bounds.height * (0.08 + i * 0.04)) - bounds.height * 0.12;
+        const radius = Math.max(22, Math.min(72, Math.max(bounds.width, bounds.height) * (0.22 + i * 0.06)));
+        const gradient = ctx.createRadialGradient(smokeX, smokeY, radius * 0.12, smokeX, smokeY, radius);
+        gradient.addColorStop(0, "rgba(38, 38, 44, 0.10)");
+        gradient.addColorStop(0.62, "rgba(24, 24, 30, 0.06)");
+        gradient.addColorStop(1, "rgba(12, 12, 16, 0)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(smokeX, smokeY, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    const neighbors = resolveNeighborDistricts(district.id, 2);
+    neighbors.forEach((neighbor, index) => {
+      if (!neighbor?.polygon || neighbor.polygon.length < 3) return;
+      const [nx, ny] = polygonCentroid(neighbor.polygon);
+      const nb = polygonBounds(neighbor.polygon);
+      const drift = Math.cos(now / (7000 + index * 1100) + safeSeed * 0.00009 + index) * 3;
+      const radius = Math.max(26, Math.min(68, Math.max(nb.width, nb.height) * 0.26));
+      ctx.save();
+      drawDistrictPolygonPath(ctx, neighbor.polygon);
+      ctx.clip();
+      const haze = ctx.createRadialGradient(nx + drift, ny - nb.height * 0.08, radius * 0.12, nx + drift, ny - nb.height * 0.08, radius);
+      haze.addColorStop(0, "rgba(30, 30, 36, 0.07)");
+      haze.addColorStop(0.6, "rgba(22, 22, 28, 0.04)");
+      haze.addColorStop(1, "rgba(12, 12, 16, 0)");
+      ctx.fillStyle = haze;
+      ctx.beginPath();
+      ctx.arc(nx + drift, ny - nb.height * 0.08, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  function drawDestroyedDistrictEffect(ctx, district, now = Date.now()) {
+    if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+    const [cx, cy] = polygonCentroid(district.polygon);
+    const bounds = polygonBounds(district.polygon);
+    const marker = {
+      seed: hashOwner(`destroyed:${normalizeDistrictId(district?.id) || district?.name || "district"}`)
+    };
+    const safeSeed = Number.isFinite(Number(marker.seed)) ? Number(marker.seed) : 0;
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      drawDistrictPolygonPath(ctx, district.polygon);
+      ctx.clip();
+
+      const radius = Math.max(bounds.width || 20, bounds.height || 20) * 0.92;
+      const charLayer = ctx.createRadialGradient(
+        cx + Math.sin(now / 3900 + safeSeed * 0.00003) * 5,
+        cy - Math.cos(now / 4400 + safeSeed * 0.00004) * 4,
+        radius * 0.05,
+        cx,
+        cy,
+        radius
+      );
+      charLayer.addColorStop(0, "rgba(10, 10, 12, 0.98)");
+      charLayer.addColorStop(0.34, "rgba(7, 7, 9, 0.96)");
+      charLayer.addColorStop(0.72, "rgba(4, 4, 6, 0.95)");
+      charLayer.addColorStop(1, "rgba(2, 2, 4, 0.98)");
+      ctx.fillStyle = charLayer;
+      ctx.fillRect(bounds.minX - 8, bounds.minY - 8, bounds.width + 16, bounds.height + 16);
+
+      const crackSegments = getDestroyedCrackSegments(district, safeSeed, bounds);
+      ctx.globalCompositeOperation = "screen";
+      crackSegments.forEach((segment, index) => {
+        const points = Array.isArray(segment?.points) ? segment.points : [];
+        if (points.length < 2) return;
+        const alpha = Math.max(0.04, Math.min(0.24, Number(segment.alpha || 0.1)));
+        const hueBoost = index % 6;
+        ctx.strokeStyle = `rgba(255, ${Math.round(64 + hueBoost * 5)}, 18, ${alpha.toFixed(3)})`;
+        ctx.lineWidth = Math.max(0.4, Math.min(2.2, Number(segment.width || 0.8)));
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let p = 1; p < points.length; p += 1) {
+          ctx.lineTo(points[p].x, points[p].y);
+        }
+        ctx.stroke();
+      });
+
+      const craterGlow = ctx.createRadialGradient(cx, cy, radius * 0.02, cx, cy, radius * 0.52);
+      craterGlow.addColorStop(0, "rgba(255, 112, 24, 0.16)");
+      craterGlow.addColorStop(0.35, "rgba(255, 78, 18, 0.09)");
+      craterGlow.addColorStop(1, "rgba(255, 52, 12, 0)");
+      ctx.fillStyle = craterGlow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.52, 0, Math.PI * 2);
+      ctx.fill();
+
+      const emberCount = 12;
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < emberCount; i += 1) {
+        const ring = 0.12 + (i % 5) * 0.055;
+        const angle = (Math.PI * 2 * i) / emberCount + (safeSeed % 41) * 0.01 + i * 0.24;
+        const distance = Math.min(bounds.width || 26, bounds.height || 26) * ring + (i % 4) * 2.1;
+        const x = cx + Math.cos(angle) * distance;
+        const y = cy + Math.sin(angle) * distance * 0.78;
+        const size = 0.65 + (i % 3) * 0.5;
+        const alpha = 0.08 - (i % 4) * 0.013;
+        if (alpha <= 0.03) continue;
+        ctx.fillStyle = `rgba(255, ${Math.round(95 + i * 2.5)}, 28, ${Math.min(0.2, alpha).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const ashCount = 14;
+      ctx.globalCompositeOperation = "source-over";
+      for (let i = 0; i < ashCount; i += 1) {
+        const phase = i * 0.71 + safeSeed * 0.0009;
+        const driftX = Math.sin(now / (2900 + (i % 4) * 300) + phase) * (3 + (i % 3) * 1.4);
+        const rise = ((now / (3100 + (i % 5) * 460) + i * 0.11) % 1);
+        const anchorAngle = (Math.PI * 2 * i) / ashCount + phase * 0.23;
+        const anchorRadius = radius * (0.08 + (i % 6) * 0.03);
+        const baseX = cx + Math.cos(anchorAngle) * anchorRadius;
+        const baseY = cy + Math.sin(anchorAngle) * anchorRadius * 0.72;
+        const x = baseX + driftX;
+        const y = baseY - rise * (12 + (i % 5) * 5);
+        const size = 0.55 + (i % 3) * 0.25;
+        const alpha = 0.06 * (1 - rise);
+        if (alpha <= 0.008) continue;
+        ctx.fillStyle = `rgba(88, 88, 96, ${Math.min(0.08, alpha).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    drawDestroyedDistrictSmoke(ctx, district, now, safeSeed, cx, cy, bounds);
+  }
+
+  function drawDistrictAttackEffect(ctx, district, marker, now = Date.now()) {
+    if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+    const [cx, cy] = polygonCentroid(district.polygon);
+    const bounds = polygonBounds(district.polygon);
+    const baseRadius = Math.max(16, Math.min(46, Math.min(bounds.width || 16, bounds.height || 16) * 0.36));
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
+    const pulse = 0.86 + Math.sin(now / 170 + safeSeed * 0.0017) * 0.18;
+    const lifeRatio = marker?.startedAt && marker?.expiresAt && marker.expiresAt > marker.startedAt
+      ? clampUnit((now - marker.startedAt) / (marker.expiresAt - marker.startedAt))
+      : 0;
+    const alpha = Math.max(0.32, 0.86 - lifeRatio * 0.42);
+    const flameAnchors = getAttackFlameAnchors(district, marker, bounds);
+
+    drawAttackAmbientSmokeAroundDistrict(ctx, marker, now, cx, cy, bounds, pulse, lifeRatio);
+    drawAttackSmokeInDistrict(ctx, district, marker, now, cx, cy, bounds, pulse, lifeRatio);
+    drawAttackSmokeInNeighborDistricts(ctx, district, marker, now, cx, cy, bounds, pulse, lifeRatio);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = alpha * 0.9;
+
+    const glowRadius = baseRadius * (1.08 + pulse * 0.26);
+    const glow = ctx.createRadialGradient(cx, cy, baseRadius * 0.16, cx, cy, glowRadius);
+    glow.addColorStop(0, "rgba(255, 250, 205, 0.92)");
+    glow.addColorStop(0.26, "rgba(255, 181, 82, 0.72)");
+    glow.addColorStop(0.6, "rgba(255, 92, 0, 0.52)");
+    glow.addColorStop(1, "rgba(255, 53, 0, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    flameAnchors.forEach((anchor) => {
+      const safeScale = Math.max(0.5, Math.min(1.7, Number(anchor?.scale || 1)));
+      const phase = Number(anchor?.phase || 0);
+      const jitterPower = Math.max(0.2, Number(anchor?.jitter || 0.8));
+      const wobbleX = Math.sin(now / 205 + phase) * jitterPower * 1.1;
+      const wobbleY = Math.cos(now / 165 + phase * 1.7) * jitterPower * 0.82
+        - Math.abs(Math.sin(now / 260 + phase)) * 1.7;
+      const flameSize = Math.max(
+        12,
+        Math.round(baseRadius * safeScale * (0.62 + pulse * 0.24 + Math.sin(now / 145 + phase) * 0.12))
+      );
+      ctx.globalAlpha = Math.max(0.2, alpha * (0.6 + safeScale * 0.18));
+      ctx.font = `${flameSize}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.shadowBlur = 8 + flameSize * 0.4;
+      ctx.shadowColor = "rgba(255, 113, 0, 0.9)";
+      ctx.fillText("🔥", Number(anchor.x || cx) + wobbleX, Number(anchor.y || cy) + wobbleY);
+    });
+
+    ctx.globalAlpha = alpha * 0.54;
+    ctx.fillStyle = "rgba(255,132,24,0.36)";
+    for (let i = 0; i < 7; i += 1) {
+      const angle = (Math.PI * 2 * i) / 7 + now / 700 + safeSeed * 0.00004;
+      const radius = baseRadius * (0.14 + (i % 3) * 0.08);
+      const x = cx + Math.cos(angle) * radius;
+      const y = cy + Math.sin(angle) * radius * 0.7 - baseRadius * 0.18;
+      const size = 1.2 + (i % 2) * 0.7;
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = Math.max(0.2, alpha * 0.72);
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.strokeStyle = `rgba(255, 92, 0, ${Math.min(0.9, 0.5 + pulse * 0.25)})`;
+      ctx.lineWidth = 1.2 + pulse * 0.95;
+      ctx.setLineDash([7, 5]);
+      ctx.lineDashOffset = -((now / 40 + safeSeed) % 180);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.restore();
+  }
+
+  function drawDistrictPoliceActionEffect(ctx, district, marker, now = Date.now()) {
+    if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+    const [cx, cy] = polygonCentroid(district.polygon);
+    const bounds = polygonBounds(district.polygon);
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
+    const minDimension = Math.max(22, Math.min(bounds.width || 22, bounds.height || 22));
+    const baseRadius = Math.max(22, Math.min(64, minDimension * 0.52));
+    const lifeRatio = marker?.startedAt && marker?.expiresAt && marker.expiresAt > marker.startedAt
+      ? clampUnit((now - marker.startedAt) / (marker.expiresAt - marker.startedAt))
+      : 0;
+    const fade = Math.max(0.34, 1 - lifeRatio * 0.45);
+    const redPulse = 0.28 + ((Math.sin(now / 145 + safeSeed * 0.0012) + 1) * 0.5) * 0.72;
+    const bluePulse = 0.28 + ((Math.sin(now / 145 + Math.PI + safeSeed * 0.0012) + 1) * 0.5) * 0.72;
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      drawDistrictPolygonPath(ctx, district.polygon);
+      ctx.clip();
+      ctx.globalCompositeOperation = "screen";
+
+      const redGlow = ctx.createRadialGradient(
+        cx - baseRadius * 0.32,
+        cy - baseRadius * 0.04,
+        baseRadius * 0.12,
+        cx - baseRadius * 0.32,
+        cy - baseRadius * 0.04,
+        baseRadius * 1.45
+      );
+      redGlow.addColorStop(0, `rgba(255, 88, 92, ${(0.44 * redPulse * fade).toFixed(3)})`);
+      redGlow.addColorStop(0.62, `rgba(255, 52, 62, ${(0.2 * redPulse * fade).toFixed(3)})`);
+      redGlow.addColorStop(1, "rgba(255, 38, 48, 0)");
+      ctx.fillStyle = redGlow;
+      ctx.beginPath();
+      ctx.arc(cx - baseRadius * 0.32, cy - baseRadius * 0.04, baseRadius * 1.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      const blueGlow = ctx.createRadialGradient(
+        cx + baseRadius * 0.32,
+        cy - baseRadius * 0.04,
+        baseRadius * 0.12,
+        cx + baseRadius * 0.32,
+        cy - baseRadius * 0.04,
+        baseRadius * 1.45
+      );
+      blueGlow.addColorStop(0, `rgba(64, 179, 255, ${(0.44 * bluePulse * fade).toFixed(3)})`);
+      blueGlow.addColorStop(0.62, `rgba(50, 122, 255, ${(0.2 * bluePulse * fade).toFixed(3)})`);
+      blueGlow.addColorStop(1, "rgba(42, 90, 255, 0)");
+      ctx.fillStyle = blueGlow;
+      ctx.beginPath();
+      ctx.arc(cx + baseRadius * 0.32, cy - baseRadius * 0.04, baseRadius * 1.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const beaconCount = 4;
+    const ringRadius = baseRadius * 0.62;
+    for (let i = 0; i < beaconCount; i += 1) {
+      const pulse = i % 2 === 0 ? redPulse : bluePulse;
+      const isRed = i % 2 === 0;
+      const angle = now / 780 + i * ((Math.PI * 2) / beaconCount) + safeSeed * 0.00019;
+      const x = cx + Math.cos(angle) * ringRadius;
+      const y = cy + Math.sin(angle) * ringRadius * 0.72;
+      const beamRadius = baseRadius * (1.62 + pulse * 0.44);
+      const beamDirection = now / 330 * (isRed ? 1 : -1) + i * 0.8;
+      const beamSpread = 0.36 + pulse * 0.2;
+      const beaconColor = isRed
+        ? `rgba(255, 66, 72, ${(0.3 + pulse * 0.42) * fade})`
+        : `rgba(56, 164, 255, ${(0.3 + pulse * 0.42) * fade})`;
+
+      ctx.fillStyle = beaconColor;
+      ctx.shadowBlur = 10 + pulse * 14;
+      ctx.shadowColor = isRed ? "rgba(255, 58, 70, 0.95)" : "rgba(52, 150, 255, 0.95)";
+      ctx.beginPath();
+      ctx.arc(x, y, 3.2 + pulse * 3.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = (0.1 + pulse * 0.16) * fade;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, beamRadius, beamDirection - beamSpread * 0.5, beamDirection + beamSpread * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      const borderMix = redPulse - bluePulse;
+      ctx.strokeStyle = borderMix >= 0
+        ? `rgba(255, 92, 96, ${Math.max(0.28, 0.4 * fade)})`
+        : `rgba(68, 172, 255, ${Math.max(0.28, 0.4 * fade)})`;
+      ctx.lineWidth = 1.2 + Math.max(redPulse, bluePulse) * 1.3;
+      ctx.setLineDash([6, 5]);
+      ctx.lineDashOffset = -(now / 52 + safeSeed) % 130;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  function resolveDistrictAllianceLabel(district) {
+    const explicit = String(district?.ownerAllianceName || "").trim();
+    if (explicit) return explicit;
+    return deriveAllianceNameFromOwnerLabel(district?.owner);
+  }
+
+  function resolveAlliancePatternKey(district) {
+    if (!district?.owner) return "";
+    const allianceLabel = resolveDistrictAllianceLabel(district);
+    const normalized = normalizeName(allianceLabel);
+    if (!normalized) return "";
+    if (normalized === "žádná" || normalized === "bez aliance" || normalized === "none") return "";
+    return normalized;
+  }
+
+  function resolveAlliancePatternVariant(allianceKey) {
+    return hashOwner(`${allianceKey}:pattern`) % 6;
+  }
+
+  function resolveAlliancePatternColors(allianceKey) {
+    const hue = hashOwner(`${allianceKey}:hue`) % 360;
+    const primaryHue = (hue + 175) % 360;
+    const secondaryHue = (hue + 312) % 360;
+    const tertiaryHue = (hue + 48) % 360;
+    return {
+      primary: `hsla(${primaryHue}, 100%, 74%, 0.82)`,
+      secondary: `hsla(${secondaryHue}, 100%, 70%, 0.66)`,
+      tertiary: `hsla(${tertiaryHue}, 100%, 80%, 0.44)`
+    };
+  }
+
+  function resolveAlliancePatternOpacity(district) {
+    if (isDistrictOwnedByPlayer(district)) return 0.5;
+    if (isDistrictOwnedByAlly(district)) return 0.46;
+    if (isDistrictOwnedByEnemy(district)) return 0.42;
+    return 0.38;
+  }
+
+  function drawPatternStar(ctx, centerX, centerY, outerRadius, innerRadius, points = 5) {
+    const safePoints = Math.max(3, Math.floor(Number(points) || 5));
+    const angleStep = Math.PI / safePoints;
+    ctx.beginPath();
+    for (let i = 0; i < safePoints * 2; i += 1) {
+      const radius = i % 2 === 0 ? outerRadius : innerRadius;
+      const angle = -Math.PI / 2 + i * angleStep;
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY + Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function createAlliancePattern(ctx, allianceKey, variant) {
+    if (!ctx || typeof document === "undefined") return null;
+    const tileSize = 34;
+    const patternCanvas = document.createElement("canvas");
+    patternCanvas.width = tileSize;
+    patternCanvas.height = tileSize;
+    const patternCtx = patternCanvas.getContext("2d");
+    if (!patternCtx) return null;
+
+    const colors = resolveAlliancePatternColors(allianceKey);
+    patternCtx.clearRect(0, 0, tileSize, tileSize);
+    patternCtx.lineCap = "round";
+    patternCtx.lineJoin = "round";
+
+    switch (variant) {
+      case 0: {
+        patternCtx.fillStyle = colors.primary;
+        const points = [[8, 9], [24, 20]];
+        points.forEach(([x, y]) => {
+          patternCtx.beginPath();
+          patternCtx.arc(x, y, 4.1, 0, Math.PI * 2);
+          patternCtx.fill();
+        });
+        patternCtx.fillStyle = colors.tertiary;
+        patternCtx.beginPath();
+        patternCtx.arc(26, 8, 2.5, 0, Math.PI * 2);
+        patternCtx.fill();
+        break;
+      }
+      case 1: {
+        patternCtx.strokeStyle = colors.primary;
+        patternCtx.lineWidth = 3;
+        for (let x = -tileSize; x <= tileSize * 2; x += 14) {
+          patternCtx.beginPath();
+          patternCtx.moveTo(x, 0);
+          patternCtx.lineTo(x + tileSize, tileSize);
+          patternCtx.stroke();
+        }
+        patternCtx.strokeStyle = colors.tertiary;
+        patternCtx.lineWidth = 2;
+        for (let x = -tileSize; x <= tileSize * 2; x += 14) {
+          patternCtx.beginPath();
+          patternCtx.moveTo(x + 6, 0);
+          patternCtx.lineTo(x + tileSize + 6, tileSize);
+          patternCtx.stroke();
+        }
+        break;
+      }
+      case 2: {
+        patternCtx.strokeStyle = colors.primary;
+        patternCtx.lineWidth = 2.4;
+        for (let y = 6; y < tileSize; y += 14) {
+          patternCtx.beginPath();
+          patternCtx.moveTo(0, y);
+          patternCtx.lineTo(tileSize, y);
+          patternCtx.stroke();
+        }
+        patternCtx.strokeStyle = colors.secondary;
+        patternCtx.lineWidth = 2;
+        for (let x = 6; x < tileSize; x += 14) {
+          patternCtx.beginPath();
+          patternCtx.moveTo(x, 0);
+          patternCtx.lineTo(x, tileSize);
+          patternCtx.stroke();
+        }
+        break;
+      }
+      case 3: {
+        patternCtx.fillStyle = colors.primary;
+        drawPatternStar(patternCtx, 10, 10, 5.6, 2.35, 5);
+        patternCtx.fillStyle = colors.secondary;
+        drawPatternStar(patternCtx, 25, 23, 5, 2.1, 5);
+        patternCtx.fillStyle = colors.tertiary;
+        patternCtx.beginPath();
+        patternCtx.arc(8, 26, 2.1, 0, Math.PI * 2);
+        patternCtx.fill();
+        break;
+      }
+      case 4: {
+        patternCtx.fillStyle = colors.primary;
+        patternCtx.fillRect(4, 4, 8, 8);
+        patternCtx.fillRect(20, 4, 8, 8);
+        patternCtx.fillStyle = colors.secondary;
+        patternCtx.fillRect(12, 13, 8, 8);
+        patternCtx.fillRect(4, 22, 8, 8);
+        patternCtx.fillStyle = colors.tertiary;
+        patternCtx.fillRect(22, 22, 6, 6);
+        break;
+      }
+      case 5:
+      default: {
+        patternCtx.strokeStyle = colors.primary;
+        patternCtx.lineWidth = 2.8;
+        [[3, 6], [3, 21]].forEach(([x, y]) => {
+          patternCtx.beginPath();
+          patternCtx.moveTo(x, y);
+          patternCtx.lineTo(x + 8, y + 6);
+          patternCtx.lineTo(x + 16, y);
+          patternCtx.stroke();
+        });
+        patternCtx.strokeStyle = colors.secondary;
+        patternCtx.lineWidth = 2.2;
+        [[18, 10], [18, 25]].forEach(([x, y]) => {
+          patternCtx.beginPath();
+          patternCtx.moveTo(x, y);
+          patternCtx.lineTo(x + 7, y + 5);
+          patternCtx.lineTo(x + 14, y);
+          patternCtx.stroke();
+        });
+        break;
+      }
+    }
+
+    return ctx.createPattern(patternCanvas, "repeat");
+  }
+
+  function resolveAlliancePattern(ctx, district) {
+    const allianceKey = resolveAlliancePatternKey(district);
+    if (!allianceKey) return null;
+    const variant = resolveAlliancePatternVariant(allianceKey);
+    const cacheKey = `${allianceKey}:${variant}`;
+    const cached = state.alliancePatternCache.get(cacheKey);
+    if (cached) return cached;
+    const next = createAlliancePattern(ctx, allianceKey, variant);
+    if (!next) return null;
+    state.alliancePatternCache.set(cacheKey, next);
+    return next;
+  }
+
   function districtFill(district) {
+    if (isDistrictDestroyed(district)) {
+      return "rgba(9, 9, 11, 0.9)";
+    }
+
+    if (state.vision.uniqueOwnerColors && district?.owner) {
+      if (isDistrictOwnedByPlayer(district)) {
+        const playerFill = resolveDistinctOwnerFill(district.owner, 0.5);
+        if (playerFill) return playerFill;
+      }
+      if (isDistrictOwnedByAlly(district)) {
+        const allyDistinctFill = resolveDistinctOwnerFill(district.owner, 0.46);
+        if (allyDistinctFill) return allyDistinctFill;
+      }
+      if (isDistrictOwnedByEnemy(district)) {
+        const enemyDistinctFill = resolveDistinctOwnerFill(district.owner, 0.42);
+        if (enemyDistinctFill) return enemyDistinctFill;
+      }
+      const ownerDistinctFill = resolveDistinctOwnerFill(district.owner, 0.38);
+      if (ownerDistinctFill) return ownerDistinctFill;
+    }
+
     if (isDistrictOwnedByPlayer(district)) return resolvePlayerOwnedFill();
     if (isDistrictOwnedByAlly(district)) return allyFill(district.owner);
     if (isDistrictOwnedByEnemy(district)) return enemyFill(district.owner);
@@ -4713,6 +9905,10 @@ window.Empire.Map = (() => {
   }
 
   function ownerFill(owner) {
+    if (state.vision.uniqueOwnerColors) {
+      const distinct = resolveDistinctOwnerFill(owner, 0.35);
+      if (distinct) return distinct;
+    }
     const normalized = normalizeName(owner);
     if (!normalized) return "rgba(34,197,94,0.35)";
     const index = hashOwner(normalized) % ownerPalette.length;
@@ -4720,6 +9916,10 @@ window.Empire.Map = (() => {
   }
 
   function enemyFill(owner) {
+    if (state.vision.uniqueOwnerColors) {
+      const distinct = resolveDistinctOwnerFill(owner, 0.22);
+      if (distinct) return distinct;
+    }
     const normalized = normalizeName(owner);
     if (!normalized) return "rgba(203,213,225,0.22)";
     const index = hashOwner(normalized) % enemyPalette.length;
@@ -4727,6 +9927,10 @@ window.Empire.Map = (() => {
   }
 
   function allyFill(owner) {
+    if (state.vision.uniqueOwnerColors) {
+      const distinct = resolveDistinctOwnerFill(owner, 0.46);
+      if (distinct) return distinct;
+    }
     const normalized = normalizeName(owner);
     if (!normalized) return allyPalette[0];
     const alliedOwners = Array.from(state.vision.alliedOwnerNames);
@@ -4742,6 +9946,21 @@ window.Empire.Map = (() => {
     const stored = normalizeHexColor(localStorage.getItem("empire_gang_color"));
     if (!stored) return "rgba(34,197,94,0.45)";
     return hexToRgba(stored, 0.45);
+  }
+
+  function normalizeDistrictBorderMode(value) {
+    const mode = String(value || "").trim().toLowerCase();
+    if (mode === "white" || mode === "black" || mode === "player") return mode;
+    return "player";
+  }
+
+  function resolveDistrictBorderStroke() {
+    const mode = normalizeDistrictBorderMode(state.vision.districtBorderMode);
+    if (mode === "white") return "rgba(248,250,252,0.9)";
+    if (mode === "black") return "rgba(2,6,23,0.92)";
+    const playerColor = normalizeHexColor(localStorage.getItem("empire_gang_color"));
+    if (!playerColor) return "rgba(34,211,238,0.78)";
+    return hexToRgba(playerColor, 0.9);
   }
 
   function normalizeHexColor(value) {
@@ -4764,16 +9983,76 @@ window.Empire.Map = (() => {
     return `rgba(${r},${g},${b},${safeAlpha})`;
   }
 
+  function clampColorChannel(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.max(0, Math.min(255, Math.round(numeric)));
+  }
+
+  function parseCssColorChannels(colorValue) {
+    const raw = String(colorValue || "").trim();
+    if (!raw) return null;
+
+    const rgbMatch = raw.match(/rgba?\(\s*([0-9]{1,3}(?:\.[0-9]+)?)\s*,\s*([0-9]{1,3}(?:\.[0-9]+)?)\s*,\s*([0-9]{1,3}(?:\.[0-9]+)?)/i);
+    if (rgbMatch) {
+      return [
+        clampColorChannel(rgbMatch[1]),
+        clampColorChannel(rgbMatch[2]),
+        clampColorChannel(rgbMatch[3])
+      ];
+    }
+
+    const normalizedHex = normalizeHexColor(raw);
+    if (normalizedHex) {
+      return [
+        parseInt(normalizedHex.slice(1, 3), 16),
+        parseInt(normalizedHex.slice(3, 5), 16),
+        parseInt(normalizedHex.slice(5, 7), 16)
+      ];
+    }
+
+    return null;
+  }
+
+  function resolveDistrictAccentChannels(district) {
+    const channelsFromFill = parseCssColorChannels(districtFill(district));
+    if (channelsFromFill) return channelsFromFill;
+    return [34, 211, 238];
+  }
+
+  function applyDistrictModalAccent(district) {
+    const content = state.modal?.root?.querySelector(".modal__content");
+    if (!content) return;
+    const [r, g, b] = resolveDistrictAccentChannels(district);
+    content.style.setProperty("--district-accent-rgb", `${r}, ${g}, ${b}`);
+
+    const glowAlpha = isDistrictOwnedByPlayer(district)
+      ? 0.42
+      : isDistrictOwnedByAlly(district)
+        ? 0.36
+        : isDistrictOwnedByEnemy(district)
+          ? 0.33
+          : 0.28;
+    content.style.setProperty("--district-accent-glow-alpha", String(glowAlpha));
+  }
+
   function isPlayerOwner(ownerName) {
     return getPlayerOwnerNames().has(normalizeName(ownerName));
   }
 
+  function isDistrictDestroyed(district) {
+    if (!district || typeof district !== "object") return false;
+    return Boolean(district.isDestroyed || district.is_destroyed || district.destroyed);
+  }
+
   function isDistrictOwnedByPlayer(district) {
+    if (isDistrictDestroyed(district)) return false;
     if (!district?.owner) return false;
     return isPlayerOwner(String(district.owner).trim());
   }
 
   function isDistrictOwnedByAlly(district) {
+    if (isDistrictDestroyed(district)) return false;
     if (!district?.owner) return false;
     const owner = normalizeName(district.owner);
     if (!owner) return false;
@@ -4782,6 +10061,7 @@ window.Empire.Map = (() => {
   }
 
   function isDistrictOwnedByEnemy(district) {
+    if (isDistrictDestroyed(district)) return false;
     if (!district?.owner) return false;
     const owner = normalizeName(district.owner);
     if (!owner) return false;
@@ -4798,7 +10078,11 @@ window.Empire.Map = (() => {
     const player = window.Empire.player || {};
     const names = [
       player.gangName,
+      player.gang_name,
+      player.gang,
       player.username,
+      player.name,
+      localStorage.getItem("empire_guest_username"),
       localStorage.getItem("empire_gang_name")
     ]
       .map((value) => normalizeName(value))
@@ -4904,6 +10188,19 @@ window.Empire.Map = (() => {
       hideTooltip();
       return;
     }
+    if (isDistrictDestroyed(district)) {
+      state.tooltip.classList.remove("hidden");
+      const districtNumber = resolveDistrictNumberLabel(district);
+      state.tooltip.innerHTML = `
+        <div class="map-tooltip__title">Vypálený distrikt</div>
+        <div>Distrikt č.: ${districtNumber}</div>
+        <div>Stav: Zničený a nepoužitelný</div>
+        <div>Vlastník: Nikdo</div>
+        <div>Příjem: 0</div>
+      `;
+      placeTooltipWithinMap(clientX, clientY);
+      return;
+    }
     const defendableByPlayer = isDistrictDefendable(district);
     const isDowntown = district.type === "downtown";
     const ownerRelation = resolveDistrictOwnerRelation(district);
@@ -4938,8 +10235,9 @@ window.Empire.Map = (() => {
       return;
     }
 
+    const canViewDistrictBuildings = defendableByPlayer;
     const buildingLine =
-      Array.isArray(district.buildings) && district.buildings.length
+      canViewDistrictBuildings && Array.isArray(district.buildings) && district.buildings.length
         ? `
           <div class="map-tooltip__section">
             <div class="map-tooltip__label">Budovy</div>
@@ -4949,17 +10247,18 @@ window.Empire.Map = (() => {
           </div>
         `
         : "";
-    const setLine = district.buildingSetTitle
+    const setLine = canViewDistrictBuildings && district.buildingSetTitle
       ? `<div class="map-tooltip__section"><div class="map-tooltip__label">Set</div><div>${district.buildingSetTitle}</div></div>`
       : "";
     const gossipLine = buildTooltipGossipSection(district, 2);
 
+    const hideEnemyEconomyIntel = ownerRelation === "enemy";
     state.tooltip.innerHTML = `
       <div class="map-tooltip__title">${district.name}</div>
       <div>Typ: ${district.type}</div>
       <div>Vlastník: ${district.owner || "Neobsazeno"}</div>
-      <div>Příjem: $${district.income}/hod</div>
-      <div>Vliv: ${district.influence}</div>
+      <div>Příjem: ${hideEnemyEconomyIntel ? "Skryto" : `$${district.income}/hod`}</div>
+      <div>Vliv: ${hideEnemyEconomyIntel ? "Skryto" : district.influence}</div>
       ${ownerIntelSection}
       ${setLine}
       ${buildingLine}
@@ -5147,14 +10446,44 @@ window.Empire.Map = (() => {
   }
 
   function applyUpdate(update) {
-    if (!update || !Array.isArray(update.districts)) return;
-    setDistricts(update.districts);
+    if (!update || typeof update !== "object") return;
+    if (Array.isArray(update.districts)) {
+      setDistricts(update.districts);
+    }
+    if (Array.isArray(update.attackedDistricts)) {
+      setUnderAttackDistricts(update.attackedDistricts, { replace: true });
+    }
+    if (Array.isArray(update.policeActions)) {
+      setPoliceActionDistricts(update.policeActions, { replace: true });
+    }
+    const eventTargetId = update.attackEvent?.targetDistrictId
+      ?? update.attackEvent?.districtId
+      ?? update.underAttackDistrictId;
+    if (eventTargetId != null) {
+      markDistrictUnderAttack(eventTargetId, {
+        attackerDistrictId: update.attackEvent?.sourceDistrictId ?? update.attackEvent?.attackerDistrictId,
+        durationMs: update.attackEvent?.durationMs,
+        source: update.attackEvent?.source || "map-update"
+      });
+    }
+    const policeTargetId = update.policeEvent?.targetDistrictId
+      ?? update.policeEvent?.districtId
+      ?? update.policeActionDistrictId;
+    if (policeTargetId != null) {
+      markDistrictPoliceAction(policeTargetId, {
+        durationMs: update.policeEvent?.durationMs,
+        source: update.policeEvent?.source || "map-update"
+      });
+    }
   }
 
   function setVisionContext(context = {}) {
     state.vision.fogPreviewMode = Boolean(context.fogPreviewMode);
     const allied = Array.isArray(context.alliedOwnerNames) ? context.alliedOwnerNames : [];
     const enemies = Array.isArray(context.enemyOwnerNames) ? context.enemyOwnerNames : [];
+    state.vision.allowEnemyModalIntelInFog = Boolean(context.allowEnemyModalIntelInFog);
+    state.vision.uniqueOwnerColors = Boolean(context.uniqueOwnerColors);
+    state.vision.districtBorderMode = normalizeDistrictBorderMode(context.districtBorderMode);
     state.vision.alliedOwnerNames = new Set(
       allied
         .map((value) => normalizeName(value))
@@ -5165,6 +10494,7 @@ window.Empire.Map = (() => {
         .map((value) => normalizeName(value))
         .filter(Boolean)
     );
+    rebuildDistinctOwnerColorIndex();
     render();
   }
 
@@ -5175,8 +10505,14 @@ window.Empire.Map = (() => {
       name: district.name || `${district.type} #${index + 1}`,
       type: district.type || "residential",
       owner: district.owner || null,
+      ownerPlayerId: district.ownerPlayerId || district.owner_player_id || null,
+      ownerNick: district.ownerNick || district.owner_nick || district.ownerUsername || district.owner_username || null,
+      ownerAllianceName: district.ownerAllianceName || district.owner_alliance_name || null,
+      ownerAvatar: district.ownerAvatar || district.owner_avatar || null,
       influence: Number(district.influence || 0),
       income: Number(district.income || 0),
+      isDestroyed: Boolean(district.isDestroyed || district.is_destroyed || district.destroyed),
+      destroyedAt: district.destroyedAt || district.destroyed_at || null,
       polygon: district.polygon,
       buildings: Array.isArray(district.buildings) ? district.buildings : [],
       buildingNameOverrides: Array.isArray(district.buildingNameOverrides) ? district.buildingNameOverrides : [],
@@ -5193,8 +10529,27 @@ window.Empire.Map = (() => {
     if (!hasPolygons) return;
 
     state.districts = normalized;
+    state.districtIndexById = new Map(
+      normalized
+        .map((district) => [normalizeDistrictId(district?.id), district])
+        .filter(([districtKey]) => Boolean(districtKey))
+    );
+    state.districtAdjacencyById = buildDistrictAdjacencyIndex(normalized);
+    state.alliancePatternCache.clear();
+    rebuildDistinctOwnerColorIndex();
+    reconcileAttackMarkersWithDistricts();
+    reconcilePoliceActionsWithDistricts();
+    pruneExpiredAttackMarkers(Date.now());
+    pruneExpiredPoliceActions(Date.now());
+    syncAttackAnimationTicker();
     state.roads = buildRoadNetworkFromDistricts(normalized);
     window.Empire.districts = normalized;
+    if (window.Empire.selectedDistrict?.id != null) {
+      const selected = normalized.find((district) => String(district.id) === String(window.Empire.selectedDistrict.id)) || null;
+      window.Empire.selectedDistrict = selected;
+      state.selectedId = selected ? selected.id : null;
+    }
+    notifySelectedDistrictChange();
     render();
   }
 
@@ -5215,12 +10570,12 @@ window.Empire.Map = (() => {
       if (event.key === "Escape") hideModal();
       if (event.key === "Enter" && !state.modal?.root?.classList.contains("hidden")) {
         const defense = document.getElementById("defense-btn");
-        if (defense && !defense.classList.contains("hidden")) {
+        if (defense && !defense.classList.contains("hidden") && !defense.disabled) {
           defense.click();
           return;
         }
         const attack = document.getElementById("attack-btn");
-        if (attack) attack.click();
+        if (attack && !attack.classList.contains("hidden") && !attack.disabled) attack.click();
       }
     });
   }
@@ -5240,6 +10595,7 @@ window.Empire.Map = (() => {
 
     const setTab = (tab) => {
       const showInfo = tab === "info";
+      state.activeBuildingDetailTab = showInfo ? "info" : "stats";
       if (panelStats) panelStats.classList.toggle("hidden", showInfo);
       if (panelInfo) panelInfo.classList.toggle("hidden", !showInfo);
       root.classList.toggle("is-info-tab", showInfo);
@@ -5276,6 +10632,7 @@ window.Empire.Map = (() => {
     const close = () => {
       root.classList.add("hidden");
       state.activeBuildingDetail = null;
+      state.activeBuildingDetailTab = "stats";
       resetSwipeState();
     };
 
@@ -5414,6 +10771,42 @@ window.Empire.Map = (() => {
           return;
         }
 
+        if (baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
+          const result = handleArmoryBuildingAction(actionId, activeContext);
+          if (result?.message) {
+            window.Empire.UI?.pushEvent?.(result.message);
+          }
+          refreshActiveBuildingDetailModal();
+          return;
+        }
+
+        if (baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
+          const result = handleFactoryBuildingAction(actionId, activeContext);
+          if (result?.message) {
+            window.Empire.UI?.pushEvent?.(result.message);
+          }
+          refreshActiveBuildingDetailModal();
+          return;
+        }
+
+        if (baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
+          const result = handlePharmacyBuildingAction(actionId, activeContext);
+          if (result?.message) {
+            window.Empire.UI?.pushEvent?.(result.message);
+          }
+          refreshActiveBuildingDetailModal();
+          return;
+        }
+
+        if (baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
+          const result = handleDrugLabBuildingAction(actionId, activeContext);
+          if (result?.message) {
+            window.Empire.UI?.pushEvent?.(result.message);
+          }
+          refreshActiveBuildingDetailModal();
+          return;
+        }
+
         if (actionId === "upgrade") {
           window.Empire.UI?.pushEvent?.(`${buildingName}: Upgrade bude doplněn později.`);
           return;
@@ -5426,6 +10819,75 @@ window.Empire.Map = (() => {
         window.Empire.UI?.pushEvent?.(`${buildingName}: Akce ${actionId} bude doplněna později.`);
       });
     });
+    root.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const activeContext = resolveActiveBuildingContext();
+      const context = activeContext?.context || null;
+      const baseName = String(context?.baseName || "").trim();
+      let result = null;
+      if (baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
+        result = handleDrugLabInlineControl(target, activeContext);
+      } else if (baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
+        result = handleArmoryInlineControl(target, activeContext);
+      } else if (baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
+        result = handleFactoryInlineControl(target, activeContext);
+      } else if (baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
+        result = handlePharmacyInlineControl(target, activeContext);
+      } else {
+        return;
+      }
+      if (result?.message) {
+        window.Empire.UI?.pushEvent?.(result.message);
+      }
+      if (result) {
+        refreshActiveBuildingDetailModal();
+      }
+    });
+    root.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.closest("[data-drug-lab-slot-select]")) return;
+      const activeContext = resolveActiveBuildingContext();
+      const context = activeContext?.context || null;
+      const baseName = String(context?.baseName || "").trim();
+      let result = null;
+      if (baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
+        result = handleDrugLabInlineControl(target, activeContext);
+      } else if (baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
+        result = handleArmoryInlineControl(target, activeContext);
+      } else if (baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
+        result = handleFactoryInlineControl(target, activeContext);
+      } else if (baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
+        result = handlePharmacyInlineControl(target, activeContext);
+      } else {
+        return;
+      }
+      if (result?.message) {
+        window.Empire.UI?.pushEvent?.(result.message);
+      }
+      if (result) {
+        refreshActiveBuildingDetailModal();
+      }
+    });
+    setInterval(() => {
+      if (root.classList.contains("hidden")) return;
+      const active = resolveActiveBuildingContext();
+      const baseName = String(active?.context?.baseName || "").trim();
+      if (
+        !(
+          baseName === DRUG_LAB_BUILDING_NAME
+          || isDrugLabBaseName(baseName)
+          || baseName === ARMORY_BUILDING_NAME
+          || isArmoryBaseName(baseName)
+          || baseName === FACTORY_BUILDING_NAME
+          || isFactoryBaseName(baseName)
+          || baseName === PHARMACY_BUILDING_NAME
+          || isPharmacyBaseName(baseName)
+        )
+      ) return;
+      refreshActiveBuildingDetailModal();
+    }, 1000);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") close();
     });
@@ -5468,7 +10930,11 @@ window.Empire.Map = (() => {
       || mechanicsType === "auto-salon"
       || mechanicsType === "exchange"
       || mechanicsType === "restaurant"
-      || mechanicsType === "convenience-store";
+      || mechanicsType === "convenience-store"
+      || mechanicsType === "armory"
+      || mechanicsType === "factory"
+      || mechanicsType === "pharmacy"
+      || mechanicsType === "drug-lab";
     if (!supportsCustomActions) {
       return;
     }
@@ -5477,6 +10943,26 @@ window.Empire.Map = (() => {
       collectBtn.classList.remove("hidden");
       collectBtn.disabled = mechanics.storedMembers <= 0;
       collectBtn.title = mechanics.storedMembers <= 0 ? "Budova nemá nasbírané členy." : "";
+    } else if (collectBtn && mechanicsType === "drug-lab") {
+      collectBtn.classList.remove("hidden");
+      collectBtn.textContent = "Vybrat drogy";
+      collectBtn.disabled = Math.max(0, Number(mechanics.storedTotal || 0)) <= 0;
+      collectBtn.title = collectBtn.disabled ? "Drug Lab sklad je prázdný." : "";
+    } else if (collectBtn && mechanicsType === "pharmacy") {
+      collectBtn.classList.remove("hidden");
+      collectBtn.textContent = "Vybrat suroviny";
+      collectBtn.disabled = Math.max(0, Number(mechanics.storedTotal || 0)) <= 0;
+      collectBtn.title = collectBtn.disabled ? "Lékárna nemá vyrobené suroviny." : "";
+    } else if (collectBtn && mechanicsType === "factory") {
+      collectBtn.classList.remove("hidden");
+      collectBtn.textContent = "Vybrat materiály";
+      collectBtn.disabled = Math.max(0, Number(mechanics.storedTotal || 0)) <= 0;
+      collectBtn.title = collectBtn.disabled ? "Továrna nemá vyrobené materiály." : "";
+    } else if (collectBtn && mechanicsType === "armory") {
+      collectBtn.classList.remove("hidden");
+      collectBtn.textContent = "Vybrat zbraně";
+      collectBtn.disabled = Math.max(0, Number(mechanics.storedTotal || 0)) <= 0;
+      collectBtn.title = collectBtn.disabled ? "Zbrojovka nemá vyrobené zbraně." : "";
     }
 
     const applyActionButtonState = (button, label, cooldownMs) => {
@@ -5531,6 +11017,58 @@ window.Empire.Map = (() => {
       applyActionButtonState(action1Btn, "Noční směna", mechanics.cooldowns?.nightShift);
       applyActionButtonState(action2Btn, "Zadní pult", mechanics.cooldowns?.backCounter);
       applyActionButtonState(action3Btn, "Místní klepy", mechanics.cooldowns?.localRumors);
+    } else if (mechanicsType === "armory") {
+      if (action1Btn) {
+        action1Btn.classList.add("hidden");
+        action1Btn.disabled = true;
+        action1Btn.title = "";
+      }
+      if (action2Btn) {
+        action2Btn.classList.add("hidden");
+        action2Btn.disabled = true;
+        action2Btn.title = "";
+      }
+      if (action3Btn) {
+        action3Btn.classList.add("hidden");
+        action3Btn.disabled = true;
+        action3Btn.title = "";
+      }
+    } else if (mechanicsType === "factory") {
+      if (action1Btn) {
+        action1Btn.classList.add("hidden");
+        action1Btn.disabled = true;
+        action1Btn.title = "";
+      }
+      if (action2Btn) {
+        action2Btn.classList.add("hidden");
+        action2Btn.disabled = true;
+        action2Btn.title = "";
+      }
+      if (action3Btn) {
+        action3Btn.classList.add("hidden");
+        action3Btn.disabled = true;
+        action3Btn.title = "";
+      }
+    } else if (mechanicsType === "pharmacy") {
+      if (action1Btn) {
+        action1Btn.classList.add("hidden");
+        action1Btn.disabled = true;
+        action1Btn.title = "";
+      }
+      if (action2Btn) {
+        action2Btn.classList.add("hidden");
+        action2Btn.disabled = true;
+        action2Btn.title = "";
+      }
+      if (action3Btn) {
+        action3Btn.classList.add("hidden");
+        action3Btn.disabled = true;
+        action3Btn.title = "";
+      }
+    } else if (mechanicsType === "drug-lab") {
+      applyActionButtonState(action1Btn, "Overclock výroby", mechanics.cooldowns?.overclock);
+      applyActionButtonState(action2Btn, "Čistá várka", mechanics.cooldowns?.cleanBatch);
+      applyActionButtonState(action3Btn, "Skrytý provoz", mechanics.cooldowns?.hiddenOperation);
     }
 
     if (upgradeBtn) {
@@ -5574,9 +11112,14 @@ window.Empire.Map = (() => {
         && mechanicsType !== "exchange"
         && mechanicsType !== "restaurant"
         && mechanicsType !== "convenience-store"
+        && mechanicsType !== "armory"
+        && mechanicsType !== "factory"
+        && mechanicsType !== "pharmacy"
+        && mechanicsType !== "drug-lab"
       )
     ) {
       root.classList.add("hidden");
+      renderDrugLabDetailPanel(null);
       if (infoEffects) infoEffects.textContent = "Žádné aktivní mechaniky.";
       return;
     }
@@ -5586,6 +11129,7 @@ window.Empire.Map = (() => {
     if (heatLabel) heatLabel.textContent = "Heat";
     if (effectsLabel) effectsLabel.textContent = "Aktivní efekty";
     level.textContent = `L${mechanics.level}`;
+    heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     if (mechanicsType === "fitness-club") {
       if (storedLabel) storedLabel.textContent = "Bojový bonus";
       if (productionLabel) productionLabel.textContent = "Income multiplikátor";
@@ -5658,13 +11202,66 @@ window.Empire.Map = (() => {
         `C x${formatDecimalValue(mechanics.currentCleanIncomeMultiplier, 2)} • `
         + `D x${formatDecimalValue(mechanics.currentDirtyIncomeMultiplier, 2)} • `
         + `V +${formatDecimalValue(mechanics.currentInfluencePerHour, 2)}/h${districtBoostLabel}`;
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
+    } else if (mechanicsType === "armory") {
+      if (storedLabel) storedLabel.textContent = "Vyrobené zbraně";
+      if (productionLabel) productionLabel.textContent = "Aktivní sloty / výroba";
+      if (heatLabel) heatLabel.textContent = "Heat výroby";
+      const activeAttackSlots = Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0)));
+      const totalAttackSlots = Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0)));
+      const activeDefenseSlots = Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)));
+      const totalDefenseSlots = Math.max(1, Math.floor(Number((mechanics.defenseSlots || []).length || 0)));
+      const storedAttackTotal = Math.max(0, Math.floor(Number(mechanics.storedAttackTotal || 0)));
+      const storedDefenseTotal = Math.max(0, Math.floor(Number(mechanics.storedDefenseTotal || 0)));
+      stored.textContent = `Útok ${storedAttackTotal} • Obrana ${storedDefenseTotal}`;
+      production.textContent = `U ${activeAttackSlots}/${totalAttackSlots} • O ${activeDefenseSlots}/${totalDefenseSlots}`;
+      heat.textContent = `Bazuka +${Math.max(0, Math.floor(Number(ARMORY_CONFIG.weapons.bazooka?.heatPerUnit || 0)))} / ks`;
+    } else if (mechanicsType === "factory") {
+      if (storedLabel) storedLabel.textContent = "Suroviny MP/TC/CM";
+      if (productionLabel) productionLabel.textContent = "Produkce + craft";
+      if (heatLabel) heatLabel.textContent = "Heat";
+      const resources = mechanics.resources || {};
+      const rates = mechanics.ratesPerHour || {};
+      stored.textContent =
+        `${Math.max(0, Math.floor(Number(resources.metalParts || 0)))}/`
+        + `${Math.max(0, Math.floor(Number(resources.techCore || 0)))}/`
+        + `${Math.max(0, Math.floor(Number(resources.combatModule || 0)))}`;
+      production.textContent =
+        `MP ${formatDecimalValue(rates.metalParts || 0, 2)}/h • `
+        + `TC ${formatDecimalValue(rates.techCore || 0, 2)}/h • `
+        + `CM ${formatDecimalValue(rates.combatModule || 0, 2)}/h`;
+      heat.textContent = `+${FACTORY_CONFIG.combatModule.heatPerUnit} / Combat Module`;
+    } else if (mechanicsType === "pharmacy") {
+      if (storedLabel) storedLabel.textContent = "Suroviny C/B/S";
+      if (productionLabel) productionLabel.textContent = "Produkce C/B/S za hod";
+      const resources = mechanics.resources || {};
+      const rates = mechanics.ratesPerHour || {};
+      stored.textContent =
+        `${Math.max(0, Math.floor(Number(resources.chemicals || 0)))}/`
+        + `${Math.max(0, Math.floor(Number(resources.biomass || 0)))}/`
+        + `${Math.max(0, Math.floor(Number(resources.stimPack || 0)))}`;
+      production.textContent =
+        `${formatDecimalValue(rates.chemicals || 0, 2)}/`
+        + `${formatDecimalValue(rates.biomass || 0, 2)}/`
+        + `${formatDecimalValue(rates.stimPack || 0, 2)}`;
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerDay || PHARMACY_CONFIG.baseHeatPerDay, 2)} / 24h`;
+    } else if (mechanicsType === "drug-lab") {
+      if (storedLabel) storedLabel.textContent = "Interní sklad";
+      if (productionLabel) productionLabel.textContent = "Sloty / multiplikátor";
+      if (heatLabel) heatLabel.textContent = "Heat z výroby";
+      stored.textContent = `${Math.max(0, Math.floor(Number(mechanics.storedTotal || 0)))} / ${Math.max(1, Math.floor(Number(mechanics.storageCapacity || 0)))}`;
+      production.textContent =
+        `${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number(mechanics.unlockedSlots || 0)))} • `
+        + `x${formatDecimalValue(mechanics.currentProductionMultiplier || 1, 2)}`;
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerHour || 0, 2)} / h`;
     } else {
       stored.textContent = `${mechanics.storedMembers} / ${mechanics.capacity}`;
       production.textContent = `${formatDecimalValue(mechanics.productionPerCycle, 2)} / 10 min`;
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     }
-    heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     effects.textContent = mechanics.effectsLabel || "Žádné";
     if (infoEffects) infoEffects.textContent = mechanics.effectsLabel || "Žádné aktivní mechaniky.";
+    renderDrugLabDetailPanel(details);
     root.classList.remove("hidden");
   }
 
@@ -5742,6 +11339,35 @@ window.Empire.Map = (() => {
         "Místní klepy: Cooldown 2h, okamžitě vygeneruje 1 districtový drb, uloží ho do historie districtu, přidá +1 heat a dá malý instantní bonus vlivu (+0.1, škáluje s levelem)."
       ];
     }
+    if (mechanicsType === "armory") {
+      return [
+        "Útok: Baseballová pálka, Pouliční pistole, Granát, Samopal, Bazuka.",
+        "Obrana: Neprůstřelná vesta, Ocelové barikády, Bezpečnostní kamery, Automatické kulometné stanoviště, Alarm.",
+        "Alarm: 5 MP + 4 TC, 40 min/ks, +10 defense, +25 % šance aktivace obranných bonusů a +20 % šance policejní reakce při útoku."
+      ];
+    }
+    if (mechanicsType === "factory") {
+      return [
+        "Slot 1 vyrábí Metal Parts (základní materiál pro zbraně).",
+        "Slot 2 vyrábí Tech Core (pokročilý materiál).",
+        `Slot 3 craftí Combat Module: ${FACTORY_CONFIG.combatModule.metalPartsCost} Metal Parts + ${FACTORY_CONFIG.combatModule.techCoreCost} Tech Core, ${formatDurationLabel(FACTORY_CONFIG.combatModule.durationMs)} na kus a +${FACTORY_CONFIG.combatModule.heatPerUnit} heat za kus.`,
+        "Combat boosty se aktivují přes Boost nad mapou: Assault Protocol (2 CM), Rapid Strike (3 CM), Breach Mode (4 CM)."
+      ];
+    }
+    if (mechanicsType === "pharmacy") {
+      return [
+        "Lékárna má 3 sloty: Chemicals, Biomass, Stim Pack. Každý slot lze zvlášť spustit/zastavit.",
+        "Vybrat suroviny přesune vyrobené látky do zásob Drug Labu (centrální vstup C/B/S).",
+        "Boosty aktivuješ tlačítkem Boost nad mapou: Recon (2 Stim), Action (3 Stim), Neuro (4 Stim, +3 heat), trvání 2h."
+      ];
+    }
+    if (mechanicsType === "drug-lab") {
+      return [
+        "Overclock výroby: Cooldown 6h, trvá 2h, +50 % produkce všech slotů a okamžitě +3 heat.",
+        "Čistá várka: Cooldown 5h, trvá 2h, nově vyrobené drogy jsou enhanced (+20 % síla efektu při použití).",
+        "Skrytý provoz: Cooldown 6h, trvá 2h, heat z výroby -30 %, ale produkce -20 %."
+      ];
+    }
     return ["Speciální akce této budovy budou doplněny."];
   }
 
@@ -5763,6 +11389,7 @@ window.Empire.Map = (() => {
 
     const context = resolveBuildingDetailContext(buildingName);
     const details = resolveBuildingDetails(context, district);
+    const mechanicsType = String(details?.mechanics?.type || "").trim();
     const title = document.getElementById("building-detail-title");
     const name = document.getElementById("building-detail-name");
     const hourly = document.getElementById("building-detail-hourly");
@@ -5776,8 +11403,30 @@ window.Empire.Map = (() => {
     const panelStats = document.getElementById("building-detail-panel-stats");
     const panelInfo = document.getElementById("building-detail-panel-info");
     const tabButtons = Array.from(root.querySelectorAll("[data-building-tab]"));
+    const hourlyRow = hourly?.closest(".modal__row") || null;
+    const dailyRow = daily?.closest(".modal__row") || null;
+    const infoHourlyRow = infoHourly?.closest(".building-info-card__stat") || null;
+    const infoDailyRow = infoDaily?.closest(".building-info-card__stat") || null;
 
-    state.activeBuildingDetail = { context, district: district || null };
+    const hideIncomeRows = mechanicsType === "drug-lab" || mechanicsType === "pharmacy" || mechanicsType === "factory" || mechanicsType === "armory";
+    if (hourlyRow) hourlyRow.classList.toggle("hidden", hideIncomeRows);
+    if (dailyRow) dailyRow.classList.toggle("hidden", hideIncomeRows);
+    if (infoHourlyRow) infoHourlyRow.classList.toggle("hidden", hideIncomeRows);
+    if (infoDailyRow) infoDailyRow.classList.toggle("hidden", hideIncomeRows);
+
+    let activeContext = context;
+    let activeDistrict = district || null;
+    const primaryContext = details?.mechanics?.primaryContext;
+    if (primaryContext && typeof primaryContext === "object") {
+      activeContext = primaryContext;
+    }
+    const primaryDistrictId = details?.mechanics?.primaryDistrictId;
+    if (primaryDistrictId != null) {
+      activeDistrict = resolveDistrictRecord(primaryDistrictId) || activeDistrict;
+    } else if (primaryContext?.districtId != null) {
+      activeDistrict = resolveDistrictRecord(primaryContext.districtId) || activeDistrict;
+    }
+    state.activeBuildingDetail = { context: activeContext, district: activeDistrict };
 
     if (title) title.textContent = `Budova: ${details.baseName}`;
     if (name) name.textContent = details.displayName;
@@ -5792,7 +11441,6 @@ window.Empire.Map = (() => {
     renderBuildingInfoActions(details);
     if (infoHeading) infoHeading.textContent = `Taktický profil: ${details.displayName}`;
     if (infoSubtitle) {
-      const mechanicsType = String(details?.mechanics?.type || "").trim();
       let subtitle = "Přehled role budovy v districtu a ekonomice gangu.";
       if (mechanicsType === "apartment-block") {
         subtitle = "Personální budova zaměřená na růst členů, kapacitu a stabilní cashflow.";
@@ -5812,14 +11460,27 @@ window.Empire.Map = (() => {
         subtitle = "Nízkoprofilová ekonomická budova s vlivovým růstem a zpravodajskými drby z districtů.";
       } else if (mechanicsType === "convenience-store") {
         subtitle = "Nízko-heat lokální cashflow bod s hybridním příjmem, vlivem a district intel drby.";
+      } else if (mechanicsType === "armory") {
+        subtitle = "Výrobní zbrojní uzel pro útok i obranu districtů: recepty, časování a zásobování z Továrny.";
+      } else if (mechanicsType === "factory") {
+        subtitle = "Produkční jádro pro výrobu zbraňových materiálů a Combat Module.";
+      } else if (mechanicsType === "pharmacy") {
+        subtitle = "Support budova pro výrobu surovin a taktických boostů akcí napříč gangem.";
+      } else if (mechanicsType === "drug-lab") {
+        subtitle = "Produkční laboratoř pro drogy: sloty, heat risk management, buffy a skladová logistika.";
       }
       infoSubtitle.textContent = subtitle;
     }
-    if (panelStats) panelStats.classList.remove("hidden");
-    if (panelInfo) panelInfo.classList.add("hidden");
-    root.classList.remove("is-info-tab");
+    const preserveInfoTab = !root.classList.contains("hidden") && state.activeBuildingDetailTab === "info";
+    const activeTab = preserveInfoTab ? "info" : "stats";
+    if (!preserveInfoTab) {
+      state.activeBuildingDetailTab = "stats";
+    }
+    if (panelStats) panelStats.classList.toggle("hidden", activeTab === "info");
+    if (panelInfo) panelInfo.classList.toggle("hidden", activeTab !== "info");
+    root.classList.toggle("is-info-tab", activeTab === "info");
     tabButtons.forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.buildingTab === "stats");
+      button.classList.toggle("is-active", button.dataset.buildingTab === activeTab);
     });
     updateBuildingMechanicsPanel(details);
     setBuildingDetailActionButtons(details);
@@ -6017,6 +11678,18 @@ window.Empire.Map = (() => {
     if (safeName === CONVENIENCE_STORE_BUILDING_NAME || isConvenienceStoreBaseName(safeName)) {
       return resolveConvenienceStoreBuildingDetails(context, district, fallbackDetails);
     }
+    if (safeName === ARMORY_BUILDING_NAME || isArmoryBaseName(safeName)) {
+      return resolveArmoryBuildingDetails(context, district, fallbackDetails);
+    }
+    if (safeName === FACTORY_BUILDING_NAME || isFactoryBaseName(safeName)) {
+      return resolveFactoryBuildingDetails(context, district, fallbackDetails);
+    }
+    if (safeName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(safeName)) {
+      return resolvePharmacyBuildingDetails(context, district, fallbackDetails);
+    }
+    if (safeName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(safeName)) {
+      return resolveDrugLabBuildingDetails(context, district, fallbackDetails);
+    }
     return fallbackDetails;
   }
 
@@ -6025,18 +11698,38 @@ window.Empire.Map = (() => {
     const defendableByPlayer = isDistrictDefendable(district);
     const isDowntown = district.type === "downtown";
     const districtNumber = resolveDistrictNumberLabel(district);
+    const isEnemyDistrict = isEnemyOwnedDistrictForModal(district);
+    const revealEnemyIntelInFog = state.vision.fogPreviewMode
+      && state.vision.allowEnemyModalIntelInFog
+      && isEnemyDistrict;
+    const revealDistrictDetails = !state.vision.fogPreviewMode || defendableByPlayer || revealEnemyIntelInFog;
+    const showEnemyOwnerProfile = isEnemyDistrict
+      && (!state.vision.fogPreviewMode || revealEnemyIntelInFog);
 
+    applyDistrictModalAccent(district);
     updateModalActionsForDistrict(district);
 
-    if (!state.vision.fogPreviewMode || defendableByPlayer) {
+    if (isDistrictDestroyed(district)) {
+      document.getElementById("modal-name").textContent = district.name || "Distrikt";
+      document.getElementById("modal-type").textContent = `${district.type || "-"} • Zničený`;
+      document.getElementById("modal-owner").textContent = "Nikdo";
+      document.getElementById("modal-income").textContent = "0 / nepoužitelný";
+      document.getElementById("modal-influence").textContent = 0;
+      updateDistrictBuildings(null);
+      updateDistrictGossip(district);
+      updateDistrictOwnerProfile(district, false);
+      state.modal.root.classList.remove("hidden");
+      return;
+    }
+
+    if (revealDistrictDetails) {
       document.getElementById("modal-name").textContent = district.name || "Distrikt";
       document.getElementById("modal-type").textContent = district.type || "-";
       document.getElementById("modal-owner").textContent = district.owner || "Neobsazeno";
-      document.getElementById("modal-income").textContent = `$${district.income || 0}/hod`;
-      document.getElementById("modal-influence").textContent = district.influence || 0;
-      updateDistrictBuildings(district);
+      document.getElementById("modal-income").textContent = isEnemyDistrict ? "Skryto" : `$${district.income || 0}/hod`;
+      document.getElementById("modal-influence").textContent = isEnemyDistrict ? "Skryto" : (district.influence || 0);
+      updateDistrictBuildings(defendableByPlayer ? district : null);
       updateDistrictGossip(district);
-      updateDistrictGallery(district);
     } else {
       document.getElementById("modal-name").textContent = isDowntown
         ? `Downtown sektor #${districtNumber}`
@@ -6047,10 +11740,81 @@ window.Empire.Map = (() => {
       document.getElementById("modal-influence").textContent = "Skryto";
       updateDistrictBuildings(null);
       updateDistrictGossip(district);
-      updateDistrictGallery(null);
     }
 
+    updateDistrictOwnerProfile(district, showEnemyOwnerProfile);
     state.modal.root.classList.remove("hidden");
+  }
+
+  function isEnemyOwnedDistrictForModal(district) {
+    if (!district?.owner) return false;
+    if (isDistrictOwnedByPlayer(district)) return false;
+    if (isDistrictOwnedByAlly(district)) return false;
+    return true;
+  }
+
+  function resolveDistrictOwnerAvatar(district) {
+    const explicitAvatar = String(district?.ownerAvatar || "").trim();
+    if (explicitAvatar) return explicitAvatar;
+    if (!districtOwnerAvatarPool.length) return "";
+    const seedSource = String(district?.ownerPlayerId || district?.ownerNick || district?.owner || "")
+      .trim()
+      .toLowerCase();
+    if (!seedSource) return districtOwnerAvatarPool[0];
+    const avatarIndex = hashOwner(seedSource) % districtOwnerAvatarPool.length;
+    return districtOwnerAvatarPool[avatarIndex];
+  }
+
+  function deriveAllianceNameFromOwnerLabel(ownerLabel) {
+    const raw = String(ownerLabel || "").trim();
+    if (!raw) return "";
+    const withoutIndex = raw.replace(/\s+\d+$/u, "").trim();
+    const allyMatch = withoutIndex.match(/^(.*?)\s*-\s*spojenec(?:\s+[A-Z])?$/iu);
+    if (allyMatch?.[1]) return String(allyMatch[1]).trim();
+    if (withoutIndex && withoutIndex !== raw) return withoutIndex;
+    return "";
+  }
+
+  function updateDistrictOwnerProfile(district, visible) {
+    const content = state.modal?.root?.querySelector(".modal__content");
+    const ownerValue = document.getElementById("modal-owner");
+    const allianceRow = document.getElementById("modal-owner-alliance-row");
+    const allianceValue = document.getElementById("modal-owner-alliance");
+    if (!content || !ownerValue || !allianceRow || !allianceValue) return;
+
+    if (!visible) {
+      allianceRow.classList.add("hidden");
+      allianceValue.textContent = "Bez aliance";
+      content.classList.remove("district-owner-bg-active");
+      content.style.setProperty("--district-owner-avatar-url", "none");
+      content.style.setProperty("--district-owner-avatar-opacity", "0");
+      return;
+    }
+
+    const explicitOwnerNick = String(district?.ownerNick || "").trim();
+    const explicitOwnerAlliance = String(district?.ownerAllianceName || "").trim();
+    const fallbackOwnerNick = String(district?.owner || "Neznámý");
+    const fallbackAllianceName = deriveAllianceNameFromOwnerLabel(district?.owner);
+    const ownerNick = explicitOwnerNick || fallbackOwnerNick;
+    const ownerAlliance = explicitOwnerAlliance || fallbackAllianceName || "Bez aliance";
+    const avatarSrc = resolveDistrictOwnerAvatar(district);
+
+    ownerValue.textContent = ownerNick;
+    allianceValue.textContent = ownerAlliance;
+    allianceRow.classList.remove("hidden");
+    content.classList.add("district-owner-bg-active");
+
+    if (!avatarSrc) {
+      content.style.setProperty("--district-owner-avatar-url", "none");
+      content.style.setProperty("--district-owner-avatar-opacity", "0");
+      return;
+    }
+
+    const safeAvatar = avatarSrc
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, "\\\"");
+    content.style.setProperty("--district-owner-avatar-url", `url("${safeAvatar}")`);
+    content.style.setProperty("--district-owner-avatar-opacity", "0.98");
   }
 
   function updateModalActionsForDistrict(district) {
@@ -6071,15 +11835,16 @@ window.Empire.Map = (() => {
     const spyState = typeof evaluateAction === "function"
       ? evaluateAction(district, "spy")
       : { allowed: !defendableByPlayer, reason: "" };
+    const destroyed = isDistrictDestroyed(district);
 
-    const showAttack = !defendableByPlayer && attackState.allowed;
-    const showRaid = !defendableByPlayer && raidState.allowed;
-    const showSpy = !defendableByPlayer && spyState.allowed;
+    const showAttack = !destroyed && !defendableByPlayer && attackState.allowed;
+    const showRaid = !destroyed && !defendableByPlayer && raidState.allowed;
+    const showSpy = !destroyed && !defendableByPlayer && spyState.allowed;
 
     attackBtn.classList.toggle("hidden", !showAttack);
     raidBtn.classList.toggle("hidden", !showRaid);
     spyBtn.classList.toggle("hidden", !showSpy);
-    defenseBtn.classList.toggle("hidden", !defendableByPlayer);
+    defenseBtn.classList.toggle("hidden", destroyed || !defendableByPlayer);
     attackBtn.disabled = false;
     raidBtn.disabled = false;
     spyBtn.disabled = false;
@@ -6370,6 +12135,18 @@ window.Empire.Map = (() => {
     applyUpdate,
     setVisionContext,
     showBuildingDetail,
-    recordIntelEvent
+    recordIntelEvent,
+    markDistrictUnderAttack,
+    clearDistrictUnderAttack,
+    clearUnderAttackDistricts: clearAllUnderAttackDistricts,
+    setUnderAttackDistricts,
+    markDistrictPoliceAction,
+    clearDistrictPoliceAction,
+    clearPoliceActions: clearAllPoliceActions,
+    setPoliceActionDistricts,
+    getPharmacyBoostSnapshot,
+    usePharmacyBoost,
+    getFactoryBoostSnapshot,
+    useFactoryBoost
   };
 })();

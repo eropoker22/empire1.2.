@@ -3,18 +3,25 @@ const jwt = require("jsonwebtoken");
 const { pool } = require("../config/db");
 const { ensureMarketSchema } = require("./marketService");
 const { ensureMoneySchema } = require("./moneyService");
+const { ensureDrugSchema } = require("./drugService");
+const { ensureGangColorSchema } = require("./gangColorService");
 
 async function registerPlayer({ username, password, gangName }) {
   await ensureMarketSchema();
   await ensureMoneySchema();
+  await ensureDrugSchema();
+  await ensureGangColorSchema();
   const passwordHash = await bcrypt.hash(password, 12);
 
   const result = await pool.query(
     `INSERT INTO players (
-       username, password_hash, gang_name, money, clean_money, dirty_money, drugs, weapons, materials, data_shards
+       username, password_hash, gang_name,
+       money, clean_money, dirty_money,
+       drugs, drug_neon_dust, drug_pulse_shot, drug_velvet_smoke, drug_ghost_serum, drug_overdrive_x,
+       weapons, materials, data_shards
      )
-     VALUES ($1, $2, $3, 12000, 12000, 0, 80, 30, 120, 18)
-     RETURNING id, username, gang_name, gang_structure`,
+     VALUES ($1, $2, $3, 12000, 12000, 0, 80, 44, 14, 12, 7, 3, 30, 120, 18)
+     RETURNING id, username, gang_name, gang_structure, gang_color`,
     [username, passwordHash, gangName]
   );
 
@@ -23,8 +30,9 @@ async function registerPlayer({ username, password, gangName }) {
 }
 
 async function loginPlayer({ username, password }) {
+  await ensureGangColorSchema();
   const result = await pool.query(
-    "SELECT id, username, gang_name, gang_structure, password_hash FROM players WHERE username = $1",
+    "SELECT id, username, gang_name, gang_structure, gang_color, password_hash FROM players WHERE username = $1",
     [username]
   );
 
@@ -45,7 +53,8 @@ function createToken(player) {
       id: player.id,
       username: player.username,
       gangName: player.gang_name,
-      structure: player.gang_structure || null
+      structure: player.gang_structure || null,
+      gangColor: player.gang_color || null
     },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
