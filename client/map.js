@@ -1074,10 +1074,14 @@ window.Empire.Map = (() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(FACTORY_PLAYER_STORAGE_KEY) || "null");
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed;
+        const normalized = createFactoryPlayerSupplyMap(parsed);
+        if (!Object.prototype.hasOwnProperty.call(parsed, "combatModule")) {
+          normalized.combatModule = 2;
+        }
+        return normalized;
       }
     } catch {}
-    return {};
+    return { combatModule: 2 };
   }
 
   function saveFactoryPlayerSupplies() {

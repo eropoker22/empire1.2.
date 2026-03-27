@@ -1972,14 +1972,12 @@ window.Empire.UI = (() => {
       name: item.name,
       value: findInventoryValueByName(attackCounts, item.name),
       metaLabel: `Síla ${item.power}`,
-      requirementLabel: `Min. ${item.requiredMembers} členů`,
       unlocked: currentGangMembers >= item.requiredMembers
     }));
     const defenseEntries = defenseWeaponStats.map((item) => ({
       name: item.name,
       value: findInventoryValueByName(defenseCounts, item.name),
       metaLabel: `Síla ${item.power}`,
-      requirementLabel: `Min. ${item.requiredMembers} členů`,
       unlocked: currentGangMembers >= item.requiredMembers
     }));
     const pharmacyEntries = pharmacySupplyTypes.map((item) => ({
@@ -2077,6 +2075,9 @@ window.Empire.UI = (() => {
     if (backdrop) backdrop.addEventListener("click", closeDefenseModal);
     if (closeBtn) closeBtn.addEventListener("click", closeDefenseModal);
     if (weaponButtons) {
+      weaponButtons.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+      });
       weaponButtons.addEventListener("click", (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
@@ -2646,6 +2647,9 @@ window.Empire.UI = (() => {
     if (backdrop) backdrop.addEventListener("click", closeAttackModal);
     if (closeBtn) closeBtn.addEventListener("click", closeAttackModal);
     if (weaponButtons) {
+      weaponButtons.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+      });
       weaponButtons.addEventListener("click", (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
@@ -3438,34 +3442,52 @@ window.Empire.UI = (() => {
       safeDistricts.map((district) => [district.id, polygonCentroid(district.polygon || [])])
     );
     const neighborsByDistrict = buildDistrictAdjacency(safeDistricts);
-    const available = new Set(safeDistricts.map((district) => district.id));
+    const available = new Set(
+      safeDistricts
+        .filter((district) => String(district?.type || "").toLowerCase() !== "downtown")
+        .map((district) => district.id)
+    );
+    const ownerTarget = Math.min(5, available.size);
     const preferredTypes = ["commercial", "industrial", "residential", "park", "downtown"];
     const mapBounds = getDistrictBounds(safeDistricts);
+    const requiredOwnerBuildings = ["Lékárna", "Továrna", "Drug lab", "Zbrojovka"];
+    const hasBuilding = (district, buildingName) => {
+      const wanted = normalizeOwnerName(buildingName);
+      const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+      return buildings.some((building) => normalizeOwnerName(building) === wanted);
+    };
+    const sortByCenterDistance = (a, b) => {
+      const distA = distanceFromMapCenter(a, mapBounds);
+      const distB = distanceFromMapCenter(b, mapBounds);
+      if (distA === distB) return Number(a.id || 0) - Number(b.id || 0);
+      return distA - distB;
+    };
 
-    preferredTypes.forEach((type) => {
+    requiredOwnerBuildings.forEach((buildingName) => {
+      if (ownersByDistrict.size >= ownerTarget) return;
       const candidate = safeDistricts
-        .filter((district) => String(district?.type || "").toLowerCase() === type && available.has(district.id))
-        .sort((a, b) => {
-          const distA = distanceFromMapCenter(a, mapBounds);
-          const distB = distanceFromMapCenter(b, mapBounds);
-          if (distA === distB) return Number(a.id || 0) - Number(b.id || 0);
-          return distA - distB;
-        })[0];
+        .filter((district) => available.has(district.id) && hasBuilding(district, buildingName))
+        .sort(sortByCenterDistance)[0];
       if (!candidate) return;
       ownersByDistrict.set(candidate.id, ownerName);
       available.delete(candidate.id);
     });
 
-    if (ownersByDistrict.size < 5 && available.size) {
+    preferredTypes.forEach((type) => {
+      if (ownersByDistrict.size >= ownerTarget) return;
+      const candidate = safeDistricts
+        .filter((district) => String(district?.type || "").toLowerCase() === type && available.has(district.id))
+        .sort(sortByCenterDistance)[0];
+      if (!candidate) return;
+      ownersByDistrict.set(candidate.id, ownerName);
+      available.delete(candidate.id);
+    });
+
+    if (ownersByDistrict.size < ownerTarget && available.size) {
       const fallback = safeDistricts
         .filter((district) => available.has(district.id))
-        .sort((a, b) => {
-          const distA = distanceFromMapCenter(a, mapBounds);
-          const distB = distanceFromMapCenter(b, mapBounds);
-          if (distA === distB) return Number(a.id || 0) - Number(b.id || 0);
-          return distA - distB;
-        });
-      const missing = Math.min(5 - ownersByDistrict.size, fallback.length);
+        .sort(sortByCenterDistance);
+      const missing = Math.min(ownerTarget - ownersByDistrict.size, fallback.length);
       for (let i = 0; i < missing; i += 1) {
         const district = fallback[i];
         ownersByDistrict.set(district.id, ownerName);
@@ -3500,9 +3522,31 @@ window.Empire.UI = (() => {
     if (enemyOwners.length && available.size) {
       const friendlyClusterIds = Array.from(ownersByDistrict.keys());
       const friendlyClusterSet = new Set(friendlyClusterIds);
+      const ownerDistrictIds = Array.from(ownersByDistrict.entries())
+        .filter(([, owner]) => normalizeOwnerName(owner) === normalizeOwnerName(ownerName))
+        .map(([districtId]) => districtId);
+      const ownerDistrictSet = new Set(ownerDistrictIds);
       const enemyTarget = Math.min(5, available.size);
       let enemySeedId = null;
-      if (friendlyClusterIds.length) {
+      if (ownerDistrictIds.length) {
+        const adjacentToOwner = Array.from(available).filter((districtId) => {
+          const neighbors = neighborsByDistrict.get(districtId);
+          if (!neighbors || !neighbors.size) return false;
+          for (const neighborId of neighbors) {
+            if (ownerDistrictSet.has(neighborId)) return true;
+          }
+          return false;
+        });
+        if (adjacentToOwner.length) {
+          enemySeedId = pickNearestToCluster(
+            new Set(adjacentToOwner),
+            ownerDistrictIds,
+            districtCenters,
+            ownerDistrictSet
+          );
+        }
+      }
+      if (!enemySeedId && friendlyClusterIds.length) {
         enemySeedId = pickNearestToCluster(available, friendlyClusterIds, districtCenters, friendlyClusterSet);
       }
       if (!enemySeedId) {
@@ -3567,14 +3611,18 @@ window.Empire.UI = (() => {
       });
     }
 
-    return safeDistricts.map((district) => ({
-      ...district,
-      owner: ownersByDistrict.get(district.id) || null,
-      ownerPlayerId: null,
-      ownerNick: null,
-      ownerAllianceName: ownerAllianceByKey.get(normalizeOwnerName(ownersByDistrict.get(district.id))) || null,
-      ...buildDemoDistrictOwnerMeta(ownersByDistrict.get(district.id), district)
-    }));
+    return safeDistricts.map((district) => {
+      const isDowntown = String(district?.type || "").toLowerCase() === "downtown";
+      const owner = isDowntown ? null : (ownersByDistrict.get(district.id) || null);
+      return {
+        ...district,
+        owner,
+        ownerPlayerId: null,
+        ownerNick: null,
+        ownerAllianceName: ownerAllianceByKey.get(normalizeOwnerName(owner)) || null,
+        ...buildDemoDistrictOwnerMeta(owner, district)
+      };
+    });
   }
 
   function assignOwnersToNeighborClusters(districts, allocations, options = {}) {

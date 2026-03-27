@@ -3486,6 +3486,7 @@ body::before {
   justify-content: end;
   margin-left: auto;
   justify-self: end;
+  touch-action: manipulation;
 }
 
 .attack-modal__step-btn {
@@ -3502,6 +3503,8 @@ body::before {
   box-shadow:
     0 0 0 1px rgba(244, 114, 182, 0.1) inset,
     0 0 12px rgba(34, 211, 238, 0.12);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .attack-modal__step-btn:disabled {
@@ -3537,6 +3540,11 @@ body::before {
 
 .attack-modal__actions {
   justify-content: flex-end;
+}
+
+#attack-modal,
+#district-defense-modal {
+  touch-action: manipulation;
 }
 
 .attack-result-modal__content {
@@ -5826,6 +5834,40 @@ body::before {
 
   .stat__value {
     font-size: 14px;
+  }
+
+  #storage-modal .modal__content {
+    width: min(96vw, 96vw);
+  }
+
+  #storage-modal .modal__body {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  #storage-modal .storage-modal__section-title {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+
+  #storage-modal .storage-modal__list {
+    gap: 6px;
+  }
+
+  #storage-modal .storage-modal__item {
+    padding: 6px 8px;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  #storage-modal .storage-modal__item strong {
+    font-size: 12px;
+  }
+
+  #storage-modal .storage-modal__meta {
+    margin-left: 4px;
+    font-size: 10px;
   }
 
   #stat-clean-money,
