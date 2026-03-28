@@ -8734,21 +8734,28 @@ body::before {
     width: min(96vw, 96vw);
     max-height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 64px - env(safe-area-inset-bottom));
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   #storage-modal .modal__body {
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 8px;
     font-size: 12px;
     overflow-y: auto;
+    overflow-x: hidden;
     overscroll-behavior: contain;
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
   }
 
-  body.mobile-storage-modal-open {
-    overflow: hidden;
-    overscroll-behavior: none;
-  }
+html.mobile-storage-modal-open,
+body.mobile-storage-modal-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+  height: 100%;
+}
 
   #storage-modal .storage-modal__section-title {
     font-size: 10px;

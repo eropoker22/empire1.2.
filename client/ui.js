@@ -2367,9 +2367,54 @@ window.Empire.UI = (() => {
     const backdrop = document.getElementById("storage-modal-backdrop");
     const closeBtn = document.getElementById("storage-modal-close");
     if (!trigger || !root) return;
+    const mobileMedia = window.matchMedia("(max-width: 720px)");
 
     const setStorageScrollLock = (locked) => {
-      document.body.classList.toggle("mobile-storage-modal-open", Boolean(locked));
+      const body = document.body;
+      const html = document.documentElement;
+      if (!body || !html) return;
+
+      if (!mobileMedia.matches) {
+        body.classList.remove("mobile-storage-modal-open");
+        html.classList.remove("mobile-storage-modal-open");
+        body.style.position = "";
+        body.style.top = "";
+        body.style.left = "";
+        body.style.right = "";
+        body.style.width = "";
+        body.style.overflow = "";
+        delete body.dataset.storageScrollLockY;
+        return;
+      }
+
+      if (locked) {
+        if (body.classList.contains("mobile-storage-modal-open")) return;
+        const scrollY = Math.max(0, Math.floor(window.scrollY || window.pageYOffset || 0));
+        body.dataset.storageScrollLockY = String(scrollY);
+        body.classList.add("mobile-storage-modal-open");
+        html.classList.add("mobile-storage-modal-open");
+        body.style.position = "fixed";
+        body.style.top = `-${scrollY}px`;
+        body.style.left = "0";
+        body.style.right = "0";
+        body.style.width = "100%";
+        body.style.overflow = "hidden";
+        return;
+      }
+
+      const restoreY = Number(body.dataset.storageScrollLockY || "0");
+      body.classList.remove("mobile-storage-modal-open");
+      html.classList.remove("mobile-storage-modal-open");
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      body.style.overflow = "";
+      delete body.dataset.storageScrollLockY;
+      if (Number.isFinite(restoreY)) {
+        window.scrollTo(0, Math.max(0, Math.floor(restoreY)));
+      }
     };
 
     const close = () => {
