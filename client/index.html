@@ -43,10 +43,10 @@
             </div>
             <div class="stat" id="stat-dirty-wrap">
               <span class="stat__label">Špinavé peníze</span>
-              <span class="stat__value" id="stat-dirty-money">$0</span>
+              <span class="stat__value" id="stat-dirty-money">$5000</span>
             </div>
-            <div class="stat" id="stat-influence-wrap">
-              <span class="stat__label">Vliv</span>
+            <div class="stat" id="stat-influence-wrap" role="button" tabindex="0" aria-label="Přepnout mezi vlivem a špehy">
+              <span class="stat__label" id="stat-influence-label">Vliv</span>
               <span class="stat__value" id="stat-influence">0</span>
             </div>
             <div class="stat" id="stat-storage-wrap" role="button" tabindex="0" aria-label="Otevřít sklad">
@@ -69,7 +69,7 @@
           <div id="city-events-card-anchor" class="hidden" aria-hidden="true"></div>
           <div class="card">
             <p class="muted">Dočasné úkoly s omezenou platností.</p>
-            <button class="btn btn--primary events-hero" id="city-events-open">
+            <button class="btn btn--primary events-hero" id="city-events-open" type="button" aria-label="City Events">
               Otevřít City Events
             </button>
             <p class="muted events-hero__note">Vyber si jednu ze tří postav a aktivuj její quest line.</p>
@@ -141,7 +141,16 @@
 
           <div class="card">
             <div class="ticker" id="event-feed">
-              <div class="ticker__title">Uliční zprávy</div>
+              <div class="ticker__header">
+                <div class="ticker__title">Uliční zprávy</div>
+                <button
+                  class="ticker__clear-btn"
+                  id="event-clear-btn"
+                  type="button"
+                  aria-label="Vymazat uliční zprávy"
+                  title="Vymazat zprávy"
+                >↻</button>
+              </div>
               <div class="ticker__items" id="event-items">
                 <div class="ticker__item">Čekám na rozkazy...</div>
               </div>
@@ -270,6 +279,9 @@
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-20">
                 20 hráčů • aliance max 4
               </button>
+              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="onboarding-20-edge">
+                Onboarding • 20 hráčů po okraji
+              </button>
             </div>
           </div>
           <div class="card" id="alliance-chat-card">
@@ -381,6 +393,81 @@
           </p>
           <div class="modal__actions defense-modal__actions">
             <button class="btn btn--primary" id="defense-modal-start">Nastavit obranu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="spy-confirm-modal" class="modal hidden">
+      <div id="spy-confirm-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content spy-confirm-modal__content">
+        <div class="modal__header">
+          <h3>Potvrdit špehování</h3>
+          <button class="modal__close" id="spy-confirm-modal-close" type="button" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body spy-confirm-modal__body">
+          <div class="modal__row">
+            <span>Cíl</span>
+            <strong id="spy-confirm-modal-district">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Dostupní špehové</span>
+            <strong id="spy-confirm-modal-count">2</strong>
+          </div>
+          <p class="muted spy-confirm-modal__note" id="spy-confirm-modal-note">
+            Každé špehování spotřebuje 1 špeha.
+          </p>
+          <div class="modal__actions spy-confirm-modal__actions">
+            <button class="btn btn--ghost" id="spy-confirm-modal-cancel" type="button">Odmítnout</button>
+            <button class="btn btn--warn" id="spy-confirm-modal-confirm" type="button">Potvrdit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="occupy-confirm-modal" class="modal hidden">
+      <div id="occupy-confirm-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content spy-confirm-modal__content">
+        <div class="modal__header">
+          <h3>Potvrdit obsazení</h3>
+          <button class="modal__close" id="occupy-confirm-modal-close" type="button" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body spy-confirm-modal__body">
+          <div class="modal__row">
+            <span>Cíl</span>
+            <strong id="occupy-confirm-modal-district">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Dostupní členové gangu</span>
+            <strong id="occupy-confirm-modal-members-available">0</strong>
+          </div>
+          <div class="modal__row">
+            <span>Potřeba pro obsazení</span>
+            <strong id="occupy-confirm-modal-members-required">0</strong>
+          </div>
+          <p class="muted spy-confirm-modal__note" id="occupy-confirm-modal-note">
+            Obsazení spotřebuje členy gangu a akce trvá 20 sekund.
+          </p>
+          <div class="modal__actions spy-confirm-modal__actions">
+            <button class="btn btn--ghost" id="occupy-confirm-modal-cancel" type="button">Odmítnout</button>
+            <button class="btn btn--warn" id="occupy-confirm-modal-confirm" type="button">Potvrdit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="spy-result-modal" class="modal hidden">
+      <div id="spy-result-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content spy-result-modal__content" id="spy-result-modal-content">
+        <div class="modal__header">
+          <h3 id="spy-result-modal-title">Výsledek špehování</h3>
+          <button class="modal__close" id="spy-result-modal-close" type="button" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body spy-result-modal__body">
+          <p class="spy-result-modal__summary" id="spy-result-modal-summary"></p>
+          <div class="spy-result-modal__details" id="spy-result-modal-details"></div>
+          <div class="modal__actions spy-result-modal__actions">
+            <button class="btn btn--primary" id="spy-result-modal-ok" type="button">Rozumím</button>
           </div>
         </div>
       </div>
@@ -1045,5 +1132,6 @@
     <script src="map.js"></script>
     <script src="police-heat.js"></script>
     <script src="ui.js"></script>
+    <script src="onboarding.js"></script>
   </body>
 </html>

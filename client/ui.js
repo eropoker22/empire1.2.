@@ -95,6 +95,7 @@ window.Empire.UI = (() => {
     "../img/avatars/Hacker/grok_image_1773621797044.jpg",
     "../img/avatars/Korporat/e4286e80-0587-4e0e-afe4-70c348ee59dd.jpg"
   ]);
+  const ONBOARDING_PROFILE_AVATAR = "../img/onboarding.jpg";
   const DEMO_OWNER_FACTIONS = Object.freeze([
     "Mafián",
     "Kartel",
@@ -159,6 +160,11 @@ window.Empire.UI = (() => {
   const SETTINGS_STORAGE_KEY = "empire_settings";
   const ATTACK_COOLDOWN_STORAGE_KEY = "empire_attack_cooldown_until_v1";
   const ATTACK_ACTION_DURATION_MS = 20 * 1000;
+  const OCCUPY_ACTION_DURATION_MS = 20 * 1000;
+  const SPY_ACTION_DURATION_MS = 20 * 1000;
+  const SPY_RECOVERY_COOLDOWN_MS = 30 * 1000;
+  const SPY_RECOVERY_TICK_MS = 1000;
+  const GUEST_DEFAULT_DIRTY_MONEY = 5000;
   const DEFAULT_SETTINGS = Object.freeze({
     sound: true,
     music: true,
@@ -1135,13 +1141,39 @@ window.Empire.UI = (() => {
   const LOCAL_GANG_MEMBERS_KEY = "empire_local_gang_members";
   const LOCAL_GANG_MEMBERS_SPENT_KEY = "empire_local_gang_members_spent";
   const LOCAL_DISTRICT_DEFENSE_ASSIGNMENTS_KEY = "empire_local_district_defense_assignments_v1";
+  const LOCAL_SPY_COUNT_KEY = "empire_local_spy_count_v1";
+  const LOCAL_SPY_RECOVERY_QUEUE_KEY = "empire_spy_recovery_queue_v1";
+  const LOCAL_DISTRICT_SPY_INTEL_KEY = "empire_district_spy_intel_v1";
+  const DISTRICT_SPY_INTEL_RESET_ONCE_KEY = "empire_spy_intel_reset_114_142_v1";
+  const DISTRICT_SPY_INTEL_RESET_IDS = Object.freeze([114, 142]);
+  const DEFAULT_BASE_SPY_COUNT = 2;
+  const BASE_SPY_COUNT_BY_FACTION = Object.freeze({
+    "mafian": 2,
+    "mafián": 2,
+    "kartel": 2,
+    "poulicni gang": 2,
+    "pouliční gang": 2,
+    "tajna organizace": 2,
+    "tajná organizace": 2,
+    "hackeri": 2,
+    "hackeři": 2,
+    "motorkarsky gang": 2,
+    "motorkářský gang": 2,
+    "soukroma armada": 2,
+    "soukromá armáda": 2,
+    "korporace": 2
+  });
   const MAP_BORDER_MODE_STORAGE_KEY = "empire_map_border_mode";
   const MAP_UNKNOWN_NEUTRAL_FILL_STORAGE_KEY = "empire_map_unknown_neutral_fill";
   const MAP_BORDER_MODE_PLAYER = "player";
   const MAP_BORDER_MODE_WHITE = "white";
   const MAP_BORDER_MODE_BLACK = "black";
+  const ONBOARDING_TUTORIAL_SPY_DISTRICT_ID = 25;
+  const ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID = 6;
   let scenarioVisionEnabled = false;
   let scenarioUniqueOwnerColors = false;
+  let scenarioProfileAvatarOverride = null;
+  let activePlayerScenarioKey = "";
   let selectedMapBorderMode = MAP_BORDER_MODE_PLAYER;
   let unknownNeutralFillEnabled = false;
   let liveAllianceOwnerNames = new Set();
@@ -1153,6 +1185,23 @@ window.Empire.UI = (() => {
   let attackResultModalState = { visible: false };
   let defenseModalRefreshTimer = null;
   let defenseModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
+  let spyConfirmModalState = { districtId: null };
+  let occupyConfirmModalState = { districtId: null };
+  let cachedSpyCount = null;
+  let isSpyCountShownInTopbar = false;
+  let topbarStatSwitchTimer = null;
+  let spyRecoveryIntervalId = null;
+  const spyActionResultTimeouts = new Set();
+  const occupyActionResultTimeouts = new Set();
+  const pendingResultModalQueue = [];
+  const moneyStatAnimationTimers = new WeakMap();
+  const moneyStatCountIntervals = new WeakMap();
+  const MONEY_STAT_COUNT_TICK_MS = 26;
+  let lastRenderedCleanMoney = null;
+  let lastRenderedDirtyMoney = null;
+  let lastRenderedInfluenceValue = null;
+  let lastRenderedTopbarMode = "influence";
+  const districtSpyIntelCache = new Map();
   const EMPTY_OWNER_NAMES = new Set();
   const WANTED_HEAT_MAX = 1000;
   const WANTED_HEAT_TIERS = [
@@ -1168,13 +1217,50 @@ window.Empire.UI = (() => {
   function init() {
     selectedMapBorderMode = resolveStoredMapBorderMode();
     unknownNeutralFillEnabled = resolveStoredUnknownNeutralFillEnabled();
+    readStoredDistrictSpyIntel();
+    applyOneTimeDistrictSpyIntelReset();
+    processSpyRecoveryQueue({ notify: false });
+    syncSpyRecoveryTicker();
     bindActions();
+    initMobileTopbarScrollState();
     initMobileScenarioCardPlacement();
     initMobileLeaderboardCardPlacement();
     initMobileMarketBuildingShortcutsPlacement();
     initMobilePrimaryActionCardsPlacement();
     syncMapVisionContext();
     refreshGangColorDisplays();
+  }
+
+  function initMobileTopbarScrollState() {
+    const media = window.matchMedia("(max-width: 720px)");
+    const topbar = document.querySelector(".topbar");
+    let ticking = false;
+
+    const applyState = () => {
+      ticking = false;
+      const shouldCondense = media.matches && window.scrollY > 36;
+      document.body.classList.toggle("is-mobile-topbar-condensed", shouldCondense);
+      if (topbar && media.matches) {
+        document.documentElement.style.setProperty("--mobile-topbar-offset", `${Math.ceil(topbar.offsetHeight)}px`);
+      } else {
+        document.documentElement.style.removeProperty("--mobile-topbar-offset");
+      }
+    };
+
+    const requestApply = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(applyState);
+    };
+
+    applyState();
+    window.addEventListener("scroll", requestApply, { passive: true });
+    window.addEventListener("resize", requestApply);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", requestApply);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(requestApply);
+    }
   }
 
   function initMobileScenarioCardPlacement() {
@@ -1369,6 +1455,320 @@ window.Empire.UI = (() => {
     } catch {}
   }
 
+  function normalizeDistrictSpyIntelEntry(districtId, rawEntry) {
+    const id = Number(districtId);
+    if (!Number.isFinite(id)) return null;
+    if (!rawEntry || typeof rawEntry !== "object") return null;
+
+    const weapons = Math.max(0, Math.floor(Number(rawEntry.weapons) || 0));
+    const powerRangeLabel = String(rawEntry.powerRangeLabel || "").trim() || "Neznámá";
+    const buildings = Array.isArray(rawEntry.buildings)
+      ? rawEntry.buildings
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+      : [];
+    const districtType = String(rawEntry.districtType || "").trim() || "Neznámý";
+    const atmosphere = String(rawEntry.atmosphere || "").trim() || "Neznámá";
+    const createdAt = Number(rawEntry.createdAt);
+
+    return {
+      districtId: id,
+      weapons,
+      powerRangeLabel,
+      buildings,
+      districtType,
+      atmosphere,
+      createdAt: Number.isFinite(createdAt) ? Math.floor(createdAt) : Date.now()
+    };
+  }
+
+  function readStoredDistrictSpyIntel() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(LOCAL_DISTRICT_SPY_INTEL_KEY) || "{}");
+      if (!parsed || typeof parsed !== "object") return;
+      Object.entries(parsed).forEach(([districtId, rawEntry]) => {
+        const normalized = normalizeDistrictSpyIntelEntry(districtId, rawEntry);
+        if (!normalized) return;
+        districtSpyIntelCache.set(String(normalized.districtId), normalized);
+      });
+    } catch {}
+  }
+
+  function writeStoredDistrictSpyIntel() {
+    const serialized = {};
+    districtSpyIntelCache.forEach((entry, districtId) => {
+      serialized[String(districtId)] = {
+        weapons: entry.weapons,
+        powerRangeLabel: entry.powerRangeLabel,
+        buildings: Array.isArray(entry.buildings) ? [...entry.buildings] : [],
+        districtType: entry.districtType,
+        atmosphere: entry.atmosphere,
+        createdAt: entry.createdAt
+      };
+    });
+    localStorage.setItem(LOCAL_DISTRICT_SPY_INTEL_KEY, JSON.stringify(serialized));
+  }
+
+  function clearDistrictSpyIntel(districtId) {
+    const key = String(Number(districtId));
+    if (!districtSpyIntelCache.has(key)) return false;
+    districtSpyIntelCache.delete(key);
+    writeStoredDistrictSpyIntel();
+    return true;
+  }
+
+  function applyOneTimeDistrictSpyIntelReset() {
+    const alreadyApplied = localStorage.getItem(DISTRICT_SPY_INTEL_RESET_ONCE_KEY) === "1";
+    if (alreadyApplied) return;
+    DISTRICT_SPY_INTEL_RESET_IDS.forEach((districtId) => {
+      clearDistrictSpyIntel(districtId);
+    });
+    localStorage.setItem(DISTRICT_SPY_INTEL_RESET_ONCE_KEY, "1");
+  }
+
+  function setDistrictSpyIntel(districtId, intelData, options = {}) {
+    const persist = options?.persist !== false;
+    const normalized = normalizeDistrictSpyIntelEntry(districtId, intelData);
+    if (!normalized) return null;
+    districtSpyIntelCache.set(String(normalized.districtId), normalized);
+    if (persist) {
+      writeStoredDistrictSpyIntel();
+    }
+    return { ...normalized, buildings: [...normalized.buildings] };
+  }
+
+  function getDistrictSpyIntel(districtId) {
+    const key = String(Number(districtId));
+    if (!districtSpyIntelCache.has(key)) return null;
+    const value = districtSpyIntelCache.get(key);
+    if (!value) return null;
+    return { ...value, buildings: [...value.buildings] };
+  }
+
+  function normalizeSpyCount(value, fallback = 0) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return Math.max(0, Math.floor(Number(fallback) || 0));
+    return Math.max(0, Math.floor(parsed));
+  }
+
+  function resolveFactionBaseSpyCount(structureValue) {
+    const factionKey = String(structureValue || "").trim().toLowerCase();
+    const configured = BASE_SPY_COUNT_BY_FACTION[factionKey];
+    return Number.isFinite(Number(configured))
+      ? normalizeSpyCount(configured, DEFAULT_BASE_SPY_COUNT)
+      : DEFAULT_BASE_SPY_COUNT;
+  }
+
+  function readStoredSpyCount() {
+    const parsed = Number(localStorage.getItem(LOCAL_SPY_COUNT_KEY));
+    if (!Number.isFinite(parsed)) return null;
+    return normalizeSpyCount(parsed, null);
+  }
+
+  function resolveSpyCountFromPayload(payload) {
+    if (!payload || typeof payload !== "object") return null;
+    const candidates = [
+      payload.spyCount,
+      payload.spy_count,
+      payload.spies,
+      payload.spyAgents,
+      payload.spy_agents,
+      payload.availableSpies,
+      payload.available_spies
+    ];
+    for (let i = 0; i < candidates.length; i += 1) {
+      const parsed = Number(candidates[i]);
+      if (Number.isFinite(parsed)) return normalizeSpyCount(parsed, 0);
+    }
+    return null;
+  }
+
+  function getSpyCount() {
+    if (cachedSpyCount != null) return cachedSpyCount;
+    const fromStorage = readStoredSpyCount();
+    if (fromStorage != null) {
+      cachedSpyCount = fromStorage;
+      return cachedSpyCount;
+    }
+    const fallbackFaction = cachedProfile?.structure || localStorage.getItem("empire_structure");
+    cachedSpyCount = resolveFactionBaseSpyCount(fallbackFaction);
+    localStorage.setItem(LOCAL_SPY_COUNT_KEY, String(cachedSpyCount));
+    return cachedSpyCount;
+  }
+
+  function renderInfluenceSpyTopbarStat({ animate = false } = {}) {
+    const wrap = document.getElementById("stat-influence-wrap");
+    const label = document.getElementById("stat-influence-label");
+    const value = document.getElementById("stat-influence");
+    if (!wrap || !label || !value) return;
+
+    const influenceValue = normalizeSpyCount(cachedEconomy?.influence || 0, 0);
+    const spyCount = getSpyCount();
+    const topbarMode = isSpyCountShownInTopbar ? "spies" : "influence";
+
+    value.dataset.influenceValue = String(influenceValue);
+    value.dataset.spyValue = String(spyCount);
+    label.textContent = topbarMode === "spies" ? "Špeh" : "Vliv";
+    if (topbarMode === "spies") {
+      stopMoneyStatCounter(value);
+      value.textContent = String(spyCount);
+    } else if (lastRenderedTopbarMode === "influence" && lastRenderedInfluenceValue != null) {
+      animateMoneyStatCounter(value, influenceValue, { prefix: "" });
+      if (influenceValue !== lastRenderedInfluenceValue) {
+        animateMoneyStatValue(value, influenceValue - lastRenderedInfluenceValue);
+      }
+    } else {
+      stopMoneyStatCounter(value);
+      value.textContent = String(influenceValue);
+    }
+    lastRenderedInfluenceValue = influenceValue;
+    lastRenderedTopbarMode = topbarMode;
+    wrap.classList.toggle("is-spies", isSpyCountShownInTopbar);
+
+    const shownLabel = isSpyCountShownInTopbar ? `${spyCount} špehů` : `${influenceValue} vlivu`;
+    const hiddenLabel = isSpyCountShownInTopbar ? `${influenceValue} vlivu` : `${spyCount} špehů`;
+    wrap.setAttribute("aria-label", `${shownLabel}. Klikni pro přepnutí na ${hiddenLabel}.`);
+
+    if (!animate) return;
+    wrap.classList.remove("is-switching");
+    void wrap.offsetWidth;
+    wrap.classList.add("is-switching");
+    if (topbarStatSwitchTimer) clearTimeout(topbarStatSwitchTimer);
+    topbarStatSwitchTimer = setTimeout(() => {
+      wrap.classList.remove("is-switching");
+      topbarStatSwitchTimer = null;
+    }, 340);
+  }
+
+  function setSpyCount(value, { persist = true, animate = false } = {}) {
+    cachedSpyCount = normalizeSpyCount(value, 0);
+    if (persist) {
+      localStorage.setItem(LOCAL_SPY_COUNT_KEY, String(cachedSpyCount));
+    }
+    if (cachedEconomy && typeof cachedEconomy === "object") {
+      cachedEconomy.spyCount = cachedSpyCount;
+      cachedEconomy.spies = cachedSpyCount;
+    }
+    renderInfluenceSpyTopbarStat({ animate });
+    const spyModal = document.getElementById("spy-confirm-modal");
+    if (spyModal && !spyModal.classList.contains("hidden")) {
+      renderSpyConfirmModal();
+    }
+    return cachedSpyCount;
+  }
+
+  function consumeSpyAgents(amount = 1) {
+    const required = normalizeSpyCount(amount, 0);
+    if (required <= 0) return true;
+    const available = getSpyCount();
+    if (available < required) return false;
+    setSpyCount(available - required, { persist: true, animate: isSpyCountShownInTopbar });
+    return true;
+  }
+
+  function normalizeSpyRecoveryQueue(value) {
+    if (!Array.isArray(value)) return [];
+    const now = Date.now();
+    return value
+      .map((entry) => Number(entry))
+      .filter((entry) => Number.isFinite(entry) && entry > now - 24 * 60 * 60 * 1000)
+      .map((entry) => Math.max(0, Math.floor(entry)))
+      .sort((a, b) => a - b);
+  }
+
+  function readSpyRecoveryQueue() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(LOCAL_SPY_RECOVERY_QUEUE_KEY) || "[]");
+      return normalizeSpyRecoveryQueue(parsed);
+    } catch {
+      return [];
+    }
+  }
+
+  function writeSpyRecoveryQueue(queue) {
+    localStorage.setItem(LOCAL_SPY_RECOVERY_QUEUE_KEY, JSON.stringify(normalizeSpyRecoveryQueue(queue)));
+  }
+
+  function syncSpyRecoveryTicker() {
+    const queue = readSpyRecoveryQueue();
+    if (!queue.length) {
+      if (spyRecoveryIntervalId != null) {
+        clearInterval(spyRecoveryIntervalId);
+        spyRecoveryIntervalId = null;
+      }
+      return;
+    }
+    if (spyRecoveryIntervalId != null) return;
+    spyRecoveryIntervalId = setInterval(() => {
+      processSpyRecoveryQueue({ notify: true });
+    }, SPY_RECOVERY_TICK_MS);
+  }
+
+  function processSpyRecoveryQueue({ notify = false } = {}) {
+    const queue = readSpyRecoveryQueue();
+    if (!queue.length) {
+      syncSpyRecoveryTicker();
+      return 0;
+    }
+
+    const now = Date.now();
+    let recovered = 0;
+    const pending = [];
+    queue.forEach((entry) => {
+      if (entry <= now) {
+        recovered += 1;
+      } else {
+        pending.push(entry);
+      }
+    });
+    writeSpyRecoveryQueue(pending);
+    if (recovered > 0) {
+      setSpyCount(getSpyCount() + recovered, { persist: true, animate: isSpyCountShownInTopbar });
+      if (notify) {
+        pushEvent(
+          recovered === 1
+            ? "1 špeh je opět dostupný."
+            : `${recovered} špehové jsou opět dostupní.`
+        );
+      }
+    }
+    syncSpyRecoveryTicker();
+    return recovered;
+  }
+
+  function enqueueSpyRecovery(amount = 1, cooldownMs = SPY_RECOVERY_COOLDOWN_MS) {
+    const count = normalizeSpyCount(amount, 0);
+    if (count <= 0) return;
+    const delay = Math.max(0, Math.floor(Number(cooldownMs) || SPY_RECOVERY_COOLDOWN_MS));
+    const now = Date.now();
+    const queue = readSpyRecoveryQueue();
+    for (let i = 0; i < count; i += 1) {
+      queue.push(now + delay);
+    }
+    writeSpyRecoveryQueue(queue);
+    syncSpyRecoveryTicker();
+  }
+
+  function initInfluenceSpyToggle() {
+    const wrap = document.getElementById("stat-influence-wrap");
+    if (!wrap || wrap.dataset.spyToggleBound === "1") return;
+    wrap.dataset.spyToggleBound = "1";
+
+    const toggle = () => {
+      isSpyCountShownInTopbar = !isSpyCountShownInTopbar;
+      renderInfluenceSpyTopbarStat({ animate: true });
+    };
+
+    wrap.addEventListener("click", toggle);
+    wrap.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggle();
+    });
+
+    renderInfluenceSpyTopbarStat();
+  }
+
   function bindActions() {
     initEventsModal();
     initBuildingsModal();
@@ -1379,17 +1779,28 @@ window.Empire.UI = (() => {
     initMarketBuildingShortcuts();
     initLeaderboardModal();
     initStorageModal();
+    initInfluenceSpyToggle();
     initWeaponsModal();
     initWeaponsPopover();
     initDistrictDefenseModal();
     initAttackModal();
     initAttackResultModal();
+    initSpyConfirmModal();
+    initOccupyConfirmModal();
+    initSpyResultModal();
+    initEventFeedControls();
     initPlayerScenarioButtons();
     document.getElementById("attack-btn").addEventListener("click", async () => {
       if (!window.Empire.selectedDistrict) return;
-      const availability = evaluateDistrictActionAvailability(window.Empire.selectedDistrict, "attack");
+      const attackBtn = document.getElementById("attack-btn");
+      const actionMode = attackBtn?.dataset?.actionMode === "occupy" ? "occupy" : "attack";
+      const availability = evaluateDistrictActionAvailability(window.Empire.selectedDistrict, actionMode);
       if (!availability.allowed) {
         pushEvent(availability.reason);
+        return;
+      }
+      if (actionMode === "occupy") {
+        openOccupyConfirmModal(window.Empire.selectedDistrict);
         return;
       }
       openAttackModal(window.Empire.selectedDistrict);
@@ -1425,15 +1836,7 @@ window.Empire.UI = (() => {
           pushEvent(availability.reason);
           return;
         }
-        if (!window.Empire.token) {
-          pushEvent("Pro špehování je nutné přihlášení.");
-          return;
-        }
-        pushEvent("Špehování distriktu bylo zahájeno.");
-        recordVerifiedIntelEvent({
-          type: "spy_started",
-          districtId: window.Empire.selectedDistrict.id
-        });
+        openSpyConfirmModal(window.Empire.selectedDistrict);
       });
     }
 
@@ -2330,6 +2733,9 @@ window.Empire.UI = (() => {
     closeAttackModal();
     closeAttackResultModal();
     closeDefenseModal();
+    closeSpyConfirmModal();
+    closeOccupyConfirmModal();
+    closeSpyResultModal();
     getPopupRoots().forEach((root) => {
       if (root instanceof HTMLElement) {
         root.classList.add("hidden");
@@ -2373,6 +2779,10 @@ window.Empire.UI = (() => {
       durationLabel: formatAttackDurationLabel(ATTACK_ACTION_DURATION_MS),
       summary: `Spustil jsi útok na hráče ${nick}.`
     };
+  }
+
+  function isOnboardingDemoScenarioActive() {
+    return activePlayerScenarioKey === "onboarding-20-edge" && scenarioVisionEnabled && !window.Empire.token;
   }
 
   function renderAttackResultModal(details) {
@@ -2624,6 +3034,12 @@ window.Empire.UI = (() => {
     attackModalState = { districtId: district?.id ?? null, message: "", selectedWeaponCounts: {} };
     setAttackModalNote("");
     root.classList.remove("hidden");
+    document.dispatchEvent(new CustomEvent("empire:attack-modal-opened", {
+      detail: {
+        districtId: district?.id ?? null,
+        district: district || null
+      }
+    }));
     renderAttackModal();
 
     if (attackModalRefreshTimer) clearInterval(attackModalRefreshTimer);
@@ -2718,6 +3134,9 @@ window.Empire.UI = (() => {
             durationMs: ATTACK_ACTION_DURATION_MS,
             source: "scenario-attack"
           });
+          if (isOnboardingDemoScenarioActive()) {
+            details.summary = `Onboarding útok na hráče ${details.nickname} dopadl úspěšně.`;
+          }
           openAttackResultModal(details);
           return;
         }
@@ -2788,6 +3207,666 @@ window.Empire.UI = (() => {
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
         closeAllPopupWindows();
+      }
+    });
+  }
+
+  function isDistrictUnownedForSpyOutcome(district) {
+    const owner = String(district?.owner || "").trim().toLowerCase();
+    if (!owner) return true;
+    return owner === "neobsazeno" || owner === "nikdo";
+  }
+
+  function resolveOccupationTierRarityWeight(tierValue) {
+    const tier = String(tierValue || "").trim().toLowerCase();
+    const weights = {
+      early: 0.15,
+      mid: 0.38,
+      late: 0.64,
+      top: 0.72,
+      high: 0.78,
+      core: 0.9
+    };
+    return Number.isFinite(weights[tier]) ? weights[tier] : 0.4;
+  }
+
+  function resolveOccupationRequiredMembers(district, spyIntel = null) {
+    const tierWeight = resolveOccupationTierRarityWeight(district?.buildingTier);
+    const districtBuildings = Array.isArray(district?.buildings) ? district.buildings : [];
+    const intelBuildings = Array.isArray(spyIntel?.buildings) ? spyIntel.buildings : [];
+    const buildingCount = Math.max(districtBuildings.length, intelBuildings.length);
+    const buildingWeight = Math.min(1, buildingCount / 4);
+    const rarityWeight = Math.min(1, tierWeight * 0.7 + buildingWeight * 0.3);
+    const required = Math.round(50 + rarityWeight * 150);
+    return Math.max(50, Math.min(200, required));
+  }
+
+  function resolvePlayerDistrictOwnerLabel() {
+    const playerOwners = getPlayerOwnerNameSet();
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const owned = districts.find((entry) => {
+      const ownerName = normalizeOwnerName(entry?.owner);
+      return ownerName && playerOwners.has(ownerName);
+    });
+    if (owned?.owner) return String(owned.owner);
+    const fallback = cachedProfile?.gangName
+      || cachedProfile?.gang_name
+      || cachedProfile?.gang
+      || window.Empire.player?.gangName
+      || window.Empire.player?.gang_name
+      || window.Empire.player?.gang
+      || localStorage.getItem("empire_gang_name")
+      || localStorage.getItem("empire_guest_username");
+    return String(fallback || "Tvůj gang").trim() || "Tvůj gang";
+  }
+
+  function resolvePlayerDistrictOwnerColor() {
+    const playerOwners = getPlayerOwnerNameSet();
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const owned = districts.find((entry) => {
+      const ownerName = normalizeOwnerName(entry?.owner);
+      const hasColor = String(entry?.ownerColor || "").trim().length > 0;
+      return ownerName && hasColor && playerOwners.has(ownerName);
+    });
+    return String(owned?.ownerColor || "").trim();
+  }
+
+  function claimDistrictForPlayer(district) {
+    if (!district || typeof district !== "object") return;
+    const ownerLabel = resolvePlayerDistrictOwnerLabel();
+    const ownerColor = resolvePlayerDistrictOwnerColor();
+    const ownerNick = String(
+      cachedProfile?.username
+      || cachedProfile?.name
+      || window.Empire.player?.username
+      || window.Empire.player?.name
+      || "Ty"
+    ).trim() || "Ty";
+    const ownerFaction = String(
+      cachedProfile?.structure
+      || window.Empire.player?.structure
+      || district?.ownerFaction
+      || district?.ownerStructure
+      || "Neznámá"
+    ).trim() || "Neznámá";
+
+    district.owner = ownerLabel;
+    district.ownerNick = ownerNick;
+    district.ownerFaction = ownerFaction;
+    district.ownerStructure = ownerFaction;
+    district.owner_structure = ownerFaction;
+    district.ownerPlayerId = window.Empire.player?.id || district.ownerPlayerId || null;
+    if (ownerColor) district.ownerColor = ownerColor;
+
+    window.Empire.Map?.refreshSelectedDistrictModal?.();
+    window.Empire.Map?.render?.();
+    updateDistrict(district);
+    refreshProfilePopulation();
+  }
+
+  function rollSpyOutcome(district) {
+    if (isOnboardingDemoScenarioActive()) {
+      return {
+        key: "success",
+        chances: { success: 100, mediumFail: 0, majorFail: 0 }
+      };
+    }
+    const isUnowned = isDistrictUnownedForSpyOutcome(district);
+    const chances = isUnowned
+      ? { success: 70, mediumFail: 20, majorFail: 10 }
+      : { success: 52, mediumFail: 28, majorFail: 20 };
+    const roll = Math.random() * 100;
+    if (roll < chances.success) return { key: "success", chances };
+    if (roll < chances.success + chances.mediumFail) return { key: "medium_fail", chances };
+    return { key: "major_fail", chances };
+  }
+
+  function estimateSpyDefenseIntel(district) {
+    const snapshot = getDistrictDefenseSnapshot(district?.id);
+    const candidates = [snapshot?.self, snapshot?.ally].filter((entry) => entry?.hasData);
+    const knownWeapons = candidates.reduce((max, entry) => Math.max(max, Number(entry?.weapons || 0)), 0);
+    const knownPower = candidates.reduce((max, entry) => Math.max(max, Number(entry?.power || 0)), 0);
+    const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+    const influence = Math.max(0, Math.floor(Number(district?.influence || 0)));
+    const fallbackPower = Math.max(26, Math.floor(influence * 1.5 + buildings.length * 26 + (district?.owner ? 48 : 12)));
+    const basePower = knownPower > 0 ? knownPower : fallbackPower;
+    const baseWeapons = knownWeapons > 0 ? knownWeapons : Math.max(0, Math.round(basePower / 36));
+    const lowerPower = Math.max(0, Math.floor(basePower * 0.8));
+    const upperPower = Math.max(lowerPower, Math.ceil(basePower * 1.2));
+    return {
+      weapons: baseWeapons,
+      powerRangeLabel: `${lowerPower} až ${upperPower}`
+    };
+  }
+
+  function resolveDistrictAtmosphereForSpy(district) {
+    const candidates = [
+      district?.ownerAtmosphere,
+      district?.atmosphere,
+      district?.districtAtmosphere,
+      district?.vibe
+    ];
+    for (let i = 0; i < candidates.length; i += 1) {
+      const value = String(candidates[i] || "").trim();
+      if (value) return value;
+    }
+    return "Neznámá";
+  }
+
+  function buildSpyIntelPayload(district) {
+    const defenseIntel = estimateSpyDefenseIntel(district);
+    const buildings = Array.isArray(district?.buildings)
+      ? district.buildings
+        .map((building) => String(building || "").trim())
+        .filter(Boolean)
+      : [];
+    const districtType = formatDistrictType(String(district?.type || ""));
+    const atmosphere = resolveDistrictAtmosphereForSpy(district);
+    return {
+      weapons: defenseIntel.weapons,
+      powerRangeLabel: defenseIntel.powerRangeLabel,
+      buildings,
+      districtType: districtType || "Neznámý",
+      atmosphere,
+      createdAt: Date.now()
+    };
+  }
+
+  function buildSpySuccessDetailsMarkup(intel) {
+    const buildingLabel = Array.isArray(intel?.buildings) && intel.buildings.length
+      ? intel.buildings.join(", ")
+      : "Bez významných budov";
+    const weapons = Math.max(0, Math.floor(Number(intel?.weapons) || 0));
+    const powerRangeLabel = String(intel?.powerRangeLabel || "").trim() || "Neznámá";
+    const districtType = String(intel?.districtType || "").trim() || "Neznámý";
+    const atmosphere = String(intel?.atmosphere || "").trim() || "Neznámá";
+    return `
+      <div class="modal__row">
+        <span>Odhad obrany (zbraně)</span>
+        <strong>${weapons} ks</strong>
+      </div>
+      <div class="modal__row">
+        <span>Odhad síly obrany (±20 %)</span>
+        <strong>${powerRangeLabel}</strong>
+      </div>
+      <div class="modal__row">
+        <span>Typ distriktu</span>
+        <strong>${districtType}</strong>
+      </div>
+      <div class="modal__row">
+        <span>Atmosféra</span>
+        <strong>${atmosphere}</strong>
+      </div>
+      <div class="modal__row">
+        <span>Budovy</span>
+        <strong>${buildingLabel}</strong>
+      </div>
+    `;
+  }
+
+  function isResultModalVisible() {
+    const root = document.getElementById("spy-result-modal");
+    return Boolean(root && !root.classList.contains("hidden"));
+  }
+
+  function renderNextPendingResultModal() {
+    if (!pendingResultModalQueue.length) return;
+    const next = pendingResultModalQueue.shift();
+    if (!next || typeof next !== "object") return;
+    if (next.kind === "occupy") {
+      renderOccupationResultModal(next.payload);
+      return;
+    }
+    renderSpyResultModal(next.payload);
+  }
+
+  function closeSpyResultModal() {
+    const root = document.getElementById("spy-result-modal");
+    if (root) root.classList.add("hidden");
+    if (!pendingResultModalQueue.length) return;
+    setTimeout(() => {
+      renderNextPendingResultModal();
+    }, 80);
+  }
+
+  function renderSpyResultModal({ outcomeKey, district, chances, spyIntel = null }) {
+    const root = document.getElementById("spy-result-modal");
+    const content = document.getElementById("spy-result-modal-content");
+    const title = document.getElementById("spy-result-modal-title");
+    const summary = document.getElementById("spy-result-modal-summary");
+    const details = document.getElementById("spy-result-modal-details");
+    if (!root || !content || !title || !summary || !details) return;
+
+    const districtName = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    content.classList.remove("is-success", "is-medium-fail", "is-major-fail");
+
+    if (outcomeKey === "success") {
+      content.classList.add("is-success");
+      title.textContent = "Špehování: Úspěch";
+      summary.textContent = `Špehování distriktu ${districtName} dopadlo úspěšně.`;
+      details.innerHTML = buildSpySuccessDetailsMarkup(spyIntel);
+    } else if (outcomeKey === "medium_fail") {
+      content.classList.add("is-medium-fail");
+      title.textContent = "Špehování: Částečný neúspěch";
+      summary.textContent = `Akce v ${districtName} nedopadla dobře, ale tvůj špeh se vrátil.`;
+      details.innerHTML = `
+        <div class="modal__row">
+          <span>Stav špeha</span>
+          <strong>Vrátil se</strong>
+        </div>
+      `;
+    } else {
+      content.classList.add("is-major-fail");
+      title.textContent = "Špehování: Velký neúspěch";
+      summary.textContent = `Špeh byl v districtu ${districtName} zajat. Ve zdroji je zamčen na 60 sekund.`;
+      details.innerHTML = `
+        <div class="modal__row">
+          <span>Stav špeha</span>
+          <strong>Zajat (60s)</strong>
+        </div>
+      `;
+    }
+
+    root.classList.remove("hidden");
+  }
+
+  function openSpyResultModal(payload) {
+    if (isResultModalVisible()) {
+      pendingResultModalQueue.push({ kind: "spy", payload });
+      return;
+    }
+    renderSpyResultModal(payload);
+  }
+
+  function initSpyResultModal() {
+    const root = document.getElementById("spy-result-modal");
+    const backdrop = document.getElementById("spy-result-modal-backdrop");
+    const closeBtn = document.getElementById("spy-result-modal-close");
+    const okBtn = document.getElementById("spy-result-modal-ok");
+    if (!root) return;
+    if (backdrop) backdrop.addEventListener("click", closeSpyResultModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeSpyResultModal);
+    if (okBtn) okBtn.addEventListener("click", closeSpyResultModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeSpyResultModal();
+      }
+    });
+  }
+
+  function finalizeSpyActionResult({ districtId }) {
+    const district = resolveDistrictById(districtId);
+    if (!district) return;
+    const rolled = rollSpyOutcome(district);
+    const outcomeKey = rolled.key;
+    const demoMode = scenarioVisionEnabled && !window.Empire.token;
+    let discoveredIntel = null;
+
+    if (outcomeKey === "success") {
+      discoveredIntel = setDistrictSpyIntel(
+        district.id,
+        buildSpyIntelPayload(district),
+        { persist: !demoMode }
+      );
+      enqueueSpyRecovery(1, SPY_RECOVERY_COOLDOWN_MS);
+      pushEvent(`Špehování distriktu ${district.name || `#${district.id}`} bylo úspěšné.`);
+    } else if (outcomeKey === "medium_fail") {
+      setSpyCount(getSpyCount() + 1, { persist: true, animate: isSpyCountShownInTopbar });
+      pushEvent("Špehování nedopadlo dobře, ale špeh se vrátil.");
+    } else {
+      enqueueSpyRecovery(1, 60 * 1000);
+      pushEvent("Špehování selhalo. Špeh byl zajat a je zamčen na 60s.");
+    }
+
+    openSpyResultModal({ outcomeKey, district, chances: rolled.chances, spyIntel: discoveredIntel });
+  }
+
+  function scheduleSpyActionResult(districtId) {
+    const timeoutId = setTimeout(() => {
+      spyActionResultTimeouts.delete(timeoutId);
+      finalizeSpyActionResult({ districtId });
+    }, SPY_ACTION_DURATION_MS);
+    spyActionResultTimeouts.add(timeoutId);
+  }
+
+  function closeSpyConfirmModal() {
+    const root = document.getElementById("spy-confirm-modal");
+    if (root) root.classList.add("hidden");
+    spyConfirmModalState = { districtId: null };
+  }
+
+  function renderSpyConfirmModal() {
+    const root = document.getElementById("spy-confirm-modal");
+    const districtEl = document.getElementById("spy-confirm-modal-district");
+    const countEl = document.getElementById("spy-confirm-modal-count");
+    const noteEl = document.getElementById("spy-confirm-modal-note");
+    const confirmBtn = document.getElementById("spy-confirm-modal-confirm");
+    if (!root || root.classList.contains("hidden")) return;
+    if (!districtEl || !countEl || !noteEl || !confirmBtn) return;
+
+    const district = resolveDistrictById(spyConfirmModalState.districtId);
+    processSpyRecoveryQueue({ notify: true });
+    const availableSpies = getSpyCount();
+    const availability = evaluateDistrictActionAvailability(district, "spy");
+    const demoMode = scenarioVisionEnabled && !window.Empire.token;
+    countEl.textContent = String(availableSpies);
+    districtEl.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
+
+    let noteText = "Každé špehování spotřebuje 1 špeha.";
+    let canConfirm = true;
+
+    if (!district) {
+      noteText = "Nejprve vyber distrikt.";
+      canConfirm = false;
+    } else if (!availability.allowed) {
+      noteText = availability.reason;
+      canConfirm = false;
+    } else if (!window.Empire.token && !demoMode) {
+      noteText = "Pro špehování je nutné přihlášení.";
+      canConfirm = false;
+    } else if (availableSpies <= 0) {
+      noteText = "Nemáš žádné dostupné špehy.";
+      canConfirm = false;
+    } else {
+      noteText = `Akce potrvá ${Math.floor(SPY_ACTION_DURATION_MS / 1000)}s. Po ${Math.floor(SPY_RECOVERY_COOLDOWN_MS / 1000)}s se 1 špeh vrátí zpět.`;
+    }
+
+    noteEl.textContent = noteText;
+    confirmBtn.disabled = !canConfirm;
+  }
+
+  function openSpyConfirmModal(district) {
+    const root = document.getElementById("spy-confirm-modal");
+    if (!root) return;
+    spyConfirmModalState = { districtId: district?.id ?? null };
+    root.classList.remove("hidden");
+    renderSpyConfirmModal();
+    document.dispatchEvent(new CustomEvent("empire:spy-modal-opened", {
+      detail: {
+        districtId: district?.id ?? null,
+        district: district || null
+      }
+    }));
+  }
+
+  function startSpyActionFromModal() {
+    const district = resolveDistrictById(spyConfirmModalState.districtId);
+    if (!district) {
+      renderSpyConfirmModal();
+      return;
+    }
+
+    const availability = evaluateDistrictActionAvailability(district, "spy");
+    if (!availability.allowed) {
+      pushEvent(availability.reason);
+      renderSpyConfirmModal();
+      return;
+    }
+    const demoMode = scenarioVisionEnabled && !window.Empire.token;
+    if (!window.Empire.token && !demoMode) {
+      pushEvent("Pro špehování je nutné přihlášení.");
+      renderSpyConfirmModal();
+      return;
+    }
+    processSpyRecoveryQueue({ notify: true });
+    if (!consumeSpyAgents(1)) {
+      pushEvent("Nemáš žádné dostupné špehy.");
+      renderSpyConfirmModal();
+      return;
+    }
+
+    pushEvent(`Špehování distriktu ${district.name || `#${district.id}`} bylo zahájeno na ${Math.floor(SPY_ACTION_DURATION_MS / 1000)}s.`);
+    window.Empire.Map?.markDistrictSpyAction?.(district.id, {
+      durationMs: SPY_ACTION_DURATION_MS,
+      source: demoMode ? "scenario-spy" : "player-spy"
+    });
+    recordVerifiedIntelEvent({
+      type: "spy_started",
+      districtId: district.id
+    });
+    document.dispatchEvent(new CustomEvent("empire:spy-started", {
+      detail: {
+        districtId: district.id,
+        district
+      }
+    }));
+    scheduleSpyActionResult(district.id);
+    closeSpyConfirmModal();
+    const districtModal = document.getElementById("district-modal");
+    if (districtModal) districtModal.classList.add("hidden");
+  }
+
+  function initSpyConfirmModal() {
+    const root = document.getElementById("spy-confirm-modal");
+    const backdrop = document.getElementById("spy-confirm-modal-backdrop");
+    const closeBtn = document.getElementById("spy-confirm-modal-close");
+    const cancelBtn = document.getElementById("spy-confirm-modal-cancel");
+    const confirmBtn = document.getElementById("spy-confirm-modal-confirm");
+    if (!root) return;
+
+    if (backdrop) backdrop.addEventListener("click", closeSpyConfirmModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeSpyConfirmModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeSpyConfirmModal);
+    if (confirmBtn) confirmBtn.addEventListener("click", startSpyActionFromModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeSpyConfirmModal();
+      }
+    });
+  }
+
+  function closeOccupyConfirmModal() {
+    const root = document.getElementById("occupy-confirm-modal");
+    if (root) root.classList.add("hidden");
+    occupyConfirmModalState = { districtId: null };
+  }
+
+  function renderOccupyConfirmModal() {
+    const root = document.getElementById("occupy-confirm-modal");
+    const districtEl = document.getElementById("occupy-confirm-modal-district");
+    const availableEl = document.getElementById("occupy-confirm-modal-members-available");
+    const requiredEl = document.getElementById("occupy-confirm-modal-members-required");
+    const noteEl = document.getElementById("occupy-confirm-modal-note");
+    const confirmBtn = document.getElementById("occupy-confirm-modal-confirm");
+    if (!root || root.classList.contains("hidden")) return;
+    if (!districtEl || !availableEl || !requiredEl || !noteEl || !confirmBtn) return;
+
+    const district = resolveDistrictById(occupyConfirmModalState.districtId);
+    const spyIntel = getDistrictSpyIntel(district?.id);
+    const requiredMembers = resolveOccupationRequiredMembers(district, spyIntel);
+    const availableMembers = countPlayerControlledPopulation(cachedProfile || window.Empire.player || {});
+    const availability = evaluateDistrictActionAvailability(district, "occupy");
+    const demoMode = scenarioVisionEnabled && !window.Empire.token;
+
+    districtEl.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    availableEl.textContent = String(availableMembers);
+    requiredEl.textContent = String(requiredMembers);
+
+    let canConfirm = true;
+    let noteText = `Akce potrvá ${Math.floor(OCCUPY_ACTION_DURATION_MS / 1000)}s.`;
+    if (!district) {
+      canConfirm = false;
+      noteText = "Nejprve vyber distrikt.";
+    } else if (!availability.allowed) {
+      canConfirm = false;
+      noteText = availability.reason;
+    } else if (!window.Empire.token && !demoMode) {
+      canConfirm = false;
+      noteText = "Pro obsazení je nutné přihlášení.";
+    } else if (availableMembers < requiredMembers) {
+      canConfirm = false;
+      noteText = `Na obsazení chybí ${requiredMembers - availableMembers} členů gangu.`;
+    }
+
+    noteEl.textContent = noteText;
+    confirmBtn.disabled = !canConfirm;
+  }
+
+  function openOccupyConfirmModal(district) {
+    const root = document.getElementById("occupy-confirm-modal");
+    if (!root) return;
+    occupyConfirmModalState = { districtId: district?.id ?? null };
+    root.classList.remove("hidden");
+    renderOccupyConfirmModal();
+    document.dispatchEvent(new CustomEvent("empire:occupy-modal-opened", {
+      detail: {
+        districtId: district?.id ?? null,
+        district: district || null
+      }
+    }));
+  }
+
+  function renderOccupationResultModal({ outcomeKey, district, requiredMembers, returnedMembers }) {
+    const root = document.getElementById("spy-result-modal");
+    const content = document.getElementById("spy-result-modal-content");
+    const title = document.getElementById("spy-result-modal-title");
+    const summary = document.getElementById("spy-result-modal-summary");
+    const details = document.getElementById("spy-result-modal-details");
+    if (!root || !content || !title || !summary || !details) return;
+
+    const districtName = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    content.classList.remove("is-success", "is-medium-fail", "is-major-fail");
+
+    if (outcomeKey === "success") {
+      content.classList.add("is-success");
+      title.textContent = "Obsazení: Úspěch";
+      summary.textContent = `District ${districtName} byl úspěšně obsazen a připadl tvému gangu.`;
+      details.innerHTML = `
+        <div class="modal__row"><span>Nasazeno členů</span><strong>${requiredMembers}</strong></div>
+        <div class="modal__row"><span>Vráceno do profilu</span><strong>${returnedMembers}</strong></div>
+      `;
+      root.classList.remove("hidden");
+      return;
+    }
+
+    if (outcomeKey === "medium_fail") {
+      content.classList.add("is-medium-fail");
+      title.textContent = "Obsazení: Střední neúspěch";
+      summary.textContent = "Obsazení nedopadlo dobře, vrátila se pouze polovina členů gangu.";
+      details.innerHTML = `
+        <div class="modal__row"><span>Nasazeno členů</span><strong>${requiredMembers}</strong></div>
+        <div class="modal__row"><span>Vráceno do profilu</span><strong>${returnedMembers}</strong></div>
+      `;
+      root.classList.remove("hidden");
+      return;
+    }
+
+    content.classList.add("is-major-fail");
+    title.textContent = "Obsazení: Velký neúspěch";
+    summary.textContent = "Členové gangu zmizeli neznámo kam a nevrátili se zpět do zdrojů.";
+    details.innerHTML = `
+      <div class="modal__row"><span>Nasazeno členů</span><strong>${requiredMembers}</strong></div>
+      <div class="modal__row"><span>Vráceno do profilu</span><strong>0</strong></div>
+    `;
+    root.classList.remove("hidden");
+  }
+
+  function openOccupationResultModal(payload) {
+    if (isResultModalVisible()) {
+      pendingResultModalQueue.push({ kind: "occupy", payload });
+      return;
+    }
+    renderOccupationResultModal(payload);
+  }
+
+  function finalizeOccupationActionResult({ districtId, requiredMembers }) {
+    const district = resolveDistrictById(districtId);
+    if (!district) return;
+    const rolled = rollSpyOutcome(district);
+    const outcomeKey = rolled.key;
+    const returnedMembers = Math.floor(Math.max(0, Number(requiredMembers) || 0) / 2);
+
+    if (outcomeKey === "success") {
+      if (returnedMembers > 0) addGangMembers(returnedMembers);
+      claimDistrictForPlayer(district);
+      pushEvent(`Obsazení distriktu ${district.name || `#${district.id}`} bylo úspěšné.`);
+      recordVerifiedIntelEvent({ type: "attack_success", districtId: district.id });
+    } else if (outcomeKey === "medium_fail") {
+      if (returnedMembers > 0) addGangMembers(returnedMembers);
+      pushEvent("Obsazení se nepodařilo. Vrátila se pouze polovina členů gangu.");
+    } else {
+      pushEvent("Obsazení selhalo. Členové gangu zmizeli neznámo kam.");
+    }
+
+    openOccupationResultModal({
+      outcomeKey,
+      district,
+      requiredMembers: Math.max(0, Math.floor(Number(requiredMembers) || 0)),
+      returnedMembers
+    });
+  }
+
+  function scheduleOccupationActionResult(districtId, requiredMembers) {
+    const timeoutId = setTimeout(() => {
+      occupyActionResultTimeouts.delete(timeoutId);
+      finalizeOccupationActionResult({ districtId, requiredMembers });
+    }, OCCUPY_ACTION_DURATION_MS);
+    occupyActionResultTimeouts.add(timeoutId);
+  }
+
+  function startOccupyActionFromModal() {
+    const district = resolveDistrictById(occupyConfirmModalState.districtId);
+    if (!district) {
+      renderOccupyConfirmModal();
+      return;
+    }
+
+    const availability = evaluateDistrictActionAvailability(district, "occupy");
+    if (!availability.allowed) {
+      pushEvent(availability.reason);
+      renderOccupyConfirmModal();
+      return;
+    }
+
+    const demoMode = scenarioVisionEnabled && !window.Empire.token;
+    if (!window.Empire.token && !demoMode) {
+      pushEvent("Pro obsazení je nutné přihlášení.");
+      renderOccupyConfirmModal();
+      return;
+    }
+
+    const requiredMembers = resolveOccupationRequiredMembers(district, getDistrictSpyIntel(district.id));
+    const availableMembers = countPlayerControlledPopulation(cachedProfile || window.Empire.player || {});
+    if (availableMembers < requiredMembers) {
+      pushEvent(`Na obsazení chybí ${requiredMembers - availableMembers} členů gangu.`);
+      renderOccupyConfirmModal();
+      return;
+    }
+
+    consumeGangMembers(requiredMembers);
+    window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
+      durationMs: OCCUPY_ACTION_DURATION_MS,
+      source: demoMode ? "scenario-occupy" : "player-occupy"
+    });
+    pushEvent(`Obsazení distriktu ${district.name || `#${district.id}`} bylo zahájeno na ${Math.floor(OCCUPY_ACTION_DURATION_MS / 1000)}s.`);
+    document.dispatchEvent(new CustomEvent("empire:occupy-started", {
+      detail: {
+        districtId: district.id,
+        district,
+        requiredMembers
+      }
+    }));
+    scheduleOccupationActionResult(district.id, requiredMembers);
+    closeOccupyConfirmModal();
+    const districtModal = document.getElementById("district-modal");
+    if (districtModal) districtModal.classList.add("hidden");
+  }
+
+  function initOccupyConfirmModal() {
+    const root = document.getElementById("occupy-confirm-modal");
+    const backdrop = document.getElementById("occupy-confirm-modal-backdrop");
+    const closeBtn = document.getElementById("occupy-confirm-modal-close");
+    const cancelBtn = document.getElementById("occupy-confirm-modal-cancel");
+    const confirmBtn = document.getElementById("occupy-confirm-modal-confirm");
+    if (!root) return;
+
+    if (backdrop) backdrop.addEventListener("click", closeOccupyConfirmModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeOccupyConfirmModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeOccupyConfirmModal);
+    if (confirmBtn) confirmBtn.addEventListener("click", startOccupyActionFromModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeOccupyConfirmModal();
       }
     });
   }
@@ -2887,6 +3966,8 @@ window.Empire.UI = (() => {
     if (!district) {
       return { allowed: false, reason: "Nejprve vyber distrikt." };
     }
+    const districtId = Number(district?.id);
+    const onboardingDemoActive = activePlayerScenarioKey === "onboarding-20-edge" && scenarioVisionEnabled && !window.Empire.token;
     if (isDistrictDestroyed(district)) {
       return { allowed: false, reason: "Distrikt je zničený a nepoužitelný." };
     }
@@ -2904,13 +3985,44 @@ window.Empire.UI = (() => {
     }
 
     if (action === "attack") {
+      if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID) {
+        return { allowed: true, reason: "" };
+      }
+      if (isDistrictUnownedForSpyOutcome(district) && !getDistrictSpyIntel(district?.id)) {
+        return { allowed: false, reason: "Na neobsazený distrikt musí nejdřív proběhnout úspěšné špehování." };
+      }
+      if (isDistrictUnownedForSpyOutcome(district) && getDistrictSpyIntel(district?.id)) {
+        return { allowed: false, reason: "Pro prázdný vyspěhovaný distrikt použij akci Obsadit." };
+      }
       const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: false });
       return adjacent
         ? { allowed: true, reason: "" }
         : { allowed: false, reason: "Útočit můžeš jen na distrikt, který sousedí s tvým dobytým distriktem." };
     }
 
+    if (action === "occupy") {
+      if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_SPY_DISTRICT_ID) {
+        if (!getDistrictSpyIntel(district?.id)) {
+          return { allowed: false, reason: "Nejdřív musí proběhnout úspěšné špehování tohoto distriktu." };
+        }
+        return { allowed: true, reason: "" };
+      }
+      if (!isDistrictUnownedForSpyOutcome(district)) {
+        return { allowed: false, reason: "Obsadit lze jen neobsazený distrikt." };
+      }
+      if (!getDistrictSpyIntel(district?.id)) {
+        return { allowed: false, reason: "Nejdřív musí proběhnout úspěšné špehování tohoto distriktu." };
+      }
+      const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: true });
+      return adjacent
+        ? { allowed: true, reason: "" }
+        : { allowed: false, reason: "Obsadit můžeš jen distrikt sousedící s tvým nebo aliančním distriktem." };
+    }
+
     if (action === "raid" || action === "spy") {
+      if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_SPY_DISTRICT_ID) {
+        return { allowed: true, reason: "" };
+      }
       const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: true });
       return adjacent
         ? { allowed: true, reason: "" }
@@ -2949,6 +4061,29 @@ window.Empire.UI = (() => {
       defenseDetail,
       weapons: getAttackWeaponTotal(attackDetail),
       defense: getDefenseWeaponTotal(defenseDetail)
+    };
+  }
+
+  function createOnboardingDemoEconomy() {
+    const loadout = createDemoWeaponLoadout(1);
+    return {
+      cleanMoney: 1200,
+      dirtyMoney: 800,
+      balance: 2000,
+      drugs: 6,
+      materials: 12,
+      influence: 8,
+      spyCount: 2,
+      spies: 2,
+      drugInventory: {
+        neonDust: 3,
+        pulseShot: 1,
+        velvetSmoke: 1,
+        ghostSerum: 1,
+        overdriveX: 0
+      },
+      activeDrugs: {},
+      ...loadout
     };
   }
 
@@ -3005,6 +4140,17 @@ window.Empire.UI = (() => {
     scenarioVisionEnabled = Boolean(enabled);
     if (!scenarioVisionEnabled) {
       scenarioUniqueOwnerColors = false;
+    } else if (!window.Empire.token) {
+      processSpyRecoveryQueue({ notify: false });
+      const baseSpies = resolveFactionBaseSpyCount(cachedProfile?.structure || localStorage.getItem("empire_structure"));
+      const storedSpyCount = readStoredSpyCount();
+      const hasPendingRecoveries = readSpyRecoveryQueue().length > 0;
+      if (storedSpyCount == null || (getSpyCount() <= 0 && !hasPendingRecoveries)) {
+        setSpyCount(baseSpies, { persist: true });
+      } else {
+        renderInfluenceSpyTopbarStat();
+      }
+      syncSpyRecoveryTicker();
     }
     syncMapVisionContext();
   }
@@ -3175,6 +4321,10 @@ window.Empire.UI = (() => {
     return normalizeHexColor(localStorage.getItem("empire_gang_color"));
   }
 
+  function resolveActiveProfileAvatar() {
+    return scenarioProfileAvatarOverride || localStorage.getItem("empire_avatar") || null;
+  }
+
   function applyProfileModalVisuals(avatarSrc = null) {
     const content = document.querySelector("#profile-modal .modal__content");
     if (!content) return;
@@ -3207,7 +4357,7 @@ window.Empire.UI = (() => {
   }
 
   function refreshGangColorDisplays() {
-    applyProfileModalVisuals(localStorage.getItem("empire_avatar"));
+    applyProfileModalVisuals(resolveActiveProfileAvatar());
     applyMapBorderSwitchVisuals();
   }
 
@@ -3256,10 +4406,12 @@ window.Empire.UI = (() => {
       pushEvent("Mapa ještě není připravená.");
       return;
     }
+    activePlayerScenarioKey = String(scenarioKey || "");
 
     const ownerName = resolveScenarioOwnerName();
     const allyName = `${ownerName} - spojenec`;
     scenarioUniqueOwnerColors = false;
+    scenarioProfileAvatarOverride = scenarioKey === "onboarding-20-edge" ? ONBOARDING_PROFILE_AVATAR : null;
     syncMapVisionContext();
     const mapScenarioDistrictOwner = (district, owner = null) => ({
       ...district,
@@ -3405,6 +4557,56 @@ window.Empire.UI = (() => {
       if (scenarioDestroyedDistrictId != null) {
         pushEvent(`Katastrofa: distrikt ${scenarioDestroyedDistrictId} je vypálený a nepoužitelný.`);
       }
+    } else if (scenarioKey === "onboarding-20-edge") {
+      const scenario = buildTwentyPlayerEdgeOnboardingScenario(districts, ownerName);
+      if (!scenario.districts.length) {
+        pushEvent("Onboarding scénář 20 hráčů se nepodařilo připravit.");
+        return;
+      }
+      setScenarioVisionMode(true);
+      scenarioUniqueOwnerColors = true;
+      syncMapVisionContext();
+      setScenarioAllianceOwners([]);
+      setScenarioEnemyOwners(scenario.enemyOwners);
+      nextDistricts = scenario.districts;
+      const tutorialEnemyOwner = String(scenario.enemyOwners?.[0] || "Vortex Hounds").trim() || "Vortex Hounds";
+      nextDistricts = nextDistricts.map((district) => {
+        if (Number(district?.id) === ONBOARDING_TUTORIAL_SPY_DISTRICT_ID) {
+          return {
+            ...district,
+            owner: null,
+            ownerPlayerId: null,
+            ownerNick: null,
+            ownerAllianceName: null,
+            ownerStructure: null,
+            ownerFaction: null,
+            ownerAvatar: null,
+            ownerAtmosphere: null
+          };
+        }
+        if (Number(district?.id) === ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID) {
+          return {
+            ...district,
+            owner: tutorialEnemyOwner,
+            ownerPlayerId: null,
+            ownerNick: tutorialEnemyOwner,
+            ownerAllianceName: null,
+            ...buildDemoDistrictOwnerMeta(tutorialEnemyOwner, district)
+          };
+        }
+        return district;
+      });
+      baseProfile.districts = scenario.ownDistrictCount;
+      baseProfile.alliance = "Žádná";
+      baseProfile.username = "Onboarding Runner";
+      baseProfile.cleanMoney = 1200;
+      baseProfile.dirtyMoney = 800;
+      baseProfile.drugs = 6;
+      baseProfile.materials = 12;
+      baseProfile.influence = 8;
+      pushEvent(
+        `Onboarding: ${scenario.playerCount} hráčů, každý drží 1 okrajový distrikt. Tvůj distrikt přímo sousedí s nepřítelem.`
+      );
     } else {
       return;
     }
@@ -3426,7 +4628,22 @@ window.Empire.UI = (() => {
         source: "scenario-alliance-20-police"
       });
     }
+    if (scenarioKey === "onboarding-20-edge") {
+      clearDistrictSpyIntel(ONBOARDING_TUTORIAL_SPY_DISTRICT_ID);
+      clearDistrictSpyIntel(ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID);
+      setLocalGangMembersBonus(0);
+      setLocalGangMembersSpent(0);
+      updateEconomy(createOnboardingDemoEconomy());
+    }
     updateProfile(baseProfile);
+    document.dispatchEvent(new CustomEvent("empire:scenario-applied", {
+      detail: {
+        scenarioKey,
+        ownerName,
+        profile: baseProfile,
+        districts: nextDistricts
+      }
+    }));
   }
 
   function assignAllianceTenScenarioOwnership(districts, ownerName, allyName, options = {}) {
@@ -3973,6 +5190,201 @@ window.Empire.UI = (() => {
     };
   }
 
+  function buildTwentyPlayerEdgeOnboardingScenario(districts, ownerName) {
+    const safeDistricts = Array.isArray(districts) ? districts : [];
+    const emptyResult = {
+      districts: [],
+      enemyOwners: [],
+      ownDistrictCount: 0,
+      playerCount: 0
+    };
+    if (!safeDistricts.length) return emptyResult;
+
+    const playerCount = 20;
+    const bounds = getDistrictBounds(safeDistricts);
+    const width = Math.max(1, Number(bounds.maxX || 0) - Number(bounds.minX || 0));
+    const height = Math.max(1, Number(bounds.maxY || 0) - Number(bounds.minY || 0));
+    const leftThreshold = bounds.minX + width * 0.2;
+    const rightThreshold = bounds.maxX - width * 0.2;
+    const bottomThreshold = bounds.maxY - height * 0.2;
+    const adjacency = buildDistrictAdjacency(safeDistricts);
+    const targetCounts = { left: 7, bottom: 7, right: 6 };
+
+    const edgeCandidates = safeDistricts
+      .filter((district) => String(district?.type || "").trim().toLowerCase() !== "downtown")
+      .map((district) => {
+        const center = polygonCentroid(district.polygon || []);
+        const onLeft = center.x <= leftThreshold;
+        const onRight = center.x >= rightThreshold;
+        const onBottom = center.y >= bottomThreshold;
+        if (!onLeft && !onRight && !onBottom) return null;
+        let edge = "left";
+        if (onBottom) edge = "bottom";
+        if (onRight && !onBottom) edge = "right";
+        return {
+          district,
+          center,
+          edge,
+          sortValue: edge === "bottom" ? center.x : center.y
+        };
+      })
+      .filter(Boolean);
+
+    const groupCandidates = {
+      left: edgeCandidates
+        .filter((entry) => entry.edge === "left")
+        .sort((a, b) => a.sortValue - b.sortValue || Number(a.district?.id || 0) - Number(b.district?.id || 0)),
+      bottom: edgeCandidates
+        .filter((entry) => entry.edge === "bottom")
+        .sort((a, b) => a.sortValue - b.sortValue || Number(a.district?.id || 0) - Number(b.district?.id || 0)),
+      right: edgeCandidates
+        .filter((entry) => entry.edge === "right")
+        .sort((a, b) => a.sortValue - b.sortValue || Number(a.district?.id || 0) - Number(b.district?.id || 0))
+    };
+
+    const allCandidates = [...groupCandidates.left, ...groupCandidates.bottom, ...groupCandidates.right];
+    const candidateById = new Map(allCandidates.map((entry) => [String(entry?.district?.id ?? ""), entry]));
+    const edgeKeys = ["left", "bottom", "right"];
+    const pairCandidates = [];
+
+    allCandidates.forEach((entry) => {
+      const entryId = String(entry?.district?.id ?? "");
+      if (!entryId) return;
+      const neighbors = adjacency.get(entry.district.id) || new Set();
+      neighbors.forEach((neighborId) => {
+        const neighborEntry = candidateById.get(String(neighborId));
+        if (!neighborEntry) return;
+        const neighborEntryId = String(neighborEntry?.district?.id ?? "");
+        if (!neighborEntryId || entryId >= neighborEntryId) return;
+        pairCandidates.push([entry, neighborEntry]);
+      });
+    });
+
+    const canPlaceEntry = (entry, selectedIds) => {
+      const neighbors = adjacency.get(entry.district.id) || new Set();
+      for (const neighborId of neighbors) {
+        if (selectedIds.has(String(neighborId))) return false;
+      }
+      return true;
+    };
+
+    const fillEdgeEntries = (edgeIndex, selectedEntries, selectedIds, countsByEdge) => {
+      if (edgeIndex >= edgeKeys.length) return selectedEntries;
+      const edgeKey = edgeKeys[edgeIndex];
+      const needed = targetCounts[edgeKey] - (countsByEdge[edgeKey] || 0);
+      if (needed < 0) return null;
+      if (needed === 0) return fillEdgeEntries(edgeIndex + 1, selectedEntries, selectedIds, countsByEdge);
+
+      const candidates = (groupCandidates[edgeKey] || []).filter((entry) => !selectedIds.has(String(entry?.district?.id ?? "")));
+      const chooseEntries = (startIndex, remaining, nextEntries, nextIds) => {
+        if (remaining === 0) {
+          return fillEdgeEntries(edgeIndex + 1, nextEntries, nextIds, {
+            ...countsByEdge,
+            [edgeKey]: targetCounts[edgeKey]
+          });
+        }
+        for (let i = startIndex; i <= candidates.length - remaining; i += 1) {
+          const entry = candidates[i];
+          const districtId = String(entry?.district?.id ?? "");
+          if (!districtId || nextIds.has(districtId)) continue;
+          if (!canPlaceEntry(entry, nextIds)) continue;
+          nextIds.add(districtId);
+          const result = chooseEntries(i + 1, remaining - 1, [...nextEntries, entry], nextIds);
+          nextIds.delete(districtId);
+          if (result) return result;
+        }
+        return null;
+      };
+
+      return chooseEntries(0, needed, selectedEntries, new Set(selectedIds));
+    };
+
+    let selected = null;
+    let adjacentPair = null;
+    let adjacentNeighbor = null;
+
+    for (let i = 0; i < pairCandidates.length; i += 1) {
+      const [firstEntry, secondEntry] = pairCandidates[i];
+      const initialCounts = { left: 0, bottom: 0, right: 0 };
+      initialCounts[firstEntry.edge] += 1;
+      initialCounts[secondEntry.edge] += 1;
+      if (edgeKeys.some((edgeKey) => initialCounts[edgeKey] > targetCounts[edgeKey])) continue;
+
+      const seededEntries = [firstEntry, secondEntry];
+      const seededIds = new Set(seededEntries.map((entry) => String(entry?.district?.id ?? "")));
+      const completedSelection = fillEdgeEntries(0, seededEntries, seededIds, initialCounts);
+      if (!completedSelection) continue;
+
+      selected = completedSelection;
+      adjacentPair = firstEntry;
+      adjacentNeighbor = secondEntry;
+      break;
+    }
+
+    if (!selected || !adjacentPair || !adjacentNeighbor) return emptyResult;
+
+    const nickPool = [
+      "Razor Vex", "Ghost Mara", "Nyx Prime", "Iron Shade", "Vortex Kane",
+      "Black Comet", "Neon Riot", "Cobra Unit", "Urban Hex", "Steel Drift",
+      "Zero Pulse", "Night Cipher", "Crimson Dot", "Volt Raven", "Silent Brick",
+      "Alpha Dock", "Chrome Lynx", "Delta Wolf", "Shadow Mint", "Metro Hawk",
+      "Apex Nova", "Toxic Ray", "Retro Kane", "Frost Mamba", "Street Rune"
+    ];
+    const usedNames = new Set();
+    const claimUniqueNick = (value, fallbackIndex = 1) => {
+      const base = String(value || "").trim() || `Hráč ${fallbackIndex}`;
+      let candidate = base;
+      let suffix = 2;
+      while (usedNames.has(normalizeOwnerName(candidate))) {
+        candidate = `${base} ${suffix}`;
+        suffix += 1;
+      }
+      usedNames.add(normalizeOwnerName(candidate));
+      return candidate;
+    };
+
+    const players = [
+      claimUniqueNick(ownerName || "Ty", 1),
+      ...Array.from({ length: playerCount - 1 }, (_, index) => claimUniqueNick(nickPool[index % nickPool.length], index + 2))
+    ];
+
+    const ownerByDistrictId = new Map();
+    ownerByDistrictId.set(adjacentPair.district.id, players[0]);
+    ownerByDistrictId.set(adjacentNeighbor.district.id, players[1]);
+
+    let playerIndex = 2;
+    selected.forEach((entry) => {
+      if (ownerByDistrictId.has(entry.district.id)) return;
+      ownerByDistrictId.set(entry.district.id, players[playerIndex]);
+      playerIndex += 1;
+    });
+
+    const nextDistricts = safeDistricts.map((district) => {
+      const owner = ownerByDistrictId.get(district.id) || null;
+      const ownerMeta = owner ? buildDemoDistrictOwnerMeta(owner, district) : {
+        ownerStructure: null,
+        ownerFaction: null,
+        ownerAvatar: null,
+        ownerAtmosphere: null
+      };
+      return {
+        ...district,
+        owner,
+        ownerPlayerId: null,
+        ownerNick: owner || null,
+        ownerAllianceName: null,
+        ...ownerMeta
+      };
+    });
+
+    return {
+      districts: nextDistricts,
+      enemyOwners: players.slice(1),
+      ownDistrictCount: 1,
+      playerCount
+    };
+  }
+
   function countOwnedDistrictsForOwner(districts, ownerName) {
     const normalizedOwner = normalizeOwnerName(ownerName);
     if (!normalizedOwner) return 0;
@@ -4301,13 +5713,28 @@ window.Empire.UI = (() => {
         `
         )
         .join("");
+      modal.classList.remove("events-modal--compact");
+    };
+
+    const resetToCompactState = () => {
+      agentButtons.forEach((btn) => btn.classList.remove("is-active"));
+      if (agentName) agentName.textContent = "Vyber postavu";
+      if (agentType) agentType.textContent = "Každá má jiné questy";
+      if (agentDesc) {
+        agentDesc.textContent = "Klikni na postavu a zobrazí se její popis a dočasné úkoly.";
+      }
+      if (agentQuote) agentQuote.textContent = "";
+      if (tasklist) tasklist.innerHTML = "";
+      modal.classList.add("events-modal--compact");
     };
 
     const openModal = () => {
+      resetToCompactState();
       modal.classList.remove("hidden");
     };
     const closeModal = () => {
       modal.classList.add("hidden");
+      modal.classList.add("events-modal--compact");
     };
 
     openBtn.addEventListener("click", openModal);
@@ -5498,7 +6925,15 @@ window.Empire.UI = (() => {
   function clampWantedHeat(value) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return 0;
-    return Math.max(0, Math.min(WANTED_HEAT_MAX, Math.floor(parsed)));
+    return Math.max(0, Math.min(WANTED_HEAT_MAX, Math.round(parsed * 10) / 10));
+  }
+
+  function formatWantedHeat(value) {
+    const heat = clampWantedHeat(value);
+    if (Math.abs(heat - Math.round(heat)) < 0.001) {
+      return `${Math.round(heat)}`;
+    }
+    return heat.toFixed(1).replace(/\.0$/, "");
   }
 
   function resolveWantedStars(heatValue) {
@@ -5517,8 +6952,9 @@ window.Empire.UI = (() => {
       star.classList.toggle("is-active", index < activeStars);
     });
     const heat = clampWantedHeat(heatValue);
-    root.setAttribute("aria-label", `Stupeň hledanosti ${activeStars}/7 (${heat} heat)`);
-    root.title = `Hledanost: ${activeStars}/7 (${heat} heat)`;
+    const heatLabel = formatWantedHeat(heat);
+    root.setAttribute("aria-label", `Stupeň hledanosti ${activeStars}/7 (${heatLabel} heat)`);
+    root.title = `Hledanost: ${activeStars}/7 (${heatLabel} heat)`;
   }
 
   function resolveWantedLevel(profile) {
@@ -5572,6 +7008,15 @@ window.Empire.UI = (() => {
 
   function updateProfile(profile) {
     cachedProfile = profile;
+    const profileSpyCount = resolveSpyCountFromPayload(profile);
+    if (profileSpyCount != null) {
+      setSpyCount(profileSpyCount, { persist: true });
+    } else if (cachedSpyCount == null) {
+      const defaultSpies = resolveFactionBaseSpyCount(profile?.structure || localStorage.getItem("empire_structure"));
+      setSpyCount(defaultSpies, { persist: true });
+    } else {
+      renderInfluenceSpyTopbarStat();
+    }
     const profileGangColor = normalizeHexColor(profile?.gangColor || profile?.gang_color);
     if (profileGangColor) {
       localStorage.setItem("empire_gang_color", profileGangColor);
@@ -5590,10 +7035,10 @@ window.Empire.UI = (() => {
     const statStructure = document.getElementById("stat-structure");
     const faction = document.getElementById("profile-faction");
     if (structure) {
-      structure.textContent = `${wantedLevel}`;
+      structure.textContent = formatWantedHeat(wantedLevel);
     }
     if (statStructure) {
-      statStructure.textContent = `${wantedLevel}`;
+      statStructure.textContent = formatWantedHeat(wantedLevel);
     }
     updateProfileWantedStars(wantedLevel);
     if (faction) {
@@ -5612,6 +7057,10 @@ window.Empire.UI = (() => {
     guestModeActive = Boolean(isGuest);
     refreshGuestBannerVisibility();
     if (isGuest) {
+      const baseSpies = resolveFactionBaseSpyCount(cachedProfile?.structure || localStorage.getItem("empire_structure"));
+      writeSpyRecoveryQueue([]);
+      syncSpyRecoveryTicker();
+      setSpyCount(baseSpies, { persist: true });
       const state = getLocalAllianceState();
       renderAllianceChat(state.chat);
       syncGuestAllianceLabel(state.activeAlliance?.name || "Žádná");
@@ -6519,14 +7968,20 @@ window.Empire.UI = (() => {
       const parsed = JSON.parse(localStorage.getItem(LOCAL_MARKET_KEY) || "null");
       if (parsed && parsed.balances && Array.isArray(parsed.orderBook) && Array.isArray(parsed.myOrders) && Array.isArray(parsed.recentTrades)) {
         normalizeLocalMarketBalances(parsed.balances);
+        const dirty = Number(parsed.balances.dirtyMoney || 0);
+        if (!Number.isFinite(dirty) || dirty < GUEST_DEFAULT_DIRTY_MONEY) {
+          parsed.balances.dirtyMoney = GUEST_DEFAULT_DIRTY_MONEY;
+          parsed.balances.money = Number(parsed.balances.cleanMoney || 0) + Number(parsed.balances.dirtyMoney || 0);
+          saveLocalMarketState(parsed);
+        }
         return parsed;
       }
     } catch {}
     const seeded = {
       balances: {
-        money: 12000,
+        money: 17000,
         cleanMoney: 12000,
-        dirtyMoney: 0,
+        dirtyMoney: GUEST_DEFAULT_DIRTY_MONEY,
         drugs: 80,
         neonDust: 44,
         pulseShot: 14,
@@ -6637,10 +8092,17 @@ window.Empire.UI = (() => {
       const parsed = Number(normalized || 0);
       return Number.isFinite(parsed) ? parsed : 0;
     };
+    const influenceEl = document.getElementById("stat-influence");
+    const influenceFromDataset = Number(influenceEl?.dataset?.influenceValue);
+    const influenceValue = Number.isFinite(influenceFromDataset)
+      ? normalizeSpyCount(influenceFromDataset, 0)
+      : parseStat("stat-influence");
     return {
       cleanMoney: parseMoney("stat-clean-money"),
       dirtyMoney: parseMoney("stat-dirty-money"),
-      influence: parseStat("stat-influence"),
+      influence: influenceValue,
+      spyCount: getSpyCount(),
+      spies: getSpyCount(),
       drugs: 0,
       drugInventory: {},
       weapons: 0,
@@ -6670,6 +8132,12 @@ window.Empire.UI = (() => {
     cachedEconomy.cleanMoney = money.cleanMoney;
     cachedEconomy.dirtyMoney = money.dirtyMoney;
     cachedEconomy.balance = money.totalMoney;
+    const economySpyCount = resolveSpyCountFromPayload(cachedEconomy);
+    if (economySpyCount != null) {
+      setSpyCount(economySpyCount, { persist: true });
+    }
+    cachedEconomy.spyCount = getSpyCount();
+    cachedEconomy.spies = getSpyCount();
     return cachedEconomy;
   }
 
@@ -6700,6 +8168,23 @@ window.Empire.UI = (() => {
     economy.balance = money.cleanMoney + money.dirtyMoney;
     updateEconomy(economy);
     return { ok: true, spent: required, cleanSpent: fromClean, dirtySpent: fromDirty };
+  }
+
+  function trySpendCleanCash(amount) {
+    const required = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (required <= 0) return { ok: true, spent: 0 };
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy);
+    if (money.cleanMoney < required) {
+      return { ok: false, reason: "insufficient_clean_cash", available: money.cleanMoney };
+    }
+
+    money.cleanMoney -= required;
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    updateEconomy(economy);
+    return { ok: true, spent: required, cleanSpent: required, dirtySpent: 0 };
   }
 
   function addCleanCash(amount) {
@@ -6978,7 +8463,7 @@ window.Empire.UI = (() => {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
     };
-    const avatar = localStorage.getItem("empire_avatar");
+    const avatar = resolveActiveProfileAvatar();
     const avatarImg = document.getElementById("profile-avatar");
     if (avatarImg) {
       if (avatar) {
@@ -6994,7 +8479,7 @@ window.Empire.UI = (() => {
     setText("profile-modal-gang", profile.gangName || guestGangName || "-");
     setText("profile-modal-faction", factionLabel);
     setText("profile-modal-influence", influenceValue);
-    setText("profile-modal-wanted", wantedLevel);
+    setText("profile-modal-wanted", formatWantedHeat(wantedLevel));
     setText("profile-modal-alliance", profile.alliance || "Žádná");
     setText("profile-modal-districts", profile.districts || 0);
     const profileHasMoneyData =
@@ -7035,6 +8520,60 @@ window.Empire.UI = (() => {
     }
   }
 
+  function animateMoneyStatValue(element, delta) {
+    if (!element || !delta) return;
+    const nextClass = delta > 0 ? "is-money-up" : "is-money-down";
+    element.classList.remove("is-money-up", "is-money-down");
+    void element.offsetWidth;
+    element.classList.add(nextClass);
+    const existingTimer = moneyStatAnimationTimers.get(element);
+    if (existingTimer) clearTimeout(existingTimer);
+    const timerId = setTimeout(() => {
+      element.classList.remove("is-money-up", "is-money-down");
+      moneyStatAnimationTimers.delete(element);
+    }, 1050);
+    moneyStatAnimationTimers.set(element, timerId);
+  }
+
+  function parseMoneyValueFromElement(element) {
+    if (!element) return 0;
+    const raw = String(element.textContent || "").replace(/[^\d-]/g, "");
+    const parsed = Number(raw || 0);
+    return Number.isFinite(parsed) ? Math.floor(parsed) : 0;
+  }
+
+  function stopMoneyStatCounter(element) {
+    if (!element) return;
+    const activeInterval = moneyStatCountIntervals.get(element);
+    if (activeInterval) {
+      clearInterval(activeInterval);
+      moneyStatCountIntervals.delete(element);
+    }
+  }
+
+  function animateMoneyStatCounter(element, targetValue, options = {}) {
+    if (!element) return;
+    const safeTarget = Math.max(0, Math.floor(Number(targetValue) || 0));
+    const prefix = String(options?.prefix ?? "$");
+    stopMoneyStatCounter(element);
+    let current = parseMoneyValueFromElement(element);
+    if (current === safeTarget) {
+      element.textContent = `${prefix}${safeTarget}`;
+      return;
+    }
+
+    const direction = safeTarget > current ? 1 : -1;
+    const intervalId = setInterval(() => {
+      current += direction;
+      element.textContent = `${prefix}${current}`;
+      if (current === safeTarget) {
+        clearInterval(intervalId);
+        moneyStatCountIntervals.delete(element);
+      }
+    }, MONEY_STAT_COUNT_TICK_MS);
+    moneyStatCountIntervals.set(element, intervalId);
+  }
+
   function updateEconomy(economy) {
     const safeEconomy = economy && typeof economy === "object" ? { ...economy } : {};
     const rawDrugInventory = safeEconomy.drugInventory && typeof safeEconomy.drugInventory === "object"
@@ -7052,14 +8591,43 @@ window.Empire.UI = (() => {
     safeEconomy.drugs = Number.isFinite(Number(safeEconomy.drugs))
       ? Math.max(0, Math.floor(Number(safeEconomy.drugs)))
       : totalDrugs;
+    safeEconomy.influence = normalizeSpyCount(safeEconomy.influence || 0, 0);
+    const economySpyCount = resolveSpyCountFromPayload(safeEconomy);
+    if (economySpyCount != null) {
+      setSpyCount(economySpyCount, { persist: true });
+    } else {
+      getSpyCount();
+    }
+    safeEconomy.spyCount = getSpyCount();
+    safeEconomy.spies = getSpyCount();
     cachedEconomy = safeEconomy;
 
     const money = resolveMoneyBreakdown(safeEconomy || {});
     const cleanMoney = document.getElementById("stat-clean-money");
     const dirtyMoney = document.getElementById("stat-dirty-money");
-    if (cleanMoney) cleanMoney.textContent = `$${money.cleanMoney}`;
-    if (dirtyMoney) dirtyMoney.textContent = `$${money.dirtyMoney}`;
-    document.getElementById("stat-influence").textContent = safeEconomy.influence || 0;
+    if (cleanMoney) {
+      if (lastRenderedCleanMoney == null) {
+        cleanMoney.textContent = `$${money.cleanMoney}`;
+      } else {
+        animateMoneyStatCounter(cleanMoney, money.cleanMoney);
+      }
+    }
+    if (dirtyMoney) {
+      if (lastRenderedDirtyMoney == null) {
+        dirtyMoney.textContent = `$${money.dirtyMoney}`;
+      } else {
+        animateMoneyStatCounter(dirtyMoney, money.dirtyMoney);
+      }
+    }
+    if (cleanMoney && lastRenderedCleanMoney != null && money.cleanMoney !== lastRenderedCleanMoney) {
+      animateMoneyStatValue(cleanMoney, money.cleanMoney - lastRenderedCleanMoney);
+    }
+    if (dirtyMoney && lastRenderedDirtyMoney != null && money.dirtyMoney !== lastRenderedDirtyMoney) {
+      animateMoneyStatValue(dirtyMoney, money.dirtyMoney - lastRenderedDirtyMoney);
+    }
+    lastRenderedCleanMoney = money.cleanMoney;
+    lastRenderedDirtyMoney = money.dirtyMoney;
+    renderInfluenceSpyTopbarStat();
     const drugs = document.getElementById("stat-drugs");
     const storage = document.getElementById("stat-storage");
     const weapons = document.getElementById("stat-weapons");
@@ -7384,6 +8952,21 @@ window.Empire.UI = (() => {
     container.prepend(div);
   }
 
+  function clearEventFeed() {
+    const container = document.getElementById("event-items");
+    if (!container) return;
+    container.innerHTML = '<div class="ticker__item">Čekám na rozkazy...</div>';
+  }
+
+  function initEventFeedControls() {
+    const clearBtn = document.getElementById("event-clear-btn");
+    if (!clearBtn || clearBtn.dataset.bound === "1") return;
+    clearBtn.dataset.bound = "1";
+    clearBtn.addEventListener("click", () => {
+      clearEventFeed();
+    });
+  }
+
   return {
     assignDistrictMetadata,
     evaluateDistrictActionAvailability,
@@ -7403,6 +8986,7 @@ window.Empire.UI = (() => {
     getCurrentGangMembers,
     getEconomySnapshot,
     trySpendCash,
+    trySpendCleanCash,
     addCleanCash,
     addDirtyCash,
     addInfluence,
@@ -7410,6 +8994,7 @@ window.Empire.UI = (() => {
     refreshProfilePopulation,
     addCraftedWeapons,
     addCraftedDefense,
-    getDistrictDefenseSnapshot
+    getDistrictDefenseSnapshot,
+    getDistrictSpyIntel
   };
 })();

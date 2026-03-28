@@ -41,6 +41,9 @@ window.Empire.Map = (() => {
     distinctOwnerColorByName: new Map(),
     attackedDistricts: new Map(),
     policeDistrictActions: new Map(),
+    spyDistrictActions: new Map(),
+    onboardingFocusDistrictId: null,
+    onboardingFocusMode: "full",
     attackAnimationIntervalId: null,
     activeBuildingDetail: null,
     activeBuildingDetailTab: "stats"
@@ -52,6 +55,9 @@ window.Empire.Map = (() => {
   const DISTRICT_POLICE_ACTION_DEFAULT_DURATION_MS = 10 * 60 * 1000;
   const DISTRICT_POLICE_ACTION_MIN_DURATION_MS = 30 * 1000;
   const DISTRICT_POLICE_ACTION_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+  const DISTRICT_SPY_ACTION_DEFAULT_DURATION_MS = 20 * 1000;
+  const DISTRICT_SPY_ACTION_MIN_DURATION_MS = 5 * 1000;
+  const DISTRICT_SPY_ACTION_MAX_DURATION_MS = 30 * 60 * 1000;
   const DISTRICT_ATTACK_ANIMATION_INTERVAL_MS = 120;
   const DISTRICT_TOP_NO_DRAW_RATIO = 0.08;
   const DOWNTOWN_VERTICAL_OFFSET_RATIO = 0.04;
@@ -517,9 +523,14 @@ window.Empire.Map = (() => {
   const PHARMACY_CONFIG = Object.freeze({
     maxLevel: 14,
     baseProductionPerHour: Object.freeze({
-      chemicals: 10,
+      chemicals: 1200,
       biomass: 6,
       stimPack: 2
+    }),
+    slotStorageCaps: Object.freeze({
+      chemicals: 20,
+      biomass: Number.POSITIVE_INFINITY,
+      stimPack: Number.POSITIVE_INFINITY
     }),
     baseHeatPerDay: 3,
     upgradePctPerLevel: 0.1,
@@ -908,6 +919,8 @@ window.Empire.Map = (() => {
     if (!state.canvas) return;
     state.ctx = state.canvas.getContext("2d");
 
+    clearSpyGeneratedGossipOnRefresh();
+    resetPharmacyProducedStateOnRefresh();
     loadMapImage();
     generateCity();
     seedDemoDistrictGossip();
@@ -1058,6 +1071,28 @@ window.Empire.Map = (() => {
     localStorage.setItem(PHARMACY_BUILDING_STORAGE_KEY, JSON.stringify(pharmacyBuildingStore));
   }
 
+  function resetPharmacyProducedStateOnRefresh(now = Date.now()) {
+    const nextStore = {};
+    let changed = false;
+    Object.entries(pharmacyBuildingStore || {}).forEach(([instanceKey, rawState]) => {
+      const snapshot = sanitizePharmacyState(rawState, now);
+      snapshot.resources = createPharmacyResourceMap();
+      snapshot.slots = (Array.isArray(snapshot.slots) ? snapshot.slots : []).map((slot, index) => {
+        const defaults = createPharmacyDefaultSlots(now);
+        const safeSlot = sanitizePharmacySlot(slot, defaults[index], now);
+        safeSlot.producedAmount = 0;
+        safeSlot.productionRemainder = 0;
+        safeSlot.lastTick = now;
+        return safeSlot;
+      });
+      nextStore[instanceKey] = snapshot;
+      changed = true;
+    });
+    if (!changed) return;
+    pharmacyBuildingStore = nextStore;
+    savePharmacyBuildingStore();
+  }
+
   function loadFactoryBuildingStore() {
     try {
       const parsed = JSON.parse(localStorage.getItem(FACTORY_BUILDING_STORAGE_KEY) || "{}");
@@ -1144,6 +1179,26 @@ window.Empire.Map = (() => {
 
   function saveDistrictGossipStore() {
     localStorage.setItem(DISTRICT_GOSSIP_STORAGE_KEY, JSON.stringify(districtGossipStore));
+  }
+
+  function clearSpyGeneratedGossipOnRefresh() {
+    if (!districtGossipStore || typeof districtGossipStore !== "object") return;
+    let changed = false;
+    const nextStore = {};
+
+    Object.entries(districtGossipStore).forEach(([districtPart, rawEntries]) => {
+      const safeEntries = Array.isArray(rawEntries) ? rawEntries : [];
+      const filtered = safeEntries
+        .map((entry) => sanitizeDistrictGossipEntry(entry))
+        .filter(Boolean)
+        .filter((entry) => String(entry.intelType || "").trim().toLowerCase() !== "spy_started");
+      if (filtered.length !== safeEntries.length) changed = true;
+      nextStore[districtPart] = filtered.slice(0, DISTRICT_GOSSIP_MAX_PER_DISTRICT);
+    });
+
+    if (!changed) return;
+    districtGossipStore = nextStore;
+    saveDistrictGossipStore();
   }
 
   function normalizeBuildingKeyPart(value) {
@@ -1930,10 +1985,11 @@ window.Empire.Map = (() => {
 
   function calculatePharmacyProductionRates(levelMultiplier = 1) {
     const multiplier = Math.max(0, Number(levelMultiplier) || 0);
+    const buildingMultiplier = 1 + getPharmacyProductionBonusPct() / 100;
     return {
-      chemicalsPerHour: PHARMACY_CONFIG.baseProductionPerHour.chemicals * multiplier,
-      biomassPerHour: PHARMACY_CONFIG.baseProductionPerHour.biomass * multiplier,
-      stimPackPerHour: PHARMACY_CONFIG.baseProductionPerHour.stimPack * multiplier
+      chemicalsPerHour: PHARMACY_CONFIG.baseProductionPerHour.chemicals * multiplier * buildingMultiplier,
+      biomassPerHour: PHARMACY_CONFIG.baseProductionPerHour.biomass * multiplier * buildingMultiplier,
+      stimPackPerHour: PHARMACY_CONFIG.baseProductionPerHour.stimPack * multiplier * buildingMultiplier
     };
   }
 
@@ -1957,6 +2013,8 @@ window.Empire.Map = (() => {
       biomass: rates.biomassPerHour,
       stimPack: rates.stimPackPerHour
     };
+    const resourceCaps = PHARMACY_CONFIG.slotStorageCaps || {};
+    const slotCapMultiplier = getPharmacyStorageCapMultiplier();
 
     stateRef.slots.forEach((slot) => {
       let from = Number(slot.lastTick || nowMs);
@@ -1983,9 +2041,23 @@ window.Empire.Map = (() => {
       const gained = Math.max(0, Math.floor(raw));
       slot.productionRemainder = Math.max(0, raw - gained);
       if (gained > 0) {
-        slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + gained));
-        stateRef.resources[resourceKey] = Math.max(0, Math.floor(Number(stateRef.resources[resourceKey] || 0) + gained));
-        produced[resourceKey] = Math.max(0, Math.floor(Number(produced[resourceKey] || 0) + gained));
+        const baseCapRaw = Number(resourceCaps[resourceKey]);
+        const capRaw = Number.isFinite(baseCapRaw) ? Math.max(0, Math.floor(baseCapRaw * slotCapMultiplier)) : Number.NaN;
+        const hasCap = Number.isFinite(capRaw);
+        const currentAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
+        const freeSpace = hasCap ? Math.max(0, Math.floor(capRaw - currentAmount)) : gained;
+        const storable = hasCap ? Math.min(gained, freeSpace) : gained;
+        if (storable > 0) {
+          slot.producedAmount = Math.max(0, currentAmount + storable);
+          stateRef.resources[resourceKey] = Math.max(0, Math.floor(Number(stateRef.resources[resourceKey] || 0) + storable));
+          produced[resourceKey] = Math.max(0, Math.floor(Number(produced[resourceKey] || 0) + storable));
+        }
+        if (hasCap && storable < gained) {
+          slot.productionRemainder = 0;
+        }
+        if (hasCap && Math.max(0, Math.floor(Number(slot.producedAmount || 0))) >= Math.floor(capRaw)) {
+          slot.isProducing = false;
+        }
       }
       slot.lastTick = nowMs;
     });
@@ -2597,16 +2669,19 @@ window.Empire.Map = (() => {
     const activeDrugTypeRaw = String(rawSlot?.activeDrugType || "").trim();
     const activeDrugType = DRUG_CONFIG[activeDrugTypeRaw] ? activeDrugTypeRaw : "neonDust";
     const producedAmountRaw = Number(rawSlot?.producedAmount || 0);
-    const queuedUnitsRaw = Number(rawSlot?.queuedUnits || 1);
+    const queuedUnitsRaw = Number(rawSlot?.queuedUnits ?? (rawSlot?.isProducing ? 0 : 1));
     const queueRemainingRaw = Number(rawSlot?.queueRemaining || 0);
     const lastTickRaw = Number(rawSlot?.lastTick || now);
     const startedAtRaw = Number(rawSlot?.startedAt || 0);
     const remainderRaw = Number(rawSlot?.productionRemainder || 0);
+    const isProducing = Boolean(rawSlot?.isProducing);
     return {
       id: slotId,
       activeDrugType,
-      isProducing: Boolean(rawSlot?.isProducing),
-      queuedUnits: Number.isFinite(queuedUnitsRaw) ? clamp(Math.floor(queuedUnitsRaw), 1, 999) : 1,
+      isProducing,
+      queuedUnits: Number.isFinite(queuedUnitsRaw)
+        ? clamp(Math.floor(queuedUnitsRaw), isProducing ? 0 : 1, 999)
+        : (isProducing ? 0 : 1),
       queueRemaining: Number.isFinite(queueRemainingRaw) ? Math.max(0, Math.floor(queueRemainingRaw)) : 0,
       producedAmount: Number.isFinite(producedAmountRaw) ? Math.max(0, Math.floor(producedAmountRaw)) : 0,
       lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : now,
@@ -2852,7 +2927,7 @@ window.Empire.Map = (() => {
     return drugType;
   }
 
-  function pushDrugLabLog(playerState, text, now = Date.now()) {
+  function pushDrugLabLog(playerState, text, now = Date.now(), options = {}) {
     const entry = sanitizeDrugLabEventLogEntry({
       id: `${now}-${Math.floor(Math.random() * 1000000)}`,
       text,
@@ -2866,7 +2941,9 @@ window.Empire.Map = (() => {
       .filter(Boolean)
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, DRUG_LAB_EVENT_LOG_LIMIT);
-    window.Empire.UI?.pushEvent?.(`Drug Lab: ${text}`);
+    if (!options?.silentUiEvent) {
+      window.Empire.UI?.pushEvent?.(`Drug Lab: ${text}`);
+    }
     return entry;
   }
 
@@ -2982,16 +3059,29 @@ window.Empire.Map = (() => {
       if (Number(slot.id) > this.getUnlockedSlotCount()) {
         return { ok: false, message: "Slot je zatím zamčený." };
       }
-      if (slot.isProducing && Math.max(0, Math.floor(Number(slot.queueRemaining || 0))) > 0) {
-        return { ok: false, message: `Slot ${slot.id}: výroba už běží.` };
-      }
       const safeDrugType = String(drugType || slot.activeDrugType || "").trim();
       if (!DRUG_CONFIG[safeDrugType]) {
         return { ok: false, message: "Vyber drogu pro produkci." };
       }
-      const safeUnits = clamp(Math.floor(Number(units) || Number(slot.queuedUnits) || 1), 1, 999);
+      const safeUnits = clamp(
+        Math.floor(Number(units) || Number(slot.queuedUnits) || (slot.isProducing ? 0 : 1)),
+        slot.isProducing ? 0 : 1,
+        999
+      );
+      if (slot.isProducing && Math.max(0, Math.floor(Number(slot.queueRemaining || 0))) > 0) {
+        if (String(slot.activeDrugType || "").trim() !== safeDrugType) {
+          return { ok: false, message: `Slot ${slot.id}: při běžící výrobě nelze změnit látku.` };
+        }
+        if (safeUnits <= 0) {
+          return { ok: false, message: `Slot ${slot.id}: nastav počet dávek pro přidání.` };
+        }
+        slot.queuedUnits = 0;
+        slot.queueRemaining = Math.max(0, Math.floor(Number(slot.queueRemaining || 0))) + safeUnits;
+        slot.lastTick = now;
+        return { ok: true, message: `Slot ${slot.id}: do fronty přidáno ${safeUnits} dávek.`, silentUiEvent: true };
+      }
       slot.activeDrugType = safeDrugType;
-      slot.queuedUnits = safeUnits;
+      slot.queuedUnits = 0;
       slot.queueRemaining = safeUnits;
       slot.isProducing = true;
       slot.startedAt = slot.startedAt > 0 ? slot.startedAt : now;
@@ -3204,7 +3294,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Drug Lab je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(DRUG_LAB_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
       }
@@ -3586,6 +3676,24 @@ window.Empire.Map = (() => {
     return entries;
   }
 
+  function getOwnedPharmacyCount() {
+    return Math.max(0, collectOwnedPharmacyEntries().length);
+  }
+
+  function getPharmacyProductionBonusPct() {
+    return Math.max(0, getOwnedPharmacyCount() * 5);
+  }
+
+  function getPharmacyStorageCapMultiplier() {
+    const warehouseCount = getOwnedWarehouseCountForDrugLab();
+    if (warehouseCount <= 0) return 1;
+    return 1 + warehouseCount * 0.2;
+  }
+
+  function getPharmacyStorageCapBonusPct() {
+    return Math.max(0, (getPharmacyStorageCapMultiplier() - 1) * 100);
+  }
+
   function collectOwnedFactoryEntries() {
     const districts = Array.isArray(state.districts) ? state.districts : [];
     const entries = [];
@@ -3786,14 +3894,14 @@ window.Empire.Map = (() => {
     for (let i = 0; i < candidates.length; i += 1) {
       const parsed = Number(candidates[i]);
       if (Number.isFinite(parsed)) {
-        return Math.max(0, Math.floor(parsed));
+        return Math.max(0, parsed);
       }
     }
     return 0;
   }
 
   function addPlayerHeatFromBuilding(amount) {
-    const delta = Math.max(0, Math.floor(Number(amount) || 0));
+    const delta = Math.max(0, Number(amount) || 0);
     if (!delta) return readCurrentPlayerHeatValue();
     const nextHeat = Math.max(0, readCurrentPlayerHeatValue() + delta);
     const currentProfile = window.Empire.player && typeof window.Empire.player === "object"
@@ -4298,6 +4406,23 @@ window.Empire.Map = (() => {
     return String(side || "").trim().toLowerCase() === "sell" ? "prodejní" : "nákupní";
   }
 
+  function buildRandomVerifiedDistrictGossip(district, payload = {}) {
+    const districtLabel = resolveDistrictNumberLabel(district);
+    const seedSource = `${districtLabel}:${Date.now()}:${payload?.districtId || ""}:${payload?.sourceBuilding || ""}`;
+    const seed = Math.abs(hashOwner(seedSource));
+    const options = [
+      `Potvrzený intel: V districtu ${districtLabel} proběhl tichý přesun hotovosti přes noční podniky.`,
+      `Potvrzený intel: V districtu ${districtLabel} byla zachycena nečekaná zásilka materiálu po zavírací době.`,
+      `Potvrzený intel: V districtu ${districtLabel} se mění směny ochranky kvůli interním sporům.`,
+      `Potvrzený intel: V districtu ${districtLabel} došlo k přesunu zbraní do provizorního skladu.`,
+      `Potvrzený intel: V districtu ${districtLabel} byl zaznamenán zvýšený pohyb kurýrů mezi podniky.`,
+      `Potvrzený intel: V districtu ${districtLabel} se připravuje rychlá výměna vedení lokální buňky.`,
+      `Potvrzený intel: V districtu ${districtLabel} byla potvrzena dohoda o ochraně tras.`,
+      `Potvrzený intel: V districtu ${districtLabel} se krátkodobě stáhla pouliční hlídka kvůli internímu rozkazu.`
+    ];
+    return options[seed % options.length];
+  }
+
   function buildIntelEventText(type, district, payload = {}) {
     const districtLabel = resolveDistrictNumberLabel(district);
     const resourceLabel = formatMarketResourceLabel(payload.resourceKey);
@@ -4316,7 +4441,7 @@ window.Empire.Map = (() => {
       return `Potvrzený intel: V districtu ${districtLabel} bylo zahájeno vykrádání.`;
     }
     if (type === "spy_started") {
-      return `Potvrzený intel: V districtu ${districtLabel} byla potvrzena špionážní aktivita.`;
+      return buildRandomVerifiedDistrictGossip(district, payload);
     }
     if (type === "market_order_created") {
       const details = quantityLabel > 0 && priceLabel > 0
@@ -4619,7 +4744,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Bytový blok je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(APARTMENT_BLOCK_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistApartmentState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -4896,7 +5021,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Škola je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(SCHOOL_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistSchoolState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -5102,7 +5227,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Fitness centrum je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(FITNESS_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistFitnessState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -5333,7 +5458,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Kasino je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(CASINO_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistCasinoState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -5628,7 +5753,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Herna je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(ARCADE_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistArcadeState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -5931,7 +6056,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Autosalon je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(AUTO_SALON_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistAutoSalonState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -6207,7 +6332,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Směnárna je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(EXCHANGE_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistExchangeState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -6595,7 +6720,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Restaurace je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistRestaurantState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -6923,7 +7048,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Večerka je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(CONVENIENCE_STORE_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistConvenienceStoreState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -7113,7 +7238,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Továrna je na maximálním levelu." };
       }
       const cost = getFactoryUpgradeCost(nextLevel);
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistFactoryState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -7399,7 +7524,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Zbrojovka je na maximálním levelu." };
       }
       const cost = getArmoryUpgradeCost(nextLevel);
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistArmoryState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -7427,6 +7552,11 @@ window.Empire.Map = (() => {
 
     const levelMultiplier = getPharmacyLevelMultiplier(snapshot.level);
     const rates = calculatePharmacyProductionRates(levelMultiplier);
+    const ownedPharmacyCount = getOwnedPharmacyCount();
+    const pharmacyProductionBonusPct = getPharmacyProductionBonusPct();
+    const ownedWarehouseCount = getOwnedWarehouseCountForDrugLab();
+    const pharmacyStorageCapBonusPct = getPharmacyStorageCapBonusPct();
+    const slotCapMultiplier = getPharmacyStorageCapMultiplier();
     const nextLevel = snapshot.level < PHARMACY_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? getPharmacyUpgradeCost(nextLevel) : 0;
     const boostSnapshot = getPharmacyBoostSnapshot(now);
@@ -7439,6 +7569,9 @@ window.Empire.Map = (() => {
         resourceLabel: config?.label || slot.resourceKey,
         isProducing: Boolean(slot.isProducing),
         producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
+        slotCap: Number.isFinite(Number(PHARMACY_CONFIG.slotStorageCaps?.[slot.resourceKey]))
+          ? Math.max(0, Math.floor(Number(PHARMACY_CONFIG.slotStorageCaps[slot.resourceKey]) * slotCapMultiplier))
+          : Number.NaN,
         perHour: Math.max(0, Number(
           slot.resourceKey === "chemicals"
             ? rates.chemicalsPerHour
@@ -7466,6 +7599,8 @@ window.Empire.Map = (() => {
         effects.push(`Aktivní boosty: ${activeLabels}`);
       }
     }
+    effects.push(`Síť Lékáren: ${ownedPharmacyCount} (+${formatDecimalValue(pharmacyProductionBonusPct, 2)}% rychlost produkce)`);
+    effects.push(`Sklady hráče: ${ownedWarehouseCount} (+${formatDecimalValue(pharmacyStorageCapBonusPct, 2)}% maximální výroba slotů)`);
     effects.push(`Zásoby v Drug Labu: C ${boostSnapshot.supplies.chemicals}, B ${boostSnapshot.supplies.biomass}, S ${boostSnapshot.supplies.stimPack}`);
 
     return {
@@ -7503,6 +7638,10 @@ window.Empire.Map = (() => {
           biomass: rates.biomassPerHour,
           stimPack: rates.stimPackPerHour
         },
+        ownedPharmacyCount,
+        pharmacyProductionBonusPct,
+        ownedWarehouseCount,
+        pharmacyStorageCapBonusPct,
         producedSinceLastTick: createPharmacyResourceMap(syncResult.produced),
         globalBoost: boostSnapshot.effective,
         drugLabSupplies: createDrugLabSupplyMap(boostSnapshot.supplies || {}),
@@ -7538,13 +7677,23 @@ window.Empire.Map = (() => {
           Math.floor(Number(player.labSupplies[resourceKey] || 0) + Number(collected[resourceKey] || 0))
         );
       });
+      const heatAdded = Math.max(0, Number(collected.chemicals || 0)) * 0.5;
+      const nextHeat = heatAdded > 0 ? addPlayerHeatFromBuilding(heatAdded) : readCurrentPlayerHeatValue();
+      if (Array.isArray(snapshot.slots)) {
+        snapshot.slots.forEach((slot) => {
+          slot.producedAmount = 0;
+          slot.productionRemainder = 0;
+          slot.lastTick = now;
+        });
+      }
       persistPharmacyState(key, snapshot);
       persistDrugLabPlayerSnapshot(player);
       return {
         ok: true,
         message:
           `Lékárna -> Drug Lab: vybráno C ${collected.chemicals}, B ${collected.biomass}, S ${collected.stimPack}. `
-          + `Stav zásob DL: C ${player.labSupplies.chemicals}, B ${player.labSupplies.biomass}, S ${player.labSupplies.stimPack}.`
+          + `Stav zásob DL: C ${player.labSupplies.chemicals}, B ${player.labSupplies.biomass}, S ${player.labSupplies.stimPack}. `
+          + `Heat +${formatDecimalValue(heatAdded, 1)} (celkem ${formatDecimalValue(nextHeat, 1)}).`
       };
     }
 
@@ -7555,7 +7704,7 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Lékárna je na maximálním levelu." };
       }
       const cost = getPharmacyUpgradeCost(nextLevel);
-      const spend = window.Empire.UI?.trySpendCash;
+      const spend = window.Empire.UI?.trySpendCleanCash;
       if (typeof spend !== "function") {
         persistPharmacyState(key, snapshot);
         return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
@@ -7581,6 +7730,8 @@ window.Empire.Map = (() => {
     const activeDistrict = primaryTarget.district || district || null;
     const sync = runDrugLabTick(activeContext, activeDistrict, now);
     const { core, building, player, instanceKey } = sync;
+    const buildingState = building && typeof building === "object" ? building : createDrugLabDefaultState(now);
+    const playerState = player && typeof player === "object" ? player : createDrugLabDefaultPlayerState();
     const unlockedSlots = core.getUnlockedSlotCount();
     const storageCapacity = core.getStorageCapacity();
     const storedTotal = core.getCurrentStoredTotal();
@@ -7594,26 +7745,44 @@ window.Empire.Map = (() => {
     const ownedWarehouseCount = getOwnedWarehouseCountForDrugLab();
     const storageCapacityBonusPct = getDrugLabStorageCapacityBonusPct();
     const warehouseProductionBonusPct = getDrugLabProductionBonusPct();
-    const pharmacySupplies = createDrugLabSupplyMap(player.labSupplies || {});
+    const pharmacySupplies = createDrugLabSupplyMap(playerState.labSupplies || {});
 
-    const slots = building.slots.map((slot) => {
+    const slots = (Array.isArray(buildingState.slots) ? buildingState.slots : []).map((slot) => {
       const unlocked = Number(slot.id) <= unlockedSlots;
       const activeDrug = DRUG_CONFIG[slot.activeDrugType] || DRUG_CONFIG.neonDust;
+      const isProducing = unlocked && Boolean(slot.isProducing);
+      const queuedUnits = isProducing
+        ? Math.max(0, Math.floor(Number(slot.queuedUnits || 0)))
+        : Math.max(1, Math.floor(Number(slot.queuedUnits || 1)));
+      const queuedSupplyCost = getDrugLabSupplyCost(activeDrug.id, queuedUnits);
       return {
         id: Number(slot.id),
         unlocked,
         activeDrugType: activeDrug.id,
         activeDrugName: activeDrug.name,
-        isProducing: unlocked && Boolean(slot.isProducing),
-        queuedUnits: Math.max(1, Math.floor(Number(slot.queuedUnits || 1))),
+        isProducing,
+        queuedUnits,
         queueRemaining: Math.max(0, Math.floor(Number(slot.queueRemaining || 0))),
         supplyCost: getDrugLabSupplyCost(activeDrug.id, 1),
+        queuedSupplyCost,
         producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
         lastTick: Math.max(0, Number(slot.lastTick || 0)),
         startedAt: Math.max(0, Number(slot.startedAt || 0))
       };
     });
     const activeSlots = slots.filter((slot) => slot.unlocked && slot.isProducing).length;
+    const queuedSupplyDemand = slots.reduce((acc, slot) => {
+      if (!slot.unlocked) return acc;
+      acc.chemicals += Math.max(0, Math.floor(Number(slot.queuedSupplyCost?.chemicals || 0)));
+      acc.biomass += Math.max(0, Math.floor(Number(slot.queuedSupplyCost?.biomass || 0)));
+      acc.stimPack += Math.max(0, Math.floor(Number(slot.queuedSupplyCost?.stimPack || 0)));
+      return acc;
+    }, createDrugLabSupplyMap());
+    const availableQueuedSupplies = createDrugLabSupplyMap({
+      chemicals: Math.max(0, Math.floor(Number(pharmacySupplies.chemicals || 0) - Number(queuedSupplyDemand.chemicals || 0))),
+      biomass: Math.max(0, Math.floor(Number(pharmacySupplies.biomass || 0) - Number(queuedSupplyDemand.biomass || 0))),
+      stimPack: Math.max(0, Math.floor(Number(pharmacySupplies.stimPack || 0) - Number(queuedSupplyDemand.stimPack || 0)))
+    });
 
     const effects = [];
     if (ownedWarehouseCount > 0) {
@@ -7631,15 +7800,15 @@ window.Empire.Map = (() => {
       effects.push(`Síť Drug Labů: +${formatDecimalValue(networkProductionBonusPct, 2)}% produkce`);
     }
     if (core.isOverclockActive(now)) {
-      effects.push(`Overclock (${formatDurationLabel(building.effects.overclockUntil - now)})`);
+      effects.push(`Overclock (${formatDurationLabel(Number(buildingState.effects?.overclockUntil || 0) - now)})`);
     }
     if (core.isCleanBatchActive(now)) {
-      effects.push(`Čistá várka (${formatDurationLabel(building.effects.cleanBatchUntil - now)})`);
+      effects.push(`Čistá várka (${formatDurationLabel(Number(buildingState.effects?.cleanBatchUntil || 0) - now)})`);
     }
     if (core.isHiddenOperationActive(now)) {
-      effects.push(`Skrytý provoz (${formatDurationLabel(building.effects.hiddenOperationUntil - now)})`);
+      effects.push(`Skrytý provoz (${formatDurationLabel(Number(buildingState.effects?.hiddenOperationUntil || 0) - now)})`);
     }
-    Object.entries(player.activeDrugEffects || {}).forEach(([key, stateRef]) => {
+    Object.entries(playerState.activeDrugEffects || {}).forEach(([key, stateRef]) => {
       if (!stateRef?.active) return;
       if (now >= Number(stateRef.endsAt || 0)) return;
       effects.push(
@@ -7675,13 +7844,13 @@ window.Empire.Map = (() => {
       mechanics: {
         type: "drug-lab",
         instanceKey,
-        level: building.level,
+        level: buildingState.level,
         nextLevel,
         nextUpgradeCost,
         cooldowns: {
-          overclock: Math.max(0, Number(building.cooldowns.overclock || 0) - now),
-          cleanBatch: Math.max(0, Number(building.cooldowns.cleanBatch || 0) - now),
-          hiddenOperation: Math.max(0, Number(building.cooldowns.hiddenOperation || 0) - now)
+          overclock: Math.max(0, Number(buildingState.cooldowns?.overclock || 0) - now),
+          cleanBatch: Math.max(0, Number(buildingState.cooldowns?.cleanBatch || 0) - now),
+          hiddenOperation: Math.max(0, Number(buildingState.cooldowns?.hiddenOperation || 0) - now)
         },
         heatPerDay,
         heatPerHour,
@@ -7689,11 +7858,13 @@ window.Empire.Map = (() => {
         unlockedSlots,
         activeSlots,
         slots,
-        storage: createDrugLabAmountMap(building.storage),
-        storageEnhanced: createDrugLabAmountMap(building.storageEnhanced),
+        storage: createDrugLabAmountMap(buildingState.storage),
+        storageEnhanced: createDrugLabAmountMap(buildingState.storageEnhanced),
         storedTotal,
         storageCapacity,
         pharmacySupplies,
+        availableQueuedSupplies,
+        queuedSupplyDemand,
         currentProductionMultiplier: core.getProductionMultiplier(now),
         ownedWarehouseCount,
         storageCapacityBonusPct,
@@ -7711,7 +7882,7 @@ window.Empire.Map = (() => {
           })
           .filter((entry) => entry.active),
         playerStats: {
-          totalHeat: Math.max(0, Math.floor(Number(player.totalHeat || 0)))
+          totalHeat: Math.max(0, Math.floor(Number(playerState.totalHeat || 0)))
         },
         ownedLabCount,
         networkProductionBonusPct,
@@ -7776,7 +7947,7 @@ window.Empire.Map = (() => {
         slot.activeDrugType = drugType;
         slot.lastTick = now;
         slot.productionRemainder = 0;
-        result = { ok: true, message: `Slot ${slot.id}: nastavena droga ${DRUG_CONFIG[drugType].name}.` };
+        result = { ok: true, message: `Slot ${slot.id}: nastavena droga ${DRUG_CONFIG[drugType].name}.`, silentUiEvent: true };
       }
     } else if (action === "slotAmount") {
       const slotId = Math.max(1, Math.floor(Number(payload.slotId) || 0));
@@ -7789,15 +7960,25 @@ window.Empire.Map = (() => {
       } else if (!delta) {
         result = { ok: false, message: "Neplatná změna množství." };
       } else {
-        slot.queuedUnits = clamp(Math.floor(Number(slot.queuedUnits || 1) + delta), 1, 999);
-        result = { ok: true, message: `Slot ${slot.id}: nastaveno ${slot.queuedUnits} dávek.` };
+        const minUnits = slot.isProducing ? 0 : 1;
+        const currentUnits = slot.isProducing
+          ? Math.max(0, Math.floor(Number(slot.queuedUnits || 0)))
+          : Math.max(1, Math.floor(Number(slot.queuedUnits || 1)));
+        slot.queuedUnits = clamp(currentUnits + delta, minUnits, 999);
+        result = { ok: true, message: `Slot ${slot.id}: nastaveno ${slot.queuedUnits} dávek.`, silentUiEvent: true };
       }
     } else if (action === "slotStart") {
       const slotId = Math.max(1, Math.floor(Number(payload.slotId) || 0));
       const slot = core.getSlotById(slotId);
+      const wasProducing = Boolean(slot?.isProducing && Math.max(0, Math.floor(Number(slot?.queueRemaining || 0))) > 0);
       const selectedDrug = String(payload.drugType || slot?.activeDrugType || "").trim();
-      const selectedUnits = clamp(Math.floor(Number(payload.units) || Number(slot?.queuedUnits || 1)), 1, 999);
-      const supplyCost = getDrugLabSupplyCost(selectedDrug, selectedUnits);
+      const selectedUnits = clamp(
+        Math.floor(Number(payload.units) || Number(slot?.queuedUnits || (wasProducing ? 0 : 1))),
+        wasProducing ? 0 : 1,
+        999
+      );
+      const appendedUnits = selectedUnits;
+      const supplyCost = getDrugLabSupplyCost(selectedDrug, appendedUnits);
       const availableSupplies = createDrugLabSupplyMap(player.labSupplies || {});
       const hasEnough =
         Number(availableSupplies.chemicals || 0) >= Number(supplyCost.chemicals || 0)
@@ -7827,6 +8008,9 @@ window.Empire.Map = (() => {
             Math.floor(Number(player.labSupplies.stimPack || 0) - Number(supplyCost.stimPack || 0))
           );
           result.message += ` Spotřeba: C ${supplyCost.chemicals}, B ${supplyCost.biomass}, S ${supplyCost.stimPack}.`;
+          if (wasProducing) {
+            result.silentUiEvent = true;
+          }
         }
       }
     } else if (action === "slotStop") {
@@ -7840,7 +8024,7 @@ window.Empire.Map = (() => {
     }
 
     if (result?.ok) {
-      pushDrugLabLog(player, result.message, now);
+      pushDrugLabLog(player, result.message, now, { silentUiEvent: Boolean(result.silentUiEvent) });
     }
     persistDrugLabRuntime(sync, now);
     return result;
@@ -7860,6 +8044,27 @@ window.Empire.Map = (() => {
     if (!root) return;
     const mechanics = details?.mechanics;
     const mechanicsType = String(mechanics?.type || "").trim();
+    const getProductBadge = (value, explicitKind = "") => {
+      const normalized = String(value || "").trim().toLowerCase();
+      const kind = String(explicitKind || "").trim().toLowerCase();
+      if (kind === "gear") return { tone: "steel", icon: "gear" };
+      if (kind === "chip") return { tone: "cyan", icon: "chip" };
+      if (kind === "crate") return { tone: "amber", icon: "crate" };
+      if (kind === "attack") return { tone: "red", icon: "crosshair" };
+      if (kind === "defense") return { tone: "cyan", icon: "shield" };
+      if (!normalized) return { tone: "neutral", icon: "dot" };
+      if (normalized.includes("stim")) return { tone: "violet", icon: "plus" };
+      if (normalized.includes("chem")) return { tone: "cyan", icon: "flask" };
+      if (normalized.includes("bio")) return { tone: "green", icon: "leaf" };
+      if (normalized.includes("meth")) return { tone: "cyan", icon: "crystal" };
+      if (normalized.includes("coke") || normalized.includes("kok")) return { tone: "red", icon: "powder" };
+      if (normalized.includes("pill")) return { tone: "amber", icon: "capsule" };
+      if (normalized.includes("acid")) return { tone: "violet", icon: "drop" };
+      if (normalized.includes("combat module")) return { tone: "amber", icon: "crate" };
+      if (normalized.includes("tech core")) return { tone: "cyan", icon: "chip" };
+      if (normalized.includes("metal part")) return { tone: "steel", icon: "gear" };
+      return { tone: "neutral", icon: "dot" };
+    };
     if (mechanicsType !== "drug-lab" && mechanicsType !== "pharmacy" && mechanicsType !== "factory" && mechanicsType !== "armory") {
       root.innerHTML = "";
       root.classList.add("hidden");
@@ -7868,52 +8073,87 @@ window.Empire.Map = (() => {
 
     if (mechanicsType === "pharmacy") {
       const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
-        .map((slot) => `
-          <div class="drug-lab-slot${slot.isProducing ? "" : " drug-lab-slot--locked"}">
-            <div class="drug-lab-slot__head">
-              <strong>Slot ${slot.id} • ${slot.resourceLabel}</strong>
-              <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
-            </div>
-            <div class="drug-lab-slot__meta">
-              Rychlost: ${formatDecimalValue(slot.perHour || 0, 2)}/h • Vyrobeno: ${Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}
-            </div>
-            <div class="drug-lab-slot__controls">
-              <button class="drug-lab-mini-btn" type="button" data-pharmacy-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
-                Start
-              </button>
-              <button class="drug-lab-mini-btn" type="button" data-pharmacy-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
-                Stop
-              </button>
-            </div>
-          </div>
-        `)
+        .map((slot) => {
+          const producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
+          const perHour = formatDecimalValue(slot.perHour || 0, 2);
+          const productBadge = getProductBadge(slot.resourceLabel);
+          const slotCapRaw = Number(slot.slotCap);
+          const isSlotAtCap = Number.isFinite(slotCapRaw) && producedAmount >= Math.max(0, Math.floor(slotCapRaw));
+          const producedLabel = Number.isFinite(slotCapRaw)
+            ? `${producedAmount}/${Math.max(0, Math.floor(slotCapRaw))}`
+            : `${producedAmount}`;
+          return `
+            <article class="pharmacy-slot${slot.isProducing ? " pharmacy-slot--active" : " pharmacy-slot--idle"}">
+              <div class="pharmacy-slot__head">
+                <div class="pharmacy-slot__title-wrap">
+                  <div class="pharmacy-slot__title-line">
+                    <span class="pharmacy-slot__icon pharmacy-slot__icon--${productBadge.tone} pharmacy-slot__icon--${productBadge.icon}" aria-hidden="true"></span>
+                    <strong class="pharmacy-slot__title">${slot.resourceLabel}</strong>
+                  </div>
+                </div>
+                <span class="pharmacy-slot__state">${slot.isProducing ? "Aktivní" : "Připraven"}</span>
+              </div>
+              <div class="pharmacy-slot__metrics">
+                <div class="pharmacy-slot__metric">
+                  <span class="pharmacy-slot__metric-label">Rychlost</span>
+                  <strong class="pharmacy-slot__metric-value">${perHour}/h</strong>
+                </div>
+                <div class="pharmacy-slot__metric">
+                  <span class="pharmacy-slot__metric-label">Vyrobeno</span>
+                  <strong class="pharmacy-slot__metric-value">${producedLabel}</strong>
+                </div>
+              </div>
+              <div class="pharmacy-slot__actions">
+                <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--start" type="button" data-pharmacy-slot-start="${slot.id}" ${(slot.isProducing || isSlotAtCap) ? "disabled" : ""}>
+                  Spustit výrobu
+                </button>
+                <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--stop" type="button" data-pharmacy-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
+                  Zastavit
+                </button>
+              </div>
+            </article>
+          `;
+        })
         .join("");
 
       const resources = mechanics.resources || {};
       const drugLabSupplies = mechanics.drugLabSupplies || {};
-      const storageStatusLabel =
-        `Interní sklad Lékárny: C ${Math.max(0, Math.floor(Number(resources.chemicals || 0)))} • `
-        + `B ${Math.max(0, Math.floor(Number(resources.biomass || 0)))} • `
-        + `S ${Math.max(0, Math.floor(Number(resources.stimPack || 0)))}`;
-      const transferStatusLabel =
-        `Zásoby Drug Labu: C ${Math.max(0, Math.floor(Number(drugLabSupplies.chemicals || 0)))} • `
-        + `B ${Math.max(0, Math.floor(Number(drugLabSupplies.biomass || 0)))} • `
-        + `S ${Math.max(0, Math.floor(Number(drugLabSupplies.stimPack || 0)))}`;
+      const internalChemicals = Math.max(0, Math.floor(Number(resources.chemicals || 0)));
+      const internalBiomass = Math.max(0, Math.floor(Number(resources.biomass || 0)));
+      const internalStimPack = Math.max(0, Math.floor(Number(resources.stimPack || 0)));
+      const labChemicals = Math.max(0, Math.floor(Number(drugLabSupplies.chemicals || 0)));
+      const labBiomass = Math.max(0, Math.floor(Number(drugLabSupplies.biomass || 0)));
+      const labStimPack = Math.max(0, Math.floor(Number(drugLabSupplies.stimPack || 0)));
 
       root.innerHTML = `
-        <div class="drug-lab-card">
-          <h4 class="drug-lab-card__title">Produkční sloty Lékárny (${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))})</h4>
-          <p class="drug-lab-card__meta"><strong>${storageStatusLabel}</strong></p>
-          <p class="drug-lab-card__meta">${transferStatusLabel}</p>
-          <div class="drug-lab-grid">
+        <section class="drug-lab-card pharmacy-card">
+          <div class="pharmacy-stock-grid">
+            <div class="pharmacy-stock-card">
+              <span class="pharmacy-stock-card__label">Interní sklad Lékárny</span>
+              <div class="pharmacy-stock-card__values">
+                <span>C ${internalChemicals}</span>
+                <span>B ${internalBiomass}</span>
+                <span>S ${internalStimPack}</span>
+              </div>
+            </div>
+            <div class="pharmacy-stock-card pharmacy-stock-card--accent">
+              <span class="pharmacy-stock-card__label">Zásoby Drug Labu</span>
+              <div class="pharmacy-stock-card__values">
+                <span>C ${labChemicals}</span>
+                <span>B ${labBiomass}</span>
+                <span>S ${labStimPack}</span>
+              </div>
+            </div>
+          </div>
+          <div class="pharmacy-slot-grid">
             ${slotRows}
           </div>
-        </div>
-        <div class="drug-lab-card">
+        </section>
+        <section class="drug-lab-card pharmacy-card pharmacy-card--hint">
           <p class="drug-lab-card__meta">
             Boosty z Lékárny aktivuješ přes tlačítko Boost nad mapou. Stim Pack se bere ze zásob Drug Labu.
           </p>
-        </div>
+        </section>
       `;
       root.classList.remove("hidden");
       return;
@@ -7923,25 +8163,48 @@ window.Empire.Map = (() => {
       const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
         .map((slot) => {
           const isCraftSlot = String(slot.mode || "").trim() === "craft";
-          const metaLabel = isCraftSlot
-            ? `Recept: ${FACTORY_CONFIG.combatModule.metalPartsCost} MP + ${FACTORY_CONFIG.combatModule.techCoreCost} TC • ${formatDurationLabel(slot.effectiveDurationMs || FACTORY_CONFIG.combatModule.durationMs)}/ks • Vyrobeno: ${Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}`
-            : `Rychlost: ${formatDecimalValue(slot.perHour || 0, 2)}/h • Vyrobeno: ${Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}`;
+          const productBadge = getProductBadge(
+            slot.resourceLabel,
+            isCraftSlot
+              ? "crate"
+              : String(slot.resourceKey || "").trim() === "techCore"
+                ? "chip"
+                : "gear"
+          );
           return `
-            <div class="drug-lab-slot">
-              <div class="drug-lab-slot__head">
-                <strong>Slot ${slot.id} • ${slot.resourceLabel}</strong>
-                <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
+            <article class="factory-slot${slot.isProducing ? " factory-slot--active" : ""}">
+              <div class="factory-slot__head">
+                <div class="factory-slot__title-wrap">
+                  <span class="drug-production-slot__icon drug-production-slot__icon--${productBadge.tone} drug-production-slot__icon--${productBadge.icon}" aria-hidden="true"></span>
+                  <div class="drug-production-slot__titles">
+                    <strong class="drug-production-slot__title">${slot.resourceLabel}</strong>
+                  </div>
+                </div>
+                <span class="drug-production-slot__state">${slot.isProducing ? "Produkuje" : "Připraven"}</span>
               </div>
-              <div class="drug-lab-slot__meta">${metaLabel}</div>
-              <div class="drug-lab-slot__controls">
-                <button class="drug-lab-mini-btn" type="button" data-factory-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
-                  Start
+              <div class="drug-production-slot__metrics">
+                <div class="drug-production-slot__metric">
+                  <span class="drug-production-slot__metric-label">${isCraftSlot ? "Recept" : "Rychlost"}</span>
+                  <strong class="drug-production-slot__metric-value">${isCraftSlot ? `${FACTORY_CONFIG.combatModule.metalPartsCost} MP + ${FACTORY_CONFIG.combatModule.techCoreCost} TC` : `${formatDecimalValue(slot.perHour || 0, 2)}/h`}</strong>
+                </div>
+                <div class="drug-production-slot__metric">
+                  <span class="drug-production-slot__metric-label">${isCraftSlot ? "Čas / kus" : "Vyrobeno"}</span>
+                  <strong class="drug-production-slot__metric-value">${isCraftSlot ? formatDurationLabel(slot.effectiveDurationMs || FACTORY_CONFIG.combatModule.durationMs) : Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}</strong>
+                </div>
+                <div class="drug-production-slot__metric">
+                  <span class="drug-production-slot__metric-label">${isCraftSlot ? "Heat / kus" : "Typ produkce"}</span>
+                  <strong class="drug-production-slot__metric-value">${isCraftSlot ? `+${FACTORY_CONFIG.combatModule.heatPerUnit}` : "pasivní výroba"}</strong>
+                </div>
+              </div>
+              <div class="factory-slot__actions">
+                <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--start" type="button" data-factory-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
+                  Spustit
                 </button>
-                <button class="drug-lab-mini-btn" type="button" data-factory-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
-                  Stop
+                <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--stop" type="button" data-factory-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
+                  Zastavit
                 </button>
               </div>
-            </div>
+            </article>
           `;
         })
         .join("");
@@ -7958,15 +8221,34 @@ window.Empire.Map = (() => {
         + `CM ${Math.max(0, Math.floor(Number(playerSupplies.combatModule || 0)))}`;
 
       root.innerHTML = `
-        <div class="drug-lab-card">
-          <h4 class="drug-lab-card__title">Produkční sloty Továrny (${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))})</h4>
-          <p class="drug-lab-card__meta"><strong>${storageStatusLabel}</strong></p>
-          <p class="drug-lab-card__meta">${playerStockLabel}</p>
-          <div class="drug-lab-grid">
+        <section class="drug-lab-card drug-production-card factory-card">
+          <div class="drug-production-card__header">
+            <div>
+              <h4 class="drug-lab-card__title">Továrna</h4>
+              <p class="drug-production-card__subtitle">Výroba součástek a Combat Modulů pro bojové boosty.</p>
+            </div>
+            <div class="drug-production-card__capacity">
+              <span class="drug-production-card__capacity-label">Aktivní sloty</span>
+              <strong class="drug-production-card__capacity-value">${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))}</strong>
+            </div>
+          </div>
+          <div class="drug-production-card__stats">
+            <div class="drug-production-stat">
+              <span class="drug-production-stat__label">Interní sklad Továrny</span>
+              <strong class="drug-production-stat__value">MP ${Math.max(0, Math.floor(Number(resources.metalParts || 0)))} • TC ${Math.max(0, Math.floor(Number(resources.techCore || 0)))} • CM ${Math.max(0, Math.floor(Number(resources.combatModule || 0)))}</strong>
+              <small class="drug-production-stat__meta">aktuálně vyrobené zásoby budovy</small>
+            </div>
+            <div class="drug-production-stat">
+              <span class="drug-production-stat__label">Sklad hráče</span>
+              <strong class="drug-production-stat__value">MP ${Math.max(0, Math.floor(Number(playerSupplies.metalParts || 0)))} • TC ${Math.max(0, Math.floor(Number(playerSupplies.techCore || 0)))} • CM ${Math.max(0, Math.floor(Number(playerSupplies.combatModule || 0)))}</strong>
+              <small class="drug-production-stat__meta">materiály dostupné mimo budovu</small>
+            </div>
+          </div>
+          <div class="pharmacy-slot-grid">
             ${slotRows}
           </div>
-        </div>
-        <div class="drug-lab-card">
+        </section>
+        <div class="drug-lab-card factory-card factory-card--hint">
           <p class="drug-lab-card__meta">
             Combat Module: ${FACTORY_CONFIG.combatModule.metalPartsCost} MP + ${FACTORY_CONFIG.combatModule.techCoreCost} TC, ${formatDurationLabel(FACTORY_CONFIG.combatModule.durationMs)} / ks, +${FACTORY_CONFIG.combatModule.heatPerUnit} heat / ks.
           </p>
@@ -7989,36 +8271,62 @@ window.Empire.Map = (() => {
         : sourceSlots.filter((slot) => String(slot.category || "").trim() === "defense");
       const playerMaterials = mechanics.playerMaterials || {};
       const renderSlotRows = (slots) => slots
-        .map((slot) => `
-          <div class="drug-lab-slot${slot.isProducing ? "" : " drug-lab-slot--locked"}">
-            <div class="drug-lab-slot__head">
-              <strong>Slot ${slot.id} • ${slot.weaponName}</strong>
-              <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
+        .map((slot) => {
+          const slotBadge = getProductBadge(slot.weaponName, String(slot.category || "").trim() === "defense" ? "defense" : "attack");
+          return `
+          <article class="armory-slot${slot.isProducing ? " armory-slot--active" : ""}">
+              <div class="armory-slot__head">
+              <div class="armory-slot__title-wrap">
+                <span class="drug-production-slot__icon drug-production-slot__icon--${slotBadge.tone} drug-production-slot__icon--${slotBadge.icon}" aria-hidden="true"></span>
+                <div class="drug-production-slot__titles">
+                  <strong class="drug-production-slot__title">${slot.weaponName}</strong>
+                </div>
+              </div>
+              <span class="drug-production-slot__state">${slot.isProducing ? "Produkuje" : "Připraven"}</span>
             </div>
-            <div class="drug-lab-slot__meta">
-              Recept: ${slot.metalPartsCost} MP + ${slot.techCoreCost} TC • ${formatDurationLabel(slot.effectiveDurationMs || slot.durationMs)} / ks • ${slot.powerLabel || "Síla"} +${Math.max(0, Math.floor(Number(slot.powerValue || 0)))}
+            <div class="drug-production-slot__metrics">
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Recept</span>
+                <strong class="drug-production-slot__metric-value">${slot.metalPartsCost} MP + ${slot.techCoreCost} TC</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Čas / kus</span>
+                <strong class="drug-production-slot__metric-value">${formatDurationLabel(slot.effectiveDurationMs || slot.durationMs)}</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">${slot.powerLabel || "Síla"}</span>
+                <strong class="drug-production-slot__metric-value">+${Math.max(0, Math.floor(Number(slot.powerValue || 0)))}</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Nastaveno</span>
+                <strong class="drug-production-slot__metric-value">${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))} ks</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Ve frontě</span>
+                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.remainingUnits || 0)))} ks</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Celkem potřeba</span>
+                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.queuedUnits || 1))) * Math.max(0, Math.floor(Number(slot.metalPartsCost || 0)))} MP + ${Math.max(0, Math.floor(Number(slot.queuedUnits || 1))) * Math.max(0, Math.floor(Number(slot.techCoreCost || 0)))} TC</strong>
+              </div>
             </div>
-            <div class="drug-lab-slot__meta">
-              Nastaveno: ${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))} ks • Ve frontě: ${Math.max(0, Math.floor(Number(slot.remainingUnits || 0)))} ks
-              • Potřeba celkem: ${Math.max(0, Math.floor(Number(slot.queuedUnits || 1))) * Math.max(0, Math.floor(Number(slot.metalPartsCost || 0)))} MP
-              + ${Math.max(0, Math.floor(Number(slot.queuedUnits || 1))) * Math.max(0, Math.floor(Number(slot.techCoreCost || 0)))} TC
-            </div>
-            <div class="drug-lab-slot__meta">${slot.specialEffect}</div>
-            <div class="drug-lab-slot__controls drug-lab-slot__controls--combat">
+            <div class="drug-lab-card__meta">${slot.specialEffect}</div>
+            <div class="drug-production-slot__controls">
               <div class="drug-lab-stepper">
                 <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-armory-slot-id="${slot.id}" data-armory-slot-adjust="-1">-</button>
                 <strong class="drug-lab-stepper__value">${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
                 <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-armory-slot-id="${slot.id}" data-armory-slot-adjust="1">+</button>
               </div>
-              <button class="drug-lab-mini-btn" type="button" data-armory-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
-                Start
+              <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--start" type="button" data-armory-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
+                Spustit
               </button>
-              <button class="drug-lab-mini-btn" type="button" data-armory-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
-                Stop
+              <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--stop" type="button" data-armory-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
+                Zastavit
               </button>
             </div>
-          </div>
-        `)
+          </article>
+        `;
+        })
         .join("");
       const attackRows = renderSlotRows(attackSlots);
       const defenseRows = renderSlotRows(defenseSlots);
@@ -8042,18 +8350,40 @@ window.Empire.Map = (() => {
         + `TC ${Math.max(0, Math.floor(Number(playerMaterials.techCore || 0)))}`;
 
       root.innerHTML = `
-        <div class="drug-lab-card">
-          <h4 class="drug-lab-card__title">Zbrojovka: Útočné zbraně (${Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0)))}/${Math.max(1, Math.floor(Number(attackSlots.length || 0)))})</h4>
-          <p class="drug-lab-card__meta"><strong>${attackStorageStatusLabel || "Bez zásob útoku"}</strong></p>
-          <div class="drug-lab-grid">
+        <section class="drug-lab-card drug-production-card armory-card">
+          <div class="drug-production-card__header">
+            <div>
+              <h4 class="drug-lab-card__title">Zbrojovka</h4>
+              <p class="drug-production-card__subtitle">Výroba útočných i obranných zbraní z materiálů hráče.</p>
+            </div>
+            <div class="drug-production-card__capacity">
+              <span class="drug-production-card__capacity-label">Materiály</span>
+              <strong class="drug-production-card__capacity-value">MP ${Math.max(0, Math.floor(Number(playerMaterials.metalParts || 0)))} / TC ${Math.max(0, Math.floor(Number(playerMaterials.techCore || 0)))}</strong>
+            </div>
+          </div>
+          <div class="drug-production-card__stats">
+            <div class="drug-production-stat">
+              <span class="drug-production-stat__label">Útočné zbraně</span>
+              <strong class="drug-production-stat__value">${Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0)))}/${Math.max(1, Math.floor(Number(attackSlots.length || 0)))}</strong>
+              <small class="drug-production-stat__meta">${attackStorageStatusLabel || "Bez zásob útoku"}</small>
+            </div>
+            <div class="drug-production-stat">
+              <span class="drug-production-stat__label">Obranné zbraně</span>
+              <strong class="drug-production-stat__value">${Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)))}/${Math.max(1, Math.floor(Number(defenseSlots.length || 0)))}</strong>
+              <small class="drug-production-stat__meta">${defenseStorageStatusLabel || "Bez zásob obrany"}</small>
+            </div>
+          </div>
+        </section>
+        <div class="drug-lab-card armory-card armory-card--section">
+          <h4 class="drug-lab-card__title">Útočné sloty</h4>
+          <div class="pharmacy-slot-grid">
             ${attackRows}
           </div>
         </div>
-        <div class="drug-lab-card">
-          <h4 class="drug-lab-card__title">Zbrojovka: Obranné zbraně (${Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)))}/${Math.max(1, Math.floor(Number(defenseSlots.length || 0)))})</h4>
-          <p class="drug-lab-card__meta"><strong>${defenseStorageStatusLabel || "Bez zásob obrany"}</strong></p>
+        <div class="drug-lab-card armory-card armory-card--section">
+          <h4 class="drug-lab-card__title">Obranné sloty</h4>
           <p class="drug-lab-card__meta">${materialsLabel}</p>
-          <div class="drug-lab-grid">
+          <div class="pharmacy-slot-grid">
             ${defenseRows}
           </div>
         </div>
@@ -8069,45 +8399,72 @@ window.Empire.Map = (() => {
             `<option value="${key}" ${slot.activeDrugType === key ? "selected" : ""}>${DRUG_CONFIG[key].name}</option>`
           )
           .join("");
+        const activeDrugName = DRUG_CONFIG[String(slot.activeDrugType || "").trim()]?.name || "Není vybráno";
+        const productBadge = getProductBadge(activeDrugName);
         if (!slot.unlocked) {
           return `
-            <div class="drug-lab-slot drug-lab-slot--locked">
-              <div class="drug-lab-slot__head">
-                <strong>Slot ${slot.id}</strong>
-                <span>Zamčeno</span>
+            <article class="drug-production-slot drug-production-slot--locked">
+              <div class="drug-production-slot__head">
+                <div class="drug-production-slot__title-wrap">
+                  <span class="drug-production-slot__icon drug-production-slot__icon--neutral drug-production-slot__icon--dot" aria-hidden="true"></span>
+                  <strong class="drug-production-slot__title">Zamčená výrobní linka</strong>
+                </div>
+                <span class="drug-production-slot__state">Zamčeno</span>
               </div>
-              <div class="drug-lab-slot__meta">Odemkneš na vyšším levelu Drug Labu.</div>
-            </div>
+              <div class="drug-production-slot__empty">Odemkneš na vyšším levelu Drug Labu.</div>
+            </article>
           `;
         }
         return `
-          <div class="drug-lab-slot">
-            <div class="drug-lab-slot__head">
-              <strong>Slot ${slot.id}</strong>
-              <span>${slot.isProducing ? "Produkuje" : "Neaktivní"}</span>
+          <article class="drug-production-slot${slot.isProducing ? " drug-production-slot--active" : ""}">
+              <div class="drug-production-slot__head">
+                <div class="drug-production-slot__title-wrap">
+                  <span class="drug-production-slot__icon drug-production-slot__icon--${productBadge.tone} drug-production-slot__icon--${productBadge.icon}" aria-hidden="true"></span>
+                  <div class="drug-production-slot__titles">
+                    <strong class="drug-production-slot__title">${activeDrugName}</strong>
+                  </div>
+                </div>
+              <span class="drug-production-slot__state">${slot.isProducing ? "Produkuje" : "Připraven"}</span>
             </div>
-            <div class="drug-lab-slot__meta">
-              Vyrobeno v tomto slotu: ${slot.producedAmount} • Ve frontě: ${Math.max(0, Math.floor(Number(slot.queueRemaining || 0)))}
+            <div class="drug-production-slot__metrics">
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Vyrobeno</span>
+                <strong class="drug-production-slot__metric-value">${slot.producedAmount}</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Ve frontě</span>
+                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.queueRemaining || 0)))}</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Chemicals / dávka</span>
+                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.chemicals || 0)))}</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Biomass / dávka</span>
+                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.biomass || 0)))}</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Stim Pack / dávka</span>
+                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.stimPack || 0)))}</strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Nastaveno</span>
+                <strong class="drug-production-slot__metric-value">${slot.isProducing ? Math.max(0, Math.floor(Number(slot.queuedUnits || 0))) : Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
+              </div>
             </div>
-            <div class="drug-lab-slot__meta">
-              Recept / dávka: C ${Math.max(0, Math.floor(Number(slot.supplyCost?.chemicals || 0)))} •
-              B ${Math.max(0, Math.floor(Number(slot.supplyCost?.biomass || 0)))} •
-              S ${Math.max(0, Math.floor(Number(slot.supplyCost?.stimPack || 0)))} •
-              Nastaveno: ${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))} dávek
-            </div>
-            <div class="drug-lab-slot__controls">
+            <div class="drug-production-slot__controls">
               <select data-drug-lab-slot-select="${slot.id}">
                 ${options}
               </select>
               <div class="drug-lab-stepper">
                 <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-drug-lab-slot-id="${slot.id}" data-drug-lab-slot-adjust="-1">-</button>
-                <strong class="drug-lab-stepper__value">${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
+                <strong class="drug-lab-stepper__value">${slot.isProducing ? Math.max(0, Math.floor(Number(slot.queuedUnits || 0))) : Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
                 <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-drug-lab-slot-id="${slot.id}" data-drug-lab-slot-adjust="1">+</button>
               </div>
               <button class="drug-lab-mini-btn" type="button" data-drug-lab-slot-start="${slot.id}" ${
-                slot.isProducing ? "disabled" : ""
+                ""
               }>
-                Start
+                ${slot.isProducing ? "Přidat" : "Start"}
               </button>
               <button class="drug-lab-mini-btn" type="button" data-drug-lab-slot-stop="${slot.id}" ${
                 !slot.isProducing ? "disabled" : ""
@@ -8115,7 +8472,7 @@ window.Empire.Map = (() => {
                 Stop
               </button>
             </div>
-          </div>
+          </article>
         `;
       })
       .join("");
@@ -8136,10 +8493,12 @@ window.Empire.Map = (() => {
       ? `Sklady v území: ${ownedWarehouseCount} ${ownedWarehouseLabel} (+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita, +${formatDecimalValue(warehouseProductionBonusPct, 2)}% produkce)`
       : "Sklady v území: 0 (bez bonusu kapacity/produkce)";
     const pharmacySupplies = mechanics.pharmacySupplies || {};
+    const availableQueuedSupplies = mechanics.availableQueuedSupplies || pharmacySupplies;
+    const queuedSupplyDemand = mechanics.queuedSupplyDemand || createDrugLabSupplyMap();
     const supplyStatusLabel =
-      `Vstup z Lékárny: C ${Math.max(0, Math.floor(Number(pharmacySupplies.chemicals || 0)))} • `
-      + `B ${Math.max(0, Math.floor(Number(pharmacySupplies.biomass || 0)))} • `
-      + `S ${Math.max(0, Math.floor(Number(pharmacySupplies.stimPack || 0)))}`;
+      `Vstup z Lékárny: C ${Math.max(0, Math.floor(Number(availableQueuedSupplies.chemicals || 0)))} • `
+      + `B ${Math.max(0, Math.floor(Number(availableQueuedSupplies.biomass || 0)))} • `
+      + `S ${Math.max(0, Math.floor(Number(availableQueuedSupplies.stimPack || 0)))}`;
     const storageStatusLabel =
       `Interní sklad: ${Math.max(0, Math.floor(Number(mechanics.storedTotal || 0)))}/${Math.max(1, Math.floor(Number(mechanics.storageCapacity || 0)))}`;
 
@@ -8156,16 +8515,43 @@ window.Empire.Map = (() => {
       : `<div class="drug-lab-list__item"><span>Žádné aktivní efekty</span><span class="drug-lab-list__value">-</span><small>-</small></div>`;
 
     root.innerHTML = `
-      <div class="drug-lab-card">
-        <h4 class="drug-lab-card__title">Produkční sloty (${mechanics.unlockedSlots}/${DRUG_LAB_CONFIG.maxSlots})</h4>
-        <p class="drug-lab-card__meta"><strong>${networkStatusLabel}</strong></p>
-        <p class="drug-lab-card__meta"><strong>${storageStatusLabel}</strong></p>
-        <p class="drug-lab-card__meta">${supplyStatusLabel}</p>
-        <p class="drug-lab-card__meta">${warehouseStatusLabel}</p>
-        <div class="drug-lab-grid">
+      <section class="drug-lab-card drug-production-card">
+        <div class="drug-production-card__header">
+          <div>
+            <h4 class="drug-lab-card__title">Drug Lab</h4>
+            <p class="drug-production-card__subtitle">Řízení výroby, spotřeby vstupů a kapacity skladu.</p>
+          </div>
+          <div class="drug-production-card__capacity">
+            <span class="drug-production-card__capacity-label">Odemčeno</span>
+            <strong class="drug-production-card__capacity-value">${mechanics.unlockedSlots}/${DRUG_LAB_CONFIG.maxSlots}</strong>
+          </div>
+        </div>
+        <div class="drug-production-card__stats">
+          <div class="drug-production-stat">
+            <span class="drug-production-stat__label">Síť Drug Labů</span>
+            <strong class="drug-production-stat__value">${ownedLabCount} ${ownedLabLabel}</strong>
+            <small class="drug-production-stat__meta">+${formatDecimalValue(networkProductionBonusPct, 2)}% produkce</small>
+          </div>
+          <div class="drug-production-stat">
+            <span class="drug-production-stat__label">Interní sklad</span>
+            <strong class="drug-production-stat__value">${Math.max(0, Math.floor(Number(mechanics.storedTotal || 0)))}/${Math.max(1, Math.floor(Number(mechanics.storageCapacity || 0)))}</strong>
+            <small class="drug-production-stat__meta">zastaví výrobu při naplnění</small>
+          </div>
+          <div class="drug-production-stat">
+            <span class="drug-production-stat__label">Vstup z Lékárny</span>
+            <strong class="drug-production-stat__value">C ${Math.max(0, Math.floor(Number(availableQueuedSupplies.chemicals || 0)))} • B ${Math.max(0, Math.floor(Number(availableQueuedSupplies.biomass || 0)))} • S ${Math.max(0, Math.floor(Number(availableQueuedSupplies.stimPack || 0)))}</strong>
+            <small class="drug-production-stat__meta">rezervace ve frontě: C ${Math.max(0, Math.floor(Number(queuedSupplyDemand.chemicals || 0)))} • B ${Math.max(0, Math.floor(Number(queuedSupplyDemand.biomass || 0)))} • S ${Math.max(0, Math.floor(Number(queuedSupplyDemand.stimPack || 0)))}</small>
+          </div>
+          <div class="drug-production-stat">
+            <span class="drug-production-stat__label">Sklady v území</span>
+            <strong class="drug-production-stat__value">${ownedWarehouseCount} ${ownedWarehouseLabel}</strong>
+            <small class="drug-production-stat__meta">${ownedWarehouseCount > 0 ? `+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita, +${formatDecimalValue(warehouseProductionBonusPct, 2)}% produkce` : "bez bonusu kapacity/produkce"}</small>
+          </div>
+        </div>
+        <div class="pharmacy-slot-grid">
           ${slotRows}
         </div>
-      </div>
+      </section>
 
       <div class="drug-lab-card">
         <h4 class="drug-lab-card__title">Aktivní efekty</h4>
@@ -8179,6 +8565,17 @@ window.Empire.Map = (() => {
     `;
 
     root.classList.remove("hidden");
+    const activeDetail = state.activeBuildingDetail || null;
+    const detailDistrict = activeDetail?.district || null;
+    const detailContext = activeDetail?.context || null;
+    document.dispatchEvent(new CustomEvent("empire:building-detail-opened", {
+      detail: {
+        districtId: detailDistrict?.id ?? detailContext?.districtId ?? null,
+        district: detailDistrict,
+        context: detailContext,
+        details
+      }
+    }));
   }
 
   function handleDrugLabInlineControl(target, activeContext) {
@@ -8227,10 +8624,22 @@ window.Empire.Map = (() => {
         persistPharmacyState(instanceKey, snapshot);
         return { ok: false, message: "Slot Lékárny neexistuje." };
       }
+      const resourceKey = PHARMACY_RESOURCE_KEYS.includes(String(slot.resourceKey || "").trim()) ? String(slot.resourceKey).trim() : null;
+      const capRaw = resourceKey ? Number(PHARMACY_CONFIG.slotStorageCaps?.[resourceKey]) : Number.NaN;
+      const hasCap = Number.isFinite(capRaw);
+      const producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
+      const resourceAmount = resourceKey ? Math.max(0, Math.floor(Number(snapshot.resources?.[resourceKey] || 0))) : 0;
+      if (hasCap && producedAmount >= Math.floor(capRaw) && resourceAmount < producedAmount) {
+        slot.isProducing = false;
+      }
       if (shouldProduce) {
         if (slot.isProducing) {
           persistPharmacyState(instanceKey, snapshot);
           return { ok: false, message: `Slot ${safeSlotId} už běží.` };
+        }
+        if (hasCap && producedAmount >= Math.floor(capRaw)) {
+          persistPharmacyState(instanceKey, snapshot);
+          return { ok: false, message: `Slot ${safeSlotId} je plný. Nejprve vyber suroviny do skladu.` };
         }
         slot.isProducing = true;
         slot.lastTick = now;
@@ -8547,6 +8956,12 @@ window.Empire.Map = (() => {
     if (picked) {
       state.selectedId = picked.id;
       window.Empire.selectedDistrict = picked;
+      document.dispatchEvent(new CustomEvent("empire:district-selected", {
+        detail: {
+          districtId: picked.id,
+          district: picked
+        }
+      }));
       notifySelectedDistrictChange();
       showModal(picked);
       render();
@@ -8678,6 +9093,12 @@ window.Empire.Map = (() => {
       if (picked) {
         state.selectedId = picked.id;
         window.Empire.selectedDistrict = picked;
+        document.dispatchEvent(new CustomEvent("empire:district-selected", {
+          detail: {
+            districtId: picked.id,
+            district: picked
+          }
+        }));
         notifySelectedDistrictChange();
         showModal(picked);
         render();
@@ -8809,6 +9230,7 @@ window.Empire.Map = (() => {
     const borderStroke = resolveDistrictBorderStroke();
     pruneExpiredAttackMarkers(now);
     pruneExpiredPoliceActions(now);
+    pruneExpiredSpyActions(now);
     syncAttackAnimationTicker();
 
     state.districts.forEach((district) => {
@@ -8817,6 +9239,7 @@ window.Empire.Map = (() => {
       const districtKey = normalizeDistrictId(district?.id);
       const attackMarker = districtKey ? state.attackedDistricts.get(districtKey) : null;
       const policeAction = districtKey ? state.policeDistrictActions.get(districtKey) : null;
+      const spyAction = districtKey ? state.spyDistrictActions.get(districtKey) : null;
       ctx.fillStyle = fill;
       ctx.strokeStyle = destroyed ? "rgba(24, 24, 27, 0.94)" : borderStroke;
       ctx.lineWidth = 1;
@@ -8855,7 +9278,39 @@ window.Empire.Map = (() => {
       if (policeAction) {
         drawDistrictPoliceActionEffect(ctx, district, policeAction, now);
       }
+      if (spyAction) {
+        drawDistrictSpyActionEffect(ctx, district, spyAction, now);
+      }
+      if (String(district?.id) === String(state.onboardingFocusDistrictId || "")) {
+        drawOnboardingFocusDistrictEffect(ctx, district, now);
+      }
     });
+  }
+
+  function drawOnboardingFocusDistrictEffect(ctx, district, now = Date.now()) {
+    const pulse = 0.5 + 0.5 * Math.sin(now / 220);
+    const haloAlpha = 0.18 + pulse * 0.18;
+    const strokeAlpha = 0.62 + pulse * 0.28;
+    const borderOnly = state.onboardingFocusMode === "border";
+
+    if (!borderOnly && drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      drawDistrictPolygonPath(ctx, district.polygon);
+      ctx.fillStyle = `rgba(34,211,238,${haloAlpha.toFixed(3)})`;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      drawDistrictPolygonPath(ctx, district.polygon);
+      ctx.strokeStyle = `rgba(103,232,249,${strokeAlpha.toFixed(3)})`;
+      ctx.lineWidth = 4 + pulse * 2.2;
+      ctx.shadowColor = "rgba(34,211,238,0.85)";
+      ctx.shadowBlur = 22 + pulse * 14;
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   function normalizeDistrictId(value) {
@@ -8878,6 +9333,15 @@ window.Empire.Map = (() => {
     return Math.max(
       DISTRICT_POLICE_ACTION_MIN_DURATION_MS,
       Math.min(DISTRICT_POLICE_ACTION_MAX_DURATION_MS, Math.floor(parsed))
+    );
+  }
+
+  function resolveSpyActionDurationMs(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DISTRICT_SPY_ACTION_DEFAULT_DURATION_MS;
+    return Math.max(
+      DISTRICT_SPY_ACTION_MIN_DURATION_MS,
+      Math.min(DISTRICT_SPY_ACTION_MAX_DURATION_MS, Math.floor(parsed))
     );
   }
 
@@ -8905,20 +9369,33 @@ window.Empire.Map = (() => {
     return changed;
   }
 
+  function pruneExpiredSpyActions(now = Date.now()) {
+    if (!state.spyDistrictActions.size) return false;
+    let changed = false;
+    for (const [districtKey, marker] of state.spyDistrictActions.entries()) {
+      if (!marker || !Number.isFinite(Number(marker.expiresAt)) || Number(marker.expiresAt) <= now) {
+        state.spyDistrictActions.delete(districtKey);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   function hasDestroyedDistricts() {
     return state.districts.some((district) => isDistrictDestroyed(district));
   }
 
   function syncAttackAnimationTicker() {
-    if (state.attackedDistricts.size > 0 || state.policeDistrictActions.size > 0 || hasDestroyedDistricts()) {
+    if (state.attackedDistricts.size > 0 || state.policeDistrictActions.size > 0 || state.spyDistrictActions.size > 0 || hasDestroyedDistricts()) {
       if (state.attackAnimationIntervalId != null) return;
       state.attackAnimationIntervalId = setInterval(() => {
         const now = Date.now();
         const attackChanged = pruneExpiredAttackMarkers(now);
         const policeChanged = pruneExpiredPoliceActions(now);
-        if (state.attackedDistricts.size < 1 && state.policeDistrictActions.size < 1 && !hasDestroyedDistricts()) {
+        const spyChanged = pruneExpiredSpyActions(now);
+        if (state.attackedDistricts.size < 1 && state.policeDistrictActions.size < 1 && state.spyDistrictActions.size < 1 && !hasDestroyedDistricts()) {
           syncAttackAnimationTicker();
-          if (attackChanged || policeChanged) render();
+          if (attackChanged || policeChanged || spyChanged) render();
           return;
         }
         render();
@@ -9254,6 +9731,21 @@ window.Empire.Map = (() => {
     }
   }
 
+  function reconcileSpyActionsWithDistricts() {
+    if (!state.spyDistrictActions.size) return;
+    const districtIdSet = mapDistrictIdSet();
+    let changed = false;
+    for (const districtKey of state.spyDistrictActions.keys()) {
+      if (!districtIdSet.has(districtKey)) {
+        state.spyDistrictActions.delete(districtKey);
+        changed = true;
+      }
+    }
+    if (changed) {
+      syncAttackAnimationTicker();
+    }
+  }
+
   function markDistrictUnderAttack(districtId, options = {}) {
     const districtKey = normalizeDistrictId(districtId);
     if (!districtKey) {
@@ -9352,6 +9844,53 @@ window.Empire.Map = (() => {
     }
   }
 
+  function markDistrictSpyAction(districtId, options = {}) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) {
+      return { ok: false, reason: "invalid_district" };
+    }
+    const districtExists = Boolean(resolveDistrictById(districtKey));
+    if (!districtExists) {
+      return { ok: false, reason: "district_not_found" };
+    }
+
+    const now = Date.now();
+    const durationMs = resolveSpyActionDurationMs(options?.durationMs);
+    const markerSeed = hashOwner(`${districtKey}:${String(options?.source || "spy-action")}:spy-action`);
+
+    state.spyDistrictActions.set(districtKey, {
+      districtId: districtKey,
+      source: String(options?.source || "spy-action").trim() || "spy-action",
+      startedAt: now,
+      expiresAt: now + durationMs,
+      seed: markerSeed
+    });
+    syncAttackAnimationTicker();
+    render();
+
+    return { ok: true };
+  }
+
+  function setSpyActionDistricts(markers, options = {}) {
+    const safeMarkers = Array.isArray(markers) ? markers : [];
+    const replace = options?.replace !== false;
+    if (replace) {
+      state.spyDistrictActions.clear();
+    }
+    safeMarkers.forEach((item) => {
+      const districtId = item?.districtId ?? item?.id;
+      if (districtId == null) return;
+      markDistrictSpyAction(districtId, {
+        durationMs: item?.durationMs,
+        source: item?.source
+      });
+    });
+    if (!safeMarkers.length && replace) {
+      syncAttackAnimationTicker();
+      render();
+    }
+  }
+
   function clearDistrictUnderAttack(districtId) {
     const districtKey = normalizeDistrictId(districtId);
     if (!districtKey) return;
@@ -9378,6 +9917,21 @@ window.Empire.Map = (() => {
   function clearAllPoliceActions() {
     if (!state.policeDistrictActions.size) return;
     state.policeDistrictActions.clear();
+    syncAttackAnimationTicker();
+    render();
+  }
+
+  function clearDistrictSpyAction(districtId) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) return;
+    if (!state.spyDistrictActions.delete(districtKey)) return;
+    syncAttackAnimationTicker();
+    render();
+  }
+
+  function clearAllSpyActions() {
+    if (!state.spyDistrictActions.size) return;
+    state.spyDistrictActions.clear();
     syncAttackAnimationTicker();
     render();
   }
@@ -9904,6 +10458,11 @@ window.Empire.Map = (() => {
 
   function drawDistrictAttackEffect(ctx, district, marker, now = Date.now()) {
     if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+    const markerSource = String(marker?.source || "").trim().toLowerCase();
+    if (markerSource.includes("occupy")) {
+      drawDistrictOccupyEffect(ctx, district, marker, now);
+      return;
+    }
     const [cx, cy] = polygonCentroid(district.polygon);
     const bounds = polygonBounds(district.polygon);
     const baseRadius = Math.max(16, Math.min(46, Math.min(bounds.width || 16, bounds.height || 16) * 0.36));
@@ -9978,6 +10537,61 @@ window.Empire.Map = (() => {
     }
 
     ctx.restore();
+  }
+
+  function drawDistrictOccupyEffect(ctx, district, marker, now = Date.now()) {
+    if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+    const [cx, cy] = polygonCentroid(district.polygon);
+    const bounds = polygonBounds(district.polygon);
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
+    const basePulse = (Math.sin(now / 145 + safeSeed * 0.0013) + 1) * 0.5;
+    const fastPulse = (Math.sin(now / 72 + safeSeed * 0.0021) + 1) * 0.5;
+    const lifeRatio = marker?.startedAt && marker?.expiresAt && marker.expiresAt > marker.startedAt
+      ? clampUnit((now - marker.startedAt) / (marker.expiresAt - marker.startedAt))
+      : 0;
+    const fade = Math.max(0.38, 1 - lifeRatio * 0.42);
+    const baseRadius = Math.max(16, Math.min(58, Math.min(bounds.width || 20, bounds.height || 20) * 0.55));
+
+    const playerHex = normalizeHexColor(localStorage.getItem("empire_gang_color"));
+    const playerColor = playerHex ? hexToRgba(playerHex, 1) : "rgba(34,197,94,1)";
+    const channels = parseCssColorChannels(playerColor) || [34, 197, 94];
+    const [r, g, b] = channels;
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      drawDistrictPolygonPath(ctx, district.polygon);
+      ctx.clip();
+      ctx.globalCompositeOperation = "screen";
+
+      const fillAlpha = (0.18 + basePulse * 0.26 + fastPulse * 0.2) * fade;
+      ctx.fillStyle = `rgba(${r},${g},${b},${Math.min(0.72, fillAlpha).toFixed(3)})`;
+      ctx.fillRect(bounds.minX - 6, bounds.minY - 6, (bounds.width || 12) + 12, (bounds.height || 12) + 12);
+
+      const coreGlow = ctx.createRadialGradient(cx, cy, baseRadius * 0.12, cx, cy, baseRadius * (1.2 + basePulse * 0.55));
+      coreGlow.addColorStop(0, `rgba(${r},${g},${b},${(0.72 * fade).toFixed(3)})`);
+      coreGlow.addColorStop(0.48, `rgba(${r},${g},${b},${(0.36 * fade).toFixed(3)})`);
+      coreGlow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = coreGlow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, baseRadius * (1.22 + basePulse * 0.55), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const strokeAlpha = (0.45 + basePulse * 0.4 + fastPulse * 0.18) * fade;
+      ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(0.94, strokeAlpha).toFixed(3)})`;
+      ctx.lineWidth = 2.1 + basePulse * 2.6;
+      ctx.setLineDash([9, 6]);
+      ctx.lineDashOffset = -((now / 26 + safeSeed) % 220);
+      ctx.shadowColor = `rgba(${r},${g},${b},0.88)`;
+      ctx.shadowBlur = 10 + basePulse * 14;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
   }
 
   function drawDistrictPoliceActionEffect(ctx, district, marker, now = Date.now()) {
@@ -10075,6 +10689,74 @@ window.Empire.Map = (() => {
       ctx.lineWidth = 1.2 + Math.max(redPulse, bluePulse) * 1.3;
       ctx.setLineDash([6, 5]);
       ctx.lineDashOffset = -(now / 52 + safeSeed) % 130;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  function drawDistrictSpyActionEffect(ctx, district, marker, now = Date.now()) {
+    if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+    const [cx, cy] = polygonCentroid(district.polygon);
+    const bounds = polygonBounds(district.polygon);
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
+    const maxDimension = Math.max(26, Math.max(bounds.width || 26, bounds.height || 26));
+    const lifeRatio = marker?.startedAt && marker?.expiresAt && marker.expiresAt > marker.startedAt
+      ? clampUnit((now - marker.startedAt) / (marker.expiresAt - marker.startedAt))
+      : 0;
+    const fade = Math.max(0.3, 1 - lifeRatio * 0.5);
+    const sweepAngle = now / 470 + safeSeed * 0.00021;
+    const coneSpread = 0.36 + Math.sin(now / 620 + safeSeed * 0.00031) * 0.08;
+    const beamLength = Math.max(42, Math.min(170, maxDimension * 1.5));
+    const originRadiusX = Math.max(10, (bounds.width || 24) * 0.24);
+    const originRadiusY = Math.max(8, (bounds.height || 24) * 0.2);
+    const originX = cx + Math.cos(sweepAngle * 0.58 + 1.05) * originRadiusX;
+    const originY = cy + Math.sin(sweepAngle * 0.54 + 0.67) * originRadiusY;
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      drawDistrictPolygonPath(ctx, district.polygon);
+      ctx.clip();
+      ctx.globalCompositeOperation = "screen";
+
+      const beam = ctx.createRadialGradient(originX, originY, beamLength * 0.05, originX, originY, beamLength);
+      beam.addColorStop(0, `rgba(242, 255, 216, ${(0.42 * fade).toFixed(3)})`);
+      beam.addColorStop(0.28, `rgba(206, 250, 255, ${(0.26 * fade).toFixed(3)})`);
+      beam.addColorStop(0.7, `rgba(120, 214, 255, ${(0.1 * fade).toFixed(3)})`);
+      beam.addColorStop(1, "rgba(88, 180, 255, 0)");
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(originX, originY);
+      ctx.arc(originX, originY, beamLength, sweepAngle - coneSpread, sweepAngle + coneSpread);
+      ctx.closePath();
+      ctx.fill();
+
+      const haloRadius = Math.max(14, Math.min(44, maxDimension * 0.34));
+      const halo = ctx.createRadialGradient(originX, originY, haloRadius * 0.1, originX, originY, haloRadius);
+      halo.addColorStop(0, `rgba(246, 255, 230, ${(0.5 * fade).toFixed(3)})`);
+      halo.addColorStop(0.65, `rgba(172, 234, 255, ${(0.2 * fade).toFixed(3)})`);
+      halo.addColorStop(1, "rgba(100, 186, 255, 0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(originX, originY, haloRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = `rgba(242, 255, 218, ${(0.72 * fade).toFixed(3)})`;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = "rgba(214, 249, 255, 0.9)";
+    ctx.beginPath();
+    ctx.arc(originX, originY, 3.6 + Math.sin(now / 120 + safeSeed * 0.0009) * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.strokeStyle = `rgba(166, 235, 255, ${(0.42 * fade).toFixed(3)})`;
+      ctx.lineWidth = 1.2 + Math.sin(now / 280 + safeSeed * 0.0012) * 0.4;
+      ctx.setLineDash([4, 6]);
+      ctx.lineDashOffset = -((now / 48 + safeSeed) % 150);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -10862,6 +11544,9 @@ window.Empire.Map = (() => {
     if (Array.isArray(update.policeActions)) {
       setPoliceActionDistricts(update.policeActions, { replace: true });
     }
+    if (Array.isArray(update.spyActions)) {
+      setSpyActionDistricts(update.spyActions, { replace: true });
+    }
     const eventTargetId = update.attackEvent?.targetDistrictId
       ?? update.attackEvent?.districtId
       ?? update.underAttackDistrictId;
@@ -10879,6 +11564,15 @@ window.Empire.Map = (() => {
       markDistrictPoliceAction(policeTargetId, {
         durationMs: update.policeEvent?.durationMs,
         source: update.policeEvent?.source || "map-update"
+      });
+    }
+    const spyTargetId = update.spyEvent?.targetDistrictId
+      ?? update.spyEvent?.districtId
+      ?? update.spyActionDistrictId;
+    if (spyTargetId != null) {
+      markDistrictSpyAction(spyTargetId, {
+        durationMs: update.spyEvent?.durationMs,
+        source: update.spyEvent?.source || "map-update-spy"
       });
     }
   }
@@ -10989,8 +11683,10 @@ window.Empire.Map = (() => {
     rebuildDistinctOwnerColorIndex();
     reconcileAttackMarkersWithDistricts();
     reconcilePoliceActionsWithDistricts();
+    reconcileSpyActionsWithDistricts();
     pruneExpiredAttackMarkers(Date.now());
     pruneExpiredPoliceActions(Date.now());
+    pruneExpiredSpyActions(Date.now());
     syncAttackAnimationTicker();
     state.roads = buildRoadNetworkFromDistricts(normalized);
     window.Empire.districts = normalized;
@@ -11029,6 +11725,38 @@ window.Empire.Map = (() => {
       }
     });
   }
+
+  document.addEventListener("empire:onboarding:focus-district", (event) => {
+    state.onboardingFocusDistrictId = event.detail?.districtId != null ? String(event.detail.districtId) : null;
+    state.onboardingFocusMode = String(event.detail?.focusMode || "full").trim() || "full";
+    render();
+  });
+
+  document.addEventListener("empire:spy-started", (event) => {
+    const districtId = event.detail?.districtId != null ? String(event.detail.districtId) : "";
+    if (!districtId || districtId !== String(state.onboardingFocusDistrictId || "")) return;
+    state.onboardingFocusMode = "border";
+    render();
+  });
+
+  document.addEventListener("empire:occupy-started", (event) => {
+    const districtId = event.detail?.districtId != null ? String(event.detail.districtId) : "";
+    if (!districtId || districtId !== String(state.onboardingFocusDistrictId || "")) return;
+    state.onboardingFocusMode = "border";
+    render();
+  });
+
+  document.addEventListener("empire:onboarding:finished", () => {
+    state.onboardingFocusDistrictId = null;
+    state.onboardingFocusMode = "full";
+    render();
+  });
+
+  document.addEventListener("empire:onboarding:reset", () => {
+    state.onboardingFocusDistrictId = null;
+    state.onboardingFocusMode = "full";
+    render();
+  });
 
   function initBuildingDetailModal() {
     const root = document.getElementById("building-detail-modal");
@@ -11287,7 +12015,7 @@ window.Empire.Map = (() => {
       } else {
         return;
       }
-      if (result?.message) {
+      if (result?.message && !result?.silentUiEvent) {
         window.Empire.UI?.pushEvent?.(result.message);
       }
       if (result) {
@@ -11313,7 +12041,7 @@ window.Empire.Map = (() => {
       } else {
         return;
       }
-      if (result?.message) {
+      if (result?.message && !result?.silentUiEvent) {
         window.Empire.UI?.pushEvent?.(result.message);
       }
       if (result) {
@@ -11322,6 +12050,14 @@ window.Empire.Map = (() => {
     });
     setInterval(() => {
       if (root.classList.contains("hidden")) return;
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement
+        && activeElement.closest("#building-detail-modal")
+        && activeElement.matches("[data-drug-lab-slot-select]")
+      ) {
+        return;
+      }
       const active = resolveActiveBuildingContext();
       const baseName = String(active?.context?.baseName || "").trim();
       if (
@@ -11546,6 +12282,7 @@ window.Empire.Map = (() => {
     const heat = document.getElementById("building-detail-heat");
     const effects = document.getElementById("building-detail-effects");
     const infoEffects = document.getElementById("building-info-effects");
+    const effectsRow = effects?.closest(".modal__row") || null;
     if (!root || !level || !stored || !production || !heat || !effects) return;
 
     const mechanics = details?.mechanics;
@@ -11578,6 +12315,7 @@ window.Empire.Map = (() => {
     if (productionLabel) productionLabel.textContent = "Produkce členů";
     if (heatLabel) heatLabel.textContent = "Heat";
     if (effectsLabel) effectsLabel.textContent = "Aktivní efekty";
+    if (effectsRow) effectsRow.classList.remove("hidden");
     level.textContent = `L${mechanics.level}`;
     heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     if (mechanicsType === "fitness-club") {
@@ -11683,17 +12421,16 @@ window.Empire.Map = (() => {
       heat.textContent = `+${FACTORY_CONFIG.combatModule.heatPerUnit} / Combat Module`;
     } else if (mechanicsType === "pharmacy") {
       if (storedLabel) storedLabel.textContent = "Suroviny C/B/S";
-      if (productionLabel) productionLabel.textContent = "Produkce C/B/S za hod";
+      if (productionLabel) productionLabel.textContent = "Síťové bonusy";
+      if (effectsRow) effectsRow.classList.add("hidden");
       const resources = mechanics.resources || {};
-      const rates = mechanics.ratesPerHour || {};
       stored.textContent =
         `${Math.max(0, Math.floor(Number(resources.chemicals || 0)))}/`
         + `${Math.max(0, Math.floor(Number(resources.biomass || 0)))}/`
         + `${Math.max(0, Math.floor(Number(resources.stimPack || 0)))}`;
       production.textContent =
-        `${formatDecimalValue(rates.chemicals || 0, 2)}/`
-        + `${formatDecimalValue(rates.biomass || 0, 2)}/`
-        + `${formatDecimalValue(rates.stimPack || 0, 2)}`;
+        `Sklad(+${formatDecimalValue(mechanics.pharmacyStorageCapBonusPct || 0, 2)}%) • `
+        + `Lékárna(+${formatDecimalValue(mechanics.pharmacyProductionBonusPct || 0, 2)}% rychlost)`;
       heat.textContent = `${formatDecimalValue(mechanics.heatPerDay || PHARMACY_CONFIG.baseHeatPerDay, 2)} / 24h`;
     } else if (mechanicsType === "drug-lab") {
       if (storedLabel) storedLabel.textContent = "Interní sklad";
@@ -11838,8 +12575,33 @@ window.Empire.Map = (() => {
     if (!root) return;
 
     const context = resolveBuildingDetailContext(buildingName);
-    const details = resolveBuildingDetails(context, district);
+    let details;
+    try {
+      details = resolveBuildingDetails(context, district);
+    } catch (error) {
+      console.error("Building detail open failed", {
+        buildingName,
+        context,
+        district,
+        error
+      });
+      details = {
+        baseName: context.baseName,
+        displayName: context.variantName || context.baseName,
+        hourlyIncome: 0,
+        dailyIncome: 0,
+        info: "Detail budovy se nepodařilo načíst. Zkus to znovu.",
+        mechanics: null,
+        specialActions: []
+      };
+    }
+    const mechanics = details?.mechanics || null;
     const mechanicsType = String(details?.mechanics?.type || "").trim();
+    if (mechanicsType) {
+      root.dataset.buildingMechanicsType = mechanicsType;
+    } else {
+      delete root.dataset.buildingMechanicsType;
+    }
     const title = document.getElementById("building-detail-title");
     const name = document.getElementById("building-detail-name");
     const hourly = document.getElementById("building-detail-hourly");
@@ -11878,7 +12640,29 @@ window.Empire.Map = (() => {
     }
     state.activeBuildingDetail = { context: activeContext, district: activeDistrict };
 
-    if (title) title.textContent = `Budova: ${details.baseName}`;
+    if (title) {
+      title.textContent = `Budova: ${details.baseName}`;
+      let slotBadgeText = "";
+      if (mechanicsType === "pharmacy" || mechanicsType === "factory") {
+        slotBadgeText =
+          `Aktivní sloty ${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/`
+          + `${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))}`;
+      } else if (mechanicsType === "drug-lab") {
+        slotBadgeText =
+          `Aktivní sloty ${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/`
+          + `${Math.max(1, Math.floor(Number(mechanics.unlockedSlots || 0)))}`;
+      } else if (mechanicsType === "armory") {
+        slotBadgeText =
+          `Aktivní sloty ${Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0))) + Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)))}/`
+          + `${Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0))) + Math.max(1, Math.floor(Number((mechanics.defenseSlots || []).length || 0)))}`;
+      }
+      if (slotBadgeText) {
+        const badge = document.createElement("span");
+        badge.className = "building-detail-title__badge";
+        badge.textContent = slotBadgeText;
+        title.appendChild(badge);
+      }
+    }
     if (name) name.textContent = details.displayName;
     const hourlyLabel = `$${formatDecimalValue(details.hourlyIncome, 2)} / hod`;
     const dailyLabel = `$${formatDecimalValue(details.dailyIncome, 2)} / den`;
@@ -12153,6 +12937,8 @@ window.Empire.Map = (() => {
       && state.vision.allowEnemyModalIntelInFog
       && isEnemyDistrict;
     const revealDistrictDetails = !state.vision.fogPreviewMode || defendableByPlayer || revealEnemyIntelInFog;
+    const spyIntel = window.Empire.UI?.getDistrictSpyIntel?.(district?.id) || null;
+    const hasSpyIntel = Boolean(spyIntel);
     applyDistrictModalAccent(district);
     updateModalActionsForDistrict(district);
 
@@ -12160,10 +12946,10 @@ window.Empire.Map = (() => {
       document.getElementById("modal-name").textContent = district.name || "Distrikt";
       document.getElementById("modal-name-income").textContent = "0 / nepoužitelný";
       document.getElementById("modal-owner").textContent = "Nikdo";
-      updateDistrictDefenseSummary(null);
-      updateDistrictBuildings(null);
+      updateDistrictDefenseSummary(null, { spyIntel });
+      updateDistrictBuildings(null, { spyIntel });
       updateDistrictGossip(district);
-      updateDistrictOwnerProfile(district, false);
+      updateDistrictOwnerProfile(district, { visible: false, spyIntel });
       state.modal.root.classList.remove("hidden");
       return;
     }
@@ -12172,7 +12958,7 @@ window.Empire.Map = (() => {
       document.getElementById("modal-name").textContent = district.name || "Distrikt";
       document.getElementById("modal-name-income").textContent = isEnemyDistrict ? "Skryto" : `$${district.income || 0}/hod`;
       document.getElementById("modal-owner").textContent = district.owner || "Neobsazeno";
-      updateDistrictBuildings(defendableByPlayer ? district : null);
+      updateDistrictBuildings(defendableByPlayer ? district : null, { spyIntel });
       updateDistrictGossip(district);
     } else {
       document.getElementById("modal-name").textContent = isDowntown
@@ -12180,23 +12966,35 @@ window.Empire.Map = (() => {
         : `District č. ${districtNumber}`;
       document.getElementById("modal-name-income").textContent = "Skryto";
       document.getElementById("modal-owner").textContent = "Skryto";
-      updateDistrictDefenseSummary(null);
-      updateDistrictBuildings(null);
+      updateDistrictDefenseSummary(null, { spyIntel });
+      updateDistrictBuildings(null, { spyIntel });
       updateDistrictGossip(district);
     }
 
     if (revealDistrictDetails) {
       updateDistrictDefenseSummary(district, {
         knownSelf: defendableByPlayer,
-        knownAlly: defendableByPlayer
+        knownAlly: defendableByPlayer,
+        spyIntel
       });
+    } else if (hasSpyIntel) {
+      updateDistrictDefenseSummary(null, { spyIntel });
     }
 
     updateDistrictOwnerProfile(district, {
       visible: revealDistrictDetails,
-      isEnemy: isEnemyDistrict
+      isEnemy: isEnemyDistrict,
+      spyIntel
     });
     state.modal.root.classList.remove("hidden");
+    document.dispatchEvent(new CustomEvent("empire:district-modal-opened", {
+      detail: {
+        districtId: district?.id ?? null,
+        district,
+        revealDistrictDetails,
+        spyIntel
+      }
+    }));
   }
 
   function isEnemyOwnedDistrictForModal(district) {
@@ -12266,18 +13064,28 @@ window.Empire.Map = (() => {
   function updateDistrictOwnerProfile(district, options = {}) {
     const visible = typeof options === "object" ? Boolean(options.visible) : Boolean(options);
     const isEnemy = typeof options === "object" ? Boolean(options.isEnemy) : false;
+    const spyIntel = typeof options === "object" ? options.spyIntel || null : null;
     const content = state.modal?.root?.querySelector(".modal__content");
     const ownerValue = document.getElementById("modal-owner");
+    const ownerRow = ownerValue?.closest(".modal__row") || null;
+    const ownerLabel = ownerRow?.querySelector("span") || null;
     const allianceRow = document.getElementById("modal-owner-alliance-row");
     const allianceValue = document.getElementById("modal-owner-alliance");
+    const allianceLabel = allianceRow?.querySelector("span") || null;
     const factionRow = document.getElementById("modal-owner-faction-row");
     const factionValue = document.getElementById("modal-owner-faction");
+    const factionLabelNode = factionRow?.querySelector("span") || null;
     const atmosphereRow = document.getElementById("modal-owner-atmosphere-row");
     const atmosphereValue = document.getElementById("modal-owner-atmosphere");
     const atmosphereImage = document.getElementById("modal-owner-atmosphere-image");
     if (!content || !ownerValue || !allianceRow || !allianceValue || !factionRow || !factionValue || !atmosphereRow || !atmosphereValue || !atmosphereImage) return;
 
-    if (!visible) {
+    content.classList.toggle("district-modal--spy-intel-compact", !visible && Boolean(spyIntel));
+    if (ownerLabel) ownerLabel.textContent = "Vlastník";
+    if (allianceLabel) allianceLabel.textContent = "Aliance";
+    if (factionLabelNode) factionLabelNode.textContent = "Frakce";
+
+    if (!visible && !spyIntel) {
       allianceRow.classList.add("hidden");
       factionRow.classList.add("hidden");
       atmosphereRow.classList.add("hidden");
@@ -12296,24 +13104,46 @@ window.Empire.Map = (() => {
       return;
     }
 
+    const useSpyOnlyIntel = !visible && Boolean(spyIntel);
+    const hasNoOwner = !district?.owner;
     const explicitOwnerNick = String(district?.ownerNick || "").trim();
     const explicitOwnerAlliance = String(district?.ownerAllianceName || "").trim();
     const fallbackOwnerNick = String(district?.owner || "Neznámý");
     const fallbackAllianceName = deriveAllianceNameFromOwnerLabel(district?.owner);
-    const ownerNick = explicitOwnerNick || fallbackOwnerNick;
-    const ownerAlliance = explicitOwnerAlliance || fallbackAllianceName || "Bez aliance";
-    const avatarSrc = resolveDistrictOwnerAvatar(district);
-    const factionLabel = resolveDistrictFactionLabel(district, isEnemy);
-    const atmosphereSrc = resolveDistrictAtmosphereImage(district, isEnemy);
+    const ownerNick = useSpyOnlyIntel
+      ? (hasNoOwner ? "Prázdné" : "Skryto")
+      : (explicitOwnerNick || fallbackOwnerNick);
+    const ownerAlliance = useSpyOnlyIntel
+      ? (hasNoOwner ? "Prázdné" : "Skryto")
+      : (explicitOwnerAlliance || fallbackAllianceName || "Bez aliance");
+    const avatarSrc = useSpyOnlyIntel ? "" : resolveDistrictOwnerAvatar(district);
+    const factionLabel = useSpyOnlyIntel
+      ? `Typ: ${String(spyIntel?.districtType || "").trim() || "Neznámý"}`
+      : resolveDistrictFactionLabel(district, isEnemy);
+    const atmosphereLabel = String(spyIntel?.atmosphere || "").trim();
+    const atmosphereSrc = useSpyOnlyIntel ? "" : resolveDistrictAtmosphereImage(district, isEnemy);
 
     ownerValue.textContent = ownerNick;
     allianceValue.textContent = ownerAlliance;
     factionValue.textContent = factionLabel;
-    atmosphereValue.textContent = atmosphereSrc ? "" : "Neznámá";
+    atmosphereValue.textContent = atmosphereSrc
+      ? ""
+      : (atmosphereLabel || "Neznámá");
     allianceRow.classList.remove("hidden");
     factionRow.classList.remove("hidden");
-    atmosphereRow.classList.remove("hidden");
-    content.classList.add("district-owner-bg-active");
+    atmosphereRow.classList.toggle("hidden", useSpyOnlyIntel);
+    content.classList.toggle("district-owner-bg-active", !useSpyOnlyIntel);
+    if (useSpyOnlyIntel && hasNoOwner) {
+      if (ownerLabel) ownerLabel.textContent = "Aliance / Vlastník";
+      ownerValue.textContent = "Prázdné";
+      allianceRow.classList.add("hidden");
+    } else if (useSpyOnlyIntel) {
+      if (ownerLabel) ownerLabel.textContent = "Vlastník";
+      if (allianceLabel) allianceLabel.textContent = "Aliance";
+    }
+    if (useSpyOnlyIntel && factionLabelNode) {
+      factionLabelNode.textContent = "Typ distriktu";
+    }
     if (atmosphereSrc) {
       atmosphereImage.src = atmosphereSrc;
       atmosphereImage.dataset.districtName = district?.name || `Distrikt ${resolveDistrictNumberLabel(district)}`;
@@ -12356,11 +13186,21 @@ window.Empire.Map = (() => {
     const allyValue = document.getElementById("modal-defense-ally");
     const selfRow = selfValue?.closest(".modal__row");
     const allyRow = allyValue?.closest(".modal__row");
+    const spyIntel = options?.spyIntel || null;
     if (!selfValue || !allyValue) return;
-    if (!district?.id) {
+    if (!district?.id && !spyIntel) {
       selfValue.textContent = "";
       allyValue.textContent = "";
       if (selfRow) selfRow.classList.add("hidden");
+      if (allyRow) allyRow.classList.add("hidden");
+      return;
+    }
+    if (!district?.id && spyIntel) {
+      const weapons = Math.max(0, Math.floor(Number(spyIntel.weapons) || 0));
+      const powerRangeLabel = String(spyIntel.powerRangeLabel || "").trim() || "Neznámá";
+      selfValue.textContent = `Odhad obrany • Zbraně: ${weapons} • Síla: ${powerRangeLabel}`;
+      allyValue.textContent = "";
+      if (selfRow) selfRow.classList.remove("hidden");
       if (allyRow) allyRow.classList.add("hidden");
       return;
     }
@@ -12372,10 +13212,17 @@ window.Empire.Map = (() => {
     const showSelf = Boolean(selfEntry.hasData) || knownSelf;
     const showAlly = Boolean(allyEntry.hasData) || knownAlly;
 
-    selfValue.textContent = selfEntry.hasData ? formatDistrictDefenseSummary(selfEntry) : "Bez obrany";
+    if (!selfEntry.hasData && spyIntel) {
+      const weapons = Math.max(0, Math.floor(Number(spyIntel.weapons) || 0));
+      const powerRangeLabel = String(spyIntel.powerRangeLabel || "").trim() || "Neznámá";
+      selfValue.textContent = `Odhad obrany • Zbraně: ${weapons} • Síla: ${powerRangeLabel}`;
+    } else {
+      selfValue.textContent = selfEntry.hasData ? formatDistrictDefenseSummary(selfEntry) : "Bez obrany";
+    }
     allyValue.textContent = allyEntry.hasData ? formatDistrictDefenseSummary(allyEntry) : "Bez obrany";
     if (selfRow) selfRow.classList.toggle("hidden", !showSelf);
     if (allyRow) allyRow.classList.toggle("hidden", !showAlly);
+    if (spyIntel && selfRow) selfRow.classList.remove("hidden");
   }
 
   function updateModalActionsForDistrict(district) {
@@ -12387,8 +13234,12 @@ window.Empire.Map = (() => {
 
     const defendableByPlayer = isDistrictDefendable(district);
     const evaluateAction = window.Empire.UI?.evaluateDistrictActionAvailability;
+    const ownerValue = String(district?.owner || "").trim().toLowerCase();
+    const isUnowned = !ownerValue || ownerValue === "neobsazeno" || ownerValue === "nikdo";
+    const hasSpyIntel = Boolean(window.Empire.UI?.getDistrictSpyIntel?.(district?.id));
+    const attackActionMode = isUnowned && hasSpyIntel ? "occupy" : "attack";
     const attackState = typeof evaluateAction === "function"
-      ? evaluateAction(district, "attack")
+      ? evaluateAction(district, attackActionMode)
       : { allowed: !defendableByPlayer, reason: "" };
     const raidState = typeof evaluateAction === "function"
       ? evaluateAction(district, "raid")
@@ -12400,12 +13251,14 @@ window.Empire.Map = (() => {
 
     const showAttack = !destroyed && !defendableByPlayer && attackState.allowed;
     const showRaid = !destroyed && !defendableByPlayer && raidState.allowed;
-    const showSpy = !destroyed && !defendableByPlayer && spyState.allowed;
+    const showSpy = !destroyed && !defendableByPlayer && spyState.allowed && !hasSpyIntel;
 
     attackBtn.classList.toggle("hidden", !showAttack);
     raidBtn.classList.toggle("hidden", !showRaid);
     spyBtn.classList.toggle("hidden", !showSpy);
     defenseBtn.classList.toggle("hidden", destroyed || !defendableByPlayer);
+    attackBtn.dataset.actionMode = attackActionMode;
+    attackBtn.textContent = attackActionMode === "occupy" ? "Obsadit" : "Zaútočit";
     attackBtn.disabled = false;
     raidBtn.disabled = false;
     spyBtn.disabled = false;
@@ -12431,28 +13284,31 @@ window.Empire.Map = (() => {
     showModal(selected);
   }
 
-  function updateDistrictBuildings(district) {
+  function updateDistrictBuildings(district, options = {}) {
     const root = document.getElementById("modal-buildings");
     const title = document.getElementById("modal-buildings-title");
     const list = document.getElementById("modal-buildings-list");
+    const spyIntel = options?.spyIntel || null;
     if (!root || !title || !list) return;
-    if (!district) {
+    if (!district && !spyIntel) {
       root.classList.add("hidden");
       list.innerHTML = "";
       return;
     }
 
-    const buildings = Array.isArray(district.buildings) ? district.buildings : [];
+    const buildings = district
+      ? (Array.isArray(district.buildings) ? district.buildings : [])
+      : (Array.isArray(spyIntel?.buildings) ? spyIntel.buildings : []);
     if (!buildings.length) {
       root.classList.add("hidden");
       list.innerHTML = "";
       return;
     }
-    const lockMeta = resolveBuildingLockMeta(district);
+    const lockMeta = district ? resolveBuildingLockMeta(district) : { locked: true, label: "Odhalené špehováním" };
 
-    title.textContent = district.buildingSetTitle
+    title.textContent = district?.buildingSetTitle
       ? `Budovy v distriktu • ${district.buildingSetTitle} (${district.buildingTier || "set"})`
-      : "Budovy v distriktu";
+      : (district ? "Budovy v distriktu" : "Odhalené budovy (špehování)");
     list.innerHTML = buildings
       .map(
         (building, index) => `
@@ -12468,6 +13324,10 @@ window.Empire.Map = (() => {
         `
       )
       .join("");
+    if (!district) {
+      root.classList.remove("hidden");
+      return;
+    }
     list.querySelectorAll("[data-building-index]:not([data-building-locked])").forEach((button) => {
       button.addEventListener("click", () => {
         const index = Number(button.getAttribute("data-building-index"));
@@ -12759,6 +13619,10 @@ window.Empire.Map = (() => {
     clearDistrictPoliceAction,
     clearPoliceActions: clearAllPoliceActions,
     setPoliceActionDistricts,
+    markDistrictSpyAction,
+    clearDistrictSpyAction,
+    clearSpyActions: clearAllSpyActions,
+    setSpyActionDistricts,
     getPharmacyBoostSnapshot,
     usePharmacyBoost,
     getFactoryBoostSnapshot,
