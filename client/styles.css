@@ -3254,6 +3254,18 @@ body::before {
 
 .market-building-shortcut:disabled:hover,
 .market-building-shortcut[aria-disabled="true"]:not(.is-unlocked):hover {
+  border-color: rgba(148, 163, 184, 0.42);
+  color: #cbd5e1;
+  background:
+    linear-gradient(145deg, rgba(15, 23, 42, 0.54), rgba(30, 41, 59, 0.5)),
+    linear-gradient(180deg, rgba(7, 10, 18, 0.96), rgba(5, 8, 14, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 20px rgba(2, 6, 23, 0.38),
+    0 0 14px rgba(148, 163, 184, 0.2);
+}
+
+.market-building-shortcut.is-lock-flash {
   border-color: rgba(248, 113, 113, 0.9);
   color: #fecaca;
   background:
@@ -8549,6 +8561,12 @@ body::before {
     z-index: 30;
   }
 
+  body:has(.modal:not(.hidden)):not(:has(#building-detail-modal:not(.hidden))) .topbar__stats {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   body.mobile-primary-modal-covers-topbar #events-modal,
   body.mobile-primary-modal-covers-topbar #buildings-modal,
   body.mobile-primary-modal-covers-topbar #market-modal {
@@ -8568,6 +8586,11 @@ body::before {
     padding-top: calc(var(--mobile-topbar-offset, 176px) + 30px);
   }
 
+  #storage-modal {
+    padding-top: calc(var(--mobile-topbar-offset, 176px) + 38px);
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
   .modal__backdrop,
   #building-detail-modal .modal__backdrop {
     inset: calc(var(--mobile-topbar-offset, 176px) + 18px) 0 0 0;
@@ -8575,11 +8598,14 @@ body::before {
 
   #storage-modal .modal__content {
     width: min(96vw, 96vw);
+    max-height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 64px - env(safe-area-inset-bottom));
+    overflow: hidden;
   }
 
   #storage-modal .modal__body {
     padding: 8px;
     font-size: 12px;
+    overflow-y: auto;
   }
 
   #storage-modal .storage-modal__section-title {
