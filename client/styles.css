@@ -4359,7 +4359,12 @@ body::before {
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact {
-  width: min(380px, 88vw);
+  width: min(350px, 86vw);
+  max-height: calc(100dvh - 128px);
+  display: flex;
+  flex-direction: column;
+  padding: 9px;
+  overflow: hidden;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .modal__header h3 {
@@ -4371,22 +4376,27 @@ body::before {
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .modal__body {
-  padding: 8px;
+  padding: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .modal__row {
-  gap: 8px;
-  padding: 7px 8px;
-  margin-bottom: 5px;
+  gap: 6px;
+  padding: 6px 7px;
+  margin-bottom: 4px;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .modal__row span {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .modal__row strong {
-  font-size: 12px;
-  line-height: 1.25;
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .modal__row--owner-meta strong,
@@ -4395,33 +4405,34 @@ body::before {
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .modal__gallery-title {
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 0.06em;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .district-buildings {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .district-buildings__item {
   align-items: flex-start;
-  padding: 7px 8px;
-  border-radius: 10px;
-  font-size: 10px;
-  line-height: 1.25;
+  padding: 4px 5px;
+  border-radius: 8px;
+  font-size: 9px;
+  line-height: 1.15;
+  min-height: 0;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .district-buildings__name {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.15;
   word-break: break-word;
 }
 
 #district-modal .modal__content.district-modal--spy-intel-compact .district-buildings__lock {
-  font-size: 8px;
-  padding: 3px 5px;
+  font-size: 7px;
+  padding: 2px 4px;
 }
 
 #district-modal .modal__row--defense strong {
@@ -7060,6 +7071,33 @@ body::before {
   .pharmacy-slot__head,
   .drug-production-slot__head {
     flex-direction: column;
+  }
+
+  #building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-production-slot__supply-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-production-slot__supply-pill {
+    justify-content: flex-start;
+    gap: 6px;
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  #building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-production-slot__supply-name {
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  #building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-production-slot__supply-value {
+    margin-left: 0;
+    font-size: 13px;
+    line-height: 1;
+    white-space: nowrap;
   }
 }
 
