@@ -2368,10 +2368,18 @@ window.Empire.UI = (() => {
     const closeBtn = document.getElementById("storage-modal-close");
     if (!trigger || !root) return;
 
-    const close = () => root.classList.add("hidden");
+    const setStorageScrollLock = (locked) => {
+      document.body.classList.toggle("mobile-storage-modal-open", Boolean(locked));
+    };
+
+    const close = () => {
+      root.classList.add("hidden");
+      setStorageScrollLock(false);
+    };
     const open = () => {
       hydrateStorageModalValues();
       root.classList.remove("hidden");
+      setStorageScrollLock(true);
     };
 
     trigger.addEventListener("click", open);

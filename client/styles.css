@@ -7832,6 +7832,99 @@ body::before {
 }
 
 @media (max-width: 720px) {
+  #events-modal .events-modal__content {
+    width: min(96vw, 430px);
+    max-width: 430px;
+    height: calc(100dvh - 18px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 18px - env(safe-area-inset-bottom));
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  #events-modal .events-modal__header {
+    margin-bottom: 4px;
+  }
+
+  #events-modal .events-modal__body {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  #events-modal .events-modal__agents {
+    gap: 8px;
+  }
+
+  #events-modal .events-agent img,
+  #events-modal.events-modal--compact .events-agent img {
+    height: 170px;
+  }
+
+  #events-modal .events-agent__info {
+    padding: 6px 7px;
+  }
+
+  #events-modal .events-agent__name {
+    font-size: 11px;
+  }
+
+  #events-modal .events-modal__detail {
+    padding: 8px;
+    border-radius: 12px;
+    gap: 0;
+  }
+
+  #events-modal .events-modal__title {
+    font-size: 15px;
+  }
+
+  #events-modal .events-modal__subtitle {
+    font-size: 11px;
+  }
+
+  #events-modal .events-modal__tagline {
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+
+  #events-agent-desc {
+    font-size: 11px;
+    line-height: 1.28;
+    margin: 0 0 4px;
+  }
+
+  #events-modal .events-tasklist {
+    gap: 6px;
+    margin-top: 4px;
+    overflow: visible;
+  }
+
+  #events-modal .events-task {
+    gap: 4px 8px;
+    padding: 6px 7px;
+    border-radius: 9px;
+  }
+
+  #events-modal .events-task__title {
+    font-size: 11px;
+  }
+
+  #events-modal .events-task__desc {
+    font-size: 10px;
+    line-height: 1.22;
+  }
+
+  #events-modal .events-task__actions {
+    gap: 8px;
+    align-self: start;
+  }
+
+  #events-modal .events-task__actions .btn {
+    min-height: 28px;
+    padding: 5px 8px;
+    font-size: 10px;
+    border-radius: 8px;
+  }
+
   .buildings-modal__layout {
     --buildings-modal-panel-height: min(48vh, 420px);
     grid-template-columns: 1fr;
@@ -8599,6 +8692,8 @@ body::before {
     align-items: start;
     align-content: start;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
@@ -8645,6 +8740,14 @@ body::before {
     padding: 8px;
     font-size: 12px;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.mobile-storage-modal-open {
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 
   #storage-modal .storage-modal__section-title {
@@ -9177,6 +9280,75 @@ body::before {
 }
 
 @media (max-width: 560px) {
+  #events-modal .events-modal__content {
+    width: min(97vw, 390px);
+    max-width: 390px;
+    padding: 7px;
+    border-radius: 12px;
+  }
+
+  #events-modal .events-modal__agents {
+    gap: 6px;
+  }
+
+  #events-modal .events-agent img,
+  #events-modal.events-modal--compact .events-agent img {
+    height: 146px;
+  }
+
+  #events-modal .events-agent__info {
+    padding: 5px 6px;
+  }
+
+  #events-modal .events-agent__name {
+    font-size: 10px;
+  }
+
+  #events-modal .events-modal__detail {
+    padding: 7px;
+  }
+
+  #events-modal .events-modal__title {
+    font-size: 14px;
+  }
+
+  #events-modal .events-modal__subtitle {
+    font-size: 10px;
+  }
+
+  #events-modal .events-modal__tagline {
+    font-size: 8px;
+  }
+
+  #events-agent-desc {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  #events-modal .events-task {
+    gap: 3px 6px;
+    padding: 5px 6px;
+  }
+
+  #events-modal .events-task__title {
+    font-size: 10px;
+  }
+
+  #events-modal .events-task__desc {
+    font-size: 9px;
+    line-height: 1.18;
+  }
+
+  #events-modal .events-task__actions {
+    gap: 6px;
+  }
+
+  #events-modal .events-task__actions .btn {
+    min-height: 26px;
+    padding: 4px 7px;
+    font-size: 9px;
+  }
+
   .auth-shell {
     padding-left: 12px;
     padding-right: 12px;
