@@ -1602,13 +1602,13 @@ body::before {
   font-size: 34px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  background: linear-gradient(135deg, #22d3ee, #f472b6 60%, #38bdf8);
+  background: linear-gradient(130deg, #67e8f9 0%, #22d3ee 38%, #7dd3fc 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   text-shadow:
-    0 0 12px rgba(34, 211, 238, 0.6),
-    0 0 24px rgba(244, 114, 182, 0.45);
+    0 0 12px rgba(34, 211, 238, 0.62),
+    0 0 24px rgba(56, 189, 248, 0.28);
 }
 
 .vortex-graffiti {
@@ -1942,20 +1942,22 @@ body::before {
 
 .tab-btn {
   flex: 1;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: var(--muted);
+  background: linear-gradient(180deg, rgba(7, 12, 22, 0.92), rgba(5, 10, 19, 0.94));
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  color: rgba(148, 163, 184, 0.86);
   padding: 8px;
   border-radius: 12px;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.65);
 }
 
 .tab-btn--active {
-  color: var(--text);
-  border-color: var(--accent);
+  color: #e6fbff;
+  border-color: rgba(34, 211, 238, 0.75);
+  background: linear-gradient(145deg, rgba(8, 34, 46, 0.95), rgba(10, 20, 36, 0.95));
   box-shadow:
-    0 0 16px rgba(34, 211, 238, 0.55),
-    0 0 26px rgba(244, 114, 182, 0.25);
+    0 0 16px rgba(34, 211, 238, 0.4),
+    inset 0 0 12px rgba(34, 211, 238, 0.18);
 }
 
 .auth-form {
@@ -2008,11 +2010,12 @@ body::before {
 }
 
 .auth-body .btn--primary {
-  background: linear-gradient(135deg, #22d3ee, #f472b6);
-  color: #040a12;
+  background: linear-gradient(140deg, #0f3142 0%, #12445c 52%, #175879 100%);
+  color: #d9f8ff;
+  border: 1px solid rgba(34, 211, 238, 0.45);
   box-shadow:
-    0 0 18px rgba(34, 211, 238, 0.6),
-    0 0 26px rgba(244, 114, 182, 0.35);
+    0 0 14px rgba(34, 211, 238, 0.32),
+    0 0 22px rgba(8, 47, 73, 0.46);
 }
 
 .auth-body .btn--ghost {
@@ -8027,6 +8030,33 @@ body::before {
 }
 
 @media (max-width: 900px) {
+  .auth-body--login {
+    background-attachment: scroll;
+    background-position: center top;
+  }
+
+  .auth-body--login::before {
+    opacity: 0.22;
+  }
+
+  .auth-body--login::after {
+    background:
+      radial-gradient(circle at 50% 22%, rgba(7, 8, 15, 0.05) 0%, rgba(7, 8, 15, 0.52) 52%, rgba(7, 8, 15, 0.86) 100%),
+      linear-gradient(180deg, rgba(7, 8, 15, 0.2), rgba(7, 8, 15, 0.88));
+  }
+
+  .rain-drops--slow {
+    opacity: 0.14;
+  }
+
+  .rain-drops--fast {
+    opacity: 0.08;
+  }
+
+  .smoke-layer {
+    opacity: 0.64;
+  }
+
   .vortex-graffiti {
     display: none;
   }
@@ -8034,14 +8064,116 @@ body::before {
   .auth-shell {
     min-height: auto;
     justify-content: flex-start;
-    padding-bottom: 118px;
+    gap: 10px;
+    padding: 14px 14px 118px;
   }
 
   .auth-body--login .auth-shell {
     min-height: 100dvh;
     justify-content: center;
-    padding-top: max(16px, env(safe-area-inset-top));
+    padding-top: max(12px, env(safe-area-inset-top));
     padding-bottom: calc(128px + env(safe-area-inset-bottom));
+  }
+
+  .auth-headline h1 {
+    font-size: clamp(26px, 7.6vw, 34px);
+    letter-spacing: 0.8px;
+  }
+
+  .auth-subtitle {
+    font-size: 13px;
+    letter-spacing: 0.45px;
+  }
+
+  .auth-card {
+    width: min(96vw, 480px);
+    max-width: 96vw;
+    min-height: auto;
+    padding: 18px 16px 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(34, 211, 238, 0.5);
+    background:
+      linear-gradient(160deg, rgba(6, 12, 22, 0.92), rgba(10, 18, 32, 0.92)),
+      repeating-linear-gradient(90deg, rgba(34, 211, 238, 0.04) 0, rgba(34, 211, 238, 0.04) 1px, transparent 1px, transparent 16px);
+    box-shadow:
+      0 16px 34px rgba(0, 0, 0, 0.52),
+      0 0 26px rgba(34, 211, 238, 0.26),
+      inset 0 0 0 1px rgba(56, 189, 248, 0.18);
+  }
+
+  .auth-tabs {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .tab-btn {
+    min-height: 40px;
+    border-radius: 11px;
+    border-color: rgba(56, 189, 248, 0.24);
+    background: linear-gradient(180deg, rgba(6, 11, 20, 0.94), rgba(5, 9, 17, 0.96));
+    color: rgba(148, 163, 184, 0.9);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+
+  .tab-btn--active {
+    color: #e6fbff;
+    border-color: rgba(34, 211, 238, 0.72);
+    background: linear-gradient(145deg, rgba(8, 34, 46, 0.95), rgba(9, 18, 34, 0.96));
+    box-shadow:
+      0 0 12px rgba(34, 211, 238, 0.34),
+      inset 0 0 10px rgba(34, 211, 238, 0.16);
+  }
+
+  .auth-form {
+    gap: 9px;
+  }
+
+  .auth-form label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(186, 230, 253, 0.88);
+  }
+
+  .auth-form input {
+    min-height: 42px;
+    border-radius: 10px;
+    padding: 10px 11px;
+    border-color: rgba(34, 211, 238, 0.42);
+    background: rgba(5, 11, 20, 0.82);
+    box-shadow:
+      inset 0 0 14px rgba(34, 211, 238, 0.12),
+      0 0 0 1px rgba(34, 211, 238, 0.06);
+  }
+
+  .auth-form--guest {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top-color: rgba(56, 189, 248, 0.3);
+  }
+
+  .auth-form--guest label {
+    font-size: 11px;
+  }
+
+  .auth-body .btn {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 11px;
+  }
+
+  .auth-body .btn--primary {
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-size: 12px;
+  }
+
+  .auth-body .btn--ghost {
+    border-color: rgba(34, 211, 238, 0.42);
+    color: rgba(186, 230, 253, 0.96);
+    background: rgba(8, 14, 26, 0.62);
   }
 
   .auth-footer--fixed {
@@ -8883,15 +9015,56 @@ body::before {
 
 @media (max-width: 560px) {
   .auth-shell {
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   .auth-card {
-    width: min(100%, 94vw);
-    max-width: 94vw;
+    width: min(100%, 95vw);
+    max-width: 95vw;
     min-height: auto;
-    padding: 20px 16px;
+    padding: 16px 13px 14px;
+    border-radius: 16px;
+  }
+
+  .auth-headline h1 {
+    font-size: clamp(24px, 9vw, 30px);
+    margin-bottom: 4px;
+  }
+
+  .auth-subtitle {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .auth-tabs {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .tab-btn {
+    min-height: 38px;
+    font-size: 12px;
+    padding: 7px 8px;
+  }
+
+  .auth-form {
+    gap: 8px;
+  }
+
+  .auth-form label {
+    font-size: 10px;
+  }
+
+  .auth-form input {
+    min-height: 39px;
+    padding: 9px 10px;
+    font-size: 14px;
+  }
+
+  .auth-body .btn {
+    min-height: 40px;
+    font-size: 12px;
   }
 
   .auth-footer {
