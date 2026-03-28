@@ -1453,17 +1453,21 @@ window.Empire.UI = (() => {
   function initMobileModalTopbarResourceVisibility() {
     const media = window.matchMedia("(max-width: 720px)");
     const modalNodes = Array.from(document.querySelectorAll(".modal"));
+    const topbarHiddenModalIds = new Set(["events-modal", "buildings-modal", "market-modal", "alliance-modal"]);
     if (!modalNodes.length) return;
 
     const applyState = () => {
       if (!media.matches) {
+        document.body.classList.remove("mobile-hide-topbar");
         document.body.classList.remove("mobile-hide-topbar-stats");
         return;
       }
 
       const openModals = modalNodes.filter((modal) => !modal.classList.contains("hidden"));
+      const shouldHideTopbar = openModals.some((modal) => topbarHiddenModalIds.has(modal.id));
       const keepStatsVisible = openModals.some((modal) => modal.id === "building-detail-modal");
       const shouldHideStats = openModals.length > 0 && !keepStatsVisible;
+      document.body.classList.toggle("mobile-hide-topbar", shouldHideTopbar);
       document.body.classList.toggle("mobile-hide-topbar-stats", shouldHideStats);
     };
 
@@ -7173,6 +7177,7 @@ window.Empire.UI = (() => {
     allianceRefreshHandler = refreshAlliance;
 
     openBtn.addEventListener("click", async () => {
+      setMobileTopbarCoveredByPrimaryModal(true);
       root.classList.remove("hidden");
       await refreshAlliance();
     });
@@ -7242,10 +7247,19 @@ window.Empire.UI = (() => {
       }
       pushEvent("Pozvánky do aliance přes backend zatím nejsou napojené.");
     });
-    if (backdrop) backdrop.addEventListener("click", () => root.classList.add("hidden"));
-    if (closeBtn) closeBtn.addEventListener("click", () => root.classList.add("hidden"));
+    if (backdrop) backdrop.addEventListener("click", () => {
+      root.classList.add("hidden");
+      setMobileTopbarCoveredByPrimaryModal(false);
+    });
+    if (closeBtn) closeBtn.addEventListener("click", () => {
+      root.classList.add("hidden");
+      setMobileTopbarCoveredByPrimaryModal(false);
+    });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") root.classList.add("hidden");
+      if (event.key === "Escape") {
+        root.classList.add("hidden");
+        setMobileTopbarCoveredByPrimaryModal(false);
+      }
     });
     chatSend.addEventListener("click", async () => {
       const text = String(chatInput.value || "").trim();
@@ -7637,6 +7651,7 @@ window.Empire.UI = (() => {
     marketRefreshHandler = refreshMarket;
 
     openBtn.addEventListener("click", async () => {
+      setMobileTopbarCoveredByPrimaryModal(true);
       root.classList.remove("hidden");
       await refreshMarket();
     });
@@ -7729,13 +7744,16 @@ window.Empire.UI = (() => {
     });
     if (backdrop) backdrop.addEventListener("click", () => {
       root.classList.add("hidden");
+      setMobileTopbarCoveredByPrimaryModal(false);
     });
     if (closeBtn) closeBtn.addEventListener("click", () => {
       root.classList.add("hidden");
+      setMobileTopbarCoveredByPrimaryModal(false);
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         root.classList.add("hidden");
+        setMobileTopbarCoveredByPrimaryModal(false);
       }
     });
   }

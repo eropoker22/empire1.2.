@@ -8561,6 +8561,13 @@ body::before {
     z-index: 30;
   }
 
+  body.mobile-hide-topbar .topbar {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-110%);
+  }
+
   body.mobile-hide-topbar-stats .topbar__stats {
     opacity: 0;
     visibility: hidden;
@@ -8569,13 +8576,15 @@ body::before {
 
   body.mobile-primary-modal-covers-topbar #events-modal,
   body.mobile-primary-modal-covers-topbar #buildings-modal,
-  body.mobile-primary-modal-covers-topbar #market-modal {
+  body.mobile-primary-modal-covers-topbar #market-modal,
+  body.mobile-primary-modal-covers-topbar #alliance-modal {
     padding-top: 12px;
   }
 
   body.mobile-primary-modal-covers-topbar #events-modal .modal__backdrop,
   body.mobile-primary-modal-covers-topbar #buildings-modal .modal__backdrop,
-  body.mobile-primary-modal-covers-topbar #market-modal .modal__backdrop {
+  body.mobile-primary-modal-covers-topbar #market-modal .modal__backdrop,
+  body.mobile-primary-modal-covers-topbar #alliance-modal .modal__backdrop {
     inset: 0;
   }
 
@@ -8918,14 +8927,17 @@ body::before {
   }
 
   #building-detail-modal .building-detail-modal__content {
-    height: min(88dvh, 640px);
-    max-height: min(88dvh, 640px);
+    width: min(96vw, 520px);
+    height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 26px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 26px - env(safe-area-inset-bottom));
     overflow: hidden;
     display: flex;
     flex-direction: column;
   }
 
   #building-detail-modal .modal__body {
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -8947,9 +8959,37 @@ body::before {
     padding-right: 0;
   }
 
+  #building-detail-panel-stats {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #building-detail-modal .building-detail-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: 8px;
+    padding-top: 8px;
+    background: linear-gradient(180deg, rgba(8, 14, 26, 0), rgba(8, 14, 26, 0.92) 24%, rgba(8, 14, 26, 0.98));
+  }
+
+  #building-detail-modal .building-detail-actions__group {
+    padding: 8px;
+    border-radius: 10px;
+  }
+
+  #building-detail-modal .building-detail-actions__label {
+    margin-bottom: 6px;
+    font-size: 10px;
+  }
+
+  #building-detail-modal .building-detail-actions__grid {
+    gap: 6px;
+  }
+
   #building-detail-modal .building-detail-action-btn {
-    min-height: 40px;
-    font-size: 13px;
+    min-height: 38px;
+    font-size: 12px;
   }
 
   #building-detail-modal .building-info-card {
@@ -9391,9 +9431,23 @@ body::before {
   }
 
   #building-detail-modal .building-detail-modal__content {
-    height: min(86dvh, 560px);
-    max-height: min(86dvh, 560px);
+    width: min(96vw, 392px);
+    height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 22px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 22px - env(safe-area-inset-bottom));
     overflow: hidden;
+  }
+
+  #building-detail-modal .modal__body {
+    padding-right: 0;
+  }
+
+  #building-detail-modal .building-detail-actions {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+
+  #building-detail-modal .building-detail-actions__group {
+    padding: 7px;
   }
 
   .modal__row {
