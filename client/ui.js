@@ -1453,7 +1453,14 @@ window.Empire.UI = (() => {
   function initMobileModalTopbarResourceVisibility() {
     const media = window.matchMedia("(max-width: 720px)");
     const modalNodes = Array.from(document.querySelectorAll(".modal"));
-    const topbarHiddenModalIds = new Set(["events-modal", "buildings-modal", "market-modal", "alliance-modal"]);
+    const topbarHiddenModalIds = new Set([
+      "events-modal",
+      "buildings-modal",
+      "market-modal",
+      "alliance-modal",
+      "storage-modal",
+      "leaderboard-modal"
+    ]);
     if (!modalNodes.length) return;
 
     const applyState = () => {

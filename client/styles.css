@@ -8588,8 +8588,34 @@ body::before {
   body.mobile-hide-topbar #events-modal,
   body.mobile-hide-topbar #buildings-modal,
   body.mobile-hide-topbar #market-modal,
-  body.mobile-hide-topbar #alliance-modal {
+  body.mobile-hide-topbar #alliance-modal,
+  body.mobile-hide-topbar #storage-modal,
+  body.mobile-hide-topbar #leaderboard-modal {
     padding-top: calc(8px + env(safe-area-inset-top));
+  }
+
+  body.mobile-hide-topbar #storage-modal {
+    display: grid;
+    align-items: start;
+    align-content: start;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
+  body.mobile-hide-topbar #storage-modal .modal__backdrop,
+  body.mobile-hide-topbar #leaderboard-modal .modal__backdrop {
+    inset: 0;
+  }
+
+  body.mobile-hide-topbar #storage-modal .modal__content,
+  body.mobile-hide-topbar #leaderboard-modal .modal__content {
+    max-height: calc(100dvh - 22px - env(safe-area-inset-bottom));
+  }
+
+  body.mobile-hide-topbar #storage-modal .modal__content {
+    margin-top: 0;
+    margin-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 
   .modal,
