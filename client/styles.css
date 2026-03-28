@@ -8562,10 +8562,7 @@ body::before {
   }
 
   body.mobile-hide-topbar .topbar {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: translateY(-110%);
+    display: none !important;
   }
 
   body.mobile-hide-topbar-stats .topbar__stats {
@@ -8578,7 +8575,7 @@ body::before {
   body.mobile-primary-modal-covers-topbar #buildings-modal,
   body.mobile-primary-modal-covers-topbar #market-modal,
   body.mobile-primary-modal-covers-topbar #alliance-modal {
-    padding-top: 12px;
+    padding-top: calc(8px + env(safe-area-inset-top));
   }
 
   body.mobile-primary-modal-covers-topbar #events-modal .modal__backdrop,
@@ -8586,6 +8583,13 @@ body::before {
   body.mobile-primary-modal-covers-topbar #market-modal .modal__backdrop,
   body.mobile-primary-modal-covers-topbar #alliance-modal .modal__backdrop {
     inset: 0;
+  }
+
+  body.mobile-hide-topbar #events-modal,
+  body.mobile-hide-topbar #buildings-modal,
+  body.mobile-hide-topbar #market-modal,
+  body.mobile-hide-topbar #alliance-modal {
+    padding-top: calc(8px + env(safe-area-inset-top));
   }
 
   .modal,
