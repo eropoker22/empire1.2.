@@ -763,6 +763,7 @@ window.Empire.Map = (() => {
     })
   });
   const ARMORY_WEAPON_KEYS = Object.freeze(Object.keys(ARMORY_CONFIG.weapons));
+  const ARMORY_BATCH_MAX_UNITS = 20;
   const ARMORY_ATTACK_WEAPON_KEYS = Object.freeze(
     ARMORY_WEAPON_KEYS.filter((key) => ARMORY_CONFIG.weapons[key]?.category !== "defense")
   );
@@ -2365,6 +2366,7 @@ window.Empire.Map = (() => {
       category,
       isProducing: false,
       producedAmount: 0,
+      batchMaxUnits: 0,
       queuedUnits: 1,
       remainingUnits: 0,
       lastTick: now,
@@ -2380,6 +2382,7 @@ window.Empire.Map = (() => {
     const config = ARMORY_CONFIG.weapons[weaponKey] || null;
     const category = config?.category === "defense" ? "defense" : "attack";
     const producedAmountRaw = Number(rawSlot?.producedAmount || 0);
+    const batchMaxUnitsRaw = Number(rawSlot?.batchMaxUnits || 0);
     const queuedUnitsRaw = Number(rawSlot?.queuedUnits || 1);
     const remainingUnitsRaw = Number(rawSlot?.remainingUnits || 0);
     const lastTickRaw = Number(rawSlot?.lastTick || now);
@@ -2390,7 +2393,8 @@ window.Empire.Map = (() => {
       category,
       isProducing: Boolean(rawSlot?.isProducing),
       producedAmount: Number.isFinite(producedAmountRaw) ? Math.max(0, Math.floor(producedAmountRaw)) : 0,
-      queuedUnits: Number.isFinite(queuedUnitsRaw) ? clamp(Math.floor(queuedUnitsRaw), 1, 999) : 1,
+      batchMaxUnits: Number.isFinite(batchMaxUnitsRaw) ? clamp(Math.floor(batchMaxUnitsRaw), 0, ARMORY_BATCH_MAX_UNITS) : 0,
+      queuedUnits: Number.isFinite(queuedUnitsRaw) ? clamp(Math.floor(queuedUnitsRaw), 1, ARMORY_BATCH_MAX_UNITS) : 1,
       remainingUnits: Number.isFinite(remainingUnitsRaw) ? Math.max(0, Math.floor(remainingUnitsRaw)) : 0,
       lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : now,
       productionRemainder: Number.isFinite(remainderRaw) ? Math.max(0, remainderRaw) : 0
@@ -2573,6 +2577,11 @@ window.Empire.Map = (() => {
           slot.isProducing = false;
           slot.productionRemainder = 0;
         }
+      }
+      const batchMaxUnits = Math.max(0, Math.floor(Number(slot.batchMaxUnits || 0)));
+      const producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
+      if (batchMaxUnits > 0 && producedAmount > batchMaxUnits) {
+        slot.producedAmount = batchMaxUnits;
       }
       slot.lastTick = nowMs;
     });
@@ -2841,11 +2850,6 @@ window.Empire.Map = (() => {
     return Math.max(0, (getDrugLabStorageCapacityMultiplier() - 1) * 100);
   }
 
-  function getDrugLabProductionBonusPct() {
-    const warehouseCount = getOwnedWarehouseCountForDrugLab();
-    return Math.max(0, warehouseCount * DRUG_LAB_CONFIG.productionBonusPerWarehousePct);
-  }
-
   function getSafeDrugLabEconomySnapshot() {
     const getSnapshot = window.Empire.UI?.getEconomySnapshot;
     if (typeof getSnapshot === "function") {
@@ -3007,10 +3011,6 @@ window.Empire.Map = (() => {
 
     getProductionMultiplier(now = Date.now()) {
       let multiplier = this.getScaledStat(1, this.building.level);
-      const warehouseProductionBonusPct = getDrugLabProductionBonusPct();
-      if (warehouseProductionBonusPct > 0) {
-        multiplier *= 1 + warehouseProductionBonusPct / 100;
-      }
       const schoolBoostPct = this.getSchoolProductionBoostPct(now);
       if (schoolBoostPct > 0) {
         multiplier *= 1 + schoolBoostPct / 100;
@@ -3855,8 +3855,7 @@ window.Empire.Map = (() => {
 
   function getOwnedDrugLabNetworkProductionBonusPct() {
     const ownedCount = collectOwnedDrugLabEntries().length;
-    const extraLabs = Math.max(0, ownedCount - 1);
-    return extraLabs * 5;
+    return Math.max(0, ownedCount) * 5;
   }
 
   function resolvePrimaryOwnedDrugLabTarget(context, district) {
@@ -7320,7 +7319,7 @@ window.Empire.Map = (() => {
     const activeDistrict = primaryTarget.district || district || null;
     const key = resolveBuildingInstanceKey(activeContext, activeDistrict);
     const ownedArmoryCount = Math.max(1, primaryTarget.entries.length || 1);
-    const networkProductionBonusPct = Math.max(0, (ownedArmoryCount - 1) * 10);
+    const networkProductionBonusPct = Math.max(0, ownedArmoryCount * 10);
     const snapshot = getArmoryStateByKey(key, now);
     const syncResult = syncArmoryProduction(snapshot, now, {
       applyHeat: true,
@@ -7354,28 +7353,46 @@ window.Empire.Map = (() => {
       const powerValue = category === "defense"
         ? Math.max(0, Math.floor(Number(config?.defensePower || 0)))
         : Math.max(0, Math.floor(Number(config?.attackPower || 0)));
-      return {
-        id: Number(slot.id),
-        weaponKey: slot.weaponKey,
-        category,
-        weaponName: config?.name || slot.weaponKey,
-        isProducing: Boolean(slot.isProducing),
-        queuedUnits: Math.max(1, Math.floor(Number(slot.queuedUnits || 1))),
-        remainingUnits: Math.max(0, Math.floor(Number(slot.remainingUnits || 0))),
-        producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
+        return {
+          id: Number(slot.id),
+          weaponKey: slot.weaponKey,
+          category,
+          weaponName: config?.name || slot.weaponKey,
+          isProducing: Boolean(slot.isProducing),
+          batchMaxUnits: Math.min(
+            ARMORY_BATCH_MAX_UNITS,
+            Math.max(
+              0,
+              Math.floor(Number(slot.batchMaxUnits || 0) || (Number(slot.producedAmount || 0) + Number(slot.remainingUnits || 0)))
+            )
+          ),
+          queuedUnits: clamp(Math.max(1, Math.floor(Number(slot.queuedUnits || 1))), 1, ARMORY_BATCH_MAX_UNITS),
+          remainingUnits: Math.max(0, Math.floor(Number(slot.remainingUnits || 0))),
+          producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
         perHour: Math.max(0, Number(rates[slot.weaponKey] || 0)),
         powerLabel: category === "defense" ? "Defense" : "Attack",
         powerValue,
         metalPartsCost: Math.max(0, Math.floor(Number(config?.metalPartsCost || 0))),
         techCoreCost: Math.max(0, Math.floor(Number(config?.techCoreCost || 0))),
         durationMs: Math.max(1, Math.floor(Number(config?.durationMs || 60000))),
-        effectiveDurationMs: Math.max(1, Math.round(Number(config?.durationMs || 60000) / totalProductionMultiplier)),
-        specialEffect: String(config?.specialEffect || ""),
-        drawback: String(config?.drawback || ""),
-        role: String(config?.role || ""),
-        heatPerUnit: Math.max(0, Math.floor(Number(config?.heatPerUnit || 0)))
-      };
-    });
+          effectiveDurationMs: Math.max(1, Math.round(Number(config?.durationMs || 60000) / totalProductionMultiplier)),
+          specialEffect: String(config?.specialEffect || ""),
+          drawback: String(config?.drawback || ""),
+          role: String(config?.role || ""),
+          heatPerUnit: Math.max(0, Math.floor(Number(config?.heatPerUnit || 0))),
+          canAffordQueue: (
+            Number(playerMaterials.metalParts || 0) >= Math.max(0, Math.floor(Number(config?.metalPartsCost || 0))) * clamp(Math.max(1, Math.floor(Number(slot.queuedUnits || 1))), 1, ARMORY_BATCH_MAX_UNITS)
+            && Number(playerMaterials.techCore || 0) >= Math.max(0, Math.floor(Number(config?.techCoreCost || 0))) * clamp(Math.max(1, Math.floor(Number(slot.queuedUnits || 1))), 1, ARMORY_BATCH_MAX_UNITS)
+          ),
+          batchAtMax: Math.min(
+            ARMORY_BATCH_MAX_UNITS,
+            Math.max(
+              0,
+              Math.floor(Number(slot.batchMaxUnits || 0) || (Number(slot.producedAmount || 0) + Number(slot.remainingUnits || 0)))
+            )
+          ) >= ARMORY_BATCH_MAX_UNITS
+        };
+      });
     const attackSlots = slots.filter((slot) => slot.category !== "defense");
     const defenseSlots = slots.filter((slot) => slot.category === "defense");
     const activeAttackSlots = attackSlots.reduce((sum, slot) => sum + (slot.isProducing ? 1 : 0), 0);
@@ -7385,17 +7402,8 @@ window.Empire.Map = (() => {
     const storedAttackTotal = ARMORY_ATTACK_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(storedWeapons[weaponKey] || 0), 0);
     const storedDefenseTotal = ARMORY_DEFENSE_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(storedWeapons[weaponKey] || 0), 0);
     const effects = [
-      `Materiály pro výrobu: MP ${playerMaterials.metalParts}, TC ${playerMaterials.techCore}`,
-      `Sklad Zbrojovky: útok ${storedAttackTotal} ks, obrana ${storedDefenseTotal} ks`
+      `Síť Zbrojovek: ${ownedArmoryCount} budov (+${formatDecimalValue(networkProductionBonusPct, 2)}% rychlost výroby)`
     ];
-    if (Math.max(0, Number(syncResult.heatAdded || 0)) > 0) {
-      effects.push(`Poslední tick výroby: +${Math.max(0, Math.floor(Number(syncResult.heatAdded || 0)))} heat`);
-    }
-    if (networkProductionBonusPct > 0) {
-      effects.push(
-        `Síť Zbrojovek: ${ownedArmoryCount} budov (+${formatDecimalValue(networkProductionBonusPct, 2)}% rychlost výroby)`
-      );
-    }
 
     const primaryDisplayName = primaryTarget.primary?.displayName || activeContext?.variantName || activeContext?.baseName;
     const otherDisplayNames = primaryTarget.entries.slice(1).map((entry) => entry.displayName);
@@ -7458,7 +7466,7 @@ window.Empire.Map = (() => {
     const context = primaryTarget.context || inputContext;
     const district = primaryTarget.district || inputDistrict;
     const ownedArmoryCount = Math.max(1, primaryTarget.entries.length || 1);
-    const networkProductionBonusPct = Math.max(0, (ownedArmoryCount - 1) * 10);
+    const networkProductionBonusPct = Math.max(0, ownedArmoryCount * 10);
     const now = Date.now();
     const key = resolveBuildingInstanceKey(context, district);
     const snapshot = getArmoryStateByKey(key, now);
@@ -7741,10 +7749,9 @@ window.Empire.Map = (() => {
     const nextUpgradeCost = nextLevel ? Number(DRUG_LAB_CONFIG.upgradeCosts[nextLevel] || 0) : 0;
     const schoolBoost = resolveDrugLabSchoolBoostPct(instanceKey, now);
     const ownedLabCount = Math.max(1, primaryTarget.entries.length || 1);
-    const networkProductionBonusPct = Math.max(0, (ownedLabCount - 1) * 5);
+    const networkProductionBonusPct = Math.max(0, ownedLabCount * 5);
     const ownedWarehouseCount = getOwnedWarehouseCountForDrugLab();
     const storageCapacityBonusPct = getDrugLabStorageCapacityBonusPct();
-    const warehouseProductionBonusPct = getDrugLabProductionBonusPct();
     const pharmacySupplies = createDrugLabSupplyMap(playerState.labSupplies || {});
 
     const slots = (Array.isArray(buildingState.slots) ? buildingState.slots : []).map((slot) => {
@@ -7771,33 +7778,22 @@ window.Empire.Map = (() => {
       };
     });
     const activeSlots = slots.filter((slot) => slot.unlocked && slot.isProducing).length;
-    const queuedSupplyDemand = slots.reduce((acc, slot) => {
-      if (!slot.unlocked) return acc;
-      acc.chemicals += Math.max(0, Math.floor(Number(slot.queuedSupplyCost?.chemicals || 0)));
-      acc.biomass += Math.max(0, Math.floor(Number(slot.queuedSupplyCost?.biomass || 0)));
-      acc.stimPack += Math.max(0, Math.floor(Number(slot.queuedSupplyCost?.stimPack || 0)));
-      return acc;
-    }, createDrugLabSupplyMap());
-    const availableQueuedSupplies = createDrugLabSupplyMap({
-      chemicals: Math.max(0, Math.floor(Number(pharmacySupplies.chemicals || 0) - Number(queuedSupplyDemand.chemicals || 0))),
-      biomass: Math.max(0, Math.floor(Number(pharmacySupplies.biomass || 0) - Number(queuedSupplyDemand.biomass || 0))),
-      stimPack: Math.max(0, Math.floor(Number(pharmacySupplies.stimPack || 0) - Number(queuedSupplyDemand.stimPack || 0)))
-    });
+    // Supplies are consumed only on Start/Add action.
+    // Switching drug type in a slot must never reserve or subtract supplies.
+    const queuedSupplyDemand = createDrugLabSupplyMap();
+    const availableQueuedSupplies = createDrugLabSupplyMap(pharmacySupplies);
 
     const effects = [];
     if (ownedWarehouseCount > 0) {
       effects.push(
-        `Sklady v území: ${ownedWarehouseCount} (+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita, +${formatDecimalValue(warehouseProductionBonusPct, 2)}% produkce)`
+        `Sklady v území: ${ownedWarehouseCount} (+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita)`
       );
     }
-    effects.push(
-      `Vstup z Lékárny: C ${pharmacySupplies.chemicals}, B ${pharmacySupplies.biomass}, S ${pharmacySupplies.stimPack}`
-    );
     if (schoolBoost.totalPct > 0) {
       effects.push(`Škola v districtu: boost produkce +${formatDecimalValue(schoolBoost.totalPct, 2)}%`);
     }
     if (networkProductionBonusPct > 0) {
-      effects.push(`Síť Drug Labů: +${formatDecimalValue(networkProductionBonusPct, 2)}% produkce`);
+      effects.push(`Síť laboratoří: +${formatDecimalValue(networkProductionBonusPct, 2)}% produkce`);
     }
     if (core.isOverclockActive(now)) {
       effects.push(`Overclock (${formatDurationLabel(Number(buildingState.effects?.overclockUntil || 0) - now)})`);
@@ -7868,7 +7864,6 @@ window.Empire.Map = (() => {
         currentProductionMultiplier: core.getProductionMultiplier(now),
         ownedWarehouseCount,
         storageCapacityBonusPct,
-        warehouseProductionBonusPct,
         playerActiveEffects: Object.entries(player.activeDrugEffects || {})
           .map(([key, effect]) => {
             const active = Boolean(effect?.active && now < Number(effect?.endsAt || 0));
@@ -7941,6 +7936,8 @@ window.Empire.Map = (() => {
         result = { ok: false, message: "Slot neexistuje." };
       } else if (Number(slot.id) > core.getUnlockedSlotCount()) {
         result = { ok: false, message: "Slot je zamčený." };
+      } else if (slot.isProducing && Math.max(0, Math.floor(Number(slot.queueRemaining || 0))) > 0) {
+        result = { ok: false, message: `Slot ${slot.id}: nejdřív zastav výrobu, pak můžeš změnit drogu.` };
       } else if (!DRUG_CONFIG[drugType]) {
         result = { ok: false, message: "Neznámá droga." };
       } else {
@@ -8286,39 +8283,45 @@ window.Empire.Map = (() => {
             </div>
             <div class="drug-production-slot__metrics">
               <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Recept</span>
-                <strong class="drug-production-slot__metric-value">${slot.metalPartsCost} MP + ${slot.techCoreCost} TC</strong>
+                <span class="drug-production-slot__metric-label">Vyrobeno</span>
+                <strong class="drug-production-slot__metric-value armory-slot__produced-value">
+                  ${Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}/${ARMORY_BATCH_MAX_UNITS}
+                </strong>
+              </div>
+              <div class="drug-production-slot__metric">
+                <span class="drug-production-slot__metric-label">Ve frontě</span>
+                <strong class="drug-production-slot__metric-value armory-slot__queue-value">
+                  ${Math.max(0, Math.floor(Number(slot.remainingUnits || 0)))}
+                </strong>
               </div>
               <div class="drug-production-slot__metric">
                 <span class="drug-production-slot__metric-label">Čas / kus</span>
                 <strong class="drug-production-slot__metric-value">${formatDurationLabel(slot.effectiveDurationMs || slot.durationMs)}</strong>
               </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">${slot.powerLabel || "Síla"}</span>
-                <strong class="drug-production-slot__metric-value">+${Math.max(0, Math.floor(Number(slot.powerValue || 0)))}</strong>
-              </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Nastaveno</span>
-                <strong class="drug-production-slot__metric-value">${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))} ks</strong>
-              </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Ve frontě</span>
-                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.remainingUnits || 0)))} ks</strong>
-              </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Celkem potřeba</span>
-                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.queuedUnits || 1))) * Math.max(0, Math.floor(Number(slot.metalPartsCost || 0)))} MP + ${Math.max(0, Math.floor(Number(slot.queuedUnits || 1))) * Math.max(0, Math.floor(Number(slot.techCoreCost || 0)))} TC</strong>
+              <div class="drug-production-slot__metric drug-production-slot__metric--supplies">
+                <span class="drug-production-slot__metric-label">Recept / dávka</span>
+                <div class="armory-slot__materials-row">
+                  <span class="armory-slot__material-pill armory-slot__material-pill--metal">
+                    <span class="armory-slot__material-name">Metal Parts</span>
+                    <strong class="armory-slot__material-value">${Math.max(0, Math.floor(Number(slot.metalPartsCost || 0)))}</strong>
+                  </span>
+                  <span class="armory-slot__material-pill armory-slot__material-pill--tech">
+                    <span class="armory-slot__material-name">Tech Core</span>
+                    <strong class="armory-slot__material-value">${Math.max(0, Math.floor(Number(slot.techCoreCost || 0)))}</strong>
+                  </span>
+                </div>
               </div>
             </div>
-            <div class="drug-lab-card__meta">${slot.specialEffect}</div>
             <div class="drug-production-slot__controls">
               <div class="drug-lab-stepper">
                 <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-armory-slot-id="${slot.id}" data-armory-slot-adjust="-1">-</button>
                 <strong class="drug-lab-stepper__value">${Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
                 <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-armory-slot-id="${slot.id}" data-armory-slot-adjust="1">+</button>
               </div>
-              <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--start" type="button" data-armory-slot-start="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
-                Spustit
+              <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--start" type="button" data-armory-slot-start="${slot.id}" ${
+                ((!slot.canAffordQueue) || (slot.isProducing && slot.batchAtMax)) ? "disabled" : ""
+              }>
+                ${slot.isProducing ? "Přidat" : "Spustit"}
               </button>
               <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--stop" type="button" data-armory-slot-stop="${slot.id}" ${!slot.isProducing ? "disabled" : ""}>
                 Zastavit
@@ -8331,60 +8334,66 @@ window.Empire.Map = (() => {
       const attackRows = renderSlotRows(attackSlots);
       const defenseRows = renderSlotRows(defenseSlots);
       const storedWeapons = mechanics.storedWeapons || {};
-      const attackStorageStatusLabel = ARMORY_ATTACK_WEAPON_KEYS
+      const attackStoredLabel = ARMORY_ATTACK_WEAPON_KEYS
         .map((weaponKey) => {
-          const weapon = ARMORY_CONFIG.weapons[weaponKey];
-          const amount = Math.max(0, Math.floor(Number(storedWeapons[weaponKey] || 0)));
-          return `${weapon.name}: ${amount}`;
+          const count = Math.max(0, Math.floor(Number(storedWeapons[weaponKey] || 0)));
+          const short =
+            weaponKey === "baseballBat" ? "BP"
+            : weaponKey === "streetPistol" ? "PP"
+            : weaponKey === "grenade" ? "GR"
+            : weaponKey === "smg" ? "SM"
+            : weaponKey === "bazooka" ? "BZ"
+            : weaponKey.toUpperCase();
+          return `${short} ${count}`;
         })
         .join(" • ");
-      const defenseStorageStatusLabel = ARMORY_DEFENSE_WEAPON_KEYS
+      const defenseStoredLabel = ARMORY_DEFENSE_WEAPON_KEYS
         .map((weaponKey) => {
-          const weapon = ARMORY_CONFIG.weapons[weaponKey];
-          const amount = Math.max(0, Math.floor(Number(storedWeapons[weaponKey] || 0)));
-          return `${weapon.name}: ${amount}`;
+          const count = Math.max(0, Math.floor(Number(storedWeapons[weaponKey] || 0)));
+          const short =
+            weaponKey === "bulletproofVest" ? "NV"
+            : weaponKey === "steelBarricades" ? "OB"
+            : weaponKey === "securityCameras" ? "BK"
+            : weaponKey === "autoMgNest" ? "AKS"
+            : weaponKey === "alarmSystem" ? "Alarm"
+            : weaponKey.toUpperCase();
+          return `${short} ${count}`;
         })
         .join(" • ");
-      const materialsLabel =
-        `Materiály ze Skladu: MP ${Math.max(0, Math.floor(Number(playerMaterials.metalParts || 0)))} • `
-        + `TC ${Math.max(0, Math.floor(Number(playerMaterials.techCore || 0)))}`;
+      const metalPartsInStorage = Math.max(0, Math.floor(Number(playerMaterials.metalParts || 0)));
+      const techCoreInStorage = Math.max(0, Math.floor(Number(playerMaterials.techCore || 0)));
 
       root.innerHTML = `
         <section class="drug-lab-card drug-production-card armory-card">
-          <div class="drug-production-card__header">
-            <div>
-              <h4 class="drug-lab-card__title">Zbrojovka</h4>
-              <p class="drug-production-card__subtitle">Výroba útočných i obranných zbraní z materiálů hráče.</p>
-            </div>
-            <div class="drug-production-card__capacity">
-              <span class="drug-production-card__capacity-label">Materiály</span>
-              <strong class="drug-production-card__capacity-value">MP ${Math.max(0, Math.floor(Number(playerMaterials.metalParts || 0)))} / TC ${Math.max(0, Math.floor(Number(playerMaterials.techCore || 0)))}</strong>
-            </div>
-          </div>
           <div class="drug-production-card__stats">
             <div class="drug-production-stat">
-              <span class="drug-production-stat__label">Útočné zbraně</span>
-              <strong class="drug-production-stat__value">${Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0)))}/${Math.max(1, Math.floor(Number(attackSlots.length || 0)))}</strong>
-              <small class="drug-production-stat__meta">${attackStorageStatusLabel || "Bez zásob útoku"}</small>
+              <span class="drug-production-stat__label">Vyrobené útočné zbraně</span>
+              <strong class="drug-production-stat__value">${attackStoredLabel}</strong>
             </div>
             <div class="drug-production-stat">
-              <span class="drug-production-stat__label">Obranné zbraně</span>
-              <strong class="drug-production-stat__value">${Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)))}/${Math.max(1, Math.floor(Number(defenseSlots.length || 0)))}</strong>
-              <small class="drug-production-stat__meta">${defenseStorageStatusLabel || "Bez zásob obrany"}</small>
+              <span class="drug-production-stat__label">Vyrobené obranné zbraně</span>
+              <strong class="drug-production-stat__value">${defenseStoredLabel}</strong>
+            </div>
+            <div class="drug-production-stat">
+              <span class="drug-production-stat__label">Metal Parts</span>
+              <strong class="drug-production-stat__value">${metalPartsInStorage}</strong>
+            </div>
+            <div class="drug-production-stat">
+              <span class="drug-production-stat__label">Tech Core</span>
+              <strong class="drug-production-stat__value">${techCoreInStorage}</strong>
             </div>
           </div>
         </section>
-        <div class="drug-lab-card armory-card armory-card--section">
-          <h4 class="drug-lab-card__title">Útočné sloty</h4>
-          <div class="pharmacy-slot-grid">
-            ${attackRows}
+        <div class="armory-layout">
+          <div class="drug-lab-card armory-card armory-card--section armory-card--attack">
+            <div class="pharmacy-slot-grid">
+              ${attackRows}
+            </div>
           </div>
-        </div>
-        <div class="drug-lab-card armory-card armory-card--section">
-          <h4 class="drug-lab-card__title">Obranné sloty</h4>
-          <p class="drug-lab-card__meta">${materialsLabel}</p>
-          <div class="pharmacy-slot-grid">
-            ${defenseRows}
+          <div class="drug-lab-card armory-card armory-card--section armory-card--defense">
+            <div class="pharmacy-slot-grid">
+              ${defenseRows}
+            </div>
           </div>
         </div>
       `;
@@ -8427,33 +8436,44 @@ window.Empire.Map = (() => {
               <span class="drug-production-slot__state">${slot.isProducing ? "Produkuje" : "Připraven"}</span>
             </div>
             <div class="drug-production-slot__metrics">
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Vyrobeno</span>
-                <strong class="drug-production-slot__metric-value">${slot.producedAmount}</strong>
+              <div class="drug-production-slot__metric drug-production-slot__metric--inline">
+                <span class="drug-production-slot__metric-label">
+                  Vyrobeno
+                  <strong class="drug-production-slot__metric-inline-value">${slot.producedAmount}</strong>
+                </span>
               </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Ve frontě</span>
-                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.queueRemaining || 0)))}</strong>
+              <div class="drug-production-slot__metric drug-production-slot__metric--inline">
+                <span class="drug-production-slot__metric-label">
+                  Ve frontě
+                  <strong class="drug-production-slot__metric-inline-value">${Math.max(0, Math.floor(Number(slot.queueRemaining || 0)))}</strong>
+                </span>
               </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Chemicals / dávka</span>
-                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.chemicals || 0)))}</strong>
+              <div class="drug-production-slot__metric drug-production-slot__metric--inline">
+                <span class="drug-production-slot__metric-label">
+                  Nastaveno
+                  <strong class="drug-production-slot__metric-inline-value">${slot.isProducing ? Math.max(0, Math.floor(Number(slot.queuedUnits || 0))) : Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
+                </span>
               </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Biomass / dávka</span>
-                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.biomass || 0)))}</strong>
-              </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Stim Pack / dávka</span>
-                <strong class="drug-production-slot__metric-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.stimPack || 0)))}</strong>
-              </div>
-              <div class="drug-production-slot__metric">
-                <span class="drug-production-slot__metric-label">Nastaveno</span>
-                <strong class="drug-production-slot__metric-value">${slot.isProducing ? Math.max(0, Math.floor(Number(slot.queuedUnits || 0))) : Math.max(1, Math.floor(Number(slot.queuedUnits || 1)))}</strong>
+              <div class="drug-production-slot__metric drug-production-slot__metric--supplies">
+                <span class="drug-production-slot__metric-label">Vstupy / dávka</span>
+                <div class="drug-production-slot__supply-row">
+                  <span class="drug-production-slot__supply-pill drug-production-slot__supply-pill--chemicals">
+                    <span class="drug-production-slot__supply-name">Chemicals</span>
+                    <strong class="drug-production-slot__supply-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.chemicals || 0)))}</strong>
+                  </span>
+                  <span class="drug-production-slot__supply-pill drug-production-slot__supply-pill--biomass">
+                    <span class="drug-production-slot__supply-name">Biomass</span>
+                    <strong class="drug-production-slot__supply-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.biomass || 0)))}</strong>
+                  </span>
+                  <span class="drug-production-slot__supply-pill drug-production-slot__supply-pill--stim">
+                    <span class="drug-production-slot__supply-name">Stim Pack</span>
+                    <strong class="drug-production-slot__supply-value">${Math.max(0, Math.floor(Number(slot.supplyCost?.stimPack || 0)))}</strong>
+                  </span>
+                </div>
               </div>
             </div>
             <div class="drug-production-slot__controls">
-              <select data-drug-lab-slot-select="${slot.id}">
+              <select data-drug-lab-slot-select="${slot.id}" ${slot.isProducing ? "disabled" : ""}>
                 ${options}
               </select>
               <div class="drug-lab-stepper">
@@ -8485,13 +8505,12 @@ window.Empire.Map = (() => {
       `Síť Drug Labů: ${ownedLabCount} ${ownedLabLabel} (+${formatDecimalValue(networkProductionBonusPct, 2)}% produkce)`;
     const ownedWarehouseCount = Math.max(0, Math.floor(Number(mechanics.ownedWarehouseCount || 0)));
     const storageCapacityBonusPct = Math.max(0, Number(mechanics.storageCapacityBonusPct || 0));
-    const warehouseProductionBonusPct = Math.max(0, Number(mechanics.warehouseProductionBonusPct || 0));
     const ownedWarehouseLabel = ownedWarehouseCount === 1
       ? "sklad"
       : (ownedWarehouseCount >= 2 && ownedWarehouseCount <= 4 ? "sklady" : "skladů");
     const warehouseStatusLabel = ownedWarehouseCount > 0
-      ? `Sklady v území: ${ownedWarehouseCount} ${ownedWarehouseLabel} (+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita, +${formatDecimalValue(warehouseProductionBonusPct, 2)}% produkce)`
-      : "Sklady v území: 0 (bez bonusu kapacity/produkce)";
+      ? `Sklady v území: ${ownedWarehouseCount} ${ownedWarehouseLabel} (+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita)`
+      : "Sklady v území: 0 (bez bonusu kapacity)";
     const pharmacySupplies = mechanics.pharmacySupplies || {};
     const availableQueuedSupplies = mechanics.availableQueuedSupplies || pharmacySupplies;
     const queuedSupplyDemand = mechanics.queuedSupplyDemand || createDrugLabSupplyMap();
@@ -8518,12 +8537,7 @@ window.Empire.Map = (() => {
       <section class="drug-lab-card drug-production-card">
         <div class="drug-production-card__header">
           <div>
-            <h4 class="drug-lab-card__title">Drug Lab</h4>
             <p class="drug-production-card__subtitle">Řízení výroby, spotřeby vstupů a kapacity skladu.</p>
-          </div>
-          <div class="drug-production-card__capacity">
-            <span class="drug-production-card__capacity-label">Odemčeno</span>
-            <strong class="drug-production-card__capacity-value">${mechanics.unlockedSlots}/${DRUG_LAB_CONFIG.maxSlots}</strong>
           </div>
         </div>
         <div class="drug-production-card__stats">
@@ -8545,7 +8559,7 @@ window.Empire.Map = (() => {
           <div class="drug-production-stat">
             <span class="drug-production-stat__label">Sklady v území</span>
             <strong class="drug-production-stat__value">${ownedWarehouseCount} ${ownedWarehouseLabel}</strong>
-            <small class="drug-production-stat__meta">${ownedWarehouseCount > 0 ? `+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita, +${formatDecimalValue(warehouseProductionBonusPct, 2)}% produkce` : "bez bonusu kapacity/produkce"}</small>
+            <small class="drug-production-stat__meta">${ownedWarehouseCount > 0 ? `+${formatDecimalValue(storageCapacityBonusPct, 2)}% kapacita` : "bez bonusu kapacity"}</small>
           </div>
         </div>
         <div class="pharmacy-slot-grid">
@@ -8554,7 +8568,6 @@ window.Empire.Map = (() => {
       </section>
 
       <div class="drug-lab-card">
-        <h4 class="drug-lab-card__title">Aktivní efekty</h4>
         <div class="drug-lab-list">${effectsRows}</div>
       </div>
       <div class="drug-lab-card">
@@ -8761,11 +8774,11 @@ window.Empire.Map = (() => {
       const slot = (Array.isArray(snapshot.slots) ? snapshot.slots : []).find((entry) => Number(entry.id) === slotId) || null;
       if (!slot || !delta) {
         persistArmoryState(instanceKey, snapshot);
-        return { ok: false, message: "Slot Zbrojovky neexistuje." };
+        return { ok: false, message: "Slot Zbrojovky neexistuje.", silentUiEvent: true };
       }
-      slot.queuedUnits = clamp(Math.floor(Number(slot.queuedUnits || 1) + delta), 1, 999);
+      slot.queuedUnits = clamp(Math.floor(Number(slot.queuedUnits || 1) + delta), 1, ARMORY_BATCH_MAX_UNITS);
       persistArmoryState(instanceKey, snapshot);
-      return { ok: true, message: `Zbrojovka slot ${slotId}: nastaveno ${slot.queuedUnits} ks.` };
+      return { ok: true, message: `Zbrojovka slot ${slotId}: nastaveno ${slot.queuedUnits} ks.`, silentUiEvent: true };
     }
 
     const setSlotState = (slotId, shouldProduce) => {
@@ -8773,23 +8786,26 @@ window.Empire.Map = (() => {
       const slot = (Array.isArray(snapshot.slots) ? snapshot.slots : []).find((entry) => Number(entry.id) === safeSlotId) || null;
       if (!slot) {
         persistArmoryState(instanceKey, snapshot);
-        return { ok: false, message: "Slot Zbrojovky neexistuje." };
+        return { ok: false, message: "Slot Zbrojovky neexistuje.", silentUiEvent: true };
       }
       if (shouldProduce) {
-        if (slot.isProducing && Math.max(0, Math.floor(Number(slot.remainingUnits || 0))) > 0) {
-          persistArmoryState(instanceKey, snapshot);
-          return { ok: false, message: `Slot ${safeSlotId} už běží.` };
-        }
         const config = ARMORY_CONFIG.weapons[String(slot.weaponKey || "").trim()] || null;
         if (!config) {
           persistArmoryState(instanceKey, snapshot);
-          return { ok: false, message: "Zbraň pro slot neexistuje." };
+          return { ok: false, message: "Zbraň pro slot neexistuje.", silentUiEvent: true };
         }
-        const units = clamp(Math.floor(Number(slot.queuedUnits || 1)), 1, 999);
+        const units = clamp(Math.floor(Number(slot.queuedUnits || 1)), 1, ARMORY_BATCH_MAX_UNITS);
         const metalCost = Math.max(0, Math.floor(Number(config.metalPartsCost || 0)));
         const techCost = Math.max(0, Math.floor(Number(config.techCoreCost || 0)));
-        const totalMetalCost = units * metalCost;
-        const totalTechCost = units * techCost;
+        const currentBatchUnits = clamp(Math.floor(Number(slot.batchMaxUnits || 0)), 0, ARMORY_BATCH_MAX_UNITS);
+        const availableBatchSpace = Math.max(0, ARMORY_BATCH_MAX_UNITS - currentBatchUnits);
+        const requestedUnits = slot.isProducing ? Math.min(units, availableBatchSpace) : units;
+        if (requestedUnits <= 0) {
+          persistArmoryState(instanceKey, snapshot);
+          return { ok: false, message: `Slot ${safeSlotId} má batch naplněný.`, silentUiEvent: true };
+        }
+        const totalMetalCost = requestedUnits * metalCost;
+        const totalTechCost = requestedUnits * techCost;
         const availableSupplies = createFactoryPlayerSupplyMap(getFactoryPlayerSuppliesSnapshot());
         if (
           Number(availableSupplies.metalParts || 0) < totalMetalCost
@@ -8800,33 +8816,53 @@ window.Empire.Map = (() => {
             ok: false,
             message:
               `Nedostatek materiálu (potřeba MP ${totalMetalCost}, TC ${totalTechCost}; `
-              + `máš MP ${availableSupplies.metalParts}, TC ${availableSupplies.techCore}).`
+              + `máš MP ${availableSupplies.metalParts}, TC ${availableSupplies.techCore}).`,
+            silentUiEvent: true
           };
         }
         availableSupplies.metalParts = Math.max(0, Math.floor(Number(availableSupplies.metalParts || 0) - totalMetalCost));
         availableSupplies.techCore = Math.max(0, Math.floor(Number(availableSupplies.techCore || 0) - totalTechCost));
         persistFactoryPlayerSuppliesSnapshot(availableSupplies);
+        const currentlyProducing = Boolean(slot.isProducing && Math.max(0, Math.floor(Number(slot.remainingUnits || 0))) > 0);
+        if (currentlyProducing) {
+          slot.remainingUnits = Math.max(0, Math.floor(Number(slot.remainingUnits || 0))) + requestedUnits;
+          slot.batchMaxUnits = Math.min(ARMORY_BATCH_MAX_UNITS, Math.max(0, Math.floor(Number(slot.batchMaxUnits || 0))) + requestedUnits);
+          slot.queuedUnits = 1;
+          slot.lastTick = now;
+          persistArmoryState(instanceKey, snapshot);
+          return {
+            ok: true,
+            message:
+              `Zbrojovka slot ${safeSlotId}: do fronty přidáno ${requestedUnits} ks. `
+              + `Spotřeba MP ${totalMetalCost}, TC ${totalTechCost}.`,
+            silentUiEvent: true
+          };
+        }
         slot.isProducing = true;
-        slot.remainingUnits = units;
+        slot.producedAmount = 0;
+        slot.batchMaxUnits = requestedUnits;
+        slot.remainingUnits = requestedUnits;
+        slot.queuedUnits = 1;
         slot.lastTick = now;
         slot.productionRemainder = 0;
         persistArmoryState(instanceKey, snapshot);
         return {
           ok: true,
           message:
-            `Zbrojovka slot ${safeSlotId}: výroba spuštěna (${units} ks). `
-            + `Spotřeba MP ${totalMetalCost}, TC ${totalTechCost}.`
+            `Zbrojovka slot ${safeSlotId}: výroba spuštěna (${requestedUnits} ks). `
+            + `Spotřeba MP ${totalMetalCost}, TC ${totalTechCost}.`,
+          silentUiEvent: true
         };
       }
       if (!slot.isProducing) {
         persistArmoryState(instanceKey, snapshot);
-        return { ok: false, message: `Slot ${safeSlotId} neběží.` };
+        return { ok: false, message: `Slot ${safeSlotId} neběží.`, silentUiEvent: true };
       }
       slot.isProducing = false;
       slot.remainingUnits = 0;
       slot.lastTick = now;
       persistArmoryState(instanceKey, snapshot);
-      return { ok: true, message: `Zbrojovka slot ${safeSlotId}: výroba zastavena.` };
+      return { ok: true, message: `Zbrojovka slot ${safeSlotId}: výroba zastavena.`, silentUiEvent: true };
     };
 
     const startBtn = target.closest("[data-armory-slot-start]");
@@ -12283,6 +12319,8 @@ window.Empire.Map = (() => {
     const effects = document.getElementById("building-detail-effects");
     const infoEffects = document.getElementById("building-info-effects");
     const effectsRow = effects?.closest(".modal__row") || null;
+    const productionRow = production?.closest(".modal__row") || null;
+    const levelRow = level?.closest(".modal__row") || null;
     if (!root || !level || !stored || !production || !heat || !effects) return;
 
     const mechanics = details?.mechanics;
@@ -12316,6 +12354,8 @@ window.Empire.Map = (() => {
     if (heatLabel) heatLabel.textContent = "Heat";
     if (effectsLabel) effectsLabel.textContent = "Aktivní efekty";
     if (effectsRow) effectsRow.classList.remove("hidden");
+    if (productionRow) productionRow.classList.remove("hidden");
+    if (levelRow) levelRow.classList.remove("hidden");
     level.textContent = `L${mechanics.level}`;
     heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     if (mechanicsType === "fitness-club") {
@@ -12395,6 +12435,8 @@ window.Empire.Map = (() => {
       if (storedLabel) storedLabel.textContent = "Vyrobené zbraně";
       if (productionLabel) productionLabel.textContent = "Aktivní sloty / výroba";
       if (heatLabel) heatLabel.textContent = "Heat výroby";
+      if (levelRow) levelRow.classList.add("hidden");
+      if (productionRow) productionRow.classList.add("hidden");
       const activeAttackSlots = Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0)));
       const totalAttackSlots = Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0)));
       const activeDefenseSlots = Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)));
@@ -12403,7 +12445,7 @@ window.Empire.Map = (() => {
       const storedDefenseTotal = Math.max(0, Math.floor(Number(mechanics.storedDefenseTotal || 0)));
       stored.textContent = `Útok ${storedAttackTotal} • Obrana ${storedDefenseTotal}`;
       production.textContent = `U ${activeAttackSlots}/${totalAttackSlots} • O ${activeDefenseSlots}/${totalDefenseSlots}`;
-      heat.textContent = `Bazuka +${Math.max(0, Math.floor(Number(ARMORY_CONFIG.weapons.bazooka?.heatPerUnit || 0)))} / ks`;
+      heat.textContent = "3 / h";
     } else if (mechanicsType === "factory") {
       if (storedLabel) storedLabel.textContent = "Suroviny MP/TC/CM";
       if (productionLabel) productionLabel.textContent = "Produkce + craft";
@@ -12434,8 +12476,10 @@ window.Empire.Map = (() => {
       heat.textContent = `${formatDecimalValue(mechanics.heatPerDay || PHARMACY_CONFIG.baseHeatPerDay, 2)} / 24h`;
     } else if (mechanicsType === "drug-lab") {
       if (storedLabel) storedLabel.textContent = "Interní sklad";
-      if (productionLabel) productionLabel.textContent = "Sloty / multiplikátor";
+      if (productionLabel) productionLabel.textContent = "Aktivní sloty";
       if (heatLabel) heatLabel.textContent = "Heat z výroby";
+      if (productionRow) productionRow.classList.add("hidden");
+      if (effectsRow) effectsRow.classList.add("hidden");
       stored.textContent = `${Math.max(0, Math.floor(Number(mechanics.storedTotal || 0)))} / ${Math.max(1, Math.floor(Number(mechanics.storageCapacity || 0)))}`;
       production.textContent =
         `${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number(mechanics.unlockedSlots || 0)))} • `
@@ -12654,7 +12698,8 @@ window.Empire.Map = (() => {
       } else if (mechanicsType === "armory") {
         slotBadgeText =
           `Aktivní sloty ${Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0))) + Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)))}/`
-          + `${Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0))) + Math.max(1, Math.floor(Number((mechanics.defenseSlots || []).length || 0)))}`;
+          + `${Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0))) + Math.max(1, Math.floor(Number((mechanics.defenseSlots || []).length || 0)))}`
+          + ` • L${Math.max(1, Math.floor(Number(mechanics.level || 1)))}`;
       }
       if (slotBadgeText) {
         const badge = document.createElement("span");
