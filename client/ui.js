@@ -1263,6 +1263,11 @@ window.Empire.UI = (() => {
     }
   }
 
+  function setMobileTopbarCoveredByPrimaryModal(covered) {
+    const media = window.matchMedia("(max-width: 720px)");
+    document.body.classList.toggle("mobile-primary-modal-covers-topbar", Boolean(covered) && media.matches);
+  }
+
   function initMobileScenarioCardPlacement() {
     const scenarioCard = document.getElementById("scenario-card");
     const scenarioAnchor = document.getElementById("scenario-card-anchor");
@@ -5730,16 +5735,23 @@ window.Empire.UI = (() => {
 
     const openModal = () => {
       resetToCompactState();
+      setMobileTopbarCoveredByPrimaryModal(true);
       modal.classList.remove("hidden");
     };
     const closeModal = () => {
       modal.classList.add("hidden");
       modal.classList.add("events-modal--compact");
+      setMobileTopbarCoveredByPrimaryModal(false);
     };
 
     openBtn.addEventListener("click", openModal);
     if (backdrop) backdrop.addEventListener("click", closeModal);
     if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+        closeModal();
+      }
+    });
 
     agentButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -5777,6 +5789,7 @@ window.Empire.UI = (() => {
 
     const closeModal = () => {
       root.classList.add("hidden");
+      setMobileTopbarCoveredByPrimaryModal(false);
     };
 
     const renderTypes = (selectedType) => {
@@ -5839,6 +5852,7 @@ window.Empire.UI = (() => {
       activeDistrictType = null;
       selectedBuildingTypeByDistrict.clear();
       renderBuildings(null);
+      setMobileTopbarCoveredByPrimaryModal(true);
       root.classList.remove("hidden");
     });
     typeList.addEventListener("click", (event) => {
@@ -7677,10 +7691,16 @@ window.Empire.UI = (() => {
       const economy = await window.Empire.API.getEconomy();
       updateEconomy(economy);
     });
-    if (backdrop) backdrop.addEventListener("click", () => root.classList.add("hidden"));
-    if (closeBtn) closeBtn.addEventListener("click", () => root.classList.add("hidden"));
+    if (backdrop) backdrop.addEventListener("click", () => {
+      root.classList.add("hidden");
+    });
+    if (closeBtn) closeBtn.addEventListener("click", () => {
+      root.classList.add("hidden");
+    });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") root.classList.add("hidden");
+      if (event.key === "Escape") {
+        root.classList.add("hidden");
+      }
     });
   }
 
@@ -7794,7 +7814,7 @@ window.Empire.UI = (() => {
       const timer = window.setTimeout(() => {
         button.classList.remove("is-lock-flash");
         lockFlashTimers.delete(button);
-      }, 540);
+      }, 2000);
       lockFlashTimers.set(button, timer);
     };
 

@@ -8272,6 +8272,22 @@ body::before {
     z-index: 90;
   }
 
+  body.mobile-primary-modal-covers-topbar .topbar {
+    z-index: 30;
+  }
+
+  body.mobile-primary-modal-covers-topbar #events-modal,
+  body.mobile-primary-modal-covers-topbar #buildings-modal,
+  body.mobile-primary-modal-covers-topbar #market-modal {
+    padding-top: 12px;
+  }
+
+  body.mobile-primary-modal-covers-topbar #events-modal .modal__backdrop,
+  body.mobile-primary-modal-covers-topbar #buildings-modal .modal__backdrop,
+  body.mobile-primary-modal-covers-topbar #market-modal .modal__backdrop {
+    inset: 0;
+  }
+
   .modal,
   #building-detail-modal,
   #profile-modal,
