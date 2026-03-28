@@ -1227,6 +1227,7 @@ window.Empire.UI = (() => {
     initMobileLeaderboardCardPlacement();
     initMobileMarketBuildingShortcutsPlacement();
     initMobilePrimaryActionCardsPlacement();
+    initMobileModalTopbarResourceVisibility();
     syncMapVisionContext();
     refreshGangColorDisplays();
   }
@@ -1447,6 +1448,41 @@ window.Empire.UI = (() => {
       media.addListener(applyPlacement);
     }
     window.addEventListener("resize", applyPlacement);
+  }
+
+  function initMobileModalTopbarResourceVisibility() {
+    const media = window.matchMedia("(max-width: 720px)");
+    const modalNodes = Array.from(document.querySelectorAll(".modal"));
+    if (!modalNodes.length) return;
+
+    const applyState = () => {
+      if (!media.matches) {
+        document.body.classList.remove("mobile-hide-topbar-stats");
+        return;
+      }
+
+      const openModals = modalNodes.filter((modal) => !modal.classList.contains("hidden"));
+      const keepStatsVisible = openModals.some((modal) => modal.id === "building-detail-modal");
+      const shouldHideStats = openModals.length > 0 && !keepStatsVisible;
+      document.body.classList.toggle("mobile-hide-topbar-stats", shouldHideStats);
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      if (!mutations?.length) return;
+      applyState();
+    });
+
+    modalNodes.forEach((modal) => {
+      observer.observe(modal, { attributes: true, attributeFilter: ["class"] });
+    });
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", applyState);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(applyState);
+    }
+    window.addEventListener("resize", applyState);
+    applyState();
   }
 
   function recordVerifiedIntelEvent(payload = {}) {

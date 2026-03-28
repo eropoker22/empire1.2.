@@ -8561,7 +8561,7 @@ body::before {
     z-index: 30;
   }
 
-  body:has(.modal:not(.hidden)):not(:has(#building-detail-modal:not(.hidden))) .topbar__stats {
+  body.mobile-hide-topbar-stats .topbar__stats {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
