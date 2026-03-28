@@ -117,17 +117,6 @@
             </button>
             <button
               class="market-building-shortcut"
-              id="market-shortcut-armory"
-              type="button"
-              data-market-building-label="Zbrojovka"
-              data-market-building-base-name="Zbrojovka"
-              disabled
-              aria-disabled="true"
-            >
-              <span class="market-building-shortcut__name">Zbrojovka</span>
-            </button>
-            <button
-              class="market-building-shortcut"
               id="market-shortcut-factory"
               type="button"
               data-market-building-label="Továrna"
@@ -136,6 +125,17 @@
               aria-disabled="true"
             >
               <span class="market-building-shortcut__name">Továrna</span>
+            </button>
+            <button
+              class="market-building-shortcut"
+              id="market-shortcut-armory"
+              type="button"
+              data-market-building-label="Zbrojovka"
+              data-market-building-base-name="Zbrojovka"
+              disabled
+              aria-disabled="true"
+            >
+              <span class="market-building-shortcut__name">Zbrojovka</span>
             </button>
           </div>
 
@@ -722,12 +722,12 @@
 
     <div id="alliance-modal" class="modal hidden">
       <div id="alliance-modal-backdrop" class="modal__backdrop"></div>
-      <div class="modal__content modal__content--profile">
+      <div class="modal__content modal__content--profile alliance-modal__content">
         <div class="modal__header">
           <h3>Aliance</h3>
           <button class="modal__close" id="alliance-modal-close" aria-label="Zavřít">✕</button>
         </div>
-        <div class="modal__body">
+        <div class="modal__body alliance-modal__body">
           <div class="alliance-control">
             <div class="alliance-control__head">
               <div class="alliance-control__title">Založit alianci</div>
@@ -1053,6 +1053,10 @@
               Sleduj ceny, prodávej zásoby a nakupuj strategické suroviny dřív než konkurence.
             </div>
           </div>
+          <div class="market-modal__tabs" id="market-tabs">
+            <button class="market-modal__tab is-active" type="button" data-market-tab="server">Server Exchange</button>
+            <button class="market-modal__tab" type="button" data-market-tab="black">Black Market</button>
+          </div>
           <div class="market-modal__toolbar">
             <select id="market-resource-select" class="market-modal__select">
               <option value="neon_dust">Neon Dust</option>
@@ -1070,7 +1074,7 @@
             </select>
             <input id="market-quantity-input" class="market-modal__input" type="number" min="1" value="10" />
             <input id="market-price-input" class="market-modal__input" type="number" min="1" value="100" />
-            <button class="btn btn--primary" id="market-create-order">Vložit příkaz</button>
+            <button class="btn btn--primary market-modal__action-btn" id="market-create-order">Vložit příkaz</button>
           </div>
           <div class="market-modal__summary" id="market-balance-summary"></div>
           <div class="market-modal__grid market-modal__grid--book">

@@ -4398,6 +4398,27 @@ window.Empire.Map = (() => {
     if (normalized === "weapons") return "zbraně";
     if (normalized === "materials") return "materiály";
     if (normalized === "data_shards" || normalized === "data") return "data";
+    if (normalized === "chemicals") return "chemicals";
+    if (normalized === "biomass") return "biomass";
+    if (normalized === "stim_pack") return "stim pack";
+    if (normalized === "neon_dust") return "neon dust";
+    if (normalized === "pulse_shot") return "pulse shot";
+    if (normalized === "velvet_smoke") return "velvet smoke";
+    if (normalized === "ghost_serum") return "ghost serum";
+    if (normalized === "overdrive_x") return "overdrive x";
+    if (normalized === "metal_parts") return "metal parts";
+    if (normalized === "tech_core") return "tech core";
+    if (normalized === "combat_module") return "combat module";
+    if (normalized === "baseball_bat") return "baseballová pálka";
+    if (normalized === "street_pistol") return "pouliční pistole";
+    if (normalized === "grenade") return "granát";
+    if (normalized === "smg") return "samopal";
+    if (normalized === "bazooka") return "bazuka";
+    if (normalized === "bulletproof_vest") return "neprůstřelná vesta";
+    if (normalized === "steel_barricades") return "ocelové barikády";
+    if (normalized === "security_cameras") return "bezpečnostní kamery";
+    if (normalized === "auto_mg_nest") return "automatické kulometné stanoviště";
+    if (normalized === "alarm_system") return "alarm";
     return "komodita";
   }
 

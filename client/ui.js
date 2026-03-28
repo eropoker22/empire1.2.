@@ -156,6 +156,69 @@ window.Empire.UI = (() => {
     { key: "techCore", name: "Tech Core" },
     { key: "combatModule", name: "Combat Module" }
   ];
+  const MARKET_SERVER_RESOURCES = Object.freeze([
+    { resourceKey: "neon_dust", name: "Neon Dust" },
+    { resourceKey: "pulse_shot", name: "Pulse Shot" },
+    { resourceKey: "velvet_smoke", name: "Velvet Smoke" },
+    { resourceKey: "ghost_serum", name: "Ghost Serum" },
+    { resourceKey: "overdrive_x", name: "Overdrive X" },
+    { resourceKey: "weapons", name: "Zbraně" },
+    { resourceKey: "materials", name: "Materiály" },
+    { resourceKey: "data_shards", name: "Data" }
+  ]);
+  const MARKET_BLACK_RESOURCE_GROUPS = Object.freeze([
+    Object.freeze({
+      label: "Lékárna",
+      options: pharmacySupplyTypes.map((item) => ({
+        resourceKey: item.key === "stimPack" ? "stim_pack" : item.key,
+        name: item.name
+      }))
+    }),
+    Object.freeze({
+      label: "Drug Lab",
+      options: storageDrugTypes.map((item) => ({
+        resourceKey: item.resourceKey,
+        name: item.name
+      }))
+    }),
+    Object.freeze({
+      label: "Továrna",
+      options: factorySupplyTypes.map((item) => ({
+        resourceKey:
+          item.key === "metalParts" ? "metal_parts"
+          : item.key === "techCore" ? "tech_core"
+          : "combat_module",
+        name: item.name
+      }))
+    }),
+    Object.freeze({
+      label: "Útočné zbraně",
+      options: [
+        { resourceKey: "baseball_bat", name: "Baseballová pálka" },
+        { resourceKey: "street_pistol", name: "Pouliční pistole" },
+        { resourceKey: "grenade", name: "Granát" },
+        { resourceKey: "smg", name: "Samopal" },
+        { resourceKey: "bazooka", name: "Bazuka" }
+      ]
+    }),
+    Object.freeze({
+      label: "Obranné zbraně",
+      options: [
+        { resourceKey: "bulletproof_vest", name: "Neprůstřelná vesta" },
+        { resourceKey: "steel_barricades", name: "Ocelové barikády" },
+        { resourceKey: "security_cameras", name: "Bezpečnostní kamery" },
+        { resourceKey: "auto_mg_nest", name: "Automatické kulometné stanoviště" },
+        { resourceKey: "alarm_system", name: "Alarm" }
+      ]
+    })
+  ]);
+  const MARKET_BLACK_RESOURCES = Object.freeze(MARKET_BLACK_RESOURCE_GROUPS.flatMap((group) => group.options));
+  const MARKET_RESOURCE_LABELS = Object.freeze(
+    [...MARKET_SERVER_RESOURCES, ...MARKET_BLACK_RESOURCES].reduce((acc, item) => {
+      if (!acc[item.resourceKey]) acc[item.resourceKey] = item.name;
+      return acc;
+    }, {})
+  );
 
   const SETTINGS_STORAGE_KEY = "empire_settings";
   const ATTACK_COOLDOWN_STORAGE_KEY = "empire_attack_cooldown_until_v1";
@@ -1459,7 +1522,8 @@ window.Empire.UI = (() => {
       "market-modal",
       "alliance-modal",
       "storage-modal",
-      "leaderboard-modal"
+      "leaderboard-modal",
+      "district-modal"
     ]);
     if (!modalNodes.length) return;
 
@@ -2257,6 +2321,7 @@ window.Empire.UI = (() => {
       rank: index + 1,
       nick: nickPool[index],
       influenceRate: 980 - index * 28 + (index % 3) * 9,
+      capturedSectors: 48 - index * 2 + (index % 4),
       alliance: alliancePool[index % alliancePool.length],
       avatar: avatarPool[index % avatarPool.length]
     }));
@@ -2264,7 +2329,8 @@ window.Empire.UI = (() => {
     const monthlyEntries = Array.from({ length: 40 }, (_, index) => ({
       rank: index + 1,
       nick: nickPool[index],
-      score: 18750 - index * 245 + (index % 4) * 19
+      score: 18750 - index * 245 + (index % 4) * 19,
+      capturedSectors: 62 - index + (index % 5)
     }));
 
     const state = {
@@ -2282,9 +2348,15 @@ window.Empire.UI = (() => {
                 <div class="leaderboard-nick">${entry.nick}</div>
                 <div class="leaderboard-sub">Aliance: ${entry.alliance}</div>
               </div>
-              <div class="leaderboard-value">
-                <span>Míra vlivu</span>
-                <strong>${entry.influenceRate}</strong>
+              <div class="leaderboard-values">
+                <div class="leaderboard-value">
+                  <span>Míra vlivu</span>
+                  <strong>${entry.influenceRate}</strong>
+                </div>
+                <div class="leaderboard-value leaderboard-value--sector">
+                  <span>Dobyté sektory</span>
+                  <strong>${entry.capturedSectors}</strong>
+                </div>
               </div>
             </div>
           `
@@ -2301,9 +2373,15 @@ window.Empire.UI = (() => {
                 <div class="leaderboard-nick">${entry.nick}</div>
                 <div class="leaderboard-sub">Měsíční výkon</div>
               </div>
-              <div class="leaderboard-value">
-                <span>Body</span>
-                <strong>${entry.score}</strong>
+              <div class="leaderboard-values">
+                <div class="leaderboard-value">
+                  <span>Body</span>
+                  <strong>${entry.score}</strong>
+                </div>
+                <div class="leaderboard-value leaderboard-value--sector">
+                  <span>Dobyté sektory</span>
+                  <strong>${entry.capturedSectors}</strong>
+                </div>
               </div>
             </div>
           `
@@ -2312,6 +2390,13 @@ window.Empire.UI = (() => {
 
     const render = () => {
       const isServer = state.tab === "server";
+      const podiumEntries = (isServer ? currentServerEntries : monthlyEntries)
+        .slice(0, 3)
+        .sort((a, b) => {
+          const aValue = isServer ? Number(a.influenceRate || 0) : Number(a.score || 0);
+          const bValue = isServer ? Number(b.influenceRate || 0) : Number(b.score || 0);
+          return bValue - aValue;
+        });
       content.innerHTML = `
         <div class="leaderboard-tabs">
           <button class="leaderboard-tab ${isServer ? "is-active" : ""}" type="button" data-leaderboard-tab="server">
@@ -2322,6 +2407,26 @@ window.Empire.UI = (() => {
           </button>
         </div>
         <div class="leaderboard-board">
+          <div class="leaderboard-hero">
+            <div class="leaderboard-hero__eyebrow">Top 3</div>
+            <div class="leaderboard-hero__title">${isServer ? "Dominance serveru" : "Měsíční podium"}</div>
+            <div class="leaderboard-podium">
+              ${podiumEntries
+                .map((entry, index) => {
+                  const place = index + 1;
+                  const metricValue = isServer ? entry.influenceRate : entry.score;
+                  return `
+                    <div class="leaderboard-podium__entry leaderboard-podium__entry--place-${place}">
+                      <div class="leaderboard-podium__place">#${place}</div>
+                      <img class="leaderboard-podium__avatar" src="${entry.avatar || podiumEntries[0]?.avatar || ""}" alt="Avatar ${entry.nick}" loading="lazy" />
+                      <div class="leaderboard-podium__nick">${entry.nick}</div>
+                      <div class="leaderboard-podium__metric">${metricValue}</div>
+                    </div>
+                  `;
+                })
+                .join("")}
+            </div>
+          </div>
           <div class="leaderboard-board__meta">
             ${isServer
               ? "Top 20 hráčů na aktuálním serveru."
@@ -2491,7 +2596,10 @@ window.Empire.UI = (() => {
     }));
     const pharmacyEntries = pharmacySupplyTypes.map((item) => ({
       name: item.name,
-      value: Math.max(0, Math.floor(Number(pharmacySupplies[item.key] || 0)))
+      value: Math.max(0, Math.floor(Number(pharmacySupplies[item.key] || 0))),
+      tone: item.key === "chemicals"
+        ? "chemicals"
+        : (item.key === "biomass" ? "biomass" : (item.key === "stimPack" ? "stim" : ""))
     }));
     const factoryEntries = factorySupplyTypes.map((item) => ({
       name: item.name,
@@ -2563,10 +2671,12 @@ window.Empire.UI = (() => {
         const useButton = allowDrugUse && entry.key
           ? `<button class="btn btn--ghost" data-use-drug="${entry.key}" ${entry.value <= 0 ? "disabled" : ""}>Použít</button>`
           : "";
+        const toneClass = entry.tone ? ` storage-modal__item--${entry.tone}` : "";
+        const toneValueClass = entry.tone ? ` storage-modal__value--${entry.tone}` : "";
         return `
-          <div class="storage-modal__item ${entry.unlocked === false ? "is-locked" : ""}">
+          <div class="storage-modal__item ${entry.unlocked === false ? "is-locked" : ""}${toneClass}">
             <span>${entry.name} ${metaParts}</span>
-            <strong>${valueLabel}</strong>
+            <strong class="storage-modal__value${toneValueClass}">${valueLabel}</strong>
             ${useButton}
           </div>
         `;
@@ -7691,13 +7801,61 @@ window.Empire.UI = (() => {
     const quantityInput = document.getElementById("market-quantity-input");
     const priceInput = document.getElementById("market-price-input");
     const createBtn = document.getElementById("market-create-order");
+    const heroTitle = root.querySelector(".market-modal__hero-title");
+    const heroCopy = root.querySelector(".market-modal__hero-copy");
 
     if (!root || !openBtn || !resourceSelect || !sideSelect || !quantityInput || !priceInput || !createBtn) return;
+    const state = { tab: "server" };
+
+    const getResourcesForActiveTab = () =>
+      state.tab === "black" ? MARKET_BLACK_RESOURCES : MARKET_SERVER_RESOURCES;
+
+    const ensureSelectedResource = () => {
+      const resources = getResourcesForActiveTab();
+      const selected = String(resourceSelect.value || "").trim();
+      if (resources.some((item) => item.resourceKey === selected)) return selected;
+      return resources[0]?.resourceKey || "";
+    };
+
+    const renderResourceOptions = () => {
+      if (state.tab === "black") {
+        resourceSelect.innerHTML = MARKET_BLACK_RESOURCE_GROUPS
+          .map((group) => `
+            <optgroup label="${group.label}">
+              ${group.options
+                .map((item) => `<option value="${item.resourceKey}">${item.name}</option>`)
+                .join("")}
+            </optgroup>
+          `)
+          .join("");
+      } else {
+        resourceSelect.innerHTML = MARKET_SERVER_RESOURCES
+          .map((item) => `<option value="${item.resourceKey}">${item.name}</option>`)
+          .join("");
+      }
+      resourceSelect.value = ensureSelectedResource();
+      root.dataset.marketTab = state.tab;
+      createBtn.textContent = state.tab === "black" ? "Vložit kontrakt" : "Vložit příkaz";
+      root.querySelectorAll("[data-market-tab]").forEach((button) => {
+        button.classList.toggle("is-active", button.getAttribute("data-market-tab") === state.tab);
+      });
+      if (heroTitle) {
+        heroTitle.textContent = state.tab === "black"
+          ? "Black Market kontrakty"
+          : "Server Exchange";
+      }
+      if (heroCopy) {
+        heroCopy.textContent = state.tab === "black"
+          ? "Podpultové obchody s látkami, továrními díly a jednotlivými kusy výzbroje. Vyšší riziko, rychlejší marže."
+          : "Sleduj serverovou nabídku, poptávku a poslední obchody. Vlož příkaz dřív, než tě ostatní předběhnou.";
+      }
+    };
 
     const refreshMarket = async () => {
       if (!window.Empire.token) {
         cachedMarket = getLocalMarketState();
-        renderMarketState(resourceSelect.value);
+        renderResourceOptions();
+        renderMarketState(resourceSelect.value, state.tab);
         return;
       }
       const market = await window.Empire.API.getMarket();
@@ -7706,16 +7864,18 @@ window.Empire.UI = (() => {
         return;
       }
       cachedMarket = market;
-      renderMarketState(resourceSelect.value);
+      renderResourceOptions();
+      renderMarketState(resourceSelect.value, state.tab);
     };
     marketRefreshHandler = refreshMarket;
 
     openBtn.addEventListener("click", async () => {
+      state.tab = "server";
       setMobileTopbarCoveredByPrimaryModal(true);
       root.classList.remove("hidden");
       await refreshMarket();
     });
-    resourceSelect.addEventListener("change", () => renderMarketState(resourceSelect.value));
+    resourceSelect.addEventListener("change", () => renderMarketState(resourceSelect.value, state.tab));
     createBtn.addEventListener("click", async () => {
       if (!window.Empire.token) {
         const result = createLocalMarketOrder({
@@ -7767,6 +7927,16 @@ window.Empire.UI = (() => {
     root.addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      const tabButton = target.closest("[data-market-tab]");
+      if (tabButton instanceof HTMLElement) {
+        const nextTab = String(tabButton.dataset.marketTab || "").trim();
+        if ((nextTab === "server" || nextTab === "black") && nextTab !== state.tab) {
+          state.tab = nextTab;
+          renderResourceOptions();
+          renderMarketState(resourceSelect.value, state.tab);
+        }
+        return;
+      }
       const cancelButton = target.closest("[data-market-cancel]");
       if (!(cancelButton instanceof HTMLElement)) return;
       const orderId = cancelButton.dataset.marketCancel;
@@ -7985,7 +8155,11 @@ window.Empire.UI = (() => {
     });
   }
 
-  function renderMarketState(resourceKey) {
+  function formatMarketResourceName(resourceKey) {
+    return MARKET_RESOURCE_LABELS[resourceKey] || String(resourceKey || "").replace(/_/g, " ");
+  }
+
+  function renderMarketState(resourceKey, marketTab = "server") {
     const summary = document.getElementById("market-balance-summary");
     const sellOrders = document.getElementById("market-sell-orders");
     const buyOrders = document.getElementById("market-buy-orders");
@@ -8006,21 +8180,29 @@ window.Empire.UI = (() => {
     const mine = (market.myOrders || []).filter((order) => order.resourceKey === resourceKey && order.status === "open");
     const trades = (market.recentTrades || []).filter((trade) => trade.resourceKey === resourceKey);
 
-    summary.innerHTML = `
-      <div class="market-balance-pill">Čisté: $${money.cleanMoney}</div>
-      <div class="market-balance-pill">Špinavé: $${money.dirtyMoney}</div>
-      <div class="market-balance-pill">Celkem: $${money.totalMoney}</div>
-      <div class="market-balance-pill">Drogy: ${balances.drugs || 0}</div>
-      <div class="market-balance-pill">Neon Dust: ${balances.neonDust || 0}</div>
-      <div class="market-balance-pill">Pulse Shot: ${balances.pulseShot || 0}</div>
-      <div class="market-balance-pill">Velvet Smoke: ${balances.velvetSmoke || 0}</div>
-      <div class="market-balance-pill">Ghost Serum: ${balances.ghostSerum || 0}</div>
-      <div class="market-balance-pill">Overdrive X: ${balances.overdriveX || 0}</div>
-      <div class="market-balance-pill">Zbraně: ${balances.weapons || 0}</div>
-      <div class="market-balance-pill">Materiály: ${balances.materials || 0}</div>
-      <div class="market-balance-pill">Data: ${balances.dataShards || 0}</div>
-      <div class="market-balance-pill">Fee: ${market.marketFeePct || 0}%</div>
-    `;
+    const activeResourceLabel = formatMarketResourceName(resourceKey);
+    const summaryPills = marketTab === "black"
+      ? [
+          `Čisté: $${money.cleanMoney}`,
+          `Špinavé: $${money.dirtyMoney}`,
+          `Kontrakt: ${activeResourceLabel}`,
+          `Ve skladu: ${balances[resourceKeyToBalanceKey(resourceKey)] || 0}`,
+          `Fee: ${market.marketFeePct || 0}%`
+        ]
+      : [
+          `Čisté: $${money.cleanMoney}`,
+          `Špinavé: $${money.dirtyMoney}`,
+          `Celkem: $${money.totalMoney}`,
+          `Drogy: ${balances.drugs || 0}`,
+          `Zbraně: ${balances.weapons || 0}`,
+          `Materiály: ${balances.materials || 0}`,
+          `Data: ${balances.dataShards || 0}`,
+          `Fee: ${market.marketFeePct || 0}%`
+        ];
+
+    summary.innerHTML = summaryPills
+      .map((label) => `<div class="market-balance-pill">${label}</div>`)
+      .join("");
 
     sellCount.textContent = String(sells.length);
     buyCount.textContent = String(buys.length);
@@ -8045,7 +8227,7 @@ window.Empire.UI = (() => {
               <span>${order.username}</span>
               <strong>$${order.pricePerUnit}</strong>
             </div>
-            <div class="market-order__meta">${order.remainingQuantity} ks</div>
+            <div class="market-order__meta">${formatMarketResourceName(order.resourceKey)} • ${order.remainingQuantity} ks</div>
           </div>
         `
       )
@@ -8064,7 +8246,7 @@ window.Empire.UI = (() => {
               <span>${order.side === "buy" ? "Poptávka" : "Nabídka"}</span>
               <strong>$${order.pricePerUnit}</strong>
             </div>
-            <div class="market-order__meta">${order.remainingQuantity}/${order.quantity} ks</div>
+            <div class="market-order__meta">${formatMarketResourceName(order.resourceKey)} • ${order.remainingQuantity}/${order.quantity} ks</div>
             <button class="btn btn--ghost" data-market-cancel="${order.id}">Zrušit</button>
           </div>
         `
@@ -8081,7 +8263,7 @@ window.Empire.UI = (() => {
         (trade) => `
           <div class="market-order market-order--history">
             <div class="market-order__head">
-              <span>${trade.quantity} ks</span>
+              <span>${formatMarketResourceName(trade.resourceKey)} • ${trade.quantity} ks</span>
               <strong>$${trade.pricePerUnit}</strong>
             </div>
             <div class="market-order__meta">Fee: $${trade.feePaid}</div>
@@ -8117,12 +8299,28 @@ window.Empire.UI = (() => {
         cleanMoney: 12000,
         dirtyMoney: GUEST_DEFAULT_DIRTY_MONEY,
         drugs: 80,
+        chemicals: 36,
+        biomass: 28,
+        stimPack: 12,
         neonDust: 44,
         pulseShot: 14,
         velvetSmoke: 12,
         ghostSerum: 7,
         overdriveX: 3,
+        metalParts: 92,
+        techCore: 48,
+        combatModule: 10,
         weapons: 30,
+        baseballBat: 8,
+        streetPistol: 6,
+        grenade: 4,
+        smg: 3,
+        bazooka: 1,
+        bulletproofVest: 7,
+        steelBarricades: 5,
+        securityCameras: 4,
+        autoMgNest: 2,
+        alarmSystem: 3,
         materials: 120,
         dataShards: 18
       },
@@ -8136,6 +8334,16 @@ window.Empire.UI = (() => {
         makeSeedOrder("weapons", "buy", 10, 235, "Raven"),
         makeSeedOrder("materials", "sell", 60, 78, "Factory 9"),
         makeSeedOrder("materials", "buy", 40, 70, "Steel Dogs"),
+        makeSeedOrder("chemicals", "sell", 18, 48, "Cold Script"),
+        makeSeedOrder("biomass", "buy", 14, 42, "Bio Verge"),
+        makeSeedOrder("stim_pack", "sell", 6, 130, "White Vein"),
+        makeSeedOrder("metal_parts", "sell", 28, 66, "Forge Lane"),
+        makeSeedOrder("tech_core", "buy", 10, 158, "Helix Nine"),
+        makeSeedOrder("combat_module", "sell", 4, 420, "Core Hammer"),
+        makeSeedOrder("street_pistol", "sell", 5, 220, "Brass Echo"),
+        makeSeedOrder("smg", "buy", 3, 460, "Riot Thread"),
+        makeSeedOrder("bulletproof_vest", "sell", 4, 210, "Shield Loop"),
+        makeSeedOrder("alarm_system", "buy", 2, 320, "Zero Ward"),
         makeSeedOrder("data_shards", "sell", 8, 420, "Hex"),
         makeSeedOrder("data_shards", "buy", 6, 390, "Ghost Wire")
       ],
@@ -8143,7 +8351,9 @@ window.Empire.UI = (() => {
       recentTrades: [
         { resourceKey: "neon_dust", quantity: 18, pricePerUnit: 96, feePaid: 86, createdAt: Date.now() - 200000 },
         { resourceKey: "pulse_shot", quantity: 3, pricePerUnit: 236, feePaid: 35, createdAt: Date.now() - 150000 },
-        { resourceKey: "weapons", quantity: 4, pricePerUnit: 248, feePaid: 49, createdAt: Date.now() - 120000 }
+        { resourceKey: "weapons", quantity: 4, pricePerUnit: 248, feePaid: 49, createdAt: Date.now() - 120000 },
+        { resourceKey: "metal_parts", quantity: 16, pricePerUnit: 64, feePaid: 51, createdAt: Date.now() - 90000 },
+        { resourceKey: "street_pistol", quantity: 2, pricePerUnit: 214, feePaid: 21, createdAt: Date.now() - 60000 }
       ],
       marketFeePct: 5
     };
@@ -8185,6 +8395,30 @@ window.Empire.UI = (() => {
       drugTotal = storageDrugTypes.reduce((sum, drug) => sum + Number(balances[drug.key] || 0), 0);
     }
     balances.drugs = Math.max(0, Math.floor(drugTotal));
+    [
+      "chemicals",
+      "biomass",
+      "stimPack",
+      "metalParts",
+      "techCore",
+      "combatModule",
+      "weapons",
+      "materials",
+      "dataShards",
+      "baseballBat",
+      "streetPistol",
+      "grenade",
+      "smg",
+      "bazooka",
+      "bulletproofVest",
+      "steelBarricades",
+      "securityCameras",
+      "autoMgNest",
+      "alarmSystem"
+    ].forEach((key) => {
+      const value = Number(balances[key] || 0);
+      balances[key] = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    });
   }
 
   function spendLocalMoney(balances, amount) {
@@ -8389,7 +8623,18 @@ window.Empire.UI = (() => {
       pulse_shot: "pulseShot",
       velvet_smoke: "velvetSmoke",
       ghost_serum: "ghostSerum",
-      overdrive_x: "overdriveX"
+      overdrive_x: "overdriveX",
+      stim_pack: "stimPack",
+      metal_parts: "metalParts",
+      tech_core: "techCore",
+      combat_module: "combatModule",
+      baseball_bat: "baseballBat",
+      street_pistol: "streetPistol",
+      bulletproof_vest: "bulletproofVest",
+      steel_barricades: "steelBarricades",
+      security_cameras: "securityCameras",
+      auto_mg_nest: "autoMgNest",
+      alarm_system: "alarmSystem"
     };
     return mapping[resourceKey] || resourceKey;
   }
