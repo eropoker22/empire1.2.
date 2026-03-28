@@ -202,50 +202,50 @@ document.addEventListener("DOMContentLoaded", () => {
     "mafián": {
       title: "Mafián",
       desc:
-        "Tradiční zločinecká rodina, která ovládá podniky, bary a noční kluby. Jejich síla je v penězích, kontaktech a dlouhodobé kontrole území.",
-      bonus: "💰 Protection Network  podniky v jejich sektorech generují +25 % více peněz."
+        "Staré rodiny už dávno nevládnou jen násilím. Drží bary, kluby, účetní stopy i lidi, co rozhodují za zataženými závěsy. Kde mafie zapustí kořeny, tam se chaos mění v disciplinovaný tok peněz a loajality.",
+      bonus: '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Protection Network</strong> Podniky v jejich sektorech generují o 25 % více peněz.</span>'
     },
     "kartel": {
-      title: "🌴 Kartel",
+      title: "Kartel",
       desc:
-        "Obrovská pašerácká síť, která kontroluje nelegální obchod a drogy. Kartely vydělávají obrovské množství peněz z černého trhu.",
-      bonus: "📦 Smuggling Routes  pasivní příjem z černého trhu každou herní hodinu."
+        "Kartel netlačí moc na odiv. Protéká městem tunelem, přístavem a nočním transportem, dokud se černý trh nezačne točit jen podle jeho pravidel. Když jde o logistiku, nikdo ve Vortex City nehraje větší hru.",
+      bonus: '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Smuggling Routes</strong> Každou herní hodinu získávají pasivní příjem z černého trhu.</span>'
     },
     "pouliční gang": {
-      title: "🔫 Pouliční gang",
+      title: "Pouliční gang",
       desc:
-        "Agresivní gangy z ulic, které rychle zabírají nové čtvrti. Nemají velkou organizaci, ale jejich počet je obrovský.",
-      bonus: "🚀 Street Takeover  obsazování sektorů je o 30 % rychlejší."
+        "Narodili se mezi neonem, graffiti a rozbitými sirénami. Nemají lesk korporace ani staré vazby mafie. Mají hlad, počet a ochotu vzít si blok dřív, než rival stihne zavřít dveře.",
+      bonus: '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Street Takeover</strong> Obsazování sektorů je o 30 % rychlejší.</span>'
     },
     "tajná organizace": {
-      title: "🕶 Tajná organizace",
+      title: "Tajná organizace",
       desc:
-        "Stínová skupina manipulující události ve městě z pozadí. Používají špionáž, sabotáž a politický vliv.",
-      bonus: "🧠 Shadow Control  mohou převzít oslabený sektor bez přímého útoku."
+        "Nikdo je nevidí přicházet. Jen po nich zůstávají ztracené záznamy, přepsaná moc a sektory, které náhle přestanou poslouchat původní majitele. Tahle frakce nebojuje nahlas. Přepisuje město ze stínu.",
+      bonus: '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Shadow Control</strong> Dokážou převzít oslabený sektor bez přímého útoku.</span>'
     },
     "hackeři": {
-      title: "💻 Hackeři",
+      title: "Hackeři",
       desc:
-        "Digitální kriminálníci, kteří ovládají infrastrukturu města. Hackují banky, systémy i nepřátelské gangy.",
-      bonus: "💻 System Breach  mohou krást peníze nebo vypnout sektor na určitou dobu."
+        "Vortex City dýchá přes síť, kamery, grid a účty. Hackeři nevstupují dveřmi. Vypínají zabezpečení, přesměrovávají finance a nechávají protivníka stát v mrtvé zóně bez dat, bez přehledu a bez reakce.",
+      bonus: '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>System Breach</strong> Mohou krást peníze nebo dočasně vypnout celý sektor.</span>'
     },
     "motorkářský gang": {
-      title: "🏍 Motorkářský gang",
+      title: "Motorkářský gang",
       desc:
-        "Nomádští jezdci, kteří kontrolují silnice a průmyslové oblasti. Jsou rychlí, agresivní a těžko se chytají.",
-      bonus: "🏁 Road Dominance  jednotky se pohybují po mapě o 35 % rychleji."
+        "Silnice jsou jejich krevní oběh a hluk motorů jejich varování. Přijedou rychle, udeří tvrdě a zmizí dřív, než se město stihne srovnat. Tam, kde ostatní plánují, oni už projíždějí cílem.",
+      bonus: '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Road Dominance</strong> Jednotky se pohybují po mapě o 35 % rychleji.</span>'
     },
     "soukromá armáda": {
-      title: "🎖 Soukromá armáda",
+      title: "Soukromá armáda",
       desc:
-        "Elitní žoldáci s vojenským výcvikem a moderním vybavením. Dražší, ale extrémně efektivní.",
-      bonus: "🛡 Elite Training  jednotky mají nejvyšší obranu ve hře."
+        "Tohle nejsou gangsteři. Tohle jsou kontraktoři války. Každý vstup, každý tah a každá obrana má řád. Jsou dražší, chladnější a přesnější než kdokoliv jiný. Když drží sektor oni, působí jako pevnost.",
+      bonus: '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Elite Training</strong> Jejich jednotky mají nejvyšší obrannou efektivitu ve hře.</span>'
     },
     "korporace": {
-      title: "🏢 Korporace",
+      title: "Korporace",
       desc:
-        "Megakorporace, které ovládají město pomocí peněz, investic a korupce. Válku vyhrávají ekonomicky.",
-      bonus: "📈 Corporate Buyout  mohou koupit oslabený sektor místo útoku."
+        "Korporace nevypadají jako válka. Vypadají jako smlouva, audit a převod vlastnictví. Kupují vliv, přetáčejí politiku a z oslabených čtvrtí dělají aktiva. Nevyhrávají ulici hlukem, ale tlakem kapitálu.",
+      bonus: '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Corporate Buyout</strong> Oslabený sektor mohou převzít nákupem místo útoku.</span>'
     }
   };
 
@@ -692,7 +692,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (detail) detail.classList.add("is-active");
       if (title) title.textContent = info.title;
       if (desc) desc.textContent = info.desc;
-      if (bonus) bonus.textContent = info.bonus;
+      if (bonus) bonus.innerHTML = info.bonus;
     }
     updateContinueState();
     updateNote();

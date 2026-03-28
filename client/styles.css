@@ -2302,17 +2302,87 @@ body::before {
 
 .faction-detail {
   margin-top: 16px;
-  border: 1px solid rgba(168, 85, 247, 0.35);
-  box-shadow: 0 0 20px rgba(168, 85, 247, 0.2);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  background:
+    radial-gradient(circle at 100% 0, rgba(34, 211, 238, 0.14), transparent 34%),
+    radial-gradient(circle at 0 0, rgba(244, 114, 182, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(8, 14, 26, 0.92), rgba(8, 12, 22, 0.84));
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.06),
+    0 16px 34px rgba(2, 6, 23, 0.34),
+    0 0 26px rgba(34, 211, 238, 0.08);
 }
 
 .faction-detail.is-active {
+  border-color: rgba(103, 232, 249, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.08),
+    0 18px 38px rgba(2, 6, 23, 0.42),
+    0 0 28px rgba(34, 211, 238, 0.12);
 }
 
 .faction-bonus {
-  margin-top: 10px;
-  font-weight: 600;
-  color: #f5d0fe;
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(244, 114, 182, 0.08)),
+    rgba(8, 14, 26, 0.76);
+  color: #e0f2fe;
+  line-height: 1.5;
+}
+
+.faction-bonus__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(103, 232, 249, 0.42);
+  color: #67e8f9;
+  background: rgba(8, 47, 73, 0.56);
+  box-shadow:
+    0 0 14px rgba(34, 211, 238, 0.34),
+    inset 0 0 12px rgba(34, 211, 238, 0.16);
+  animation: factionBonusGlow 1.9s ease-in-out infinite;
+}
+
+.faction-bonus__copy {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.faction-bonus__copy strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #f8fafc;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@keyframes factionBonusGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 12px rgba(34, 211, 238, 0.24),
+      inset 0 0 10px rgba(34, 211, 238, 0.1);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 20px rgba(34, 211, 238, 0.44),
+      inset 0 0 14px rgba(34, 211, 238, 0.18);
+    transform: scale(1.04);
+  }
 }
 
 .gang-color-card {
@@ -2359,8 +2429,12 @@ body::before {
 }
 
 #faction-desc {
+  margin-top: 8px;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.7;
+  color: #dbeafe;
+  max-width: 62ch;
+  text-wrap: pretty;
 }
 
 .faction-links {
