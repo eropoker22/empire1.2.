@@ -125,6 +125,7 @@ async function getMarketState(playerId) {
     `SELECT id, resource_key, side, quantity, remaining_quantity, price_per_unit, status, created_at
        FROM market_orders
       WHERE player_id = $1
+        AND status = 'open'
       ORDER BY created_at DESC
       LIMIT 40`,
     [playerId]

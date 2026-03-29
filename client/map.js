@@ -70,6 +70,18 @@ window.Empire.Map = (() => {
     night: "../img/mapanoc.png",
     blackout: "../img/blackout.png"
   });
+  const ALLIANCE_ICON_SYMBOL_BY_KEY = Object.freeze({
+    crown_skull: "☠︎",
+    crossed_knives: "⚔︎",
+    broken_shield: "⛨",
+    snake_dagger: "🐍︎",
+    eye_triangle: "◉",
+    flame: "🔥︎",
+    spider: "🕷︎",
+    lightning: "⚡︎",
+    wolf_head: "🐺︎",
+    broken_mask: "🎭︎"
+  });
 
   const ownerPalette = [
     "rgba(244,114,182,0.34)",
@@ -8564,7 +8576,7 @@ window.Empire.Map = (() => {
       const techCoreInStorage = Math.max(0, Math.floor(Number(playerMaterials.techCore || 0)));
 
       root.innerHTML = `
-        <section class="drug-lab-card drug-production-card armory-card armory-card--materials-sticky">
+        <section class="drug-lab-card drug-production-card armory-card">
           <div class="drug-production-card__stats">
             <div class="drug-production-stat">
               <span class="drug-production-stat__label">Vyrobené útočné zbraně</span>
@@ -8574,6 +8586,10 @@ window.Empire.Map = (() => {
               <span class="drug-production-stat__label">Vyrobené obranné zbraně</span>
               <strong class="drug-production-stat__value">${defenseStoredLabel}</strong>
             </div>
+          </div>
+        </section>
+        <section class="drug-lab-card drug-production-card armory-card armory-card--materials-sticky">
+          <div class="drug-production-card__stats armory-card__materials-stats">
             <div class="drug-production-stat armory-material-stat">
               <span class="drug-production-stat__label">Metal Parts</span>
               <strong class="drug-production-stat__value">${metalPartsInStorage}</strong>
@@ -9487,16 +9503,8 @@ window.Empire.Map = (() => {
       });
       ctx.closePath();
       ctx.fill();
-      const alliancePattern = destroyed ? null : resolveAlliancePattern(ctx, district);
-      if (alliancePattern) {
-        ctx.save();
-        ctx.globalCompositeOperation = "screen";
-        ctx.globalAlpha = resolveAlliancePatternOpacity(district);
-        ctx.fillStyle = alliancePattern;
-        ctx.fill();
-        ctx.restore();
-      }
       ctx.stroke();
+      drawDistrictAllianceIcon(ctx, district);
 
       if (district.id === state.hoverId || district.id === state.selectedId) {
         ctx.strokeStyle = district.id === state.selectedId ? "#facc15" : "#38bdf8";
@@ -11005,6 +11013,44 @@ window.Empire.Map = (() => {
     return deriveAllianceNameFromOwnerLabel(district?.owner);
   }
 
+  function resolveDistrictAllianceIconKey(district) {
+    const explicit = String(district?.ownerAllianceIconKey || "").trim();
+    if (explicit) return explicit;
+    return window.Empire.UI?.resolveAllianceIconKeyByName?.(resolveDistrictAllianceLabel(district)) || "";
+  }
+
+  function resolveDistrictAllianceIconSymbol(district) {
+    const iconKey = resolveDistrictAllianceIconKey(district);
+    return ALLIANCE_ICON_SYMBOL_BY_KEY[iconKey] || "";
+  }
+
+  function drawDistrictAllianceIcon(ctx, district) {
+    if (!ctx || !district?.owner || isDistrictDestroyed(district)) return;
+    const symbol = resolveDistrictAllianceIconSymbol(district);
+    if (!symbol) return;
+    const bounds = polygonBounds(district.polygon);
+    const minDimension = Math.max(20, Math.min(bounds.width || 20, bounds.height || 20));
+    const maxDimension = Math.max(20, Math.max(bounds.width || 20, bounds.height || 20));
+    const fontSize = Math.max(14, Math.min(36, minDimension * 0.44));
+    const [cx, cy] = polygonCentroid(district.polygon);
+    const iconY = cy + Math.min(maxDimension * 0.05, 5);
+
+    ctx.save();
+    ctx.font = `900 ${fontSize}px "Segoe UI Symbol", "Arial Unicode MS", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(2.5, fontSize * 0.14);
+    ctx.strokeStyle = "rgba(255,255,255,0.86)";
+    ctx.shadowColor = "rgba(255,255,255,0.28)";
+    ctx.shadowBlur = Math.max(4, fontSize * 0.18);
+    ctx.strokeText(symbol, cx, iconY);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(5, 7, 11, 0.96)";
+    ctx.fillText(symbol, cx, iconY);
+    ctx.restore();
+  }
+
   function resolveAlliancePatternKey(district) {
     if (!district?.owner) return "";
     const allianceLabel = resolveDistrictAllianceLabel(district);
@@ -11882,6 +11928,7 @@ window.Empire.Map = (() => {
         ownerPlayerId: district.ownerPlayerId || district.owner_player_id || null,
         ownerNick: district.ownerNick || district.owner_nick || district.ownerUsername || district.owner_username || null,
         ownerAllianceName: district.ownerAllianceName || district.owner_alliance_name || null,
+        ownerAllianceIconKey: district.ownerAllianceIconKey || district.owner_alliance_icon_key || null,
         ownerAvatar: district.ownerAvatar || district.owner_avatar || null,
         ownerStructure: district.ownerStructure || district.owner_structure || district.faction || null,
         ownerFaction: district.ownerFaction || district.owner_faction || district.ownerStructure || district.faction || null,
@@ -12933,7 +12980,11 @@ window.Empire.Map = (() => {
       if (slotBadgeText) {
         const badge = document.createElement("span");
         badge.className = "building-detail-title__badge";
-        badge.textContent = slotBadgeText;
+        const compactSlotBadgeText = slotBadgeText.replace(/^Aktivní sloty/i, "AS");
+        badge.innerHTML = `
+          <span class="building-detail-title__badge-text building-detail-title__badge-text--full">${slotBadgeText}</span>
+          <span class="building-detail-title__badge-text building-detail-title__badge-text--compact">${compactSlotBadgeText}</span>
+        `;
         title.appendChild(badge);
       }
       const supportsTopTitleActions =

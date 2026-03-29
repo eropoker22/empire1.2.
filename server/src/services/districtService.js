@@ -49,7 +49,8 @@ async function listDistricts() {
             d.owner_player_id, d.is_destroyed, d.destroyed_at,
             p.gang_name AS owner_name,
             p.username AS owner_username,
-            a.name AS owner_alliance_name
+            a.name AS owner_alliance_name,
+            a.icon_key AS owner_alliance_icon_key
      FROM districts d
       LEFT JOIN players p ON p.id = d.owner_player_id
       LEFT JOIN alliances a ON a.id = p.alliance_id
@@ -64,6 +65,7 @@ async function listDistricts() {
     ownerPlayerId: row.owner_player_id || null,
     ownerNick: row.owner_username || null,
     ownerAllianceName: row.owner_alliance_name || null,
+    ownerAllianceIconKey: row.owner_alliance_icon_key || null,
     influence: row.influence_level,
     income: row.base_income,
     isDestroyed: Boolean(row.is_destroyed),

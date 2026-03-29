@@ -1260,7 +1260,9 @@ window.Empire.UI = (() => {
   let selectedMapBorderMode = MAP_BORDER_MODE_PLAYER;
   let unknownNeutralFillEnabled = false;
   let liveAllianceOwnerNames = new Set();
+  let liveAllianceIconByName = new Map();
   let scenarioAllianceOwnerNames = new Set();
+  let scenarioAllianceIconByName = new Map();
   let scenarioEnemyOwnerNames = new Set();
   let guestModeActive = false;
   let attackModalRefreshTimer = null;
@@ -4059,10 +4061,35 @@ window.Empire.UI = (() => {
     return String(owned?.ownerColor || "").trim();
   }
 
+  function resolvePlayerAllianceVisualMeta() {
+    const localState = !window.Empire.token ? getLocalAllianceState() : null;
+    const activeAlliance = window.Empire.token
+      ? null
+      : ((localState?.alliances || []).find((item) => item.id === localState?.activeAllianceId) || null);
+    const playerOwners = getPlayerOwnerNameSet();
+    const ownedDistrict = (Array.isArray(window.Empire.districts) ? window.Empire.districts : []).find((entry) => {
+      const ownerName = normalizeOwnerName(entry?.owner);
+      return ownerName && playerOwners.has(ownerName) && String(entry?.ownerAllianceName || "").trim();
+    });
+    const allianceName = String(
+      activeAlliance?.name
+      || ownedDistrict?.ownerAllianceName
+      || ""
+    ).trim();
+    if (!allianceName) {
+      return { name: null, iconKey: null };
+    }
+    return {
+      name: allianceName,
+      iconKey: resolveAllianceIconKeyByName(allianceName)
+    };
+  }
+
   function claimDistrictForPlayer(district) {
     if (!district || typeof district !== "object") return;
     const ownerLabel = resolvePlayerDistrictOwnerLabel();
     const ownerColor = resolvePlayerDistrictOwnerColor();
+    const allianceMeta = resolvePlayerAllianceVisualMeta();
     const ownerNick = String(
       cachedProfile?.username
       || cachedProfile?.name
@@ -4080,6 +4107,8 @@ window.Empire.UI = (() => {
 
     district.owner = ownerLabel;
     district.ownerNick = ownerNick;
+    district.ownerAllianceName = allianceMeta.name || null;
+    district.ownerAllianceIconKey = allianceMeta.iconKey || null;
     district.ownerFaction = ownerFaction;
     district.ownerStructure = ownerFaction;
     district.owner_structure = ownerFaction;
@@ -4960,6 +4989,10 @@ window.Empire.UI = (() => {
     syncMapVisionContext();
   }
 
+  function setScenarioAllianceIcons(entries) {
+    setAllianceIconMap(scenarioAllianceIconByName, entries);
+  }
+
   function setLiveAllianceOwnersFromAlliance(alliance) {
     const playerNames = getPlayerOwnerNameSet();
     const names = new Set();
@@ -4974,11 +5007,21 @@ window.Empire.UI = (() => {
       });
     });
     liveAllianceOwnerNames = names;
+    const iconEntries = [];
+    const allianceName = String(alliance?.name || "").trim();
+    if (allianceName) {
+      iconEntries.push([
+        allianceName,
+        String(alliance?.icon_key || alliance?.iconKey || DEFAULT_ALLIANCE_ICON_KEY).trim() || DEFAULT_ALLIANCE_ICON_KEY
+      ]);
+    }
+    setAllianceIconMap(liveAllianceIconByName, iconEntries);
     syncMapVisionContext();
   }
 
   function clearLiveAllianceOwners() {
     liveAllianceOwnerNames = new Set();
+    liveAllianceIconByName = new Map();
     syncMapVisionContext();
   }
 
@@ -5222,6 +5265,7 @@ window.Empire.UI = (() => {
     const allyName = `${ownerName} - spojenec`;
     scenarioUniqueOwnerColors = false;
     scenarioProfileAvatarOverride = normalizedScenarioKey === "onboarding-20-edge" ? ONBOARDING_PROFILE_AVATAR : null;
+    setScenarioAllianceIcons([]);
     syncMapVisionContext();
     const mapScenarioDistrictOwner = (district, owner = null) => ({
       ...district,
@@ -5292,6 +5336,12 @@ window.Empire.UI = (() => {
       const blackoutThirdEnemyName = "Zabijak";
       const blackoutFourthEnemyName = "Sněhulák";
       const blackoutFifthEnemyName = "Pepek";
+      setScenarioAllianceIcons([
+        [ownAllianceName, "lightning"],
+        [enemyAllianceName, "eye_triangle"],
+        [blackoutAllianceName, "lightning"],
+        [blackoutEnemyAllianceName, "eye_triangle"]
+      ]);
       setScenarioVisionMode(true);
       setScenarioAllianceOwners([allyName]);
       setScenarioEnemyOwners(enemyOwners);
@@ -8088,6 +8138,25 @@ window.Empire.UI = (() => {
       }
     };
 
+    const captureAllianceScrollState = () => ({
+      modalBody: root.querySelector(".alliance-modal__body")?.scrollTop || 0,
+      members: document.querySelector("#alliance-active-panel .alliance-members")?.scrollTop || 0,
+      managementBody: managementModal.querySelector(".alliance-management-modal__body")?.scrollTop || 0,
+      managementPanel: document.getElementById("alliance-management-panel")?.scrollTop || 0
+    });
+
+    const restoreAllianceScrollState = (scrollState) => {
+      if (!scrollState) return;
+      const modalBody = root.querySelector(".alliance-modal__body");
+      const members = document.querySelector("#alliance-active-panel .alliance-members");
+      const managementBody = managementModal.querySelector(".alliance-management-modal__body");
+      const managementPanel = document.getElementById("alliance-management-panel");
+      if (modalBody) modalBody.scrollTop = Number(scrollState.modalBody || 0);
+      if (members) members.scrollTop = Number(scrollState.members || 0);
+      if (managementBody) managementBody.scrollTop = Number(scrollState.managementBody || 0);
+      if (managementPanel) managementPanel.scrollTop = Number(scrollState.managementPanel || 0);
+    };
+
     const renderAllianceIconPicker = () => {
       iconPicker.innerHTML = ALLIANCE_ICON_OPTIONS.map((icon) => `
         <button
@@ -8109,12 +8178,14 @@ window.Empire.UI = (() => {
     };
 
     const refreshAlliance = async () => {
+      const scrollState = captureAllianceScrollState();
       if (!window.Empire.token) {
         const localState = getLocalAllianceState();
         renderAllianceState(localState.activeAlliance, localState.alliances, localState.incomingInvites || []);
         renderAllianceManagementState(localState.activeAlliance);
         renderAllianceChat(localState.chat);
         setLiveAllianceOwnersFromAlliance(localState.activeAlliance || null);
+        restoreAllianceScrollState(scrollState);
         (localState.notifications || []).forEach((notification) => {
           pushEvent(`Aliance: ${notification.message}`);
         });
@@ -8132,6 +8203,7 @@ window.Empire.UI = (() => {
       renderAllianceManagementState(mine.alliance || null);
       renderAllianceChat([]);
       setLiveAllianceOwnersFromAlliance(mine.alliance || null);
+      restoreAllianceScrollState(scrollState);
       (mine.notifications || []).forEach((notification) => {
         pushEvent(`Aliance: ${notification.message}`);
       });
@@ -8150,7 +8222,7 @@ window.Empire.UI = (() => {
         if (!root.classList.contains("hidden") && allianceRefreshHandler) {
           allianceRefreshHandler().catch(() => {});
         }
-      }, 1000);
+      }, 10000);
     });
     createToggleBtn.addEventListener("click", () => {
       setCreateAllianceModalVisible(true);
@@ -8320,6 +8392,34 @@ window.Empire.UI = (() => {
     const normalized = String(iconKey || "").trim() || DEFAULT_ALLIANCE_ICON_KEY;
     return ALLIANCE_ICON_OPTIONS.find((icon) => icon.key === normalized)
       || ALLIANCE_ICON_OPTIONS[0];
+  }
+
+  function normalizeAllianceNameKey(value) {
+    return normalizeOwnerName(value);
+  }
+
+  function normalizeAllianceIconKey(value) {
+    return getAllianceIconOption(value).key;
+  }
+
+  function setAllianceIconMap(targetMap, entries) {
+    targetMap.clear();
+    const safeEntries = entries instanceof Map
+      ? Array.from(entries.entries())
+      : Array.isArray(entries) ? entries : [];
+    safeEntries.forEach(([allianceName, iconKey]) => {
+      const nameKey = normalizeAllianceNameKey(allianceName);
+      if (!nameKey) return;
+      targetMap.set(nameKey, normalizeAllianceIconKey(iconKey));
+    });
+  }
+
+  function resolveAllianceIconKeyByName(allianceName) {
+    const nameKey = normalizeAllianceNameKey(allianceName);
+    if (!nameKey) return null;
+    return scenarioAllianceIconByName.get(nameKey)
+      || liveAllianceIconByName.get(nameKey)
+      || null;
   }
 
   function escapeAllianceMarkup(value) {
@@ -9773,6 +9873,11 @@ window.Empire.UI = (() => {
           pushEvent(`Market: ${result.error}`);
           return;
         }
+        if (cachedMarket) {
+          cachedMarket.myOrders = (cachedMarket.myOrders || []).filter((order) => order.id !== orderId);
+          cachedMarket.orderBook = (cachedMarket.orderBook || []).filter((order) => order.id !== orderId);
+          renderMarketState(resourceSelect.value, state.tab);
+        }
         pushEvent("Lokální market příkaz byl zrušen.");
         recordVerifiedIntelEvent({
           type: "market_order_cancelled",
@@ -9787,6 +9892,11 @@ window.Empire.UI = (() => {
       if (result.error) {
         pushEvent(`Market: ${result.error}`);
         return;
+      }
+      if (cachedMarket) {
+        cachedMarket.myOrders = (cachedMarket.myOrders || []).filter((order) => order.id !== orderId);
+        cachedMarket.orderBook = (cachedMarket.orderBook || []).filter((order) => order.id !== orderId);
+        renderMarketState(resourceSelect.value, state.tab);
       }
       pushEvent("Příkaz byl zrušen.");
       recordVerifiedIntelEvent({
@@ -9985,6 +10095,36 @@ window.Empire.UI = (() => {
     return MARKET_RESOURCE_LABELS[resourceKey] || String(resourceKey || "").replace(/_/g, " ");
   }
 
+  function formatCompactMarketResourceName(resourceKey) {
+    const compactLabels = {
+      neon_dust: "ND",
+      pulse_shot: "PS",
+      velvet_smoke: "VS",
+      ghost_serum: "GS",
+      overdrive_x: "OX",
+      weapons: "Zbraně",
+      materials: "Mat",
+      data_shards: "Data",
+      chemicals: "Chem",
+      biomass: "Bio",
+      stim_pack: "Stim",
+      metal_parts: "MP",
+      tech_core: "TC",
+      combat_module: "CM",
+      baseball_bat: "Pálka",
+      street_pistol: "Pistole",
+      grenade: "Granát",
+      smg: "SMG",
+      bazooka: "Bazuka",
+      bulletproof_vest: "Vesta",
+      steel_barricades: "Barikády",
+      security_cameras: "Kamery",
+      auto_mg_nest: "MG Nest",
+      alarm_system: "Alarm"
+    };
+    return compactLabels[resourceKey] || formatMarketResourceName(resourceKey);
+  }
+
   function renderMarketState(resourceKey, marketTab = "server") {
     const summary = document.getElementById("market-balance-summary");
     const sellOrders = document.getElementById("market-sell-orders");
@@ -10000,7 +10140,7 @@ window.Empire.UI = (() => {
     const market = cachedMarket || { balances: {}, orderBook: [], myOrders: [] };
     const balances = market.balances || {};
     const money = resolveMoneyBreakdown(balances);
-    const selectedOrders = (market.orderBook || []).filter((order) => order.resourceKey === resourceKey);
+    const selectedOrders = (market.orderBook || []).filter((order) => order.resourceKey === resourceKey && order.status === "open");
     const sells = selectedOrders.filter((order) => order.side === "sell");
     const buys = selectedOrders.filter((order) => order.side === "buy");
     const mine = (market.myOrders || []).filter((order) => order.resourceKey === resourceKey && order.status === "open");
@@ -10010,19 +10150,15 @@ window.Empire.UI = (() => {
     const summaryPills = marketTab === "black"
       ? [
           `Čisté: $${money.cleanMoney}`,
-          `Špinavé: $${money.dirtyMoney}`,
           `Kontrakt: ${activeResourceLabel}`,
           `Ve skladu: ${balances[resourceKeyToBalanceKey(resourceKey)] || 0}`,
           `Fee: ${market.marketFeePct || 0}%`
         ]
       : [
           `Čisté: $${money.cleanMoney}`,
-          `Špinavé: $${money.dirtyMoney}`,
-          `Celkem: $${money.totalMoney}`,
           `Drogy: ${balances.drugs || 0}`,
           `Zbraně: ${balances.weapons || 0}`,
           `Materiály: ${balances.materials || 0}`,
-          `Data: ${balances.dataShards || 0}`,
           `Fee: ${market.marketFeePct || 0}%`
         ];
 
@@ -10053,7 +10189,7 @@ window.Empire.UI = (() => {
               <span>${order.username}</span>
               <strong>$${order.pricePerUnit}</strong>
             </div>
-            <div class="market-order__meta">${formatMarketResourceName(order.resourceKey)} • ${order.remainingQuantity} ks</div>
+            <div class="market-order__meta">${formatCompactMarketResourceName(order.resourceKey)} • ${order.remainingQuantity} ks</div>
           </div>
         `
       )
@@ -10072,7 +10208,7 @@ window.Empire.UI = (() => {
               <span>${order.side === "buy" ? "Poptávka" : "Nabídka"}</span>
               <strong>$${order.pricePerUnit}</strong>
             </div>
-            <div class="market-order__meta">${formatMarketResourceName(order.resourceKey)} • ${order.remainingQuantity}/${order.quantity} ks</div>
+            <div class="market-order__meta">${formatCompactMarketResourceName(order.resourceKey)} • ${order.remainingQuantity}/${order.quantity} ks</div>
             <button class="btn btn--ghost" data-market-cancel="${order.id}">Zrušit</button>
           </div>
         `
@@ -10089,7 +10225,7 @@ window.Empire.UI = (() => {
         (trade) => `
           <div class="market-order market-order--history">
             <div class="market-order__head">
-              <span>${formatMarketResourceName(trade.resourceKey)} • ${trade.quantity} ks</span>
+              <span>${formatCompactMarketResourceName(trade.resourceKey)} • ${trade.quantity} ks</span>
               <strong>$${trade.pricePerUnit}</strong>
             </div>
             <div class="market-order__meta">Fee: $${trade.feePaid}</div>
@@ -10110,6 +10246,10 @@ window.Empire.UI = (() => {
       const parsed = JSON.parse(localStorage.getItem(LOCAL_MARKET_KEY) || "null");
       if (parsed && parsed.balances && Array.isArray(parsed.orderBook) && Array.isArray(parsed.myOrders) && Array.isArray(parsed.recentTrades)) {
         normalizeLocalMarketBalances(parsed.balances);
+        if (parsed.myOrders.length) {
+          parsed.myOrders = [];
+          saveLocalMarketState(parsed);
+        }
         const dirty = Number(parsed.balances.dirtyMoney || 0);
         if (!Number.isFinite(dirty) || dirty < GUEST_DEFAULT_DIRTY_MONEY) {
           parsed.balances.dirtyMoney = GUEST_DEFAULT_DIRTY_MONEY;
@@ -10517,8 +10657,8 @@ window.Empire.UI = (() => {
     } else {
       addLocalMoney(state.balances, order.remainingQuantity * order.pricePerUnit, "clean");
     }
-    order.remainingQuantity = 0;
-    order.status = "cancelled";
+    state.myOrders = (state.myOrders || []).filter((item) => item.id !== orderId);
+    state.orderBook = (state.orderBook || []).filter((item) => item.id !== orderId);
     saveLocalMarketState(state);
     return { ok: true };
   }
@@ -11195,6 +11335,7 @@ window.Empire.UI = (() => {
     addCraftedWeapons,
     addCraftedDefense,
     getDistrictDefenseSnapshot,
-    getDistrictSpyIntel
+    getDistrictSpyIntel,
+    resolveAllianceIconKeyByName
   };
 })();
