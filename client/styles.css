@@ -13061,6 +13061,20 @@ body.mobile-storage-modal-open {
     font-size: 20px;
   }
 
+  .map-mode-switch {
+    gap: 4px;
+    padding: 3px;
+    border-radius: 8px;
+  }
+
+  .map-mode-switch__btn {
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    border-radius: 6px;
+  }
+
   .map-border-switch {
     padding: 4px 6px;
     border-radius: 9px;
