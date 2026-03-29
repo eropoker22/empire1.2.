@@ -5204,24 +5204,43 @@ body::before {
     align-items: start;
     justify-items: center;
     padding-top: 88px;
-    padding-bottom: 28px;
+    padding-bottom: 18px;
   }
 
   #district-modal .modal__content {
-    width: min(760px, calc(100vw - 44px));
-    max-height: calc(100dvh - 118px);
+    width: min(500px, calc(100vw - 52px));
+    max-height: calc(100dvh - 108px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding: 8px;
+  }
+
+  #district-modal .modal__header {
+    margin-bottom: 5px;
+  }
+
+  #district-modal .modal__header h3 {
+    gap: 8px;
+    font-size: 19px;
+  }
+
+  #district-modal .modal-name-income {
+    font-size: 12px;
+  }
+
+  #district-modal .modal__close {
+    width: 32px;
+    height: 32px;
   }
 
   #district-modal .modal__body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
-    gap: 8px;
+    gap: 6px;
     overflow: visible;
-    padding: 10px;
+    padding: 8px;
   }
 
   #district-modal .modal__row,
@@ -5235,22 +5254,54 @@ body::before {
     grid-column: 1 / -1;
   }
 
+  #district-modal .modal__row {
+    gap: 8px;
+    padding: 6px 8px;
+    min-height: 0;
+  }
+
+  #district-modal .modal__row span,
+  #district-modal .modal__row strong {
+    font-size: 13px;
+  }
+
+  #district-modal .modal__gallery-title {
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
   #district-modal .modal__actions {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
+    padding-top: 6px;
   }
 
   #district-modal .modal__actions .btn {
     min-width: 0;
+    min-height: 34px;
+    padding: 7px 8px;
+    font-size: 12px;
   }
 
   #district-modal .district-gossip {
     max-height: none;
+    font-size: 12px;
   }
 
   #district-modal .district-buildings {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #district-modal .district-buildings__item {
+    padding: 7px 8px;
+    min-height: 0;
+  }
+
+  #district-modal .district-buildings__name,
+  #district-modal .district-buildings__meta {
+    font-size: 12px;
   }
 }
 
