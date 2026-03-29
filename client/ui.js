@@ -1500,6 +1500,7 @@ window.Empire.UI = (() => {
     initMobilePrimaryActionCardsPlacement();
     initMobileModalTopbarResourceVisibility();
     initGlobalModalScrollLock();
+    initDoubleTapZoomLock();
     initMapModeControls();
     startPoliceRaidProtectionTicker();
     if (!window.Empire.token) {
@@ -1553,6 +1554,36 @@ window.Empire.UI = (() => {
     });
     window.addEventListener("resize", applyState);
     applyState();
+  }
+
+  function initDoubleTapZoomLock() {
+    const target = document.documentElement;
+    if (!target) return;
+    let lastTapAt = 0;
+    let lastTapTarget = null;
+    let multiTouchActive = false;
+
+    const updateMultiTouchState = (event) => {
+      multiTouchActive = Boolean(event?.touches && event.touches.length > 1);
+    };
+
+    target.addEventListener("touchstart", updateMultiTouchState, { passive: true });
+    target.addEventListener("touchmove", updateMultiTouchState, { passive: true });
+    target.addEventListener("touchend", (event) => {
+      if (multiTouchActive) {
+        multiTouchActive = false;
+        return;
+      }
+      const changedTouches = event?.changedTouches;
+      if (!changedTouches || changedTouches.length !== 1) return;
+      const now = Date.now();
+      const tappedTarget = event.target;
+      const isDoubleTap = tappedTarget === lastTapTarget && (now - lastTapAt) < 320;
+      lastTapAt = now;
+      lastTapTarget = tappedTarget;
+      if (!isDoubleTap) return;
+      event.preventDefault();
+    }, { passive: false });
   }
 
   function stopRoundPhaseTicker() {
@@ -2007,7 +2038,9 @@ window.Empire.UI = (() => {
       "buildings-modal",
       "storage-modal",
       "leaderboard-modal",
+      "profile-modal",
       "gang-heat-modal",
+      "alliance-management-modal",
       "settings-modal",
       "district-modal",
       "district-defense-modal",

@@ -6339,6 +6339,87 @@ body::before {
     padding: 5px 9px;
     font-size: 8px;
   }
+
+  #spy-confirm-modal .modal__body,
+  #raid-confirm-modal .modal__body,
+  #attack-confirm-modal .modal__body,
+  #spy-result-modal .modal__body,
+  #raid-result-modal .modal__body,
+  #attack-result-modal .modal__body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #spy-confirm-modal .modal__row,
+  #raid-confirm-modal .modal__row,
+  #attack-confirm-modal .modal__row,
+  #spy-confirm-modal .spy-confirm-modal__note,
+  #raid-confirm-modal .spy-confirm-modal__note,
+  #attack-confirm-modal .attack-confirm-modal__note,
+  #spy-confirm-modal .spy-confirm-modal__actions,
+  #raid-confirm-modal .spy-confirm-modal__actions,
+  #attack-confirm-modal .attack-confirm-modal__actions,
+  #spy-result-modal .spy-result-modal__summary,
+  #raid-result-modal .spy-result-modal__summary,
+  #spy-result-modal .spy-result-modal__details,
+  #raid-result-modal .spy-result-modal__details,
+  #spy-result-modal .spy-result-modal__actions,
+  #raid-result-modal .spy-result-modal__actions,
+  #attack-result-modal .attack-result-modal__badge,
+  #attack-result-modal .attack-result-modal__summary,
+  #attack-result-modal .modal__actions,
+  #attack-result-modal .modal__row {
+    grid-column: 1 / -1;
+  }
+
+  #spy-result-modal .spy-result-modal__details,
+  #raid-result-modal .spy-result-modal__details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #spy-result-modal .spy-result-modal__details .modal__row,
+  #raid-result-modal .spy-result-modal__details .modal__row {
+    grid-column: auto;
+  }
+
+  #spy-confirm-modal .modal__row,
+  #raid-confirm-modal .modal__row,
+  #attack-confirm-modal .modal__row,
+  #spy-result-modal .modal__row,
+  #raid-result-modal .modal__row,
+  #attack-result-modal .modal__row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 7px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(8, 10, 18, 0.56);
+  }
+
+  #spy-confirm-modal .modal__row strong,
+  #raid-confirm-modal .modal__row strong,
+  #attack-confirm-modal .modal__row strong,
+  #spy-result-modal .modal__row strong,
+  #raid-result-modal .modal__row strong,
+  #attack-result-modal .modal__row strong {
+    text-align: left;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 11px;
+  }
+
+  #spy-confirm-modal .spy-confirm-modal__note,
+  #raid-confirm-modal .spy-confirm-modal__note,
+  #attack-confirm-modal .attack-confirm-modal__note,
+  #spy-result-modal .spy-result-modal__summary,
+  #raid-result-modal .spy-result-modal__summary {
+    margin-top: 1px;
+    margin-bottom: 0;
+  }
 }
 
 .modal__row {
@@ -12058,7 +12139,9 @@ body::before {
   body.mobile-hide-topbar #buildings-modal,
   body.mobile-hide-topbar #storage-modal,
   body.mobile-hide-topbar #leaderboard-modal,
+  body.mobile-hide-topbar #profile-modal,
   body.mobile-hide-topbar #gang-heat-modal,
+  body.mobile-hide-topbar #alliance-management-modal,
   body.mobile-hide-topbar #police-action-result-modal,
   body.mobile-hide-topbar #district-modal {
     padding-top: calc(20px + env(safe-area-inset-top));
@@ -12077,6 +12160,8 @@ body::before {
 
   body.mobile-hide-topbar #storage-modal .modal__backdrop,
   body.mobile-hide-topbar #leaderboard-modal .modal__backdrop,
+  body.mobile-hide-topbar #profile-modal .modal__backdrop,
+  body.mobile-hide-topbar #alliance-management-modal .modal__backdrop,
   body.mobile-hide-topbar #district-modal .modal__backdrop {
     inset: 0;
   }
