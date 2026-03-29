@@ -11207,6 +11207,38 @@ body::before {
     height: auto;
     max-height: none;
     overflow: visible;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .buildings-modal__building-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 6px;
+  }
+
+  .buildings-modal__type-btn {
+    min-height: 50px;
+    padding: 8px 6px;
+    font-size: 9px;
+    border-radius: 12px;
+  }
+
+  .buildings-modal__building {
+    min-height: 42px;
+    padding: 8px 6px;
+    border-radius: 10px;
+    font-size: 9px;
+    gap: 4px;
+  }
+
+  .buildings-modal__building > span:first-child {
+    font-size: 9px;
+  }
+
+  .buildings-modal__building > span:nth-child(2) {
+    font-size: 8px;
   }
 
   .buildings-modal__detail {
