@@ -10671,6 +10671,9 @@ body::before {
 
 .market-modal__content {
   width: min(700px, 90vw);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 128px - env(safe-area-inset-bottom));
   border: 1px solid rgba(34, 211, 238, 0.26);
   background:
     radial-gradient(circle at 100% 0, rgba(244, 114, 182, 0.12), transparent 26%),
@@ -10683,7 +10686,7 @@ body::before {
 }
 
 #market-modal {
-  overflow-y: auto;
+  overflow: hidden;
   overflow-x: hidden;
   place-items: start center;
   padding-top: 96px;
@@ -10691,8 +10694,15 @@ body::before {
 }
 
 .market-modal__body {
-  display: grid;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .market-modal__tabs {
@@ -12664,6 +12674,11 @@ body.mobile-storage-modal-open {
 
   #market-modal .modal__backdrop {
     inset: calc(var(--mobile-topbar-offset, 176px) + 10px) 0 0 0;
+  }
+
+  #market-modal .modal__content {
+    width: min(94vw, 700px);
+    max-height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 26px - env(safe-area-inset-bottom));
   }
 
   #market-modal .market-modal__tabs {

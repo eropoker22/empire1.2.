@@ -1466,6 +1466,7 @@ window.Empire.UI = (() => {
   const spyActionResultTimeouts = new Set();
   const occupyActionResultTimeouts = new Set();
   const pendingResultModalQueue = [];
+  let suppressResultModalQueueAdvance = false;
   const moneyStatAnimationTimers = new WeakMap();
   const moneyStatCountIntervals = new WeakMap();
   const MONEY_STAT_COUNT_TICK_MS = 26;
@@ -2040,6 +2041,8 @@ window.Empire.UI = (() => {
       "leaderboard-modal",
       "profile-modal",
       "gang-heat-modal",
+      "alliance-modal",
+      "alliance-create-modal",
       "alliance-management-modal",
       "settings-modal",
       "district-modal",
@@ -3714,15 +3717,20 @@ window.Empire.UI = (() => {
   }
 
   function closeAllPopupWindows() {
-    closeAttackModal();
-    closeAttackConfirmModal();
-    closeAttackResultModal();
-    closeRaidResultModal();
-    closePoliceActionResultModal();
-    closeDefenseModal();
-    closeSpyConfirmModal();
-    closeOccupyConfirmModal();
-    closeSpyResultModal();
+    suppressResultModalQueueAdvance = true;
+    try {
+      closeAttackModal();
+      closeAttackConfirmModal();
+      closeAttackResultModal();
+      closeRaidResultModal();
+      closePoliceActionResultModal();
+      closeDefenseModal();
+      closeSpyConfirmModal();
+      closeOccupyConfirmModal();
+      closeSpyResultModal();
+    } finally {
+      suppressResultModalQueueAdvance = false;
+    }
     getPopupRoots().forEach((root) => {
       if (root instanceof HTMLElement) {
         root.classList.add("hidden");
@@ -4173,11 +4181,14 @@ window.Empire.UI = (() => {
   function openAttackResultModal(details) {
     const root = document.getElementById("attack-result-modal");
     if (!root) return;
+    if (isResultModalVisible()) {
+      pendingResultModalQueue.push({ kind: "attack", payload: details });
+      return;
+    }
     const nextState = {
       ...(details || {}),
       visible: true
     };
-    closeAllPopupWindows();
     attackResultModalState = nextState;
     renderAttackResultModal(attackResultModalState);
     root.classList.remove("hidden");
@@ -4187,6 +4198,11 @@ window.Empire.UI = (() => {
     const root = document.getElementById("attack-result-modal");
     if (root) root.classList.add("hidden");
     attackResultModalState = { visible: false };
+    if (suppressResultModalQueueAdvance) return;
+    if (!pendingResultModalQueue.length) return;
+    setTimeout(() => {
+      renderNextPendingResultModal();
+    }, 80);
   }
 
   function closeAttackConfirmModal() {
@@ -4574,11 +4590,11 @@ window.Empire.UI = (() => {
     const backdrop = document.getElementById("attack-result-modal-backdrop");
     const closeBtn = document.getElementById("attack-result-modal-close");
     if (!root) return;
-    if (backdrop) backdrop.addEventListener("click", closeAllPopupWindows);
-    if (closeBtn) closeBtn.addEventListener("click", closeAllPopupWindows);
+    if (backdrop) backdrop.addEventListener("click", closeAttackResultModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeAttackResultModal);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
-        closeAllPopupWindows();
+        closeAttackResultModal();
       }
     });
   }
@@ -4586,6 +4602,11 @@ window.Empire.UI = (() => {
   function closeRaidResultModal() {
     const root = document.getElementById("raid-result-modal");
     if (root) root.classList.add("hidden");
+    if (suppressResultModalQueueAdvance) return;
+    if (!pendingResultModalQueue.length) return;
+    setTimeout(() => {
+      renderNextPendingResultModal();
+    }, 80);
   }
 
   function openRaidResultModal(payload = {}) {
@@ -4595,6 +4616,10 @@ window.Empire.UI = (() => {
     const summary = document.getElementById("raid-result-modal-summary");
     const details = document.getElementById("raid-result-modal-details");
     if (!root || !content || !title || !summary || !details) return;
+    if (isResultModalVisible()) {
+      pendingResultModalQueue.push({ kind: "raid", payload });
+      return;
+    }
 
     const tone = String(payload.tone || "").trim();
     content.classList.remove("is-clean-success", "is-dirty-fail", "is-disaster", "is-alert");
@@ -4619,12 +4644,12 @@ window.Empire.UI = (() => {
     const closeBtn = document.getElementById("raid-result-modal-close");
     const okBtn = document.getElementById("raid-result-modal-ok");
     if (!root) return;
-    if (backdrop) backdrop.addEventListener("click", closeAllPopupWindows);
-    if (closeBtn) closeBtn.addEventListener("click", closeAllPopupWindows);
-    if (okBtn) okBtn.addEventListener("click", closeAllPopupWindows);
+    if (backdrop) backdrop.addEventListener("click", closeRaidResultModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeRaidResultModal);
+    if (okBtn) okBtn.addEventListener("click", closeRaidResultModal);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
-        closeAllPopupWindows();
+        closeRaidResultModal();
       }
     });
   }
@@ -6280,8 +6305,12 @@ window.Empire.UI = (() => {
   }
 
   function isResultModalVisible() {
-    const root = document.getElementById("spy-result-modal");
-    return Boolean(root && !root.classList.contains("hidden"));
+    const roots = [
+      document.getElementById("spy-result-modal"),
+      document.getElementById("raid-result-modal"),
+      document.getElementById("attack-result-modal")
+    ];
+    return roots.some((root) => Boolean(root && !root.classList.contains("hidden")));
   }
 
   function renderNextPendingResultModal() {
@@ -6292,12 +6321,21 @@ window.Empire.UI = (() => {
       renderOccupationResultModal(next.payload);
       return;
     }
-    renderSpyResultModal(next.payload);
+    if (next.kind === "attack") {
+      openAttackResultModal(next.payload);
+      return;
+    }
+    if (next.kind === "raid") {
+      openRaidResultModal(next.payload);
+      return;
+    }
+    openSpyResultModal(next.payload);
   }
 
   function closeSpyResultModal() {
     const root = document.getElementById("spy-result-modal");
     if (root) root.classList.add("hidden");
+    if (suppressResultModalQueueAdvance) return;
     if (!pendingResultModalQueue.length) return;
     setTimeout(() => {
       renderNextPendingResultModal();
@@ -12626,10 +12664,15 @@ window.Empire.UI = (() => {
     };
 
     const refreshMarket = async () => {
+      const marketBody = root.querySelector(".market-modal__body");
+      const marketScrollTop = marketBody?.scrollTop || 0;
       if (!window.Empire.token) {
         cachedMarket = getLocalMarketState();
         renderResourceOptions();
         renderMarketState(resourceSelect.value, state.tab);
+        requestAnimationFrame(() => {
+          if (marketBody) marketBody.scrollTop = marketScrollTop;
+        });
         return;
       }
       const market = await window.Empire.API.getMarket();
@@ -12640,6 +12683,9 @@ window.Empire.UI = (() => {
       cachedMarket = market;
       renderResourceOptions();
       renderMarketState(resourceSelect.value, state.tab);
+      requestAnimationFrame(() => {
+        if (marketBody) marketBody.scrollTop = marketScrollTop;
+      });
     };
     marketRefreshHandler = refreshMarket;
 
