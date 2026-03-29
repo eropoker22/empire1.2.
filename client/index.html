@@ -381,6 +381,10 @@
             <span>Obrana (Spojenec)</span>
             <strong id="modal-defense-ally"></strong>
           </div>
+          <div class="modal__row hidden" id="modal-raid-lock-row">
+            <span>Další krádež</span>
+            <strong id="modal-raid-lock">0s</strong>
+          </div>
           <div id="modal-buildings" class="modal__gallery hidden">
             <div class="modal__gallery-title" id="modal-buildings-title">Budovy v distriktu</div>
             <div class="district-buildings" id="modal-buildings-list"></div>
@@ -648,6 +652,23 @@
           <div class="modal__row">
             <span id="attack-result-modal-label-duration">Trvání</span>
             <strong id="attack-result-modal-duration">-</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="raid-result-modal" class="modal hidden">
+      <div id="raid-result-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content spy-result-modal__content" id="raid-result-modal-content">
+        <div class="modal__header">
+          <h3 id="raid-result-modal-title">Výsledek krádeže</h3>
+          <button class="modal__close" id="raid-result-modal-close" type="button" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body spy-result-modal__body">
+          <p class="spy-result-modal__summary" id="raid-result-modal-summary"></p>
+          <div class="spy-result-modal__details" id="raid-result-modal-details"></div>
+          <div class="modal__actions spy-result-modal__actions">
+            <button class="btn btn--primary" id="raid-result-modal-ok" type="button">Rozumím</button>
           </div>
         </div>
       </div>

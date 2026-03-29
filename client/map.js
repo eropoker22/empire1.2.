@@ -43,6 +43,7 @@ window.Empire.Map = (() => {
     attackedDistricts: new Map(),
     policeDistrictActions: new Map(),
     spyDistrictActions: new Map(),
+    raidDistrictActions: new Map(),
     onboardingFocusDistrictId: null,
     onboardingFocusMode: "full",
     attackAnimationIntervalId: null,
@@ -59,6 +60,9 @@ window.Empire.Map = (() => {
   const DISTRICT_SPY_ACTION_DEFAULT_DURATION_MS = 20 * 1000;
   const DISTRICT_SPY_ACTION_MIN_DURATION_MS = 5 * 1000;
   const DISTRICT_SPY_ACTION_MAX_DURATION_MS = 30 * 60 * 1000;
+  const DISTRICT_RAID_ACTION_DEFAULT_DURATION_MS = 20 * 1000;
+  const DISTRICT_RAID_ACTION_MIN_DURATION_MS = 5 * 1000;
+  const DISTRICT_RAID_ACTION_MAX_DURATION_MS = 30 * 60 * 1000;
   const DISTRICT_ATTACK_ANIMATION_INTERVAL_MS = 120;
   const DISTRICT_TOP_NO_DRAW_RATIO = 0.08;
   const DOWNTOWN_VERTICAL_OFFSET_RATIO = 0.04;
@@ -9492,6 +9496,7 @@ window.Empire.Map = (() => {
       const attackMarker = districtKey ? state.attackedDistricts.get(districtKey) : null;
       const policeAction = districtKey ? state.policeDistrictActions.get(districtKey) : null;
       const spyAction = districtKey ? state.spyDistrictActions.get(districtKey) : null;
+      const raidAction = districtKey ? state.raidDistrictActions.get(districtKey) : null;
       ctx.fillStyle = fill;
       ctx.strokeStyle = destroyed ? "rgba(24, 24, 27, 0.94)" : borderStroke;
       ctx.lineWidth = 1;
@@ -9524,6 +9529,9 @@ window.Empire.Map = (() => {
       }
       if (spyAction) {
         drawDistrictSpyActionEffect(ctx, district, spyAction, now);
+      }
+      if (raidAction) {
+        drawDistrictRaidActionEffect(ctx, district, raidAction, now);
       }
       if (String(district?.id) === String(state.onboardingFocusDistrictId || "")) {
         drawOnboardingFocusDistrictEffect(ctx, district, now);
@@ -9589,6 +9597,15 @@ window.Empire.Map = (() => {
     );
   }
 
+  function resolveRaidActionDurationMs(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DISTRICT_RAID_ACTION_DEFAULT_DURATION_MS;
+    return Math.max(
+      DISTRICT_RAID_ACTION_MIN_DURATION_MS,
+      Math.min(DISTRICT_RAID_ACTION_MAX_DURATION_MS, Math.floor(parsed))
+    );
+  }
+
   function pruneExpiredAttackMarkers(now = Date.now()) {
     if (!state.attackedDistricts.size) return false;
     let changed = false;
@@ -9625,21 +9642,34 @@ window.Empire.Map = (() => {
     return changed;
   }
 
+  function pruneExpiredRaidActions(now = Date.now()) {
+    if (!state.raidDistrictActions.size) return false;
+    let changed = false;
+    for (const [districtKey, marker] of state.raidDistrictActions.entries()) {
+      if (!marker || !Number.isFinite(Number(marker.expiresAt)) || Number(marker.expiresAt) <= now) {
+        state.raidDistrictActions.delete(districtKey);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   function hasDestroyedDistricts() {
     return state.districts.some((district) => isDistrictDestroyed(district));
   }
 
   function syncAttackAnimationTicker() {
-    if (state.attackedDistricts.size > 0 || state.policeDistrictActions.size > 0 || state.spyDistrictActions.size > 0 || hasDestroyedDistricts()) {
+    if (state.attackedDistricts.size > 0 || state.policeDistrictActions.size > 0 || state.spyDistrictActions.size > 0 || state.raidDistrictActions.size > 0 || hasDestroyedDistricts()) {
       if (state.attackAnimationIntervalId != null) return;
       state.attackAnimationIntervalId = setInterval(() => {
         const now = Date.now();
         const attackChanged = pruneExpiredAttackMarkers(now);
         const policeChanged = pruneExpiredPoliceActions(now);
         const spyChanged = pruneExpiredSpyActions(now);
-        if (state.attackedDistricts.size < 1 && state.policeDistrictActions.size < 1 && state.spyDistrictActions.size < 1 && !hasDestroyedDistricts()) {
+        const raidChanged = pruneExpiredRaidActions(now);
+        if (state.attackedDistricts.size < 1 && state.policeDistrictActions.size < 1 && state.spyDistrictActions.size < 1 && state.raidDistrictActions.size < 1 && !hasDestroyedDistricts()) {
           syncAttackAnimationTicker();
-          if (attackChanged || policeChanged || spyChanged) render();
+          if (attackChanged || policeChanged || spyChanged || raidChanged) render();
           return;
         }
         render();
@@ -9990,6 +10020,21 @@ window.Empire.Map = (() => {
     }
   }
 
+  function reconcileRaidActionsWithDistricts() {
+    if (!state.raidDistrictActions.size) return;
+    const districtIdSet = mapDistrictIdSet();
+    let changed = false;
+    for (const districtKey of state.raidDistrictActions.keys()) {
+      if (!districtIdSet.has(districtKey)) {
+        state.raidDistrictActions.delete(districtKey);
+        changed = true;
+      }
+    }
+    if (changed) {
+      syncAttackAnimationTicker();
+    }
+  }
+
   function markDistrictUnderAttack(districtId, options = {}) {
     const districtKey = normalizeDistrictId(districtId);
     if (!districtKey) {
@@ -10133,6 +10178,48 @@ window.Empire.Map = (() => {
       syncAttackAnimationTicker();
       render();
     }
+  }
+
+  function markDistrictRaidAction(districtId, options = {}) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) {
+      return { ok: false, reason: "invalid_district" };
+    }
+    const districtExists = Boolean(resolveDistrictById(districtKey));
+    if (!districtExists) {
+      return { ok: false, reason: "district_not_found" };
+    }
+
+    const now = Date.now();
+    const durationMs = resolveRaidActionDurationMs(options?.durationMs);
+    const markerSeed = hashOwner(`${districtKey}:${String(options?.source || "raid-action")}:raid-action`);
+
+    state.raidDistrictActions.set(districtKey, {
+      districtId: districtKey,
+      source: String(options?.source || "raid-action").trim() || "raid-action",
+      startedAt: now,
+      expiresAt: now + durationMs,
+      seed: markerSeed
+    });
+    syncAttackAnimationTicker();
+    render();
+
+    return { ok: true };
+  }
+
+  function clearDistrictRaidAction(districtId) {
+    const districtKey = normalizeDistrictId(districtId);
+    if (!districtKey) return;
+    if (!state.raidDistrictActions.delete(districtKey)) return;
+    syncAttackAnimationTicker();
+    render();
+  }
+
+  function clearAllRaidActions() {
+    if (!state.raidDistrictActions.size) return;
+    state.raidDistrictActions.clear();
+    syncAttackAnimationTicker();
+    render();
   }
 
   function clearDistrictUnderAttack(districtId) {
@@ -10832,6 +10919,67 @@ window.Empire.Map = (() => {
       ctx.lineDashOffset = -((now / 26 + safeSeed) % 220);
       ctx.shadowColor = `rgba(${r},${g},${b},0.88)`;
       ctx.shadowBlur = 10 + basePulse * 14;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+  }
+
+  function drawDistrictRaidActionEffect(ctx, district, marker, now = Date.now()) {
+    if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+    const bounds = polygonBounds(district.polygon);
+    const [cx, cy] = polygonCentroid(district.polygon);
+    const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
+    const minDimension = Math.max(24, Math.min(bounds.width || 24, bounds.height || 24));
+    const maxDimension = Math.max(28, Math.max(bounds.width || 28, bounds.height || 28));
+    const lifeRatio = marker?.startedAt && marker?.expiresAt && marker.expiresAt > marker.startedAt
+      ? clampUnit((now - marker.startedAt) / (marker.expiresAt - marker.startedAt))
+      : 0;
+    const fade = Math.max(0.24, 1 - lifeRatio * 0.38);
+    const flicker = 0.42 + ((Math.sin(now / 70 + safeSeed * 0.0021) + 1) * 0.5) * 0.58;
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      drawDistrictPolygonPath(ctx, district.polygon);
+      ctx.clip();
+
+      const sweepWidth = Math.max(18, minDimension * 0.46);
+      for (let i = 0; i < 3; i += 1) {
+        const progress = ((now / (420 + i * 80)) + safeSeed * 0.0007 + i * 0.31) % 1;
+        const shadowX = bounds.minX - sweepWidth + progress * (bounds.width + sweepWidth * 2);
+        const shadowAlpha = (0.12 + flicker * 0.2) * fade * (1 - i * 0.12);
+        const gradient = ctx.createLinearGradient(shadowX, bounds.minY, shadowX + sweepWidth, bounds.maxY);
+        gradient.addColorStop(0, "rgba(3,4,7,0)");
+        gradient.addColorStop(0.45, `rgba(3,4,7,${shadowAlpha.toFixed(3)})`);
+        gradient.addColorStop(1, "rgba(3,4,7,0)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(shadowX, bounds.minY - 8, sweepWidth, (bounds.height || 20) + 16);
+      }
+
+      const glitchCount = 5;
+      for (let i = 0; i < glitchCount; i += 1) {
+        const phase = (now / (95 + i * 22) + safeSeed * 0.0014 + i) % 1;
+        const lineY = bounds.minY + phase * Math.max(12, bounds.height);
+        const lineHeight = 1.2 + (i % 2) * 1.4;
+        const lineWidth = Math.max(16, maxDimension * (0.42 + (i % 3) * 0.16));
+        const offsetX = Math.sin(now / 85 + i + safeSeed * 0.0009) * maxDimension * 0.22;
+        ctx.fillStyle = `rgba(148,163,184,${(0.12 + flicker * 0.14).toFixed(3)})`;
+        ctx.fillRect(cx - lineWidth / 2 + offsetX, lineY, lineWidth, lineHeight);
+      }
+
+      ctx.fillStyle = `rgba(2, 6, 12, ${(0.16 + flicker * 0.12).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(16, minDimension * 0.36), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(71, 85, 105, ${(0.2 + flicker * 0.16).toFixed(3)})`;
+      ctx.lineWidth = 1.2 + flicker * 0.8;
+      ctx.setLineDash([5, 7]);
+      ctx.lineDashOffset = -((now / 38 + safeSeed) % 140);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
@@ -11829,6 +11977,16 @@ window.Empire.Map = (() => {
     if (Array.isArray(update.spyActions)) {
       setSpyActionDistricts(update.spyActions, { replace: true });
     }
+    if (Array.isArray(update.raidActions)) {
+      update.raidActions.forEach((item) => {
+        const districtId = item?.districtId ?? item?.id;
+        if (districtId == null) return;
+        markDistrictRaidAction(districtId, {
+          durationMs: item?.durationMs,
+          source: item?.source || "map-update-raid"
+        });
+      });
+    }
     const eventTargetId = update.attackEvent?.targetDistrictId
       ?? update.attackEvent?.districtId
       ?? update.underAttackDistrictId;
@@ -11855,6 +12013,15 @@ window.Empire.Map = (() => {
       markDistrictSpyAction(spyTargetId, {
         durationMs: update.spyEvent?.durationMs,
         source: update.spyEvent?.source || "map-update-spy"
+      });
+    }
+    const raidTargetId = update.raidEvent?.targetDistrictId
+      ?? update.raidEvent?.districtId
+      ?? update.raidActionDistrictId;
+    if (raidTargetId != null) {
+      markDistrictRaidAction(raidTargetId, {
+        durationMs: update.raidEvent?.durationMs,
+        source: update.raidEvent?.source || "map-update-raid"
       });
     }
   }
@@ -11967,9 +12134,11 @@ window.Empire.Map = (() => {
     reconcileAttackMarkersWithDistricts();
     reconcilePoliceActionsWithDistricts();
     reconcileSpyActionsWithDistricts();
+    reconcileRaidActionsWithDistricts();
     pruneExpiredAttackMarkers(Date.now());
     pruneExpiredPoliceActions(Date.now());
     pruneExpiredSpyActions(Date.now());
+    pruneExpiredRaidActions(Date.now());
     syncAttackAnimationTicker();
     state.roads = buildRoadNetworkFromDistricts(normalized);
     window.Empire.districts = normalized;
@@ -12007,6 +12176,27 @@ window.Empire.Map = (() => {
         if (attack && !attack.classList.contains("hidden") && !attack.disabled) attack.click();
       }
     });
+  }
+
+  let districtModalRefreshIntervalId = null;
+
+  function startDistrictModalRefreshTicker() {
+    if (districtModalRefreshIntervalId) return;
+    districtModalRefreshIntervalId = setInterval(() => {
+      if (!state.modal?.root || state.modal.root.classList.contains("hidden")) return;
+      const selected = window.Empire.selectedDistrict?.id != null
+        ? state.districts.find((district) => String(district?.id) === String(window.Empire.selectedDistrict.id)) || null
+        : null;
+      if (!selected) return;
+      updateDistrictRaidLockRow(selected);
+      updateModalActionsForDistrict(selected);
+    }, 1000);
+  }
+
+  function stopDistrictModalRefreshTicker() {
+    if (!districtModalRefreshIntervalId) return;
+    clearInterval(districtModalRefreshIntervalId);
+    districtModalRefreshIntervalId = null;
   }
 
   document.addEventListener("empire:onboarding:focus-district", (event) => {
@@ -13324,6 +13514,7 @@ window.Empire.Map = (() => {
     const hasSpyIntel = Boolean(spyIntel);
     applyDistrictModalAccent(district);
     updateModalActionsForDistrict(district);
+    updateDistrictRaidLockRow(district);
 
     if (isDistrictDestroyed(district)) {
       document.getElementById("modal-name").textContent = district.name || "Distrikt";
@@ -13334,6 +13525,7 @@ window.Empire.Map = (() => {
       updateDistrictGossip(district);
       updateDistrictOwnerProfile(district, { visible: false, spyIntel });
       state.modal.root.classList.remove("hidden");
+      startDistrictModalRefreshTicker();
       return;
     }
 
@@ -13370,6 +13562,7 @@ window.Empire.Map = (() => {
       spyIntel
     });
     state.modal.root.classList.remove("hidden");
+    startDistrictModalRefreshTicker();
     document.dispatchEvent(new CustomEvent("empire:district-modal-opened", {
       detail: {
         districtId: district?.id ?? null,
@@ -13564,6 +13757,29 @@ window.Empire.Map = (() => {
     return `Zbraně: ${weapons} • Lidé: ${members} • Síla: ${power}`;
   }
 
+  function formatDistrictRaidLockLabel(ms) {
+    const totalSeconds = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}h`);
+    if (hours > 0 || minutes > 0) {
+      parts.push(`${String(minutes).padStart(hours > 0 ? 2 : 1, "0")}m`);
+    }
+    parts.push(`${String(seconds).padStart(hours > 0 || minutes > 0 ? 2 : 1, "0")}s`);
+    return parts.join(" ");
+  }
+
+  function updateDistrictRaidLockRow(district) {
+    const row = document.getElementById("modal-raid-lock-row");
+    const value = document.getElementById("modal-raid-lock");
+    if (!row || !value) return;
+    const remainingMs = window.Empire.UI?.getDistrictRaidLockRemainingMs?.(district?.id) || 0;
+    row.classList.toggle("hidden", remainingMs <= 0);
+    value.textContent = remainingMs > 0 ? formatDistrictRaidLockLabel(remainingMs) : "";
+  }
+
   function updateDistrictDefenseSummary(district, options = {}) {
     const selfValue = document.getElementById("modal-defense-self");
     const allyValue = document.getElementById("modal-defense-ally");
@@ -13631,9 +13847,10 @@ window.Empire.Map = (() => {
       ? evaluateAction(district, "spy")
       : { allowed: !defendableByPlayer, reason: "" };
     const destroyed = isDistrictDestroyed(district);
+    const raidLockRemainingMs = window.Empire.UI?.getDistrictRaidLockRemainingMs?.(district?.id) || 0;
 
     const showAttack = !destroyed && !defendableByPlayer && attackState.allowed;
-    const showRaid = !destroyed && !defendableByPlayer && raidState.allowed;
+    const showRaid = !destroyed && !defendableByPlayer;
     const showSpy = !destroyed && !defendableByPlayer && spyState.allowed && !hasSpyIntel;
 
     attackBtn.classList.toggle("hidden", !showAttack);
@@ -13642,19 +13859,23 @@ window.Empire.Map = (() => {
     defenseBtn.classList.toggle("hidden", destroyed || !defendableByPlayer);
     attackBtn.dataset.actionMode = attackActionMode;
     attackBtn.textContent = attackActionMode === "occupy" ? "Obsadit" : "Zaútočit";
+    raidBtn.textContent = raidLockRemainingMs > 0
+      ? `Vykrást • ${formatDistrictRaidLockLabel(raidLockRemainingMs)}`
+      : "Vykrást";
     attackBtn.disabled = false;
-    raidBtn.disabled = false;
+    raidBtn.disabled = showRaid ? !raidState.allowed : false;
     spyBtn.disabled = false;
     attackBtn.setAttribute("aria-disabled", "false");
-    raidBtn.setAttribute("aria-disabled", "false");
+    raidBtn.setAttribute("aria-disabled", showRaid && !raidState.allowed ? "true" : "false");
     spyBtn.setAttribute("aria-disabled", "false");
     attackBtn.title = "";
-    raidBtn.title = "";
+    raidBtn.title = showRaid && !raidState.allowed ? String(raidState.reason || "") : "";
     spyBtn.title = "";
   }
 
   function hideModal() {
     if (!state.modal?.root) return;
+    stopDistrictModalRefreshTicker();
     state.modal.root.classList.add("hidden");
   }
 
@@ -14053,6 +14274,9 @@ window.Empire.Map = (() => {
     clearDistrictSpyAction,
     clearSpyActions: clearAllSpyActions,
     setSpyActionDistricts,
+    markDistrictRaidAction,
+    clearDistrictRaidAction,
+    clearRaidActions: clearAllRaidActions,
     getPharmacyBoostSnapshot,
     usePharmacyBoost,
     getFactoryBoostSnapshot,

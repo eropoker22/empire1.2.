@@ -5199,6 +5199,61 @@ body::before {
   backdrop-filter: blur(2px);
 }
 
+@media (min-width: 721px) {
+  #district-modal {
+    align-items: start;
+    justify-items: center;
+    padding-top: 88px;
+    padding-bottom: 28px;
+  }
+
+  #district-modal .modal__content {
+    width: min(760px, calc(100vw - 44px));
+    max-height: calc(100dvh - 118px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #district-modal .modal__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    overflow: visible;
+    padding: 10px;
+  }
+
+  #district-modal .modal__row,
+  #district-modal .modal__gallery,
+  #district-modal .modal__actions {
+    margin-bottom: 0;
+  }
+
+  #district-modal .modal__gallery,
+  #district-modal .modal__actions {
+    grid-column: 1 / -1;
+  }
+
+  #district-modal .modal__actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #district-modal .modal__actions .btn {
+    min-width: 0;
+  }
+
+  #district-modal .district-gossip {
+    max-height: none;
+  }
+
+  #district-modal .district-buildings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 #district-modal .modal__row {
   flex-direction: row;
   align-items: center;
@@ -5773,6 +5828,7 @@ body::before {
 #attack-confirm-modal,
 #occupy-confirm-modal,
 #spy-result-modal,
+#raid-result-modal,
 #attack-modal,
 #attack-result-modal {
   place-items: center;
@@ -5785,6 +5841,7 @@ body::before {
 #attack-confirm-modal .modal__backdrop,
 #occupy-confirm-modal .modal__backdrop,
 #spy-result-modal .modal__backdrop,
+#raid-result-modal .modal__backdrop,
 #attack-modal .modal__backdrop,
 #attack-result-modal .modal__backdrop {
   inset: 0;
@@ -5796,6 +5853,7 @@ body::before {
 #attack-confirm-modal .modal__content,
 #occupy-confirm-modal .modal__content,
 #spy-result-modal .modal__content,
+#raid-result-modal .modal__content,
 #attack-modal .modal__content,
 #attack-result-modal .modal__content {
   margin-top: 0;
@@ -5883,6 +5941,22 @@ body::before {
 
 .spy-result-modal__content.is-major-fail::before {
   background: radial-gradient(circle, rgba(248, 113, 113, 0.26), transparent 58%);
+}
+
+#raid-result-modal .spy-result-modal__content.is-clean-success::before {
+  background: radial-gradient(circle, rgba(74, 222, 128, 0.24), transparent 58%);
+}
+
+#raid-result-modal .spy-result-modal__content.is-dirty-fail::before {
+  background: radial-gradient(circle, rgba(250, 204, 21, 0.24), transparent 58%);
+}
+
+#raid-result-modal .spy-result-modal__content.is-disaster::before {
+  background: radial-gradient(circle, rgba(248, 113, 113, 0.26), transparent 58%);
+}
+
+#raid-result-modal .spy-result-modal__content.is-alert::before {
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.26), transparent 58%);
 }
 
 .spy-result-modal__body {
@@ -11037,6 +11111,7 @@ body::before {
   body.mobile-hide-topbar #attack-confirm-modal,
   body.mobile-hide-topbar #occupy-confirm-modal,
   body.mobile-hide-topbar #spy-result-modal,
+  body.mobile-hide-topbar #raid-result-modal,
   body.mobile-hide-topbar #attack-modal,
   body.mobile-hide-topbar #attack-result-modal {
     place-items: center;
@@ -11049,6 +11124,7 @@ body::before {
   body.mobile-hide-topbar #attack-confirm-modal .modal__content,
   body.mobile-hide-topbar #occupy-confirm-modal .modal__content,
   body.mobile-hide-topbar #spy-result-modal .modal__content,
+  body.mobile-hide-topbar #raid-result-modal .modal__content,
   body.mobile-hide-topbar #attack-modal .modal__content,
   body.mobile-hide-topbar #attack-result-modal .modal__content {
     height: auto;

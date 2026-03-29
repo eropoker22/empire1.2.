@@ -174,6 +174,7 @@ window.Empire.UI = (() => {
   const ALLIANCE_READY_WINDOW_MS = 6 * 60 * 60 * 1000;
   const DEFAULT_ALLIANCE_DESCRIPTION = "Aliance která všechny zabije";
   const PLAYER_SCENARIO_STORAGE_KEY = "empire_active_player_scenario";
+  const DISTRICT_RAID_LOCK_STORAGE_KEY = "empire_district_raid_lock_until_v1";
   const MARKET_SERVER_RESOURCES = Object.freeze([
     { resourceKey: "neon_dust", name: "Neon Dust" },
     { resourceKey: "pulse_shot", name: "Pulse Shot" },
@@ -242,6 +243,12 @@ window.Empire.UI = (() => {
   const ATTACK_COOLDOWN_STORAGE_KEY = "empire_attack_cooldown_until_v1";
   const ATTACK_COOLDOWN_MS = 20 * 1000;
   const ATTACK_ACTION_DURATION_MS = 20 * 1000;
+  const RAID_COOLDOWN_STORAGE_KEY = "empire_raid_cooldown_until_v1";
+  const RAID_BASE_COOLDOWN_MS = 30 * 1000;
+  const RAID_ACTION_DURATION_MS = 20 * 1000;
+  const DISTRICT_RAID_LOCK_MS = 2 * 60 * 60 * 1000;
+  const OWNER_RAID_STORAGE_KEY = "empire_owner_raid_storage_v1";
+  const DISTRICT_RAID_STASH_STORAGE_KEY = "empire_district_raid_stash_v1";
   const OCCUPY_ACTION_DURATION_MS = 20 * 1000;
   const SPY_ACTION_DURATION_MS = 20 * 1000;
   const SPY_RECOVERY_COOLDOWN_MS = 30 * 1000;
@@ -1267,6 +1274,8 @@ window.Empire.UI = (() => {
   let guestModeActive = false;
   let attackModalRefreshTimer = null;
   let attackResultTimer = null;
+  let raidActionTimeoutId = null;
+  let raidActionState = { districtId: null, startedAt: 0, endsAt: 0 };
   let attackModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
   let attackConfirmModalState = {
     districtId: null,
@@ -1709,6 +1718,7 @@ window.Empire.UI = (() => {
       "spy-confirm-modal",
       "occupy-confirm-modal",
       "spy-result-modal",
+      "raid-result-modal",
       "attack-modal",
       "attack-confirm-modal",
       "attack-result-modal"
@@ -2090,6 +2100,7 @@ window.Empire.UI = (() => {
     initAttackModal();
     initAttackConfirmModal();
     initAttackResultModal();
+    initRaidResultModal();
     initSpyConfirmModal();
     initOccupyConfirmModal();
     initSpyResultModal();
@@ -2120,15 +2131,16 @@ window.Empire.UI = (() => {
           pushEvent(availability.reason);
           return;
         }
-        if (!window.Empire.token) {
-          pushEvent("Pro vykrádání je nutné přihlášení.");
+        if (isRaidActionRunning()) {
+          pushEvent("Krádež už právě probíhá. Současně může běžet jen jedna.");
           return;
         }
-        pushEvent("Vykrádání distriktu bylo zahájeno.");
-        recordVerifiedIntelEvent({
-          type: "raid_started",
-          districtId: window.Empire.selectedDistrict.id
-        });
+        const cooldownMs = getRaidCooldownRemainingMs();
+        if (cooldownMs > 0) {
+          pushEvent(`Krádež je na cooldownu ještě ${formatRaidCooldownLabel(cooldownMs)}.`);
+          return;
+        }
+        startRaidAction(window.Empire.selectedDistrict);
       });
     }
 
@@ -3077,6 +3089,103 @@ window.Empire.UI = (() => {
     return `${minutes}m`;
   }
 
+  function getRaidCooldownUntil() {
+    const parsed = Number(localStorage.getItem(RAID_COOLDOWN_STORAGE_KEY) || 0);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.floor(parsed));
+  }
+
+  function setRaidCooldownUntil(value) {
+    const safeValue = Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+    localStorage.setItem(RAID_COOLDOWN_STORAGE_KEY, String(safeValue));
+    return safeValue;
+  }
+
+  function getRaidCooldownRemainingMs() {
+    return Math.max(0, getRaidCooldownUntil() - Date.now());
+  }
+
+  function readDistrictRaidLockState() {
+    try {
+      const raw = localStorage.getItem(DISTRICT_RAID_LOCK_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      const now = Date.now();
+      return Object.entries(parsed).reduce((acc, [districtId, until]) => {
+        const safeDistrictId = Number(districtId);
+        const safeUntil = Number(until);
+        if (!Number.isFinite(safeDistrictId) || !Number.isFinite(safeUntil) || safeUntil <= now) return acc;
+        acc[String(safeDistrictId)] = Math.floor(safeUntil);
+        return acc;
+      }, {});
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveDistrictRaidLockState(nextState) {
+    const safeState = !nextState || typeof nextState !== "object"
+      ? {}
+      : Object.entries(nextState).reduce((acc, [districtId, until]) => {
+          const safeDistrictId = Number(districtId);
+          const safeUntil = Number(until);
+          if (!Number.isFinite(safeDistrictId) || !Number.isFinite(safeUntil) || safeUntil <= Date.now()) return acc;
+          acc[String(safeDistrictId)] = Math.floor(safeUntil);
+          return acc;
+        }, {});
+    localStorage.setItem(DISTRICT_RAID_LOCK_STORAGE_KEY, JSON.stringify(safeState));
+    return safeState;
+  }
+
+  function setDistrictRaidLockUntil(districtId, until) {
+    const safeDistrictId = Number(districtId);
+    if (!Number.isFinite(safeDistrictId)) return 0;
+    const safeUntil = Number(until);
+    const currentState = readDistrictRaidLockState();
+    if (!Number.isFinite(safeUntil) || safeUntil <= Date.now()) {
+      delete currentState[String(safeDistrictId)];
+      saveDistrictRaidLockState(currentState);
+      return 0;
+    }
+    currentState[String(safeDistrictId)] = Math.floor(safeUntil);
+    saveDistrictRaidLockState(currentState);
+    return currentState[String(safeDistrictId)];
+  }
+
+  function getDistrictRaidLockRemainingMs(districtId) {
+    const safeDistrictId = Number(districtId);
+    if (!Number.isFinite(safeDistrictId)) return 0;
+    const currentState = readDistrictRaidLockState();
+    const until = Number(currentState[String(safeDistrictId)] || 0);
+    if (!Number.isFinite(until) || until <= Date.now()) {
+      if (currentState[String(safeDistrictId)]) {
+        delete currentState[String(safeDistrictId)];
+        saveDistrictRaidLockState(currentState);
+      }
+      return 0;
+    }
+    return Math.max(0, until - Date.now());
+  }
+
+  function isRaidActionRunning() {
+    return Number(raidActionState.endsAt || 0) > Date.now();
+  }
+
+  function resolveRaidDurationWithBoosts() {
+    const pharmacySnapshot = window.Empire.Map?.getPharmacyBoostSnapshot?.();
+    const factorySnapshot = window.Empire.Map?.getFactoryBoostSnapshot?.();
+    const stealSpeedPct = Math.max(0, Number(pharmacySnapshot?.effective?.stealSpeedPct || 0));
+    const raidSpeedPct = Math.max(0, Number(factorySnapshot?.effective?.raidSpeedPct || 0));
+    const totalSpeedPct = stealSpeedPct + raidSpeedPct;
+    const multiplier = Math.max(0.2, 1 - totalSpeedPct / 100);
+    return Math.max(5000, Math.round(RAID_ACTION_DURATION_MS * multiplier));
+  }
+
+  function formatRaidCooldownLabel(ms) {
+    return formatAttackCooldownLabel(ms);
+  }
+
   function getAttackModalAvailability() {
     const counts = resolveWeaponCounts();
     const availableWeapons = getAttackWeaponTotal(counts);
@@ -3145,6 +3254,7 @@ window.Empire.UI = (() => {
     closeAttackModal();
     closeAttackConfirmModal();
     closeAttackResultModal();
+    closeRaidResultModal();
     closeDefenseModal();
     closeSpyConfirmModal();
     closeOccupyConfirmModal();
@@ -4001,10 +4111,303 @@ window.Empire.UI = (() => {
     });
   }
 
+  function closeRaidResultModal() {
+    const root = document.getElementById("raid-result-modal");
+    if (root) root.classList.add("hidden");
+  }
+
+  function openRaidResultModal(payload = {}) {
+    const root = document.getElementById("raid-result-modal");
+    const content = document.getElementById("raid-result-modal-content");
+    const title = document.getElementById("raid-result-modal-title");
+    const summary = document.getElementById("raid-result-modal-summary");
+    const details = document.getElementById("raid-result-modal-details");
+    if (!root || !content || !title || !summary || !details) return;
+
+    const tone = String(payload.tone || "").trim();
+    content.classList.remove("is-clean-success", "is-dirty-fail", "is-disaster", "is-alert");
+    if (tone) content.classList.add(tone);
+    title.textContent = String(payload.title || "Výsledek krádeže").trim() || "Výsledek krádeže";
+    summary.textContent = String(payload.summary || "").trim();
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    details.innerHTML = rows.map((row) => `
+      <div class="modal__row">
+        <span>${row.label}</span>
+        <strong>${row.value}</strong>
+      </div>
+    `).join("");
+    root.classList.remove("hidden");
+  }
+
+  function initRaidResultModal() {
+    const root = document.getElementById("raid-result-modal");
+    const backdrop = document.getElementById("raid-result-modal-backdrop");
+    const closeBtn = document.getElementById("raid-result-modal-close");
+    const okBtn = document.getElementById("raid-result-modal-ok");
+    if (!root) return;
+    if (backdrop) backdrop.addEventListener("click", closeAllPopupWindows);
+    if (closeBtn) closeBtn.addEventListener("click", closeAllPopupWindows);
+    if (okBtn) okBtn.addEventListener("click", closeAllPopupWindows);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeAllPopupWindows();
+      }
+    });
+  }
+
   function isDistrictUnownedForSpyOutcome(district) {
     const owner = String(district?.owner || "").trim().toLowerCase();
     if (!owner) return true;
     return owner === "neobsazeno" || owner === "nikdo";
+  }
+
+  function districtHasSecurityCameras(district) {
+    if (!district?.id || isDistrictUnownedForSpyOutcome(district)) return false;
+    const store = readLocalDistrictDefenseAssignments();
+    const districtStore = store[String(district.id)] && typeof store[String(district.id)] === "object"
+      ? store[String(district.id)]
+      : {};
+    const ownerKey = normalizeOwnerName(district?.owner);
+    const ownerEntry = ownerKey && districtStore[ownerKey] && typeof districtStore[ownerKey] === "object"
+      ? districtStore[ownerKey]
+      : null;
+    const weaponCounts = ownerEntry?.weaponCounts && typeof ownerEntry.weaponCounts === "object"
+      ? ownerEntry.weaponCounts
+      : {};
+    return Math.max(0, Math.floor(Number(weaponCounts["Bezpečnostní kamery"] || 0))) > 0;
+  }
+
+  function resolveRaidOutcomeChances(district) {
+    const base = isDistrictUnownedForSpyOutcome(district)
+      ? { clean_success: 78, dirty_fail: 18, disaster: 4 }
+      : { clean_success: 70, dirty_fail: 20, disaster: 10 };
+    if (!districtHasSecurityCameras(district)) return base;
+    const remaining = 75;
+    const nonDisasterBase = Math.max(1, base.clean_success + base.dirty_fail);
+    const clean = (base.clean_success / nonDisasterBase) * remaining;
+    const dirty = remaining - clean;
+    return {
+      clean_success: clean,
+      dirty_fail: dirty,
+      disaster: 25
+    };
+  }
+
+  function resolveRaidOutcomeKey(district) {
+    const chances = resolveRaidOutcomeChances(district);
+    const roll = Math.random() * 100;
+    if (roll < chances.clean_success) return "clean_success";
+    if (roll < chances.clean_success + chances.dirty_fail) return "dirty_fail";
+    return "disaster";
+  }
+
+  function resolveEmptyDistrictRaidStash(district) {
+    const buildingCount = Math.max(1, (Array.isArray(district?.buildings) ? district.buildings.length : 0) || 1);
+    const tierWeight = resolveOccupationTierRarityWeight(district?.buildingTier);
+    const seed = Math.abs(hashDistrictSeed(`raid-empty:${district?.id}:${district?.type || ""}`));
+    const materialBase = 24 + buildingCount * 12 + Math.round(tierWeight * 60) + (seed % 16);
+    return {
+      metal_parts: Math.max(12, Math.floor(materialBase * 0.55)),
+      tech_core: Math.max(6, Math.floor(materialBase * 0.28)),
+      combat_module: Math.max(1, Math.floor(materialBase * 0.08))
+    };
+  }
+
+  function applyRaidLootToPlayer(loot = {}) {
+    const applied = {};
+    Object.entries(loot || {}).forEach(([resourceKey, amount]) => {
+      const gained = addEconomyResource(resourceKey, amount);
+      if (gained > 0) applied[resourceKey] = gained;
+    });
+    return applied;
+  }
+
+  function formatRaidLootLabel(loot = {}) {
+    const labels = {
+      metal_parts: "MP",
+      tech_core: "TC",
+      combat_module: "CM",
+      materials: "MAT",
+      drugs: "DRG",
+      weapons: "WPN"
+    };
+    const parts = Object.entries(loot)
+      .map(([resourceKey, amount]) => {
+        const safeAmount = Math.max(0, Math.floor(Number(amount) || 0));
+        if (safeAmount <= 0) return "";
+        return `${labels[resourceKey] || resourceKey} ${safeAmount}`;
+      })
+      .filter(Boolean);
+    return parts.length ? parts.join(" • ") : "Nic";
+  }
+
+  function applyRaidGangLoss(lossPct) {
+    const totalMembers = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(cachedProfile || window.Empire.player || {})) || 0));
+    const loss = Math.max(0, Math.floor(totalMembers * Math.max(0, Number(lossPct) || 0) / 100));
+    if (loss > 0) {
+      consumeGangMembers(loss);
+    }
+    return loss;
+  }
+
+  function buildRaidResultPayload({ district, outcomeKey, loot, cooldownMs, gangLoss, targetAlerted }) {
+    const districtLabel = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    if (outcomeKey === "clean_success") {
+      return {
+        tone: "is-clean-success",
+        title: "ČISTÁ KRÁDEŽ",
+        summary: "Vlezli jste tam, sebrali co šlo a zmizeli jak duchové. Ani kurva nevěděli, že tam někdo byl. Prachy jsou tvoje.",
+        rows: [
+          { label: "Cíl", value: districtLabel },
+          { label: "Získáno", value: formatRaidLootLabel(loot) },
+          { label: "Trvání", value: formatAttackDurationLabel(resolveRaidDurationWithBoosts()) },
+          { label: "Cooldown", value: formatRaidCooldownLabel(cooldownMs) }
+        ]
+      };
+    }
+    if (outcomeKey === "dirty_fail") {
+      return {
+        tone: "is-dirty-fail",
+        title: "ŠPINAVÁ KRÁDEŽ",
+        summary: "Vzali jste lup ale nebylo to čistý. Trochu krve, trochu bordelu. Něco jsi nechal na místě, ale pořád jsi v plusu.",
+        rows: [
+          { label: "Cíl", value: districtLabel },
+          { label: "Ztráta členů", value: `${gangLoss}` },
+          { label: "Cooldown", value: formatRaidCooldownLabel(cooldownMs) },
+          { label: "Zisk", value: "Nic" }
+        ]
+      };
+    }
+    return {
+      tone: targetAlerted ? "is-alert" : "is-disaster",
+      title: "PRŮSER",
+      summary: "Posrali jste to. Chytili vás při činu, někdo to odnesl a zbytek zdrhal jak krysy. Nemáš nic, jen ostudu a ztráty.",
+      rows: [
+        { label: "Cíl", value: districtLabel },
+        { label: "Ztráta členů", value: `${gangLoss}` },
+        { label: "Cooldown", value: formatRaidCooldownLabel(cooldownMs) },
+        { label: "Upozornění cíle", value: targetAlerted ? "Ano" : "Ne" }
+      ]
+    };
+  }
+
+  function maybeShowRaidTargetAlert(district) {
+    const targetOwner = normalizeOwnerName(district?.owner);
+    const playerOwners = getPlayerOwnerNameSet();
+    if (!targetOwner || !playerOwners.has(targetOwner)) return false;
+    openRaidResultModal({
+      tone: "is-alert",
+      title: "Pokus o krádež",
+      summary: `Někdo se pokusil vykrást tvůj distrikt ${district?.name || `#${district?.id ?? "-"}`}.`,
+      rows: [
+        { label: "District", value: district?.name || `#${district?.id ?? "-"}` },
+        { label: "Stav", value: "Pokus odhalen" }
+      ]
+    });
+    return true;
+  }
+
+  function finalizeRaidActionResult({ districtId, durationMs }) {
+    raidActionTimeoutId = null;
+    raidActionState = { districtId: null, startedAt: 0, endsAt: 0 };
+    window.Empire.Map?.clearRaidActions?.();
+
+    const district = resolveDistrictById(districtId);
+    if (!district) return;
+    const outcomeKey = resolveRaidOutcomeKey(district);
+    let cooldownMs = RAID_BASE_COOLDOWN_MS;
+    let loot = {};
+    let gangLoss = 0;
+    let targetAlerted = false;
+
+    if (outcomeKey === "clean_success") {
+      if (isDistrictUnownedForSpyOutcome(district)) {
+        updateDistrictRaidStash(district, (current) => {
+          const next = { ...current };
+          Object.entries(current).forEach(([resourceKey, amount]) => {
+            const available = Math.max(0, Math.floor(Number(amount || 0)));
+            const stolen = available > 0
+              ? Math.min(available, Math.max(1, Math.floor(available * 0.25)))
+              : 0;
+            if (stolen > 0) {
+              loot[resourceKey] = stolen;
+              next[resourceKey] = Math.max(0, available - stolen);
+            }
+          });
+          return next;
+        });
+      } else {
+        const nextLoot = {};
+        const stealPct = 2 + Math.floor(Math.random() * 5);
+        updateOwnerRaidInventory(district.owner, (current) => {
+          const next = { ...current };
+          ["metal_parts", "tech_core", "combat_module", "drugs", "weapons"].forEach((resourceKey) => {
+            const available = Math.max(0, Math.floor(Number(current[resourceKey] || 0)));
+            const stolen = available > 0
+              ? Math.min(available, Math.max(1, Math.floor(available * (stealPct / 100))))
+              : 0;
+            if (stolen > 0) {
+              nextLoot[resourceKey] = stolen;
+              next[resourceKey] = Math.max(0, available - stolen);
+            }
+          });
+          return next;
+        });
+        loot = nextLoot;
+      }
+      applyRaidLootToPlayer(loot);
+      pushEvent(`Krádež v districtu ${district.name || `#${district.id}`} dopadla čistě. Zisk: ${formatRaidLootLabel(loot)}.`);
+    } else if (outcomeKey === "dirty_fail") {
+      cooldownMs = Math.round(RAID_BASE_COOLDOWN_MS * 1.2);
+      gangLoss = applyRaidGangLoss(2.5);
+      pushEvent(`Špinavá krádež v districtu ${district.name || `#${district.id}`}. Přišel jsi o ${gangLoss} členů gangu.`);
+    } else {
+      cooldownMs = Math.round(RAID_BASE_COOLDOWN_MS * 1.5);
+      gangLoss = applyRaidGangLoss(5);
+      targetAlerted = !isDistrictUnownedForSpyOutcome(district);
+      if (targetAlerted) {
+        maybeShowRaidTargetAlert(district);
+      }
+      pushEvent(`Krádež v districtu ${district.name || `#${district.id}`} skončila průserem. Ztráta členů: ${gangLoss}.`);
+    }
+
+    setRaidCooldownUntil(Date.now() + cooldownMs);
+    setDistrictRaidLockUntil(district.id, Date.now() + DISTRICT_RAID_LOCK_MS);
+    openRaidResultModal(buildRaidResultPayload({
+      district,
+      outcomeKey,
+      loot,
+      cooldownMs,
+      gangLoss,
+      targetAlerted
+    }));
+  }
+
+  function startRaidAction(district) {
+    if (!district) return;
+    const durationMs = resolveRaidDurationWithBoosts();
+    raidActionState = {
+      districtId: district.id,
+      startedAt: Date.now(),
+      endsAt: Date.now() + durationMs
+    };
+    if (raidActionTimeoutId) {
+      clearTimeout(raidActionTimeoutId);
+    }
+    raidActionTimeoutId = setTimeout(() => {
+      finalizeRaidActionResult({ districtId: district.id, durationMs });
+    }, durationMs);
+    window.Empire.Map?.markDistrictRaidAction?.(district.id, {
+      durationMs,
+      source: "raid-action"
+    });
+    recordVerifiedIntelEvent({
+      type: "raid_started",
+      districtId: district.id
+    });
+    pushEvent(`Krádež v districtu ${district.name || `#${district.id}`} byla spuštěna. Trvání ${formatAttackDurationLabel(durationMs)}.`);
+    const districtModal = document.getElementById("district-modal");
+    if (districtModal) districtModal.classList.add("hidden");
   }
 
   function resolveOccupationTierRarityWeight(tierValue) {
@@ -4840,6 +5243,15 @@ window.Empire.UI = (() => {
     if (action === "raid" || action === "spy") {
       if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_SPY_DISTRICT_ID) {
         return { allowed: true, reason: "" };
+      }
+      if (action === "raid") {
+        const districtRaidLockMs = getDistrictRaidLockRemainingMs(districtId);
+        if (districtRaidLockMs > 0) {
+          return {
+            allowed: false,
+            reason: `Distrikt je po krádeži zamčený ještě ${formatAttackDurationLabel(districtRaidLockMs)}.`
+          };
+        }
       }
       const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: true });
       return adjacent
@@ -8185,6 +8597,7 @@ window.Empire.UI = (() => {
         renderAllianceManagementState(localState.activeAlliance);
         renderAllianceChat(localState.chat);
         setLiveAllianceOwnersFromAlliance(localState.activeAlliance || null);
+        syncBlackoutScenarioAllianceDistrictState(localState.activeAlliance || null);
         restoreAllianceScrollState(scrollState);
         (localState.notifications || []).forEach((notification) => {
           pushEvent(`Aliance: ${notification.message}`);
@@ -9218,6 +9631,30 @@ window.Empire.UI = (() => {
         { time: "20:18", author: "System", text: "Zabijak zadal o vstup do aliance." }
       ]
     };
+  }
+
+  function syncBlackoutScenarioAllianceDistrictState(activeAlliance) {
+    if (window.Empire.token || activePlayerScenarioKey !== "alliance-ten-blackout" || !window.Empire.Map?.setDistricts) return;
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    if (!districts.length) return;
+    const allianceName = String(activeAlliance?.name || "").trim();
+    const allianceIconKey = String(activeAlliance?.icon_key || activeAlliance?.iconKey || DEFAULT_ALLIANCE_ICON_KEY).trim() || DEFAULT_ALLIANCE_ICON_KEY;
+    const memberNames = new Set(
+      (Array.isArray(activeAlliance?.members) ? activeAlliance.members : [])
+        .map((member) => normalizeOwnerName(member?.username))
+        .filter(Boolean)
+    );
+    const nextDistricts = districts.map((district) => {
+      const ownerKey = normalizeOwnerName(district?.owner);
+      if (ownerKey !== normalizeOwnerName("Zabijak")) return district;
+      const isAccepted = memberNames.has(ownerKey) && allianceName;
+      return {
+        ...district,
+        ownerAllianceName: isAccepted ? allianceName : null,
+        ownerAllianceIconKey: isAccepted ? allianceIconKey : null
+      };
+    });
+    window.Empire.Map.setDistricts(nextDistricts);
   }
 
   function getLocalAllianceState() {
@@ -10605,6 +11042,137 @@ window.Empire.UI = (() => {
     return mapping[resourceKey] || resourceKey;
   }
 
+  function addEconomyResource(resourceKey, amount) {
+    const value = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (value <= 0) return 0;
+    const economy = ensureEconomyCache();
+    const balanceKey = resourceKeyToBalanceKey(resourceKey);
+    economy[balanceKey] = Math.max(0, Math.floor(Number(economy[balanceKey] || 0) + value));
+    if (["metalParts", "techCore", "combatModule"].includes(balanceKey)) {
+      economy.materials = Math.max(0, Math.floor(Number(economy.materials || 0) + value));
+    } else if (storageDrugTypes.some((item) => item.key === balanceKey)) {
+      economy.drugInventory = economy.drugInventory || {};
+      economy.drugInventory[balanceKey] = Math.max(0, Math.floor(Number(economy.drugInventory[balanceKey] || 0) + value));
+      economy.drugs = Math.max(0, Math.floor(Number(economy.drugs || 0) + value));
+    } else if (["baseballBat", "streetPistol", "grenade", "smg", "bazooka"].includes(balanceKey)) {
+      economy.weapons = Math.max(0, Math.floor(Number(economy.weapons || 0) + value));
+    }
+    updateEconomy(economy);
+    return value;
+  }
+
+  function removeEconomyResource(resourceKey, amount) {
+    const value = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (value <= 0) return 0;
+    const economy = ensureEconomyCache();
+    const balanceKey = resourceKeyToBalanceKey(resourceKey);
+    const available = Math.max(0, Math.floor(Number(economy[balanceKey] || 0)));
+    const removed = Math.min(available, value);
+    if (removed <= 0) return 0;
+    economy[balanceKey] = Math.max(0, available - removed);
+    if (["metalParts", "techCore", "combatModule"].includes(balanceKey)) {
+      economy.materials = Math.max(0, Math.floor(Number(economy.materials || 0) - removed));
+    } else if (storageDrugTypes.some((item) => item.key === balanceKey)) {
+      economy.drugInventory = economy.drugInventory || {};
+      economy.drugInventory[balanceKey] = Math.max(0, Math.floor(Number(economy.drugInventory[balanceKey] || 0) - removed));
+      economy.drugs = Math.max(0, Math.floor(Number(economy.drugs || 0) - removed));
+    } else if (["baseballBat", "streetPistol", "grenade", "smg", "bazooka"].includes(balanceKey)) {
+      economy.weapons = Math.max(0, Math.floor(Number(economy.weapons || 0) - removed));
+    }
+    updateEconomy(economy);
+    return removed;
+  }
+
+  function readOwnerRaidStorageState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(OWNER_RAID_STORAGE_KEY) || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveOwnerRaidStorageState(state) {
+    localStorage.setItem(OWNER_RAID_STORAGE_KEY, JSON.stringify(state && typeof state === "object" ? state : {}));
+  }
+
+  function seedOwnerRaidInventory(ownerName) {
+    const normalizedOwner = normalizeOwnerName(ownerName);
+    const districts = (Array.isArray(window.Empire.districts) ? window.Empire.districts : []).filter(
+      (district) => normalizeOwnerName(district?.owner) === normalizedOwner
+    );
+    const ownedCount = Math.max(1, districts.length || 1);
+    const seed = Math.abs(hashDistrictSeed(`${normalizedOwner}:${ownedCount}:raid-storage`));
+    return {
+      metal_parts: Math.max(20, 24 + ownedCount * 6 + (seed % 18)),
+      tech_core: Math.max(8, 10 + ownedCount * 3 + (seed % 9)),
+      combat_module: Math.max(3, 4 + Math.floor(ownedCount / 2) + (seed % 4)),
+      drugs: Math.max(24, 30 + ownedCount * 7 + (seed % 25)),
+      weapons: Math.max(18, 20 + ownedCount * 5 + (seed % 20))
+    };
+  }
+
+  function getOwnerRaidInventory(ownerName) {
+    const ownerKey = normalizeOwnerName(ownerName);
+    if (!ownerKey) return {};
+    const state = readOwnerRaidStorageState();
+    if (!state[ownerKey] || typeof state[ownerKey] !== "object") {
+      state[ownerKey] = seedOwnerRaidInventory(ownerName);
+      saveOwnerRaidStorageState(state);
+    }
+    return { ...state[ownerKey] };
+  }
+
+  function updateOwnerRaidInventory(ownerName, updater) {
+    const ownerKey = normalizeOwnerName(ownerName);
+    if (!ownerKey) return {};
+    const state = readOwnerRaidStorageState();
+    const current = state[ownerKey] && typeof state[ownerKey] === "object"
+      ? { ...state[ownerKey] }
+      : seedOwnerRaidInventory(ownerName);
+    const next = typeof updater === "function" ? updater(current) : current;
+    state[ownerKey] = next && typeof next === "object" ? next : current;
+    saveOwnerRaidStorageState(state);
+    return { ...state[ownerKey] };
+  }
+
+  function readDistrictRaidStashState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DISTRICT_RAID_STASH_STORAGE_KEY) || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveDistrictRaidStashState(state) {
+    localStorage.setItem(DISTRICT_RAID_STASH_STORAGE_KEY, JSON.stringify(state && typeof state === "object" ? state : {}));
+  }
+
+  function getDistrictRaidStash(district) {
+    const districtKey = String(district?.id || "").trim();
+    if (!districtKey) return {};
+    const state = readDistrictRaidStashState();
+    if (!state[districtKey] || typeof state[districtKey] !== "object") {
+      state[districtKey] = resolveEmptyDistrictRaidStash(district);
+      saveDistrictRaidStashState(state);
+    }
+    return { ...state[districtKey] };
+  }
+
+  function updateDistrictRaidStash(district, updater) {
+    const districtKey = String(district?.id || "").trim();
+    if (!districtKey) return {};
+    const state = readDistrictRaidStashState();
+    const current = state[districtKey] && typeof state[districtKey] === "object"
+      ? { ...state[districtKey] }
+      : resolveEmptyDistrictRaidStash(district);
+    const next = typeof updater === "function" ? updater(current) : current;
+    state[districtKey] = next && typeof next === "object" ? next : current;
+    saveDistrictRaidStashState(state);
+    return { ...state[districtKey] };
+  }
+
   function createLocalMarketOrder({ resourceKey, side, quantity, pricePerUnit }) {
     const state = getLocalMarketState();
     normalizeLocalMarketBalances(state.balances || {});
@@ -11319,6 +11887,7 @@ window.Empire.UI = (() => {
     pushEvent,
     refreshMarketBuildingShortcuts,
     handleMarketUpdate,
+    getDistrictRaidLockRemainingMs,
     setGuestMode,
     initProfileModal,
     initSettingsModal,
