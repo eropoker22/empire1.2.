@@ -31,14 +31,22 @@ router.post("/attack", auth, async (req, res) => {
     });
 
     return res.json({
-      message: result.destroyed
+      message: result.message || (result.destroyed
         ? "District destroyed. It is now neutral and unusable."
-        : (result.success ? "Attack succeeded." : "Attack failed."),
+        : (result.success ? "Attack succeeded." : "Attack failed.")),
       success: result.success,
+      outcomeKey: result.outcomeKey || (result.destroyed ? "catastrophe" : (result.success ? "total_success" : "failure")),
       destroyed: Boolean(result.destroyed),
       influenceChange: result.influenceChange,
       heatGain: result.heatGain || 0,
-      sourceDistrictId: result.sourceDistrictId ?? null
+      sourceDistrictId: result.sourceDistrictId ?? null,
+      attackPower: result.attackPower || 0,
+      defensePower: result.defensePower || 0,
+      attackerLossPct: result.attackerLossPct || 0,
+      defenderLossPct: result.defenderLossPct || 0,
+      districtLossPct: result.districtLossPct || 0,
+      newOwnerId: result.newOwnerId ?? null,
+      newInfluence: result.newInfluence ?? null
     });
   } catch (err) {
     return res.status(500).json({ error: "attack_failed" });

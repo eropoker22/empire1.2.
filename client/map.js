@@ -27,6 +27,7 @@ window.Empire.Map = (() => {
     pinchStartScale: 1,
     pinchWorldCenter: null,
     mapImage: null,
+    mapMode: "night",
     mapSize: { width: 1400, height: 900 },
     vision: {
       fogPreviewMode: false,
@@ -63,6 +64,12 @@ window.Empire.Map = (() => {
   const DOWNTOWN_VERTICAL_OFFSET_RATIO = 0.04;
   const DOWNTOWN_WARP_RADIUS_X_RATIO = 0.42;
   const DOWNTOWN_WARP_RADIUS_Y_RATIO = 0.38;
+  const MAP_MODE_STORAGE_KEY = "empire_map_mode_v1";
+  const MAP_MODE_IMAGE_BY_KEY = Object.freeze({
+    day: "../img/mapaden.png",
+    night: "../img/mapanoc.png",
+    blackout: "../img/blackout.png"
+  });
 
   const ownerPalette = [
     "rgba(244,114,182,0.34)",
@@ -577,6 +584,7 @@ window.Empire.Map = (() => {
       heatPerUnit: 1
     })
   });
+  const FACTORY_SLOT_STORAGE_CAP = 20;
   const FACTORY_COMBAT_BOOSTS = Object.freeze({
     assault: Object.freeze({
       combatModuleCost: 2,
@@ -780,6 +788,22 @@ window.Empire.Map = (() => {
       })
     )
   );
+  const ARMORY_SPECIAL_ACTIONS = Object.freeze({
+    attackBoost: Object.freeze({
+      cooldownMs: 6 * 60 * 60 * 1000,
+      durationMs: 2 * 60 * 60 * 1000,
+      productionBoostPct: 20,
+      immediateHeat: 10,
+      passiveHeatPerHour: 5
+    }),
+    defenseBoost: Object.freeze({
+      cooldownMs: 6 * 60 * 60 * 1000,
+      durationMs: 2 * 60 * 60 * 1000,
+      productionBoostPct: 20,
+      immediateHeat: 10,
+      passiveHeatPerHour: 5
+    })
+  });
 
   const DRUG_LAB_BUILDING_NAME = "Drug lab";
   const DRUG_LAB_BUILDING_STORAGE_KEY = "empire_drug_lab_building_mechanics_v1";
@@ -919,10 +943,11 @@ window.Empire.Map = (() => {
     state.tooltip = document.getElementById("map-tooltip");
     if (!state.canvas) return;
     state.ctx = state.canvas.getContext("2d");
+    state.mapMode = resolveStoredMapMode();
 
     clearSpyGeneratedGossipOnRefresh();
     resetPharmacyProducedStateOnRefresh();
-    loadMapImage();
+    loadMapImage(state.mapMode);
     generateCity();
     seedDemoDistrictGossip();
     initModal();
@@ -2283,6 +2308,9 @@ window.Empire.Map = (() => {
           );
           const crafted = Math.max(0, Math.min(cycles, maxFromMetal, maxFromTech));
           if (crafted > 0) {
+            const currentAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
+            const slotSpace = Math.max(0, FACTORY_SLOT_STORAGE_CAP - currentAmount);
+            const storable = Math.min(crafted, slotSpace);
             stateRef.resources.metalParts = Math.max(
               0,
               Math.floor(
@@ -2301,7 +2329,7 @@ window.Empire.Map = (() => {
               0,
               Math.floor(Number(stateRef.resources.combatModule || 0) + crafted)
             );
-            slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + crafted));
+            slot.producedAmount = Math.max(0, currentAmount + storable);
             produced.combatModule = Math.max(0, Math.floor(Number(produced.combatModule || 0) + crafted));
             heatAdded += crafted * FACTORY_CONFIG.combatModule.heatPerUnit;
           }
@@ -2314,7 +2342,10 @@ window.Empire.Map = (() => {
         const gained = Math.max(0, Math.floor(raw));
         slot.productionRemainder = Math.max(0, raw - gained);
         if (gained > 0) {
-          slot.producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0) + gained));
+          const currentAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
+          const slotSpace = Math.max(0, FACTORY_SLOT_STORAGE_CAP - currentAmount);
+          const storable = Math.min(gained, slotSpace);
+          slot.producedAmount = Math.max(0, currentAmount + storable);
           stateRef.resources[slot.resourceKey] = Math.max(
             0,
             Math.floor(Number(stateRef.resources[slot.resourceKey] || 0) + gained)
@@ -2405,11 +2436,29 @@ window.Empire.Map = (() => {
     return ARMORY_SLOT_CONFIG.map((slot) => createArmoryDefaultSlot(slot.id, slot.weaponKey, now));
   }
 
+  function createArmoryDefaultCooldownState() {
+    return {
+      attackBoost: 0,
+      defenseBoost: 0
+    };
+  }
+
+  function createArmoryDefaultEffectState() {
+    return {
+      attackBoostUntil: 0,
+      defenseBoostUntil: 0
+    };
+  }
+
   function createArmoryDefaultState(now = Date.now()) {
     return {
       level: 1,
       slots: createArmoryDefaultSlots(now),
-      storedWeapons: createArmoryWeaponMap()
+      storedWeapons: createArmoryWeaponMap(),
+      cooldowns: createArmoryDefaultCooldownState(),
+      effects: createArmoryDefaultEffectState(),
+      boostHeatRemainder: 0,
+      lastBoostHeatAt: now
     };
   }
 
@@ -2424,6 +2473,10 @@ window.Empire.Map = (() => {
       sanitizeArmorySlot(slotsRaw[index], fallbackSlot, now)
     );
     const storedWeapons = createArmoryWeaponMap(rawState?.storedWeapons || rawState?.resources || {});
+    const cooldownsRaw = rawState?.cooldowns || {};
+    const effectsRaw = rawState?.effects || {};
+    const boostHeatRemainderRaw = Number(rawState?.boostHeatRemainder || 0);
+    const lastBoostHeatAtRaw = Number(rawState?.lastBoostHeatAt || now);
 
     if (!slotsRaw.length && rawState?.storedWeapons && typeof rawState.storedWeapons === "object") {
       slots.forEach((slot) => {
@@ -2434,7 +2487,17 @@ window.Empire.Map = (() => {
     return {
       level,
       slots,
-      storedWeapons
+      storedWeapons,
+      cooldowns: {
+        attackBoost: Math.max(0, Number(cooldownsRaw.attackBoost || 0)),
+        defenseBoost: Math.max(0, Number(cooldownsRaw.defenseBoost || 0))
+      },
+      effects: {
+        attackBoostUntil: Math.max(0, Number(effectsRaw.attackBoostUntil || 0)),
+        defenseBoostUntil: Math.max(0, Number(effectsRaw.defenseBoostUntil || 0))
+      },
+      boostHeatRemainder: Number.isFinite(boostHeatRemainderRaw) ? Math.max(0, boostHeatRemainderRaw) : 0,
+      lastBoostHeatAt: Number.isFinite(lastBoostHeatAtRaw) ? Math.max(0, Math.floor(lastBoostHeatAtRaw)) : now
     };
   }
 
@@ -2462,14 +2525,79 @@ window.Empire.Map = (() => {
     return 1 + (safeLevel - 1) * ARMORY_CONFIG.upgradePctPerLevel;
   }
 
-  function calculateArmoryProductionRates(levelMultiplier = 1) {
+  function calculateArmoryProductionRates(levelMultiplier = 1, options = {}) {
     const multiplier = Math.max(0.1, Number(levelMultiplier) || 1);
+    const attackMultiplier = Math.max(0.1, Number(options?.attackMultiplier) || 1);
+    const defenseMultiplier = Math.max(0.1, Number(options?.defenseMultiplier) || 1);
     return ARMORY_WEAPON_KEYS.reduce((acc, key) => {
       const weapon = ARMORY_CONFIG.weapons[key];
       const basePerHour = 3600000 / Math.max(1, Number(weapon.durationMs || 1));
-      acc[key] = basePerHour * multiplier;
+      const categoryMultiplier = weapon?.category === "defense" ? defenseMultiplier : attackMultiplier;
+      acc[key] = basePerHour * multiplier * categoryMultiplier;
       return acc;
     }, {});
+  }
+
+  function getArmoryBoostSnapshot(armoryState, now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const effects = armoryState?.effects || {};
+    const attackBoostActive = Number(effects.attackBoostUntil || 0) > nowMs;
+    const defenseBoostActive = Number(effects.defenseBoostUntil || 0) > nowMs;
+    const attackProductionMultiplier = attackBoostActive
+      ? (1 + ARMORY_SPECIAL_ACTIONS.attackBoost.productionBoostPct / 100)
+      : 1;
+    const defenseProductionMultiplier = defenseBoostActive
+      ? (1 + ARMORY_SPECIAL_ACTIONS.defenseBoost.productionBoostPct / 100)
+      : 1;
+    const passiveHeatPerHour =
+      (attackBoostActive ? ARMORY_SPECIAL_ACTIONS.attackBoost.passiveHeatPerHour : 0)
+      + (defenseBoostActive ? ARMORY_SPECIAL_ACTIONS.defenseBoost.passiveHeatPerHour : 0);
+    const activeLabels = [];
+    if (attackBoostActive) {
+      activeLabels.push(`Attack gun boost +${ARMORY_SPECIAL_ACTIONS.attackBoost.productionBoostPct}%`);
+    }
+    if (defenseBoostActive) {
+      activeLabels.push(`Defense gun boost +${ARMORY_SPECIAL_ACTIONS.defenseBoost.productionBoostPct}%`);
+    }
+    return {
+      attackBoostActive,
+      defenseBoostActive,
+      attackProductionMultiplier,
+      defenseProductionMultiplier,
+      passiveHeatPerHour,
+      activeLabels,
+      activeCount: activeLabels.length
+    };
+  }
+
+  function applyArmoryPassiveBoostHeat(armoryState, now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    let from = Number(armoryState?.lastBoostHeatAt || nowMs);
+    if (!Number.isFinite(from) || from > nowMs) {
+      from = nowMs;
+    }
+    let gained = 0;
+    if (from < nowMs) {
+      const effects = armoryState?.effects || {};
+      const attackUntil = Math.max(0, Number(effects.attackBoostUntil || 0));
+      const defenseUntil = Math.max(0, Number(effects.defenseBoostUntil || 0));
+      const attackStart = Math.max(0, attackUntil - ARMORY_SPECIAL_ACTIONS.attackBoost.durationMs);
+      const defenseStart = Math.max(0, defenseUntil - ARMORY_SPECIAL_ACTIONS.defenseBoost.durationMs);
+      const attackOverlapMs = Math.max(0, Math.min(nowMs, attackUntil) - Math.max(from, attackStart));
+      const defenseOverlapMs = Math.max(0, Math.min(nowMs, defenseUntil) - Math.max(from, defenseStart));
+      const rawHeat =
+        (attackOverlapMs / 3600000) * ARMORY_SPECIAL_ACTIONS.attackBoost.passiveHeatPerHour
+        + (defenseOverlapMs / 3600000) * ARMORY_SPECIAL_ACTIONS.defenseBoost.passiveHeatPerHour
+        + Math.max(0, Number(armoryState?.boostHeatRemainder || 0));
+      gained = Math.max(0, Math.floor(rawHeat));
+      armoryState.boostHeatRemainder = Math.max(0, rawHeat - gained);
+    }
+    armoryState.lastBoostHeatAt = nowMs;
+    let nextHeat = null;
+    if (gained > 0) {
+      nextHeat = addPlayerHeatFromBuilding(gained);
+    }
+    return { gained, nextHeat };
   }
 
   function syncArmoryProduction(instanceState, now = Date.now(), options = {}) {
@@ -2484,11 +2612,15 @@ window.Empire.Map = (() => {
     const networkProductionBonusPct = Number.isFinite(networkBonusRaw)
       ? Math.max(0, networkBonusRaw)
       : Math.max(0, (ownedArmoryCount - 1) * 10);
-    const totalProductionMultiplier = Math.max(
+    const baseProductionMultiplier = Math.max(
       0.1,
       levelMultiplier * (1 + networkProductionBonusPct / 100)
     );
-    const rates = calculateArmoryProductionRates(totalProductionMultiplier);
+    const boostSnapshot = getArmoryBoostSnapshot(stateRef, nowMs);
+    const rates = calculateArmoryProductionRates(baseProductionMultiplier, {
+      attackMultiplier: boostSnapshot.attackProductionMultiplier,
+      defenseMultiplier: boostSnapshot.defenseProductionMultiplier
+    });
     const produced = createArmoryWeaponMap({}, false);
     const applyHeat = options?.applyHeat !== false;
     let heatAdded = 0;
@@ -2527,7 +2659,11 @@ window.Empire.Map = (() => {
         return;
       }
 
-      const scaledDurationMs = Math.max(1, Math.round(Number(weapon.durationMs || 1) / totalProductionMultiplier));
+      const categoryProductionMultiplier = baseProductionMultiplier
+        * (slot.category === "defense"
+          ? boostSnapshot.defenseProductionMultiplier
+          : boostSnapshot.attackProductionMultiplier);
+      const scaledDurationMs = Math.max(1, Math.round(Number(weapon.durationMs || 1) / categoryProductionMultiplier));
       const rawCycles = (elapsedMs / scaledDurationMs) + Number(slot.productionRemainder || 0);
       const cycles = Math.max(0, Math.floor(rawCycles));
       slot.productionRemainder = Math.max(0, rawCycles - cycles);
@@ -2600,13 +2736,14 @@ window.Empire.Map = (() => {
       rates,
       produced,
       levelMultiplier,
-      totalProductionMultiplier,
+      totalProductionMultiplier: baseProductionMultiplier,
       ownedArmoryCount,
       networkProductionBonusPct,
       activeSlots,
       heatAdded,
       nextHeat,
-      factorySupplies: createFactoryPlayerSupplyMap(factorySupplies)
+      factorySupplies: createFactoryPlayerSupplyMap(factorySupplies),
+      boostSnapshot
     };
   }
 
@@ -7111,21 +7248,23 @@ window.Empire.Map = (() => {
     const resources = createFactoryResourceMap(snapshot.resources);
     const playerSupplies = getFactoryPlayerSuppliesSnapshot();
     const boostSnapshot = getFactoryBoostSnapshot(now);
-    const slots = (Array.isArray(snapshot.slots) ? snapshot.slots : []).map((slot) => {
-      const config = FACTORY_SLOT_CONFIG.find((entry) => Number(entry.id) === Number(slot.id)) || null;
-      const isCraftSlot = String(config?.mode || slot.mode || "").trim() === "craft";
-      const perHour = slot.resourceKey === "metalParts"
-        ? rates.metalPartsPerHour
-        : slot.resourceKey === "techCore"
-          ? rates.techCorePerHour
-          : rates.combatModulePerHour;
+      const slots = (Array.isArray(snapshot.slots) ? snapshot.slots : []).map((slot) => {
+        const config = FACTORY_SLOT_CONFIG.find((entry) => Number(entry.id) === Number(slot.id)) || null;
+        const isCraftSlot = String(config?.mode || slot.mode || "").trim() === "craft";
+        const producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
+        const perHour = slot.resourceKey === "metalParts"
+          ? rates.metalPartsPerHour
+          : slot.resourceKey === "techCore"
+            ? rates.techCorePerHour
+            : rates.combatModulePerHour;
       return {
         id: Number(slot.id),
         resourceKey: slot.resourceKey,
         resourceLabel: config?.label || slot.resourceKey,
         mode: config?.mode || slot.mode || "produce",
         isProducing: Boolean(slot.isProducing),
-        producedAmount: Math.max(0, Math.floor(Number(slot.producedAmount || 0))),
+        producedAmount,
+        slotCap: FACTORY_SLOT_STORAGE_CAP,
         perHour: Math.max(0, Number(perHour || 0)),
         effectiveDurationMs: isCraftSlot
           ? Math.max(1, Math.round(FACTORY_CONFIG.combatModule.durationMs / totalProductionMultiplier))
@@ -7135,21 +7274,8 @@ window.Empire.Map = (() => {
     const activeSlots = Math.max(0, Math.floor(Number(syncResult.activeSlots || 0)));
     const storedTotal = FACTORY_RESOURCE_KEYS.reduce((sum, resourceKey) => sum + Number(resources[resourceKey] || 0), 0);
     const effects = [
-      `Craft Combat Module: ${FACTORY_CONFIG.combatModule.metalPartsCost} Metal Parts + ${FACTORY_CONFIG.combatModule.techCoreCost} Tech Core • ${formatDurationLabel(FACTORY_CONFIG.combatModule.durationMs)} / ks • +${FACTORY_CONFIG.combatModule.heatPerUnit} heat / ks`,
-      `Sklad hráče: MP ${playerSupplies.metalParts}, TC ${playerSupplies.techCore}, CM ${playerSupplies.combatModule}`
+      `Síť Továren: ${ownedFactoryCount} budov (+${formatDecimalValue(networkProductionBonusPct, 2)}% rychlost výroby)`
     ];
-    if (boostSnapshot.activeCount > 0) {
-      const activeLabels = boostSnapshot.activeEffects
-        .slice(0, 4)
-        .map((entry) => `${entry.type} ${formatDurationLabel(entry.remainingMs)}`)
-        .join(", ");
-      effects.push(`Combat boosty: ${activeLabels}`);
-    }
-    if (networkProductionBonusPct > 0) {
-      effects.push(
-        `Síť Továren: ${ownedFactoryCount} budov (+${formatDecimalValue(networkProductionBonusPct, 2)}% rychlost výroby)`
-      );
-    }
 
     const primaryDisplayName = primaryTarget.primary?.displayName || activeContext?.variantName || activeContext?.baseName;
     const otherDisplayNames = primaryTarget.entries.slice(1).map((entry) => entry.displayName);
@@ -7234,6 +7360,13 @@ window.Empire.Map = (() => {
         return { ok: false, message: "Továrna: není co vybrat." };
       }
       snapshot.resources = createFactoryResourceMap();
+      if (Array.isArray(snapshot.slots)) {
+        snapshot.slots.forEach((slot) => {
+          slot.producedAmount = 0;
+          slot.productionRemainder = 0;
+          slot.lastTick = now;
+        });
+      }
       const player = getFactoryPlayerSuppliesSnapshot();
       FACTORY_RESOURCE_KEYS.forEach((resourceKey) => {
         player[resourceKey] = Math.max(
@@ -7342,6 +7475,7 @@ window.Empire.Map = (() => {
     const ownedArmoryCount = Math.max(1, primaryTarget.entries.length || 1);
     const networkProductionBonusPct = Math.max(0, ownedArmoryCount * 10);
     const snapshot = getArmoryStateByKey(key, now);
+    applyArmoryPassiveBoostHeat(snapshot, now);
     const syncResult = syncArmoryProduction(snapshot, now, {
       applyHeat: true,
       ownedArmoryCount,
@@ -7362,8 +7496,12 @@ window.Empire.Map = (() => {
     persistArmoryState(key, snapshot);
 
     const levelMultiplier = getArmoryLevelMultiplier(snapshot.level);
-    const totalProductionMultiplier = levelMultiplier * (1 + networkProductionBonusPct / 100);
-    const rates = calculateArmoryProductionRates(totalProductionMultiplier);
+    const baseProductionMultiplier = levelMultiplier * (1 + networkProductionBonusPct / 100);
+    const boostSnapshot = getArmoryBoostSnapshot(snapshot, now);
+    const rates = calculateArmoryProductionRates(baseProductionMultiplier, {
+      attackMultiplier: boostSnapshot.attackProductionMultiplier,
+      defenseMultiplier: boostSnapshot.defenseProductionMultiplier
+    });
     const nextLevel = snapshot.level < ARMORY_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? getArmoryUpgradeCost(nextLevel) : 0;
     const storedWeapons = createArmoryWeaponMap(snapshot.storedWeapons);
@@ -7374,6 +7512,10 @@ window.Empire.Map = (() => {
       const powerValue = category === "defense"
         ? Math.max(0, Math.floor(Number(config?.defensePower || 0)))
         : Math.max(0, Math.floor(Number(config?.attackPower || 0)));
+      const categoryProductionMultiplier = baseProductionMultiplier
+        * (category === "defense"
+          ? boostSnapshot.defenseProductionMultiplier
+          : boostSnapshot.attackProductionMultiplier);
         return {
           id: Number(slot.id),
           weaponKey: slot.weaponKey,
@@ -7396,7 +7538,7 @@ window.Empire.Map = (() => {
         metalPartsCost: Math.max(0, Math.floor(Number(config?.metalPartsCost || 0))),
         techCoreCost: Math.max(0, Math.floor(Number(config?.techCoreCost || 0))),
         durationMs: Math.max(1, Math.floor(Number(config?.durationMs || 60000))),
-          effectiveDurationMs: Math.max(1, Math.round(Number(config?.durationMs || 60000) / totalProductionMultiplier)),
+          effectiveDurationMs: Math.max(1, Math.round(Number(config?.durationMs || 60000) / categoryProductionMultiplier)),
           specialEffect: String(config?.specialEffect || ""),
           drawback: String(config?.drawback || ""),
           role: String(config?.role || ""),
@@ -7423,7 +7565,7 @@ window.Empire.Map = (() => {
     const storedAttackTotal = ARMORY_ATTACK_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(storedWeapons[weaponKey] || 0), 0);
     const storedDefenseTotal = ARMORY_DEFENSE_WEAPON_KEYS.reduce((sum, weaponKey) => sum + Number(storedWeapons[weaponKey] || 0), 0);
     const effects = [
-      `Síť Zbrojovek: ${ownedArmoryCount} budov (+${formatDecimalValue(networkProductionBonusPct, 2)}% rychlost výroby)`
+      `Síť aktivních továren (+${formatDecimalValue(networkProductionBonusPct, 2)}% rychlost výroby za budovu)`
     ];
 
     const primaryDisplayName = primaryTarget.primary?.displayName || activeContext?.variantName || activeContext?.baseName;
@@ -7444,7 +7586,8 @@ window.Empire.Map = (() => {
       specialActions: [
         "Útok (sloty 1-5): Baseballová pálka, Pouliční pistole, Granát, Samopal, Bazuka.",
         "Obrana (sloty 6-10): Neprůstřelná vesta, Ocelové barikády, Bezpečnostní kamery, Automatické kulometné stanoviště, Alarm.",
-        "Vybrat zbraně: přesune vyrobené kusy do inventáře útoku i obrany."
+        "Attack gun boost: trvání 2h, cooldown 6h, +20 % rychlost výroby útočných zbraní, okamžitě +10 heat, během boostu +5 heat/h.",
+        "Defense gun boost: trvání 2h, cooldown 6h, +20 % rychlost výroby obranných zbraní, okamžitě +10 heat, během boostu +5 heat/h."
       ],
       mechanics: {
         type: "armory",
@@ -7452,7 +7595,8 @@ window.Empire.Map = (() => {
         level: snapshot.level,
         nextLevel,
         nextUpgradeCost,
-        heatPerDay: 0,
+        heatPerHour: Math.max(0, Number(boostSnapshot.passiveHeatPerHour || 0)),
+        heatPerDay: Math.max(0, Number(boostSnapshot.passiveHeatPerHour || 0)) * 24,
         effectsLabel: effects.join(" • "),
         storedWeapons,
         playerMaterials,
@@ -7470,7 +7614,19 @@ window.Empire.Map = (() => {
         heatAddedSinceLastTick: Math.max(0, Math.floor(Number(syncResult.heatAdded || 0))),
         ownedArmoryCount,
         networkProductionBonusPct,
-        productionMultiplier: totalProductionMultiplier,
+        productionMultiplier: baseProductionMultiplier,
+        attackProductionMultiplier: baseProductionMultiplier * boostSnapshot.attackProductionMultiplier,
+        defenseProductionMultiplier: baseProductionMultiplier * boostSnapshot.defenseProductionMultiplier,
+        cooldowns: {
+          attackBoost: Math.max(0, Number(snapshot.cooldowns.attackBoost || 0) - now),
+          defenseBoost: Math.max(0, Number(snapshot.cooldowns.defenseBoost || 0) - now)
+        },
+        boosts: {
+          attackBoostActive: boostSnapshot.attackBoostActive,
+          defenseBoostActive: boostSnapshot.defenseBoostActive,
+          attackBoostUntil: Math.max(0, Number(snapshot.effects.attackBoostUntil || 0) - now),
+          defenseBoostUntil: Math.max(0, Number(snapshot.effects.defenseBoostUntil || 0) - now)
+        },
         primaryContext: activeContext,
         primaryDistrictId: activeDistrict?.id ?? null
       }
@@ -7491,6 +7647,7 @@ window.Empire.Map = (() => {
     const now = Date.now();
     const key = resolveBuildingInstanceKey(context, district);
     const snapshot = getArmoryStateByKey(key, now);
+    applyArmoryPassiveBoostHeat(snapshot, now);
     const syncResult = syncArmoryProduction(snapshot, now, {
       applyHeat: true,
       ownedArmoryCount,
@@ -7507,8 +7664,48 @@ window.Empire.Map = (() => {
     }
 
     if (actionId === "1" || actionId === "2" || actionId === "3") {
+      if (actionId === "1") {
+        const cooldownLeft = Math.max(0, Number(snapshot.cooldowns.attackBoost || 0) - now);
+        if (cooldownLeft > 0) {
+          persistArmoryState(key, snapshot);
+          return { ok: false, message: `Attack gun boost je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        }
+        snapshot.effects.attackBoostUntil = now + ARMORY_SPECIAL_ACTIONS.attackBoost.durationMs;
+        snapshot.cooldowns.attackBoost = now + ARMORY_SPECIAL_ACTIONS.attackBoost.cooldownMs;
+        snapshot.lastBoostHeatAt = now;
+        const nextHeat = addPlayerHeatFromBuilding(ARMORY_SPECIAL_ACTIONS.attackBoost.immediateHeat);
+        persistArmoryState(key, snapshot);
+        return {
+          ok: true,
+          message:
+            `Attack gun boost aktivní na ${formatDurationLabel(ARMORY_SPECIAL_ACTIONS.attackBoost.durationMs)} `
+            + `(+${ARMORY_SPECIAL_ACTIONS.attackBoost.productionBoostPct}% produkce útoku). `
+            + `Heat +${ARMORY_SPECIAL_ACTIONS.attackBoost.immediateHeat} (celkem ${nextHeat}) `
+            + `a během boostu +${ARMORY_SPECIAL_ACTIONS.attackBoost.passiveHeatPerHour}/h.`
+        };
+      }
+      if (actionId === "2") {
+        const cooldownLeft = Math.max(0, Number(snapshot.cooldowns.defenseBoost || 0) - now);
+        if (cooldownLeft > 0) {
+          persistArmoryState(key, snapshot);
+          return { ok: false, message: `Defense gun boost je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        }
+        snapshot.effects.defenseBoostUntil = now + ARMORY_SPECIAL_ACTIONS.defenseBoost.durationMs;
+        snapshot.cooldowns.defenseBoost = now + ARMORY_SPECIAL_ACTIONS.defenseBoost.cooldownMs;
+        snapshot.lastBoostHeatAt = now;
+        const nextHeat = addPlayerHeatFromBuilding(ARMORY_SPECIAL_ACTIONS.defenseBoost.immediateHeat);
+        persistArmoryState(key, snapshot);
+        return {
+          ok: true,
+          message:
+            `Defense gun boost aktivní na ${formatDurationLabel(ARMORY_SPECIAL_ACTIONS.defenseBoost.durationMs)} `
+            + `(+${ARMORY_SPECIAL_ACTIONS.defenseBoost.productionBoostPct}% produkce obrany). `
+            + `Heat +${ARMORY_SPECIAL_ACTIONS.defenseBoost.immediateHeat} (celkem ${nextHeat}) `
+            + `a během boostu +${ARMORY_SPECIAL_ACTIONS.defenseBoost.passiveHeatPerHour}/h.`
+        };
+      }
       persistArmoryState(key, snapshot);
-      return { ok: false, message: "Speciální bojové nasazení zbraní bude napojené v další fázi." };
+      return { ok: false, message: "Zbrojovka: neznámá speciální akce." };
     }
 
     if (actionId === "collect") {
@@ -8181,6 +8378,10 @@ window.Empire.Map = (() => {
       const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
         .map((slot) => {
           const isCraftSlot = String(slot.mode || "").trim() === "craft";
+          const producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
+          const isSlotAtCap = Number.isFinite(Number(slot.slotCap))
+            ? producedAmount >= Math.max(0, Math.floor(Number(slot.slotCap || FACTORY_SLOT_STORAGE_CAP)))
+            : producedAmount >= FACTORY_SLOT_STORAGE_CAP;
           const productBadge = getProductBadge(
             slot.resourceLabel,
             isCraftSlot
@@ -8189,6 +8390,10 @@ window.Empire.Map = (() => {
                 ? "chip"
                 : "gear"
           );
+          const slotCap = Math.max(0, Math.floor(Number(slot.slotCap || FACTORY_SLOT_STORAGE_CAP)));
+          const producedLabel = isCraftSlot
+            ? formatDurationLabel(slot.effectiveDurationMs || FACTORY_CONFIG.combatModule.durationMs)
+            : `${producedAmount}/${slotCap || FACTORY_SLOT_STORAGE_CAP}`;
           return `
             <article class="factory-slot${slot.isProducing ? " factory-slot--active" : ""}">
               <div class="factory-slot__head">
@@ -8198,20 +8403,20 @@ window.Empire.Map = (() => {
                     <strong class="drug-production-slot__title">${slot.resourceLabel}</strong>
                   </div>
                 </div>
-                <span class="drug-production-slot__state">${slot.isProducing ? "Produkuje" : "Připraven"}</span>
+                <span class="drug-production-slot__state">${slot.isProducing ? "Produkuje" : isSlotAtCap ? "Plný" : "Připraven"}</span>
               </div>
               <div class="drug-production-slot__metrics">
                 <div class="drug-production-slot__metric">
                   <span class="drug-production-slot__metric-label">${isCraftSlot ? "Recept" : "Rychlost"}</span>
-                  <strong class="drug-production-slot__metric-value">${isCraftSlot ? `${FACTORY_CONFIG.combatModule.metalPartsCost} MP + ${FACTORY_CONFIG.combatModule.techCoreCost} TC` : `${formatDecimalValue(slot.perHour || 0, 2)}/h`}</strong>
+                  <strong class="drug-production-slot__metric-value${isCraftSlot ? " factory-slot__recipe-value" : ""}">${isCraftSlot ? `<span class="factory-slot__recipe-line">4 MP</span><span class="factory-slot__recipe-line factory-slot__recipe-line--secondary">+ 3 TC</span>` : `${formatDecimalValue(slot.perHour || 0, 2)}/h`}</strong>
                 </div>
                 <div class="drug-production-slot__metric">
                   <span class="drug-production-slot__metric-label">${isCraftSlot ? "Čas / kus" : "Vyrobeno"}</span>
-                  <strong class="drug-production-slot__metric-value">${isCraftSlot ? formatDurationLabel(slot.effectiveDurationMs || FACTORY_CONFIG.combatModule.durationMs) : Math.max(0, Math.floor(Number(slot.producedAmount || 0)))}</strong>
+                  <strong class="drug-production-slot__metric-value">${producedLabel}</strong>
                 </div>
                 <div class="drug-production-slot__metric">
-                  <span class="drug-production-slot__metric-label">${isCraftSlot ? "Heat / kus" : "Typ produkce"}</span>
-                  <strong class="drug-production-slot__metric-value">${isCraftSlot ? `+${FACTORY_CONFIG.combatModule.heatPerUnit}` : "pasivní výroba"}</strong>
+                  <span class="drug-production-slot__metric-label">Cena</span>
+                  <strong class="drug-production-slot__metric-value factory-slot__price-value">$20</strong>
                 </div>
               </div>
               <div class="factory-slot__actions">
@@ -8229,27 +8434,9 @@ window.Empire.Map = (() => {
 
       const resources = mechanics.resources || {};
       const playerSupplies = mechanics.playerSupplies || {};
-      const storageStatusLabel =
-        `Interní sklad Továrny: MP ${Math.max(0, Math.floor(Number(resources.metalParts || 0)))} • `
-        + `TC ${Math.max(0, Math.floor(Number(resources.techCore || 0)))} • `
-        + `CM ${Math.max(0, Math.floor(Number(resources.combatModule || 0)))}`;
-      const playerStockLabel =
-        `Sklad hráče: MP ${Math.max(0, Math.floor(Number(playerSupplies.metalParts || 0)))} • `
-        + `TC ${Math.max(0, Math.floor(Number(playerSupplies.techCore || 0)))} • `
-        + `CM ${Math.max(0, Math.floor(Number(playerSupplies.combatModule || 0)))}`;
 
       root.innerHTML = `
         <section class="drug-lab-card drug-production-card factory-card">
-          <div class="drug-production-card__header">
-            <div>
-              <h4 class="drug-lab-card__title">Továrna</h4>
-              <p class="drug-production-card__subtitle">Výroba součástek a Combat Modulů pro bojové boosty.</p>
-            </div>
-            <div class="drug-production-card__capacity">
-              <span class="drug-production-card__capacity-label">Aktivní sloty</span>
-              <strong class="drug-production-card__capacity-value">${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))}</strong>
-            </div>
-          </div>
           <div class="drug-production-card__stats">
             <div class="drug-production-stat">
               <span class="drug-production-stat__label">Interní sklad Továrny</span>
@@ -8262,18 +8449,10 @@ window.Empire.Map = (() => {
               <small class="drug-production-stat__meta">materiály dostupné mimo budovu</small>
             </div>
           </div>
-          <div class="pharmacy-slot-grid">
+          <div class="factory-slot-grid">
             ${slotRows}
           </div>
         </section>
-        <div class="drug-lab-card factory-card factory-card--hint">
-          <p class="drug-lab-card__meta">
-            Combat Module: ${FACTORY_CONFIG.combatModule.metalPartsCost} MP + ${FACTORY_CONFIG.combatModule.techCoreCost} TC, ${formatDurationLabel(FACTORY_CONFIG.combatModule.durationMs)} / ks, +${FACTORY_CONFIG.combatModule.heatPerUnit} heat / ks.
-          </p>
-          <p class="drug-lab-card__meta">
-            Combat boosty aktivuješ přes tlačítko Boost nad mapou (Assault Protocol, Rapid Strike, Breach Mode).
-          </p>
-        </div>
       `;
       root.classList.remove("hidden");
       return;
@@ -8385,7 +8564,7 @@ window.Empire.Map = (() => {
       const techCoreInStorage = Math.max(0, Math.floor(Number(playerMaterials.techCore || 0)));
 
       root.innerHTML = `
-        <section class="drug-lab-card drug-production-card armory-card">
+        <section class="drug-lab-card drug-production-card armory-card armory-card--materials-sticky">
           <div class="drug-production-card__stats">
             <div class="drug-production-stat">
               <span class="drug-production-stat__label">Vyrobené útočné zbraně</span>
@@ -8395,11 +8574,11 @@ window.Empire.Map = (() => {
               <span class="drug-production-stat__label">Vyrobené obranné zbraně</span>
               <strong class="drug-production-stat__value">${defenseStoredLabel}</strong>
             </div>
-            <div class="drug-production-stat">
+            <div class="drug-production-stat armory-material-stat">
               <span class="drug-production-stat__label">Metal Parts</span>
               <strong class="drug-production-stat__value">${metalPartsInStorage}</strong>
             </div>
-            <div class="drug-production-stat">
+            <div class="drug-production-stat armory-material-stat">
               <span class="drug-production-stat__label">Tech Core</span>
               <strong class="drug-production-stat__value">${techCoreInStorage}</strong>
             </div>
@@ -11837,6 +12016,7 @@ window.Empire.Map = (() => {
       tabButtons.forEach((button) => {
         button.classList.toggle("is-active", button.dataset.buildingTab === tab);
       });
+      updateArmoryMaterialsStickyCompactState();
     };
 
     const isMobileSwipeViewport = () => window.matchMedia("(max-width: 900px)").matches;
@@ -11873,6 +12053,9 @@ window.Empire.Map = (() => {
 
     if (backdrop) backdrop.addEventListener("click", close);
     if (closeBtn) closeBtn.addEventListener("click", close);
+    if (panelStats) {
+      panelStats.addEventListener("scroll", updateArmoryMaterialsStickyCompactState, { passive: true });
+    }
     root.addEventListener("click", (event) => {
       if (event.target === root || event.target === backdrop) close();
     });
@@ -12082,6 +12265,16 @@ window.Empire.Map = (() => {
     root.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      const titleActionBtn = target.closest("[data-building-title-action]");
+      if (titleActionBtn instanceof HTMLElement) {
+        const actionId = String(titleActionBtn.dataset.buildingTitleAction || "").trim();
+        if (!actionId) return;
+        const modalActionBtn = root.querySelector(`[data-building-action="${actionId}"]`);
+        if (modalActionBtn instanceof HTMLButtonElement && !modalActionBtn.disabled) {
+          modalActionBtn.click();
+        }
+        return;
+      }
       if (target.closest("[data-drug-lab-slot-select]")) return;
       const activeContext = resolveActiveBuildingContext();
       const context = activeContext?.context || null;
@@ -12147,10 +12340,14 @@ window.Empire.Map = (() => {
     const action2Btn = buttonByAction.get("2");
     const action3Btn = buttonByAction.get("3");
     const upgradeBtn = buttonByAction.get("upgrade");
+    const specialActionsGroup = action1Btn?.closest(".building-detail-actions__group") || null;
+    const upgradeGroup = upgradeBtn?.closest(".building-detail-actions__group") || null;
 
     actionButtons.forEach((button) => {
       button.classList.remove("hidden");
     });
+    if (specialActionsGroup) specialActionsGroup.classList.remove("hidden");
+    if (upgradeGroup) upgradeGroup.classList.remove("hidden");
     if (action1Btn) action1Btn.textContent = "Akce 1";
     if (action2Btn) action2Btn.textContent = "Akce 2";
     if (action3Btn) action3Btn.textContent = "Akce 3";
@@ -12202,10 +12399,18 @@ window.Empire.Map = (() => {
       collectBtn.disabled = Math.max(0, Number(mechanics.storedTotal || 0)) <= 0;
       collectBtn.title = collectBtn.disabled ? "Továrna nemá vyrobené materiály." : "";
     } else if (collectBtn && mechanicsType === "armory") {
-      collectBtn.classList.remove("hidden");
-      collectBtn.textContent = "Vybrat zbraně";
-      collectBtn.disabled = Math.max(0, Number(mechanics.storedTotal || 0)) <= 0;
-      collectBtn.title = collectBtn.disabled ? "Zbrojovka nemá vyrobené zbraně." : "";
+      collectBtn.classList.add("hidden");
+    }
+    if (
+      collectBtn
+      && (
+        mechanicsType === "armory"
+        || mechanicsType === "pharmacy"
+        || mechanicsType === "factory"
+        || mechanicsType === "drug-lab"
+      )
+    ) {
+      collectBtn.classList.add("hidden");
     }
 
     const applyActionButtonState = (button, label, cooldownMs) => {
@@ -12261,48 +12466,24 @@ window.Empire.Map = (() => {
       applyActionButtonState(action2Btn, "Zadní pult", mechanics.cooldowns?.backCounter);
       applyActionButtonState(action3Btn, "Místní klepy", mechanics.cooldowns?.localRumors);
     } else if (mechanicsType === "armory") {
-      if (action1Btn) {
-        action1Btn.classList.add("hidden");
-        action1Btn.disabled = true;
-        action1Btn.title = "";
-      }
-      if (action2Btn) {
-        action2Btn.classList.add("hidden");
-        action2Btn.disabled = true;
-        action2Btn.title = "";
-      }
+      applyActionButtonState(action1Btn, "Attack gun boost", mechanics.cooldowns?.attackBoost);
+      applyActionButtonState(action2Btn, "Defense gun boost", mechanics.cooldowns?.defenseBoost);
       if (action3Btn) {
         action3Btn.classList.add("hidden");
         action3Btn.disabled = true;
         action3Btn.title = "";
       }
     } else if (mechanicsType === "factory") {
-      if (action1Btn) {
-        action1Btn.classList.add("hidden");
-        action1Btn.disabled = true;
-        action1Btn.title = "";
-      }
-      if (action2Btn) {
-        action2Btn.classList.add("hidden");
-        action2Btn.disabled = true;
-        action2Btn.title = "";
-      }
+      applyActionButtonState(action1Btn, "Akce 1", 0);
+      applyActionButtonState(action2Btn, "Akce 2", 0);
       if (action3Btn) {
         action3Btn.classList.add("hidden");
         action3Btn.disabled = true;
         action3Btn.title = "";
       }
     } else if (mechanicsType === "pharmacy") {
-      if (action1Btn) {
-        action1Btn.classList.add("hidden");
-        action1Btn.disabled = true;
-        action1Btn.title = "";
-      }
-      if (action2Btn) {
-        action2Btn.classList.add("hidden");
-        action2Btn.disabled = true;
-        action2Btn.title = "";
-      }
+      applyActionButtonState(action1Btn, "Akce 1", 0);
+      applyActionButtonState(action2Btn, "Akce 2", 0);
       if (action3Btn) {
         action3Btn.classList.add("hidden");
         action3Btn.disabled = true;
@@ -12324,7 +12505,29 @@ window.Empire.Map = (() => {
         upgradeBtn.disabled = true;
         upgradeBtn.title = "Budova je na maximálním levelu.";
       }
+      if (
+        mechanicsType === "armory"
+        || mechanicsType === "drug-lab"
+        || mechanicsType === "pharmacy"
+        || mechanicsType === "factory"
+      ) {
+        upgradeBtn.classList.add("hidden");
+      }
     }
+    if (upgradeGroup && (mechanicsType === "pharmacy" || mechanicsType === "factory")) {
+      upgradeGroup.classList.add("hidden");
+    }
+  }
+
+  function updateArmoryMaterialsStickyCompactState() {
+    const root = document.getElementById("building-detail-modal");
+    if (!root || root.classList.contains("hidden")) return;
+    if (String(root.dataset.buildingMechanicsType || "").trim() !== "armory") return;
+    const panelStats = document.getElementById("building-detail-panel-stats");
+    if (!panelStats || panelStats.classList.contains("hidden")) return;
+    const stickyCard = panelStats.querySelector(".armory-card--materials-sticky");
+    if (!(stickyCard instanceof HTMLElement)) return;
+    stickyCard.classList.toggle("is-scroll-compact", panelStats.scrollTop > 8);
   }
 
   function updateBuildingMechanicsPanel(details) {
@@ -12466,11 +12669,13 @@ window.Empire.Map = (() => {
       const storedDefenseTotal = Math.max(0, Math.floor(Number(mechanics.storedDefenseTotal || 0)));
       stored.textContent = `Útok ${storedAttackTotal} • Obrana ${storedDefenseTotal}`;
       production.textContent = `U ${activeAttackSlots}/${totalAttackSlots} • O ${activeDefenseSlots}/${totalDefenseSlots}`;
-      heat.textContent = "3 / h";
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerHour || 0, 2)} / h`;
     } else if (mechanicsType === "factory") {
+      if (levelRow) levelRow.classList.add("hidden");
       if (storedLabel) storedLabel.textContent = "Suroviny MP/TC/CM";
-      if (productionLabel) productionLabel.textContent = "Produkce + craft";
+      if (productionLabel) productionLabel.textContent = "Síť aktivních továren";
       if (heatLabel) heatLabel.textContent = "Heat";
+      if (productionRow) productionRow.classList.add("hidden");
       const resources = mechanics.resources || {};
       const rates = mechanics.ratesPerHour || {};
       stored.textContent =
@@ -12483,6 +12688,7 @@ window.Empire.Map = (() => {
         + `CM ${formatDecimalValue(rates.combatModule || 0, 2)}/h`;
       heat.textContent = `+${FACTORY_CONFIG.combatModule.heatPerUnit} / Combat Module`;
     } else if (mechanicsType === "pharmacy") {
+      if (levelRow) levelRow.classList.add("hidden");
       if (storedLabel) storedLabel.textContent = "Suroviny C/B/S";
       if (productionLabel) productionLabel.textContent = "Síťové bonusy";
       if (effectsRow) effectsRow.classList.add("hidden");
@@ -12496,6 +12702,7 @@ window.Empire.Map = (() => {
         + `Lékárna(+${formatDecimalValue(mechanics.pharmacyProductionBonusPct || 0, 2)}% rychlost)`;
       heat.textContent = `${formatDecimalValue(mechanics.heatPerDay || PHARMACY_CONFIG.baseHeatPerDay, 2)} / 24h`;
     } else if (mechanicsType === "drug-lab") {
+      if (levelRow) levelRow.classList.add("hidden");
       if (storedLabel) storedLabel.textContent = "Interní sklad";
       if (productionLabel) productionLabel.textContent = "Aktivní sloty";
       if (heatLabel) heatLabel.textContent = "Heat z výroby";
@@ -12595,7 +12802,8 @@ window.Empire.Map = (() => {
       return [
         "Útok: Baseballová pálka, Pouliční pistole, Granát, Samopal, Bazuka.",
         "Obrana: Neprůstřelná vesta, Ocelové barikády, Bezpečnostní kamery, Automatické kulometné stanoviště, Alarm.",
-        "Alarm: 5 MP + 4 TC, 40 min/ks, +10 defense, +25 % šance aktivace obranných bonusů a +20 % šance policejní reakce při útoku."
+        "Attack gun boost: Cooldown 6h, trvá 2h, +20 % produkce útočných zbraní, okamžitě +10 heat a během trvání +5 heat/h.",
+        "Defense gun boost: Cooldown 6h, trvá 2h, +20 % produkce obranných zbraní, okamžitě +10 heat a během trvání +5 heat/h."
       ];
     }
     if (mechanicsType === "factory") {
@@ -12677,6 +12885,7 @@ window.Empire.Map = (() => {
     const infoHourly = document.getElementById("building-info-hourly");
     const infoDaily = document.getElementById("building-info-daily");
     const infoEffects = document.getElementById("building-info-effects");
+    const closeButton = document.getElementById("building-detail-modal-close");
     const panelStats = document.getElementById("building-detail-panel-stats");
     const panelInfo = document.getElementById("building-detail-panel-info");
     const tabButtons = Array.from(root.querySelectorAll("[data-building-tab]"));
@@ -12706,7 +12915,7 @@ window.Empire.Map = (() => {
     state.activeBuildingDetail = { context: activeContext, district: activeDistrict };
 
     if (title) {
-      title.textContent = `Budova: ${details.baseName}`;
+      title.textContent = details.baseName;
       let slotBadgeText = "";
       if (mechanicsType === "pharmacy" || mechanicsType === "factory") {
         slotBadgeText =
@@ -12719,14 +12928,70 @@ window.Empire.Map = (() => {
       } else if (mechanicsType === "armory") {
         slotBadgeText =
           `Aktivní sloty ${Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0))) + Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)))}/`
-          + `${Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0))) + Math.max(1, Math.floor(Number((mechanics.defenseSlots || []).length || 0)))}`
-          + ` • L${Math.max(1, Math.floor(Number(mechanics.level || 1)))}`;
+          + `${Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0))) + Math.max(1, Math.floor(Number((mechanics.defenseSlots || []).length || 0)))}`;
       }
       if (slotBadgeText) {
         const badge = document.createElement("span");
         badge.className = "building-detail-title__badge";
         badge.textContent = slotBadgeText;
         title.appendChild(badge);
+      }
+      const supportsTopTitleActions =
+        mechanicsType === "armory"
+        || mechanicsType === "pharmacy"
+        || mechanicsType === "drug-lab"
+        || mechanicsType === "factory";
+      if (supportsTopTitleActions) {
+        const canCollect = Math.max(0, Number(mechanics.storedTotal || 0)) > 0;
+        const canUpgrade = Boolean(mechanics.nextLevel && Number(mechanics.nextUpgradeCost || 0) > 0);
+        const collectVerb =
+          mechanicsType === "armory" ? "zbraně"
+          : mechanicsType === "pharmacy" ? "suroviny"
+          : mechanicsType === "factory" ? "materiály"
+          : "drogy";
+
+        const collectPlusBtn = document.createElement("button");
+        collectPlusBtn.type = "button";
+        collectPlusBtn.className = "building-detail-title__action-btn building-detail-title__action-btn--collect";
+        collectPlusBtn.dataset.buildingTitleAction = "collect";
+        collectPlusBtn.textContent = "+";
+        collectPlusBtn.disabled = !canCollect;
+        collectPlusBtn.title = canCollect
+          ? `Vybrat ${collectVerb} do inventáře`
+          : `${details.baseName} nemá co vybrat.`;
+        title.appendChild(collectPlusBtn);
+
+        const upgradeBtn = document.createElement("button");
+        upgradeBtn.type = "button";
+        upgradeBtn.className = "building-detail-title__action-btn building-detail-title__action-btn--upgrade";
+        upgradeBtn.dataset.buildingTitleAction = "upgrade";
+        upgradeBtn.textContent = "↑";
+        upgradeBtn.disabled = !canUpgrade;
+        upgradeBtn.title = canUpgrade
+          ? `Upgrade na L${Math.max(0, Math.floor(Number(mechanics.nextLevel || 0)))} za $${Math.max(0, Math.floor(Number(mechanics.nextUpgradeCost || 0)))}`
+          : "Budova je na maximálním levelu.";
+        title.appendChild(upgradeBtn);
+      }
+    }
+    if (closeButton) {
+      const headerLevelId = "building-detail-header-level";
+      let levelBadge = document.getElementById(headerLevelId);
+      if (!levelBadge) {
+        levelBadge = document.createElement("span");
+        levelBadge.id = headerLevelId;
+        levelBadge.className = "building-detail-header-level";
+        closeButton.parentElement?.insertBefore(levelBadge, closeButton);
+      }
+      const showHeaderLevel =
+        mechanicsType === "pharmacy"
+        || mechanicsType === "drug-lab"
+        || mechanicsType === "factory"
+        || mechanicsType === "armory";
+      if (showHeaderLevel) {
+        levelBadge.textContent = `L${Math.max(1, Math.floor(Number(mechanics?.level || 1)))}`;
+        levelBadge.classList.remove("hidden");
+      } else {
+        levelBadge.classList.add("hidden");
       }
     }
     if (name) name.textContent = details.displayName;
@@ -12786,6 +13051,7 @@ window.Empire.Map = (() => {
     setBuildingDetailActionButtons(details);
 
     root.classList.remove("hidden");
+    updateArmoryMaterialsStickyCompactState();
   }
 
   function showBuildingDetail(buildingName, district) {
@@ -13370,11 +13636,11 @@ window.Empire.Map = (() => {
       list.innerHTML = "";
       return;
     }
-    const lockMeta = district ? resolveBuildingLockMeta(district) : { locked: true, label: "Odhalené špehováním" };
+    const lockMeta = district ? resolveBuildingLockMeta(district) : { locked: true, label: "" };
 
     title.textContent = district?.buildingSetTitle
       ? `Budovy v distriktu • ${district.buildingSetTitle} (${district.buildingTier || "set"})`
-      : (district ? "Budovy v distriktu" : "Odhalené budovy (špehování)");
+      : "Budovy v distriktu";
     list.innerHTML = buildings
       .map(
         (building, index) => `
@@ -13385,7 +13651,7 @@ window.Empire.Map = (() => {
             ${lockMeta.locked ? 'data-building-locked="1" disabled aria-disabled="true"' : ""}
           >
             <span class="district-buildings__name">${building}</span>
-            ${lockMeta.locked ? `<span class="district-buildings__lock">${lockMeta.label}</span>` : ""}
+            ${lockMeta.locked && lockMeta.label ? `<span class="district-buildings__lock">${lockMeta.label}</span>` : ""}
           </button>
         `
       )
@@ -13577,9 +13843,54 @@ window.Empire.Map = (() => {
 
   function loadMapImage() {
     const img = new Image();
-    img.src = "../img/mapa3.png";
-    img.onload = () => render();
+    img.src = MAP_MODE_IMAGE_BY_KEY[state.mapMode] || MAP_MODE_IMAGE_BY_KEY.night;
+    img.onload = () => {
+      document.dispatchEvent(new CustomEvent("empire:map-mode-changed", {
+        detail: { mapMode: state.mapMode }
+      }));
+      render();
+    };
     state.mapImage = img;
+  }
+
+  function normalizeMapMode(value) {
+    const key = String(value || "").trim().toLowerCase();
+    if (key === "day") return "day";
+    if (key === "blackout") return "blackout";
+    return "night";
+  }
+
+  function resolveStoredMapMode() {
+    try {
+      return normalizeMapMode(localStorage.getItem(MAP_MODE_STORAGE_KEY) || "night");
+    } catch {
+      return "night";
+    }
+  }
+
+  function setMapMode(mode) {
+    const nextMode = normalizeMapMode(mode);
+    if (state.mapMode === nextMode) return;
+    state.mapMode = nextMode;
+    try {
+      localStorage.setItem(MAP_MODE_STORAGE_KEY, nextMode);
+    } catch {}
+    const img = new Image();
+    img.src = MAP_MODE_IMAGE_BY_KEY[nextMode] || MAP_MODE_IMAGE_BY_KEY.night;
+    img.onload = () => {
+      state.mapImage = img;
+      document.dispatchEvent(new CustomEvent("empire:map-mode-changed", {
+        detail: { mapMode: nextMode }
+      }));
+      render();
+    };
+    img.onerror = () => {
+      render();
+    };
+  }
+
+  function getMapMode() {
+    return normalizeMapMode(state.mapMode);
   }
 
   function buildRoadNetworkFromDistricts(districts) {
@@ -13671,6 +13982,8 @@ window.Empire.Map = (() => {
   return {
     init,
     render,
+    getMapMode,
+    setMapMode,
     setDistricts,
     refreshSelectedDistrictModal,
     applyUpdate,

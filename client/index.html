@@ -168,8 +168,32 @@
 
         <section class="map-area">
           <div class="map-header">
-            <h1>Mapa kontroly města</h1>
+            <h1>
+              <span class="map-title-desktop">Mapa kontroly města</span>
+              <span class="map-title-mobile">Mapa</span>
+            </h1>
             <div class="map-header__controls">
+              <div
+                class="map-mode-switch"
+                id="map-mode-switch"
+                role="group"
+                aria-label="Přepnout denní a noční mapu"
+              >
+                <button
+                  class="map-mode-switch__btn"
+                  id="map-mode-day"
+                  type="button"
+                  data-map-mode="day"
+                  aria-label="Denní mapa"
+                >DEN</button>
+                <button
+                  class="map-mode-switch__btn"
+                  id="map-mode-night"
+                  type="button"
+                  data-map-mode="night"
+                  aria-label="Noční mapa"
+                >NOC</button>
+              </div>
               <div
                 class="map-border-switch"
                 id="map-border-switch"
@@ -218,6 +242,18 @@
             <div class="profile-row">
               <span>Zbývá dní</span>
               <strong id="round-days">-</strong>
+            </div>
+            <div class="profile-row">
+              <span>Herní den</span>
+              <strong id="round-game-day">1/30</strong>
+            </div>
+            <div class="profile-row">
+              <span>Čas</span>
+              <strong id="round-game-time">06:00</strong>
+            </div>
+            <div class="profile-row">
+              <span>Fáze</span>
+              <strong id="round-phase">DEN</strong>
             </div>
           </div>
         </section>
@@ -276,8 +312,8 @@
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-ten">
                 Aliance 2 hráčů má 10 sektorů
               </button>
-              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-20">
-                20 hráčů • aliance max 4
+              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-ten-blackout">
+                Aliance 2 hráčů • BLACKOUT
               </button>
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="onboarding-20-edge">
                 Onboarding • 20 hráčů po okraji
@@ -485,6 +521,18 @@
       </div>
     </div>
 
+    <div id="alliance-member-lightbox" class="avatar-lightbox hidden">
+      <div id="alliance-member-lightbox-backdrop" class="avatar-lightbox__backdrop"></div>
+      <div class="avatar-lightbox__content alliance-member-lightbox__content">
+        <button class="avatar-lightbox__close" id="alliance-member-lightbox-close" aria-label="Zavřít">✕</button>
+        <img id="alliance-member-lightbox-image" alt="Avatar člena aliance" />
+        <div class="avatar-lightbox__caption" id="alliance-member-lightbox-caption">
+          <div class="avatar-lightbox__legend-name" id="alliance-member-lightbox-title">Člen aliance</div>
+          <div class="avatar-lightbox__legend-bio" id="alliance-member-lightbox-meta"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="attack-modal" class="modal hidden">
       <div id="attack-modal-backdrop" class="modal__backdrop"></div>
       <div class="modal__content attack-modal__content">
@@ -524,41 +572,81 @@
       </div>
     </div>
 
+    <div id="attack-confirm-modal" class="modal hidden">
+      <div id="attack-confirm-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content spy-confirm-modal__content attack-confirm-modal__content">
+        <div class="modal__header">
+          <h3>Potvrdit útok</h3>
+          <button class="modal__close" id="attack-confirm-modal-close" type="button" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body spy-confirm-modal__body attack-confirm-modal__body">
+          <div class="modal__row">
+            <span>Cíl</span>
+            <strong id="attack-confirm-modal-district">-</strong>
+          </div>
+          <div class="modal__row hidden" id="attack-confirm-modal-defense-row">
+            <span>Zjištěná obrana</span>
+            <strong id="attack-confirm-modal-defense">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Použité zbraně</span>
+            <strong id="attack-confirm-modal-weapons">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Použito členů</span>
+            <strong id="attack-confirm-modal-members">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Výsledná síla útoku</span>
+            <strong id="attack-confirm-modal-power">-</strong>
+          </div>
+          <p class="muted spy-confirm-modal__note attack-confirm-modal__note" id="attack-confirm-modal-note">
+            Po potvrzení se útok spustí na 20 sekund.
+          </p>
+          <div class="modal__actions spy-confirm-modal__actions attack-confirm-modal__actions">
+            <button class="btn btn--ghost" id="attack-confirm-modal-cancel" type="button">Zrušit</button>
+            <button class="btn btn--danger" id="attack-confirm-modal-confirm" type="button">Potvrdit útok</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="attack-result-modal" class="modal hidden">
       <div id="attack-result-modal-backdrop" class="modal__backdrop"></div>
-      <div class="modal__content attack-result-modal__content">
+      <div class="modal__content attack-result-modal__content" id="attack-result-modal-content">
         <div class="modal__header">
           <h3>Útok spuštěn</h3>
           <button class="modal__close" id="attack-result-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body attack-result-modal__body">
+          <div class="attack-result-modal__badge" id="attack-result-modal-badge">Výsledek útoku</div>
           <p class="attack-result-modal__summary" id="attack-result-modal-summary"></p>
           <div class="modal__row">
-            <span>Nickname cíle</span>
+            <span id="attack-result-modal-label-target">Cíl</span>
             <strong id="attack-result-modal-nickname">-</strong>
           </div>
           <div class="modal__row">
-            <span>Frakce</span>
+            <span id="attack-result-modal-label-attack">Útočná síla</span>
             <strong id="attack-result-modal-faction">-</strong>
           </div>
           <div class="modal__row">
-            <span>Aliance</span>
+            <span id="attack-result-modal-label-defense">Obranná síla</span>
             <strong id="attack-result-modal-alliance">-</strong>
           </div>
           <div class="modal__row">
-            <span>Použité zbraně</span>
+            <span id="attack-result-modal-label-attack-losses">Ztráty útočníka</span>
             <strong id="attack-result-modal-weapons">-</strong>
           </div>
           <div class="modal__row">
-            <span>Výsledná síla útoku</span>
+            <span id="attack-result-modal-label-defense-losses">Ztráty obránce</span>
             <strong id="attack-result-modal-power">-</strong>
           </div>
           <div class="modal__row">
-            <span>Zapojených členů</span>
+            <span id="attack-result-modal-label-state">Stav districtu</span>
             <strong id="attack-result-modal-members">-</strong>
           </div>
           <div class="modal__row">
-            <span>Trvání útoku</span>
+            <span id="attack-result-modal-label-duration">Trvání</span>
             <strong id="attack-result-modal-duration">-</strong>
           </div>
         </div>
@@ -728,33 +816,92 @@
           <button class="modal__close" id="alliance-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body alliance-modal__body">
-          <div class="alliance-control">
-            <div class="alliance-control__head">
-              <div class="alliance-control__title">Založit alianci</div>
-              <div class="alliance-control__subtitle">Vytvoř vlastní frakci a nastav její směr.</div>
+          <div class="alliance-control" id="alliance-create-entry">
+            <div class="alliance-control__head alliance-control__head--split">
+              <div>
+                <div class="alliance-control__title">Vytvoření aliance</div>
+                <div class="alliance-control__subtitle">Založ vlastní alianci a nastav její identitu.</div>
+              </div>
+              <button class="btn btn--primary alliance-control__launch-btn" id="alliance-create-toggle-btn">
+                Vytvořit alianci
+              </button>
             </div>
-            <div class="alliance-control__row">
-              <input id="alliance-create-name" type="text" placeholder="Zadej název aliance" />
-              <button class="btn btn--primary" id="alliance-create-btn">Vytvořit alianci</button>
-            </div>
-          </div>
-
-          <div class="alliance-control">
-            <div class="alliance-control__head">
-              <div class="alliance-control__title">Pozvat člena</div>
-              <div class="alliance-control__subtitle">Přidej hráče do své aliance nebo připrav testovací tým.</div>
-            </div>
-            <div class="alliance-control__row">
-              <input id="alliance-invite-name" type="text" placeholder="Jméno hráče nebo gangu" />
-              <button class="btn btn--ghost" id="alliance-invite-btn">Pozvat člena</button>
-            </div>
-          </div>
-
-          <div class="modal__actions">
-            <button class="btn btn--danger hidden" id="alliance-leave-btn">Opustit alianci</button>
           </div>
           <div id="alliance-active-panel"></div>
+          <div id="alliance-player-invites-panel"></div>
           <div id="alliance-list-panel"></div>
+          <div class="modal__actions alliance-modal__footer-actions">
+            <button class="btn btn--danger hidden" id="alliance-leave-btn">Opustit alianci</button>
+            <button class="btn btn--primary hidden" id="alliance-management-footer-btn">Správa aliance</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="alliance-leave-modal" class="modal hidden">
+      <div id="alliance-leave-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content alliance-leave-modal__content">
+        <div class="modal__header alliance-leave-modal__header">
+          <h3>Varování</h3>
+          <button class="modal__close" id="alliance-leave-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body alliance-leave-modal__body">
+          <div class="alliance-leave-modal__warning-mark">!</div>
+          <div class="alliance-leave-modal__text">
+            Po opuštění aliance přijdeš o skladové zásoby a zvýšíš si heat. Přesné hodnoty nastavíme později.
+          </div>
+          <div class="modal__actions alliance-leave-modal__actions">
+            <button class="btn btn--ghost" id="alliance-leave-cancel-btn">Zpět</button>
+            <button class="btn btn--danger" id="alliance-leave-confirm-btn">Opravdu opustit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="alliance-create-modal" class="modal hidden">
+      <div id="alliance-create-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content alliance-create-modal__content">
+        <div class="modal__header">
+          <h3>Nová aliance</h3>
+          <button class="modal__close" id="alliance-create-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body alliance-create-modal__body">
+          <div class="alliance-control alliance-control--create">
+            <div class="alliance-control__stack">
+              <input id="alliance-create-name" type="text" maxlength="40" placeholder="Název aliance" />
+              <textarea id="alliance-create-description" rows="3" maxlength="180" placeholder="Popisek aliance"></textarea>
+            </div>
+            <div class="alliance-icon-picker">
+              <div class="alliance-icon-picker__label">Znak aliance</div>
+              <div class="alliance-icon-picker__grid" id="alliance-icon-picker"></div>
+            </div>
+            <div class="alliance-control__row alliance-control__row--end">
+              <button class="btn btn--primary" id="alliance-create-btn">Potvrdit vytvoření</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="alliance-management-modal" class="modal hidden">
+      <div id="alliance-management-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content alliance-management-modal__content">
+        <div class="modal__header">
+          <h3>Správa aliance</h3>
+          <button class="modal__close" id="alliance-management-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body alliance-management-modal__body">
+          <div class="alliance-control alliance-control--create">
+            <div class="alliance-control__head">
+              <div class="alliance-control__title">Pozvat hráče</div>
+              <div class="alliance-control__subtitle">Pošli přímou pozvánku pouze hráči, který není v žádné alianci.</div>
+            </div>
+            <div class="alliance-control__row">
+              <input id="alliance-management-invite-name" type="text" placeholder="Jméno hráče" />
+              <button class="btn btn--primary" id="alliance-management-invite-btn">Poslat pozvánku</button>
+            </div>
+          </div>
+          <div id="alliance-management-panel"></div>
         </div>
       </div>
     </div>

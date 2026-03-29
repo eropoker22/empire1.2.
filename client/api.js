@@ -4,9 +4,7 @@ window.Empire.API = (() => {
   const baseUrl = "http://localhost:3000";
 
   function init() {
-    if (window.Empire.token) {
-      refreshRound();
-    }
+    refreshRound();
   }
 
   async function login(username, password) {
@@ -93,14 +91,14 @@ window.Empire.API = (() => {
     return res.json();
   }
 
-  async function createAlliance(name) {
+  async function createAlliance(name, description = "", iconKey = "") {
     const res = await fetch(`${baseUrl}/alliances/create`, {
       method: "POST",
       headers: {
         ...authHeaders(),
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, description, iconKey })
     });
     return res.json();
   }
@@ -113,6 +111,90 @@ window.Empire.API = (() => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ allianceId })
+    });
+    return res.json();
+  }
+
+  async function requestAllianceInvite(allianceId) {
+    const res = await fetch(`${baseUrl}/alliances/invitations/request`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ allianceId })
+    });
+    return res.json();
+  }
+
+  async function respondToAllianceInvite(requestId, accept) {
+    const res = await fetch(`${baseUrl}/alliances/invitations/${requestId}/respond`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ accept: Boolean(accept) })
+    });
+    return res.json();
+  }
+
+  async function sendAllianceManagementInvite(username) {
+    const res = await fetch(`${baseUrl}/alliances/management/invite`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username })
+    });
+    return res.json();
+  }
+
+  async function respondToAllianceMemberInvite(inviteId, accept) {
+    const res = await fetch(`${baseUrl}/alliances/member-invites/${inviteId}/respond`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ accept: Boolean(accept) })
+    });
+    return res.json();
+  }
+
+  async function markAllianceReady() {
+    const res = await fetch(`${baseUrl}/alliances/ready`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+    return res.json();
+  }
+
+  async function removeAllianceMember(memberId) {
+    const res = await fetch(`${baseUrl}/alliances/members/${memberId}/remove`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+    return res.json();
+  }
+
+  async function startAllianceKickVote(targetPlayerId) {
+    const res = await fetch(`${baseUrl}/alliances/kick-votes/start`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ targetPlayerId })
+    });
+    return res.json();
+  }
+
+  async function castAllianceKickVote(voteId) {
+    const res = await fetch(`${baseUrl}/alliances/kick-votes/${voteId}/cast`, {
+      method: "POST",
+      headers: authHeaders()
     });
     return res.json();
   }
@@ -192,6 +274,14 @@ window.Empire.API = (() => {
     listAlliances,
     createAlliance,
     joinAlliance,
+    requestAllianceInvite,
+    respondToAllianceInvite,
+    sendAllianceManagementInvite,
+    respondToAllianceMemberInvite,
+    markAllianceReady,
+    removeAllianceMember,
+    startAllianceKickVote,
+    castAllianceKickVote,
     leaveAlliance,
     getMarket,
     createMarketOrder,

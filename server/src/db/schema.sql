@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS alliances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,
   owner_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  description TEXT NOT NULL DEFAULT '',
+  icon_key TEXT NOT NULL DEFAULT 'crown_skull',
   bonus_income_pct INT NOT NULL DEFAULT 0,
   bonus_influence_pct INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -51,6 +53,67 @@ CREATE TABLE IF NOT EXISTS alliances (
 ALTER TABLE players
   ADD CONSTRAINT players_alliance_fk
   FOREIGN KEY (alliance_id) REFERENCES alliances(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS alliance_join_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alliance_id UUID NOT NULL REFERENCES alliances(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (alliance_id, player_id)
+);
+
+CREATE TABLE IF NOT EXISTS alliance_member_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alliance_id UUID NOT NULL REFERENCES alliances(id) ON DELETE CASCADE,
+  target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  inviter_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (alliance_id, target_player_id)
+);
+
+CREATE TABLE IF NOT EXISTS alliance_notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  read_at TIMESTAMP NULL
+);
+
+ALTER TABLE players
+  ADD COLUMN IF NOT EXISTS alliance_ready_at TIMESTAMP NULL;
+
+CREATE TABLE IF NOT EXISTS alliance_kick_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alliance_id UUID NOT NULL REFERENCES alliances(id) ON DELETE CASCADE,
+  target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  started_by_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMP NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alliance_kick_votes_open_unique
+  ON alliance_kick_votes (alliance_id, target_player_id)
+  WHERE status = 'open';
+
+CREATE TABLE IF NOT EXISTS alliance_kick_vote_ballots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vote_id UUID NOT NULL REFERENCES alliance_kick_votes(id) ON DELETE CASCADE,
+  voter_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (vote_id, voter_player_id)
+);
+
+CREATE TABLE IF NOT EXISTS alliance_audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alliance_id UUID NOT NULL REFERENCES alliances(id) ON DELETE CASCADE,
+  actor_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
+  target_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
+  action_key TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
 
 -- Districts (static map)
 CREATE TABLE IF NOT EXISTS districts (

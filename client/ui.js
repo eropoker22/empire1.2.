@@ -156,6 +156,24 @@ window.Empire.UI = (() => {
     { key: "techCore", name: "Tech Core" },
     { key: "combatModule", name: "Combat Module" }
   ];
+  const ALLIANCE_ICON_OPTIONS = Object.freeze([
+    { key: "crown_skull", label: "Lebka s korunou", symbol: "☠" },
+    { key: "crossed_knives", label: "Zkřížené nože", symbol: "⚔" },
+    { key: "broken_shield", label: "Štít", symbol: "⛨" },
+    { key: "snake_dagger", label: "Had kolem nože", symbol: "🐍" },
+    { key: "eye_triangle", label: "Oko", symbol: "◉" },
+    { key: "flame", label: "Plamen", symbol: "🔥" },
+    { key: "spider", label: "Pavouk", symbol: "🕷" },
+    { key: "lightning", label: "Blesk", symbol: "⚡" },
+    { key: "wolf_head", label: "Vlčí hlava", symbol: "🐺" },
+    { key: "broken_mask", label: "Maska", symbol: "🎭" }
+  ]);
+  const DEFAULT_ALLIANCE_ICON_KEY = "crown_skull";
+  const ALLIANCE_MAX_MEMBERS = 4;
+  const LOCAL_ALLIANCE_REQUEST_PLAYER_ID = "guest-player";
+  const ALLIANCE_READY_WINDOW_MS = 6 * 60 * 60 * 1000;
+  const DEFAULT_ALLIANCE_DESCRIPTION = "Aliance která všechny zabije";
+  const PLAYER_SCENARIO_STORAGE_KEY = "empire_active_player_scenario";
   const MARKET_SERVER_RESOURCES = Object.freeze([
     { resourceKey: "neon_dust", name: "Neon Dust" },
     { resourceKey: "pulse_shot", name: "Pulse Shot" },
@@ -222,6 +240,7 @@ window.Empire.UI = (() => {
 
   const SETTINGS_STORAGE_KEY = "empire_settings";
   const ATTACK_COOLDOWN_STORAGE_KEY = "empire_attack_cooldown_until_v1";
+  const ATTACK_COOLDOWN_MS = 20 * 1000;
   const ATTACK_ACTION_DURATION_MS = 20 * 1000;
   const OCCUPY_ACTION_DURATION_MS = 20 * 1000;
   const SPY_ACTION_DURATION_MS = 20 * 1000;
@@ -1199,6 +1218,7 @@ window.Empire.UI = (() => {
   let marketRefreshHandler = null;
   let marketBuildingShortcutRefreshHandler = null;
   let allianceRefreshHandler = null;
+  let allianceCountdownIntervalId = null;
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
   const LOCAL_GANG_MEMBERS_KEY = "empire_local_gang_members";
@@ -1244,7 +1264,15 @@ window.Empire.UI = (() => {
   let scenarioEnemyOwnerNames = new Set();
   let guestModeActive = false;
   let attackModalRefreshTimer = null;
+  let attackResultTimer = null;
   let attackModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
+  let attackConfirmModalState = {
+    districtId: null,
+    availability: null,
+    selectionSummary: null,
+    baseDetails: null,
+    defensePowerEstimate: 0
+  };
   let attackResultModalState = { visible: false };
   let defenseModalRefreshTimer = null;
   let defenseModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
@@ -1253,6 +1281,9 @@ window.Empire.UI = (() => {
   let cachedSpyCount = null;
   let isSpyCountShownInTopbar = false;
   let topbarStatSwitchTimer = null;
+  let roundPhaseTimer = null;
+  let roundStatusState = null;
+  let roundStatusOverride = null;
   let spyRecoveryIntervalId = null;
   const spyActionResultTimeouts = new Set();
   const occupyActionResultTimeouts = new Set();
@@ -1291,8 +1322,156 @@ window.Empire.UI = (() => {
     initMobileMarketBuildingShortcutsPlacement();
     initMobilePrimaryActionCardsPlacement();
     initMobileModalTopbarResourceVisibility();
+    initMapModeControls();
     syncMapVisionContext();
     refreshGangColorDisplays();
+  }
+
+  function stopRoundPhaseTicker() {
+    if (!roundPhaseTimer) return;
+    clearInterval(roundPhaseTimer);
+    roundPhaseTimer = null;
+  }
+
+  function resolveRoundPhaseSnapshot(round) {
+    if (!round?.roundStartedAt || !round?.phaseDurationMs) return null;
+    const startedAtMs = new Date(round.roundStartedAt).getTime();
+    const phaseDurationMs = Math.max(1, Math.floor(Number(round.phaseDurationMs) || 0));
+    if (!Number.isFinite(startedAtMs) || !Number.isFinite(phaseDurationMs)) return null;
+    const nowMs = Date.now();
+    const elapsedMs = Math.max(0, nowMs - startedAtMs);
+    const phaseIndex = Math.floor(elapsedMs / phaseDurationMs);
+    const phaseKey = phaseIndex % 2 === 0 ? "day" : "night";
+    const phaseLabel = phaseKey === "day" ? "DEN" : "NOC";
+    const currentGameDay = Math.max(1, Math.floor(elapsedMs / (phaseDurationMs * 2)) + 1);
+    const totalGameDays = Math.max(1, Math.floor(Number(round.totalGameDays) || 0));
+    return {
+      phaseKey,
+      phaseLabel,
+      currentGameDay: Math.min(totalGameDays, currentGameDay)
+    };
+  }
+
+  function resolveEffectiveRoundMode(phaseKey, subPhaseKey = "") {
+    const normalizedPhaseKey = String(phaseKey || "").trim().toLowerCase();
+    const normalizedSubPhaseKey = String(subPhaseKey || "").trim().toLowerCase();
+    if (normalizedSubPhaseKey === "blackout" && normalizedPhaseKey === "night") {
+      return {
+        mapMode: "blackout",
+        phaseLabel: "BLACKOUT"
+      };
+    }
+    return {
+      mapMode: normalizedPhaseKey === "day" ? "day" : "night",
+      phaseLabel: normalizedPhaseKey === "day" ? "DEN" : "NOC"
+    };
+  }
+
+  function formatRoundClockLabel(minutesInDay) {
+    const safeMinutes = ((Math.floor(Number(minutesInDay) || 0) % 1440) + 1440) % 1440;
+    const hours = Math.floor(safeMinutes / 60);
+    const minutes = safeMinutes % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  }
+
+  function resolveRoundClockSnapshot(round) {
+    if (!round?.roundStartedAt) return null;
+    const startedAtMs = new Date(round.roundStartedAt).getTime();
+    const gameClockStartHour = Math.max(0, Math.floor(Number(round.gameClockStartHour) || 6));
+    const gameMinutesPerRealMinute = Math.max(1, Number(round.gameMinutesPerRealMinute) || 3);
+    if (!Number.isFinite(startedAtMs)) return null;
+    const elapsedMs = Math.max(0, Date.now() - startedAtMs);
+    const elapsedGameMinutes = Math.floor((elapsedMs / (60 * 1000)) * gameMinutesPerRealMinute);
+    const minutesInDay = (gameClockStartHour * 60 + elapsedGameMinutes) % 1440;
+    return {
+      minutesInDay,
+      label: formatRoundClockLabel(minutesInDay)
+    };
+  }
+
+  function renderRoundStatusState() {
+    const override = roundStatusOverride && typeof roundStatusOverride === "object" ? roundStatusOverride : null;
+    const fallbackTotalGameDays = 30;
+    if (!roundStatusState && !override) return;
+    const roundEnds = document.getElementById("round-ends");
+    const roundDays = document.getElementById("round-days");
+    const roundGameDay = document.getElementById("round-game-day");
+    const roundGameTime = document.getElementById("round-game-time");
+    const roundPhase = document.getElementById("round-phase");
+    const phaseSnapshot = roundStatusState ? resolveRoundPhaseSnapshot(roundStatusState) : null;
+    const clockSnapshot = roundStatusState ? resolveRoundClockSnapshot(roundStatusState) : null;
+    const basePhaseKey = override?.phaseKey || phaseSnapshot?.phaseKey || roundStatusState?.currentPhaseKey || "";
+    const activeSubPhaseKey = override?.subPhaseKey || roundStatusState?.currentSubPhaseKey || "";
+    const effectiveMode = resolveEffectiveRoundMode(basePhaseKey, activeSubPhaseKey);
+    const displayPhaseKey = effectiveMode.mapMode || "";
+    const displayPhaseLabel = override?.phaseLabel || roundStatusState?.currentSubPhaseLabel || effectiveMode.phaseLabel || "-";
+    const displayGameDay = override?.currentGameDay || phaseSnapshot?.currentGameDay || 1;
+    const displayClockLabel = override?.timeLabel || clockSnapshot?.label || roundStatusState?.currentGameTimeLabel || "06:00";
+    const totalGameDays = Math.max(1, Math.floor(Number(roundStatusState?.totalGameDays) || fallbackTotalGameDays));
+    if (roundEnds) {
+      roundEnds.textContent = roundStatusState?.roundEndsAt || "-";
+    }
+    if (roundDays) {
+      roundDays.textContent = roundStatusState?.daysRemaining != null ? roundStatusState.daysRemaining : "-";
+    }
+    if (roundGameDay) {
+      if (phaseSnapshot || override) {
+        roundGameDay.textContent = `${displayGameDay}/${totalGameDays}`;
+      } else {
+        roundGameDay.textContent = "-";
+      }
+    }
+    if (roundGameTime) {
+      roundGameTime.textContent = displayClockLabel;
+    }
+    if (roundPhase) {
+      roundPhase.textContent = displayPhaseLabel;
+    }
+    if (displayPhaseKey) {
+      window.Empire.Map?.setMapMode?.(displayPhaseKey);
+    }
+  }
+
+  function startRoundPhaseTicker() {
+    stopRoundPhaseTicker();
+    if (!roundStatusState?.roundStartedAt || !roundStatusState?.phaseDurationMs) return;
+    renderRoundStatusState();
+    roundPhaseTimer = setInterval(() => {
+      renderRoundStatusState();
+    }, 1000);
+  }
+
+  function initMapModeControls() {
+    const root = document.getElementById("map-mode-switch");
+    const buttons = Array.from(document.querySelectorAll("[data-map-mode]"));
+    if (!root || !buttons.length) return;
+
+    const syncVisibility = () => {
+      root.classList.toggle("hidden", activePlayerScenarioKey === "alliance-ten-blackout");
+    };
+
+    const syncState = () => {
+      const activeMode = String(window.Empire.Map?.getMapMode?.() || "night").trim().toLowerCase();
+      buttons.forEach((button) => {
+        const mode = String(button.getAttribute("data-map-mode") || "").trim().toLowerCase();
+        button.classList.toggle("is-active", mode === activeMode);
+        button.setAttribute("aria-pressed", mode === activeMode ? "true" : "false");
+      });
+    };
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const mode = String(button.getAttribute("data-map-mode") || "").trim().toLowerCase();
+        if (!mode) return;
+        window.Empire.Map?.setMapMode?.(mode);
+        syncState();
+      });
+    });
+
+    document.addEventListener("empire:map-mode-changed", syncState);
+    document.addEventListener("empire:scenario-applied", syncVisibility);
+    syncState();
+    syncVisibility();
   }
 
   function initMobileTopbarScrollState() {
@@ -1523,7 +1702,14 @@ window.Empire.UI = (() => {
       "alliance-modal",
       "storage-modal",
       "leaderboard-modal",
-      "district-modal"
+      "district-modal",
+      "district-defense-modal",
+      "spy-confirm-modal",
+      "occupy-confirm-modal",
+      "spy-result-modal",
+      "attack-modal",
+      "attack-confirm-modal",
+      "attack-result-modal"
     ]);
     if (!modalNodes.length) return;
 
@@ -1900,6 +2086,7 @@ window.Empire.UI = (() => {
     initWeaponsPopover();
     initDistrictDefenseModal();
     initAttackModal();
+    initAttackConfirmModal();
     initAttackResultModal();
     initSpyConfirmModal();
     initOccupyConfirmModal();
@@ -2850,7 +3037,15 @@ window.Empire.UI = (() => {
 
   function getAttackCooldownUntil() {
     const parsed = Number(localStorage.getItem(ATTACK_COOLDOWN_STORAGE_KEY) || 0);
-    return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+    if (!Number.isFinite(parsed)) return 0;
+    const safeValue = Math.max(0, Math.floor(parsed));
+    const now = Date.now();
+    const maxAllowed = now + ATTACK_COOLDOWN_MS;
+    if (safeValue > maxAllowed) {
+      localStorage.setItem(ATTACK_COOLDOWN_STORAGE_KEY, String(maxAllowed));
+      return maxAllowed;
+    }
+    return safeValue;
   }
 
   function setAttackCooldownUntil(value) {
@@ -2946,6 +3141,7 @@ window.Empire.UI = (() => {
 
   function closeAllPopupWindows() {
     closeAttackModal();
+    closeAttackConfirmModal();
     closeAttackResultModal();
     closeDefenseModal();
     closeSpyConfirmModal();
@@ -2996,12 +3192,231 @@ window.Empire.UI = (() => {
     };
   }
 
+  function formatAttackSelectionSummary(selectionSummary) {
+    const items = attackWeaponStats
+      .map((item) => {
+        const count = Math.max(0, Math.floor(Number(selectionSummary?.selection?.[item.name] || 0)));
+        return count > 0 ? `${count}× ${item.name}` : "";
+      })
+      .filter(Boolean);
+    return items.length > 0 ? items.join(", ") : "Žádná zbraň";
+  }
+
+  function getAttackDefensePowerEstimate(district) {
+    const snapshot = window.Empire.UI?.getDistrictDefenseSnapshot?.(district?.id) || null;
+    const knownPower = [
+      Number(snapshot?.self?.power || 0),
+      Number(snapshot?.ally?.power || 0)
+    ].reduce((max, value) => Math.max(max, Number.isFinite(value) ? value : 0), 0);
+    if (knownPower > 0) return Math.max(0, Math.floor(knownPower));
+    const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
+    const influence = Math.max(0, Math.floor(Number(district?.influence || district?.influence_level || 0)));
+    return Math.max(26, Math.floor(influence * 1.5 + buildings.length * 26 + (district?.owner ? 48 : 12)));
+  }
+
+  function resolveAttackOutcomeMeta(outcomeKey) {
+    const key = String(outcomeKey || "").trim().toLowerCase();
+    switch (key) {
+      case "total_success":
+        return {
+          key,
+          title: "TOTÁLNÍ ÚSPĚCH",
+          tone: "success",
+          badge: "District je tvůj",
+          summary: "Rozjebali jste je na kusy. District je tvůj. Kdo tam ještě dýchá, už maká pro tebe nebo chcípne do rána."
+        };
+      case "pyrrhic_victory":
+        return {
+          key,
+          title: "PYRRHOVO VÍTĚZSTVÍ",
+          tone: "warning",
+          badge: "Obrana zničená",
+          summary: "Sejmul jsi jejich obranu, ale tvoji lidi šli do sraček s nima. Půlka chcípla, zbraně v hajzlu. District pořád stojí ale sotva."
+        };
+      case "catastrophe":
+        return {
+          key,
+          title: "KATASTROFA",
+          tone: "critical",
+          badge: "District shořel",
+          summary: "Všechno shořelo do prdele. Baráky, lidi, zásoby. Jen popel a smrad. Tady už není co brát, jen prázdná díra."
+        };
+      case "failure":
+      default:
+        return {
+          key: "failure",
+          title: "NEÚSPĚCH",
+          tone: "danger",
+          badge: "Útok odražen",
+          summary: "Totální průser. Vběhli jste tam jak idioti a nechali tam krev i výbavu. Oni taky něco ztratili, ale ty jsi ten, co dostal přes držku."
+        };
+    }
+  }
+
+  function buildAttackOutcomeDetails(district, availability, selectionSummary, attackResult = null) {
+    const base = getAttackResultDetails(district, {
+      ...availability,
+      ...selectionSummary
+    });
+    const attackPower = Math.max(0, Math.floor(Number(attackResult?.attackPower ?? base.attackPower ?? 0)));
+    const defensePower = Math.max(0, Math.floor(Number(attackResult?.defensePower ?? getAttackDefensePowerEstimate(district))));
+    const outcomeMeta = resolveAttackOutcomeMeta(attackResult?.outcomeKey || "");
+    const districtDestroyed = Boolean(attackResult?.destroyed || outcomeMeta.key === "catastrophe");
+    const attackerLossPct = Math.max(0, Math.floor(Number(attackResult?.attackerLossPct || 0)));
+    const defenderLossPct = Math.max(0, Math.floor(Number(attackResult?.defenderLossPct || 0)));
+    const districtLossPct = Math.max(0, Math.floor(Number(attackResult?.districtLossPct || 0)));
+    const selectedWeaponLosses = {};
+    attackWeaponStats.forEach((item) => {
+      const selected = Math.max(0, Math.floor(Number(selectionSummary?.selection?.[item.name] || 0)));
+      if (!selected) return;
+      let lost = selected;
+      if (outcomeMeta.key === "total_success") {
+        lost = 0;
+      } else if (outcomeMeta.key === "pyrrhic_victory") {
+        lost = Math.ceil(selected * 0.5);
+      }
+      selectedWeaponLosses[item.name] = lost;
+    });
+    const lostMembers = outcomeMeta.key === "total_success"
+      ? 0
+      : outcomeMeta.key === "pyrrhic_victory"
+        ? Math.ceil(Number(selectionSummary?.totalUsedMembers || 0) * 0.5)
+        : Math.max(0, Math.floor(Number(selectionSummary?.totalUsedMembers || 0)));
+
+    const availableRows = {
+      attackPower: `${attackPower}`,
+      defensePower: `${defensePower}`,
+      attackerLosses: `${attackerLossPct}%`,
+      defenderLosses: `${defenderLossPct}%`,
+      districtState: districtDestroyed
+        ? "Zničený"
+        : outcomeMeta.key === "total_success"
+          ? "Obsazený"
+          : "Stojí"
+    };
+
+    return {
+      ...base,
+      districtId: district?.id ?? null,
+      districtName: district?.name || `Distrikt #${district?.id ?? "-"}`,
+      title: outcomeMeta.title,
+      outcomeBadge: outcomeMeta.badge,
+      outcomeTone: outcomeMeta.tone,
+      summary: outcomeMeta.summary,
+      outcomeKey: outcomeMeta.key,
+      attackPower,
+      defensePower,
+      attackerLossPct,
+      defenderLossPct,
+      districtLossPct,
+      districtDestroyed,
+      selectedWeaponLosses,
+      lostMembers,
+      attackRowValue: availableRows.attackPower,
+      defenseRowValue: availableRows.defensePower,
+      attackerLossesRowValue: availableRows.attackerLosses,
+      defenderLossesRowValue: availableRows.defenderLosses,
+      districtStateValue: districtDestroyed ? "Zničený" : (outcomeMeta.key === "total_success" ? "Obsazený" : "Stojí"),
+      durationValue: base.durationLabel
+    };
+  }
+
+  function scheduleAttackResultModal(details, selectionSummary) {
+    if (attackResultTimer) {
+      clearTimeout(attackResultTimer);
+      attackResultTimer = null;
+    }
+    const safeDetails = { ...(details || {}) };
+    const safeSelectionSummary = selectionSummary ? { ...selectionSummary } : null;
+    attackResultTimer = setTimeout(() => {
+      attackResultTimer = null;
+      applyAttackOutcomeLosses(safeSelectionSummary, safeDetails.outcomeKey);
+      if (String(safeDetails.outcomeKey || "").trim().toLowerCase() === "total_success") {
+        const district = resolveDistrictById(safeDetails.districtId);
+        if (district) {
+          claimDistrictForPlayer(district);
+        }
+      }
+      openAttackResultModal(safeDetails);
+    }, ATTACK_ACTION_DURATION_MS);
+  }
+
+  function resolveAttackOutcomeFromPower(attackPower, defensePower) {
+    const attack = Math.max(0, Math.floor(Number(attackPower) || 0));
+    const defense = Math.max(0, Math.floor(Number(defensePower) || 0));
+    const catastrophe = Math.random() < 0.08;
+    if (catastrophe) {
+      return {
+        outcomeKey: "catastrophe",
+        attackerLossPct: 100,
+        defenderLossPct: 100,
+        districtLossPct: 100,
+        destroyed: true
+      };
+    }
+    if (attack > defense) {
+      if (Math.random() < 0.7) {
+        return {
+          outcomeKey: "total_success",
+          attackerLossPct: 0,
+          defenderLossPct: 100,
+          districtLossPct: 100,
+          destroyed: false
+        };
+      }
+      return {
+        outcomeKey: "pyrrhic_victory",
+        attackerLossPct: 50,
+        defenderLossPct: 100,
+        districtLossPct: 25,
+        destroyed: false
+      };
+    }
+    return {
+      outcomeKey: "failure",
+      attackerLossPct: 100,
+      defenderLossPct: 20,
+      districtLossPct: 20,
+      destroyed: false
+    };
+  }
+
+  function applyAttackOutcomeLosses(selectionSummary, outcomeKey) {
+    const key = String(outcomeKey || "").trim().toLowerCase();
+    if (key === "total_success") {
+      return { weaponLosses: {}, lostMembers: 0 };
+    }
+    const weaponLosses = {};
+    attackWeaponStats.forEach((item) => {
+      const selected = Math.max(0, Math.floor(Number(selectionSummary?.selection?.[item.name] || 0)));
+      if (!selected) return;
+      const lost = key === "pyrrhic_victory"
+        ? Math.ceil(selected * 0.5)
+        : selected;
+      if (lost > 0) weaponLosses[item.name] = lost;
+    });
+    const lostMembers = key === "pyrrhic_victory"
+      ? Math.ceil(Math.max(0, Number(selectionSummary?.totalUsedMembers || 0)) * 0.5)
+      : Math.max(0, Math.floor(Number(selectionSummary?.totalUsedMembers || 0)));
+    if (Object.keys(weaponLosses).length > 0) {
+      consumeAttackWeaponCounts(weaponLosses);
+    }
+    if (lostMembers > 0) {
+      consumeGangMembers(lostMembers);
+    }
+    return { weaponLosses, lostMembers };
+  }
+
   function isOnboardingDemoScenarioActive() {
     return activePlayerScenarioKey === "onboarding-20-edge" && scenarioVisionEnabled && !window.Empire.token;
   }
 
   function renderAttackResultModal(details) {
+    const root = document.getElementById("attack-result-modal");
+    const content = document.getElementById("attack-result-modal-content");
+    const badge = document.getElementById("attack-result-modal-badge");
     const summary = document.getElementById("attack-result-modal-summary");
+    const title = document.querySelector("#attack-result-modal .modal__header h3");
     const nickname = document.getElementById("attack-result-modal-nickname");
     const faction = document.getElementById("attack-result-modal-faction");
     const alliance = document.getElementById("attack-result-modal-alliance");
@@ -3009,14 +3424,38 @@ window.Empire.UI = (() => {
     const power = document.getElementById("attack-result-modal-power");
     const members = document.getElementById("attack-result-modal-members");
     const duration = document.getElementById("attack-result-modal-duration");
-    if (summary) summary.textContent = details.summary;
-    if (nickname) nickname.textContent = details.nickname;
-    if (faction) faction.textContent = details.faction;
-    if (alliance) alliance.textContent = details.alliance;
-    if (weapons) weapons.textContent = details.weapons;
-    if (power) power.textContent = String(details.attackPower ?? 0);
-    if (members) members.textContent = `${details.members} členů gangu`;
-    if (duration) duration.textContent = details.durationLabel;
+    const targetLabel = document.getElementById("attack-result-modal-label-target");
+    const attackLabel = document.getElementById("attack-result-modal-label-attack");
+    const defenseLabel = document.getElementById("attack-result-modal-label-defense");
+    const attackLossLabel = document.getElementById("attack-result-modal-label-attack-losses");
+    const defenseLossLabel = document.getElementById("attack-result-modal-label-defense-losses");
+    const stateLabel = document.getElementById("attack-result-modal-label-state");
+    const durationLabel = document.getElementById("attack-result-modal-label-duration");
+    if (content) {
+      content.classList.remove("is-total-success", "is-pyrrhic-victory", "is-failure", "is-catastrophe");
+      const outcomeClass = details?.outcomeKey
+        ? `is-${String(details.outcomeKey).replace(/_/g, "-")}`
+        : "is-failure";
+      content.classList.add(outcomeClass);
+    }
+    if (badge) badge.textContent = details.outcomeBadge || "Výsledek útoku";
+    if (title) title.textContent = details.title || "Výsledek útoku";
+    if (summary) summary.textContent = details.summary || "";
+    if (targetLabel) targetLabel.textContent = "Cíl";
+    if (attackLabel) attackLabel.textContent = "Útočná síla";
+    if (defenseLabel) defenseLabel.textContent = "Obranná síla";
+    if (attackLossLabel) attackLossLabel.textContent = "Ztráty útočníka";
+    if (defenseLossLabel) defenseLossLabel.textContent = "Ztráty obránce";
+    if (stateLabel) stateLabel.textContent = "Stav districtu";
+    if (durationLabel) durationLabel.textContent = "Trvání";
+    if (nickname) nickname.textContent = details.districtName || `Distrikt #${details.districtId ?? "-"}`;
+    if (faction) faction.textContent = `${details.attackPower ?? 0}`;
+    if (alliance) alliance.textContent = `${details.defensePower ?? 0}`;
+    if (weapons) weapons.textContent = `${details.attackerLossPct ?? 0}%`;
+    if (power) power.textContent = `${details.defenderLossPct ?? 0}%`;
+    if (members) members.textContent = details.districtStateValue || "-";
+    if (duration) duration.textContent = details.durationValue || details.durationLabel || "-";
+    if (!root) return;
   }
 
   function renderAttackWeaponButtons(container, availability) {
@@ -3164,6 +3603,141 @@ window.Empire.UI = (() => {
     const root = document.getElementById("attack-result-modal");
     if (root) root.classList.add("hidden");
     attackResultModalState = { visible: false };
+  }
+
+  function closeAttackConfirmModal() {
+    const root = document.getElementById("attack-confirm-modal");
+    if (root) root.classList.add("hidden");
+    attackConfirmModalState = {
+      districtId: null,
+      availability: null,
+      selectionSummary: null,
+      baseDetails: null,
+      defensePowerEstimate: 0
+    };
+  }
+
+  function renderAttackConfirmModal() {
+    const root = document.getElementById("attack-confirm-modal");
+    const districtEl = document.getElementById("attack-confirm-modal-district");
+    const defenseRowEl = document.getElementById("attack-confirm-modal-defense-row");
+    const defenseEl = document.getElementById("attack-confirm-modal-defense");
+    const weaponsEl = document.getElementById("attack-confirm-modal-weapons");
+    const membersEl = document.getElementById("attack-confirm-modal-members");
+    const powerEl = document.getElementById("attack-confirm-modal-power");
+    const noteEl = document.getElementById("attack-confirm-modal-note");
+    const confirmBtn = document.getElementById("attack-confirm-modal-confirm");
+    if (!root || root.classList.contains("hidden")) return;
+    if (!districtEl || !defenseRowEl || !defenseEl || !weaponsEl || !membersEl || !powerEl || !noteEl || !confirmBtn) return;
+
+    const district = resolveDistrictById(attackConfirmModalState.districtId);
+    const availability = attackConfirmModalState.availability || getAttackModalAvailability();
+    const selectionSummary = attackConfirmModalState.selectionSummary || getAttackSelectionSummary(availability);
+    const baseDetails = attackConfirmModalState.baseDetails || getAttackResultDetails(district, {
+      ...availability,
+      ...selectionSummary
+    });
+    const spyIntel = getDistrictSpyIntel(district?.id);
+    const usedMembers = Math.max(0, Math.floor(Number(selectionSummary?.totalUsedMembers || 0)));
+    const attackPower = Math.max(0, Math.floor(Number(baseDetails.attackPower || 0)));
+
+    districtEl.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    if (spyIntel && String(spyIntel.powerRangeLabel || "").trim()) {
+      defenseRowEl.classList.remove("hidden");
+      const range = String(spyIntel.powerRangeLabel).trim();
+      defenseEl.innerHTML = `${range} <span class="attack-confirm-modal__intel-chip">ze špehování</span>`;
+    } else {
+      defenseRowEl.classList.add("hidden");
+      defenseEl.textContent = "-";
+    }
+    weaponsEl.textContent = formatAttackSelectionSummary(selectionSummary);
+    membersEl.textContent = String(usedMembers);
+    powerEl.textContent = String(attackPower);
+    noteEl.textContent = `Po potvrzení se útok spustí na ${formatAttackDurationLabel(ATTACK_ACTION_DURATION_MS)}. Výsledek se ukáže až po doběhnutí plamenů.`;
+
+    confirmBtn.disabled = !district || usedMembers <= 0 || attackPower <= 0;
+  }
+
+  function openAttackConfirmModal(payload) {
+    const root = document.getElementById("attack-confirm-modal");
+    if (!root) return;
+    attackConfirmModalState = {
+      districtId: payload?.districtId ?? null,
+      availability: payload?.availability || null,
+      selectionSummary: payload?.selectionSummary || null,
+      baseDetails: payload?.baseDetails || null,
+      defensePowerEstimate: Math.max(0, Math.floor(Number(payload?.defensePowerEstimate || 0)))
+    };
+    root.classList.remove("hidden");
+    renderAttackConfirmModal();
+    document.dispatchEvent(new CustomEvent("empire:attack-confirm-modal-opened", {
+      detail: {
+        districtId: attackConfirmModalState.districtId,
+        district: resolveDistrictById(attackConfirmModalState.districtId) || null
+      }
+    }));
+  }
+
+  function startAttackActionFromConfirmModal() {
+    const district = resolveDistrictById(attackConfirmModalState.districtId);
+    if (!district) {
+      closeAttackConfirmModal();
+      closeAttackModal();
+      return;
+    }
+
+    const availability = attackConfirmModalState.availability || getAttackModalAvailability();
+    const selectionSummary = attackConfirmModalState.selectionSummary || getAttackSelectionSummary(availability);
+    const baseDetails = attackConfirmModalState.baseDetails || getAttackResultDetails(district, {
+      ...availability,
+      ...selectionSummary
+    });
+    const defensePowerEstimate = Math.max(0, Math.floor(Number(
+      attackConfirmModalState.defensePowerEstimate || getAttackDefensePowerEstimate(district)
+    )));
+    const demoMode = scenarioVisionEnabled && !window.Empire.token;
+
+    closeAllPopupWindows();
+    setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
+
+    const outcomeRoll = resolveAttackOutcomeFromPower(baseDetails.attackPower, defensePowerEstimate);
+    const details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
+      ...outcomeRoll,
+      attackPower: baseDetails.attackPower,
+      defensePower: defensePowerEstimate
+    });
+
+    pushEvent(`${details.title}: ${details.summary}`);
+    window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
+      attackerDistrictId: district.id,
+      durationMs: ATTACK_ACTION_DURATION_MS,
+      source: demoMode ? "scenario-attack" : "player-attack"
+    });
+    recordVerifiedIntelEvent({
+      type: "attack_outcome",
+      districtId: district.id,
+      message: details.summary
+    });
+    scheduleAttackResultModal(details, selectionSummary);
+  }
+
+  function initAttackConfirmModal() {
+    const root = document.getElementById("attack-confirm-modal");
+    const backdrop = document.getElementById("attack-confirm-modal-backdrop");
+    const closeBtn = document.getElementById("attack-confirm-modal-close");
+    const cancelBtn = document.getElementById("attack-confirm-modal-cancel");
+    const confirmBtn = document.getElementById("attack-confirm-modal-confirm");
+    if (!root) return;
+
+    if (backdrop) backdrop.addEventListener("click", closeAttackConfirmModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeAttackConfirmModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeAttackConfirmModal);
+    if (confirmBtn) confirmBtn.addEventListener("click", startAttackActionFromConfirmModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeAttackConfirmModal();
+      }
+    });
   }
 
   function renderAttackModal() {
@@ -3334,25 +3908,25 @@ window.Empire.UI = (() => {
           renderAttackModal();
           return;
         }
-        const details = getAttackResultDetails(district, {
+        if (selectionSummary.remainingMembers < 0) {
+          setAttackModalNote("Nemáš dost členů gangu pro tuto kombinaci.");
+          renderAttackModal();
+          return;
+        }
+        const baseDetails = getAttackResultDetails(district, {
           ...availability,
           ...selectionSummary
         });
+        const defensePowerEstimate = getAttackDefensePowerEstimate(district);
 
         if (demoMode) {
-          setAttackCooldownUntil(Date.now() + 10 * 1000);
-          consumeAttackWeaponCounts(selectionSummary.selection);
-          consumeGangMembers(selectionSummary.totalUsedMembers);
-          pushEvent(`Ukázkový útok na ${district.name || `distrikt #${district.id}`} byl spuštěn s ${details.weapons} a ${selectionSummary.totalUsedMembers} členy.`);
-          window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
-            attackerDistrictId: district.id,
-            durationMs: ATTACK_ACTION_DURATION_MS,
-            source: "scenario-attack"
+          openAttackConfirmModal({
+            districtId: district.id,
+            availability,
+            selectionSummary,
+            baseDetails,
+            defensePowerEstimate
           });
-          if (isOnboardingDemoScenarioActive()) {
-            details.summary = `Onboarding útok na hráče ${details.nickname} dopadl úspěšně.`;
-          }
-          openAttackResultModal(details);
           return;
         }
 
@@ -3378,26 +3952,25 @@ window.Empire.UI = (() => {
             renderAttackModal();
             return;
           }
-          consumeAttackWeaponCounts(selectionSummary.selection);
-          consumeGangMembers(selectionSummary.totalUsedMembers);
-          setAttackCooldownUntil(Date.now() + 10 * 1000);
-          if (result?.message) {
-            pushEvent(result.message);
-          }
-          if (result?.destroyed) {
-            pushEvent("Distrikt byl po útoku zničen a je nyní nepoužitelný.");
-          }
+          setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
+          const details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
+            ...result,
+            attackPower: result?.attackPower ?? baseDetails.attackPower,
+            defensePower: result?.defensePower ?? defensePowerEstimate
+          });
+          pushEvent(details.summary);
           window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
             attackerDistrictId: result?.sourceDistrictId ?? result?.attackerDistrictId ?? null,
             durationMs: ATTACK_ACTION_DURATION_MS,
             source: "player-attack"
           });
           recordVerifiedIntelEvent({
-            type: "attack_success",
+            type: "attack_outcome",
             districtId: district.id,
-            message: result?.message || ""
+            message: details.summary
           });
-          openAttackResultModal(details);
+          closeAttackModal();
+          scheduleAttackResultModal(details, selectionSummary);
         } catch (error) {
           const message = error?.message || "Útok se nepodařilo spustit.";
           setAttackModalNote(message);
@@ -3550,6 +4123,7 @@ window.Empire.UI = (() => {
     const upperPower = Math.max(lowerPower, Math.ceil(basePower * 1.2));
     return {
       weapons: baseWeapons,
+      powerEstimate: basePower,
       powerRangeLabel: `${lowerPower} až ${upperPower}`
     };
   }
@@ -4580,16 +5154,31 @@ window.Empire.UI = (() => {
     const scenarioButtons = Array.from(document.querySelectorAll("[data-player-scenario]"));
     if (!scenarioButtons.length) return;
 
+    const setActiveScenarioButton = (scenarioKey) => {
+      scenarioButtons.forEach((candidate) => {
+        candidate.classList.toggle("is-active", candidate.dataset.playerScenario === scenarioKey);
+      });
+    };
+
     scenarioButtons.forEach((button) => {
       button.addEventListener("click", () => {
         const scenarioKey = button.dataset.playerScenario;
         applyPlayerScenario(scenarioKey);
-        scenarioButtons.forEach((candidate) => {
-          candidate.classList.toggle("is-active", candidate === button);
-        });
+        localStorage.setItem(PLAYER_SCENARIO_STORAGE_KEY, String(scenarioKey || ""));
+        setActiveScenarioButton(String(scenarioKey || ""));
         refreshGuestBannerVisibility();
       });
     });
+
+    const savedScenarioKey = String(localStorage.getItem(PLAYER_SCENARIO_STORAGE_KEY) || "").trim();
+    const savedScenarioButton = savedScenarioKey
+      ? scenarioButtons.find((button) => button.dataset.playerScenario === savedScenarioKey)
+      : null;
+    if (savedScenarioButton && !window.Empire.token) {
+      applyPlayerScenario(savedScenarioKey);
+      setActiveScenarioButton(savedScenarioKey);
+      refreshGuestBannerVisibility();
+    }
   }
 
   function cloneScenarioPolygon(polygon) {
@@ -4622,11 +5211,17 @@ window.Empire.UI = (() => {
       return;
     }
     activePlayerScenarioKey = String(scenarioKey || "");
+    const normalizedScenarioKey = activePlayerScenarioKey === "alliance-ten-blackout"
+        ? "alliance-ten"
+        : activePlayerScenarioKey;
+    const forcedMapMode = activePlayerScenarioKey === "alliance-ten-blackout"
+      ? "blackout"
+      : "";
 
     const ownerName = resolveScenarioOwnerName();
     const allyName = `${ownerName} - spojenec`;
     scenarioUniqueOwnerColors = false;
-    scenarioProfileAvatarOverride = scenarioKey === "onboarding-20-edge" ? ONBOARDING_PROFILE_AVATAR : null;
+    scenarioProfileAvatarOverride = normalizedScenarioKey === "onboarding-20-edge" ? ONBOARDING_PROFILE_AVATAR : null;
     syncMapVisionContext();
     const mapScenarioDistrictOwner = (district, owner = null) => ({
       ...district,
@@ -4655,9 +5250,11 @@ window.Empire.UI = (() => {
     };
     let scenarioAttackIncident = null;
     let scenarioPoliceIncident = null;
+    let scenarioPoliceIncidentIds = [];
     let scenarioDestroyedDistrictId = null;
+    roundStatusOverride = null;
 
-    if (scenarioKey === "full-map") {
+    if (normalizedScenarioKey === "full-map") {
       setScenarioVisionMode(true);
       setScenarioAllianceOwners([]);
       setScenarioEnemyOwners([]);
@@ -4665,7 +5262,7 @@ window.Empire.UI = (() => {
       baseProfile.districts = districts.length;
       baseProfile.alliance = "Žádná";
       pushEvent(`Ukázka: ${ownerName} ovládá celou mapu (${districts.length} sektorů).`);
-    } else if (scenarioKey === "single-district") {
+    } else if (normalizedScenarioKey === "single-district") {
       setScenarioVisionMode(true);
       setScenarioAllianceOwners([]);
       setScenarioEnemyOwners([]);
@@ -4682,12 +5279,19 @@ window.Empire.UI = (() => {
       }
       baseProfile.alliance = "Žádná";
       pushEvent("Ukázka: hráč drží pouze jeden distrikt.");
-    } else if (scenarioKey === "alliance-ten") {
+    } else if (normalizedScenarioKey === "alliance-ten") {
       const enemyOneName = "Stínoví vlci A";
       const enemyTwoName = "Stínoví vlci B";
       const enemyOwners = [enemyOneName, enemyTwoName];
       const ownAllianceName = `${ownerName} + spojenec`;
+      const blackoutAllyName = "Knedlík";
       const enemyAllianceName = "Stínoví vlci";
+      const blackoutAllianceName = `${ownerName} + ${blackoutAllyName}`;
+      const blackoutEnemyAllianceName = "Ledová aliance";
+      const blackoutSecondEnemyName = "Ledovec";
+      const blackoutThirdEnemyName = "Zabijak";
+      const blackoutFourthEnemyName = "Sněhulák";
+      const blackoutFifthEnemyName = "Pepek";
       setScenarioVisionMode(true);
       setScenarioAllianceOwners([allyName]);
       setScenarioEnemyOwners(enemyOwners);
@@ -4705,9 +5309,100 @@ window.Empire.UI = (() => {
       const totalOwned = ownDistrictCount + allyDistrictCount;
       baseProfile.districts = ownDistrictCount;
       baseProfile.alliance = `${ownerName} + spojenec (2/4 • ${totalOwned} sektorů)`;
+      roundStatusOverride = activePlayerScenarioKey === "alliance-ten-blackout"
+        ? {
+            currentGameDay: 3,
+            timeLabel: "20:30",
+            phaseKey: "night",
+            subPhaseKey: "blackout",
+            phaseLabel: "BLACKOUT"
+          }
+        : {
+            currentGameDay: 3,
+            timeLabel: "20:30",
+            phaseKey: "night",
+            phaseLabel: "NOC"
+          };
+      if (activePlayerScenarioKey === "alliance-ten-blackout") {
+        setScenarioAllianceOwners([blackoutAllyName]);
+        scenarioPoliceIncidentIds = [143, 38];
+        nextDistricts = nextDistricts.map((district) => {
+          const districtId = Number(district?.id);
+          if (districtId === 143 || districtId === 121) {
+            return {
+              ...district,
+              owner: blackoutThirdEnemyName,
+              ownerNick: blackoutThirdEnemyName,
+              ownerAllianceName: null,
+              ...buildDemoDistrictOwnerMeta(blackoutThirdEnemyName, district)
+            };
+          }
+          if (districtId === 38 || districtId === 25) {
+            return {
+              ...district,
+              owner: blackoutFourthEnemyName,
+              ownerNick: blackoutFourthEnemyName,
+              ownerAllianceName: blackoutEnemyAllianceName,
+              ...buildDemoDistrictOwnerMeta(blackoutFourthEnemyName, district)
+            };
+          }
+          if (districtId === 82) {
+            return {
+              ...district,
+              owner: blackoutSecondEnemyName,
+              ownerNick: blackoutSecondEnemyName,
+              ownerAllianceName: blackoutEnemyAllianceName,
+              ...buildDemoDistrictOwnerMeta(blackoutSecondEnemyName, district)
+            };
+          }
+          if (districtId === 108 || districtId === 103 || districtId === 89) {
+            return {
+              ...district,
+              owner: blackoutFifthEnemyName,
+              ownerNick: blackoutFifthEnemyName,
+              ownerAllianceName: null,
+              ...buildDemoDistrictOwnerMeta(blackoutFifthEnemyName, district)
+            };
+          }
+          if (districtId === 102) {
+            return {
+              ...district,
+              owner: blackoutAllyName,
+              ownerNick: blackoutAllyName,
+              ownerAllianceName: blackoutAllianceName,
+              ...buildDemoDistrictOwnerMeta(blackoutAllyName, district)
+            };
+          }
+          if (districtId === 109) {
+            return {
+              ...district,
+              owner: blackoutAllyName,
+              ownerNick: blackoutAllyName,
+              ownerAllianceName: blackoutAllianceName,
+              ...buildDemoDistrictOwnerMeta(blackoutAllyName, district)
+            };
+          }
+          if (normalizeOwnerName(district?.owner) === normalizeOwnerName(ownerName)) {
+            return {
+              ...district,
+              ownerAllianceName: blackoutAllianceName
+            };
+          }
+          if (normalizeOwnerName(district?.owner) === normalizeOwnerName(allyName)) {
+            return {
+              ...district,
+              ownerAllianceName: blackoutAllianceName
+            };
+          }
+          return district;
+        });
+        setScenarioEnemyOwners([enemyOneName, enemyTwoName, blackoutSecondEnemyName, blackoutThirdEnemyName, blackoutFourthEnemyName, blackoutFifthEnemyName]);
+        baseProfile.alliance = `${blackoutAllianceName} (Leader • 2/4)`;
+        baseProfile.districts = countOwnedDistrictsForOwner(nextDistricts, ownerName);
+      }
       pushEvent(`Ukázka: ${ownerName} drží ${ownDistrictCount} sektorů, spojenec ${allyDistrictCount}.`);
       pushEvent(`Hrozba: nepřátelská aliance (${enemyOneName} + ${enemyTwoName}) drží ${enemyDistrictCount} sousedních sektorů.`);
-    } else if (scenarioKey === "alliance-war") {
+    } else if (normalizedScenarioKey === "alliance-war") {
       const allyOneName = `${ownerName} - spojenec A`;
       const allyTwoName = `${ownerName} - spojenec B`;
       const enemyAllianceOne = ["Stínoví vlci 1", "Stínoví vlci 2", "Stínoví vlci 3"];
@@ -4739,7 +5434,7 @@ window.Empire.UI = (() => {
       pushEvent(
         `Ukázka: ty držíš ${ownDistrictCount} sektory, 2 spojenci drží ${allyTotal} a 2 nepřátelské aliance drží ${enemyTotal} sektorů.`
       );
-    } else if (scenarioKey === "alliance-20") {
+    } else if (normalizedScenarioKey === "alliance-20") {
       const scenario = buildTwentyPlayerAllianceScenario(districts, ownerName);
       if (!scenario.districts.length) {
         pushEvent("Ukázka 20 hráčů se nepodařila připravit.");
@@ -4772,7 +5467,7 @@ window.Empire.UI = (() => {
       if (scenarioDestroyedDistrictId != null) {
         pushEvent(`Katastrofa: distrikt ${scenarioDestroyedDistrictId} je vypálený a nepoužitelný.`);
       }
-    } else if (scenarioKey === "onboarding-20-edge") {
+    } else if (normalizedScenarioKey === "onboarding-20-edge") {
       const scenario = buildTwentyPlayerEdgeOnboardingScenario(districts, ownerName);
       if (!scenario.districts.length) {
         pushEvent("Onboarding scénář 20 hráčů se nepodařilo připravit.");
@@ -4829,6 +5524,12 @@ window.Empire.UI = (() => {
     window.Empire.player = baseProfile;
     window.Empire.Map.clearUnderAttackDistricts?.();
     window.Empire.Map.clearPoliceActions?.();
+    if (forcedMapMode) {
+      window.Empire.Map.setMapMode?.(forcedMapMode);
+    } else if (roundStatusOverride?.phaseKey) {
+      const overrideMode = resolveEffectiveRoundMode(roundStatusOverride.phaseKey, roundStatusOverride.subPhaseKey).mapMode;
+      window.Empire.Map.setMapMode?.(overrideMode || roundStatusOverride.phaseKey);
+    }
     window.Empire.Map.setDistricts(nextDistricts);
     if (scenarioAttackIncident?.targetDistrictId != null) {
       window.Empire.Map.markDistrictUnderAttack?.(scenarioAttackIncident.targetDistrictId, {
@@ -4843,17 +5544,32 @@ window.Empire.UI = (() => {
         source: "scenario-alliance-20-police"
       });
     }
-    if (scenarioKey === "onboarding-20-edge") {
+    if (scenarioPoliceIncidentIds.length) {
+      scenarioPoliceIncidentIds.forEach((districtId) => {
+        window.Empire.Map.markDistrictPoliceAction?.(districtId, {
+          durationMs: 60000,
+          source: "scenario-alliance-ten-blackout-police"
+        });
+      });
+    }
+    if (normalizedScenarioKey === "onboarding-20-edge") {
       clearDistrictSpyIntel(ONBOARDING_TUTORIAL_SPY_DISTRICT_ID);
       clearDistrictSpyIntel(ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID);
       setLocalGangMembersBonus(0);
       setLocalGangMembersSpent(0);
       updateEconomy(createOnboardingDemoEconomy());
     }
+    if (!window.Empire.token && activePlayerScenarioKey === "alliance-ten-blackout") {
+      const allianceState = buildAllianceTenBlackoutLocalAllianceState(ownerName, "Knedlík");
+      saveLocalAllianceState(allianceState);
+      syncGuestAllianceLabel(allianceState.alliances[0]?.name || "Žádná");
+    }
     updateProfile(baseProfile);
+    renderRoundStatusState();
     document.dispatchEvent(new CustomEvent("empire:scenario-applied", {
       detail: {
-        scenarioKey,
+        scenarioKey: activePlayerScenarioKey,
+        scenarioBaseKey: normalizedScenarioKey,
         ownerName,
         profile: baseProfile,
         districts: nextDistricts
@@ -7319,64 +8035,164 @@ window.Empire.UI = (() => {
     const root = document.getElementById("alliance-modal");
     const backdrop = document.getElementById("alliance-modal-backdrop");
     const closeBtn = document.getElementById("alliance-modal-close");
+    const createToggleBtn = document.getElementById("alliance-create-toggle-btn");
+    const leaveModal = document.getElementById("alliance-leave-modal");
+    const leaveModalBackdrop = document.getElementById("alliance-leave-modal-backdrop");
+    const leaveModalCloseBtn = document.getElementById("alliance-leave-modal-close");
+    const leaveCancelBtn = document.getElementById("alliance-leave-cancel-btn");
+    const leaveConfirmBtn = document.getElementById("alliance-leave-confirm-btn");
+    const createModal = document.getElementById("alliance-create-modal");
+    const createModalBackdrop = document.getElementById("alliance-create-modal-backdrop");
+    const createModalCloseBtn = document.getElementById("alliance-create-modal-close");
+    const managementModal = document.getElementById("alliance-management-modal");
+    const managementModalBackdrop = document.getElementById("alliance-management-modal-backdrop");
+    const managementModalCloseBtn = document.getElementById("alliance-management-modal-close");
+    const managementInviteName = document.getElementById("alliance-management-invite-name");
+    const managementInviteBtn = document.getElementById("alliance-management-invite-btn");
     const createBtn = document.getElementById("alliance-create-btn");
     const leaveBtn = document.getElementById("alliance-leave-btn");
     const createName = document.getElementById("alliance-create-name");
-    const inviteName = document.getElementById("alliance-invite-name");
-    const inviteBtn = document.getElementById("alliance-invite-btn");
+    const createDescription = document.getElementById("alliance-create-description");
+    const iconPicker = document.getElementById("alliance-icon-picker");
     const chatInput = document.getElementById("alliance-chat-input");
     const chatSend = document.getElementById("alliance-chat-send");
-    if (!root || !openBtn || !createBtn || !leaveBtn || !createName || !inviteName || !inviteBtn || !chatInput || !chatSend) return;
+    if (!root || !openBtn || !createToggleBtn || !leaveModal || !leaveConfirmBtn || !createModal || !managementModal || !managementInviteName || !managementInviteBtn || !createBtn || !leaveBtn || !createName || !createDescription || !iconPicker || !chatInput || !chatSend) return;
+
+    let selectedAllianceIconKey = DEFAULT_ALLIANCE_ICON_KEY;
+
+    const resetCreateAllianceForm = () => {
+      createName.value = "";
+      createDescription.value = DEFAULT_ALLIANCE_DESCRIPTION;
+      selectedAllianceIconKey = DEFAULT_ALLIANCE_ICON_KEY;
+      renderAllianceIconPicker();
+    };
+
+    const setCreateAllianceModalVisible = (visible) => {
+      createModal.classList.toggle("hidden", !visible);
+      if (visible) {
+        window.requestAnimationFrame(() => createName.focus());
+      }
+    };
+
+    const setAllianceManagementModalVisible = (visible) => {
+      managementModal.classList.toggle("hidden", !visible);
+      if (visible) {
+        window.requestAnimationFrame(() => managementInviteName.focus());
+      }
+    };
+
+    const setAllianceLeaveModalVisible = (visible) => {
+      leaveModal.classList.toggle("hidden", !visible);
+      if (visible) {
+        window.requestAnimationFrame(() => leaveConfirmBtn.focus());
+      }
+    };
+
+    const renderAllianceIconPicker = () => {
+      iconPicker.innerHTML = ALLIANCE_ICON_OPTIONS.map((icon) => `
+        <button
+          type="button"
+          class="alliance-icon-option${icon.key === selectedAllianceIconKey ? " is-selected" : ""}"
+          data-alliance-icon-key="${icon.key}"
+          title="${icon.label}"
+          aria-label="${icon.label}"
+        >
+          <span class="alliance-icon-option__symbol">${icon.symbol}</span>
+        </button>
+      `).join("");
+      iconPicker.querySelectorAll("[data-alliance-icon-key]").forEach((button) => {
+        button.addEventListener("click", () => {
+          selectedAllianceIconKey = button.getAttribute("data-alliance-icon-key") || DEFAULT_ALLIANCE_ICON_KEY;
+          renderAllianceIconPicker();
+        });
+      });
+    };
 
     const refreshAlliance = async () => {
       if (!window.Empire.token) {
         const localState = getLocalAllianceState();
-        renderAllianceState(localState.activeAlliance, localState.alliances);
+        renderAllianceState(localState.activeAlliance, localState.alliances, localState.incomingInvites || []);
+        renderAllianceManagementState(localState.activeAlliance);
         renderAllianceChat(localState.chat);
         setLiveAllianceOwnersFromAlliance(localState.activeAlliance || null);
+        (localState.notifications || []).forEach((notification) => {
+          pushEvent(`Aliance: ${notification.message}`);
+        });
+        if ((localState.notifications || []).length) {
+          localState.notifications = [];
+          saveLocalAllianceState(localState);
+        }
         return;
       }
       const [mine, listing] = await Promise.all([
         window.Empire.API.getAlliance(),
         window.Empire.API.listAlliances()
       ]);
-      renderAllianceState(mine.alliance || null, listing.alliances || []);
+      renderAllianceState(mine.alliance || null, listing.alliances || [], mine.incomingInvites || []);
+      renderAllianceManagementState(mine.alliance || null);
       renderAllianceChat([]);
       setLiveAllianceOwnersFromAlliance(mine.alliance || null);
+      (mine.notifications || []).forEach((notification) => {
+        pushEvent(`Aliance: ${notification.message}`);
+      });
     };
     allianceRefreshHandler = refreshAlliance;
 
     openBtn.addEventListener("click", async () => {
       setMobileTopbarCoveredByPrimaryModal(true);
       root.classList.remove("hidden");
+      setCreateAllianceModalVisible(false);
+      setAllianceManagementModalVisible(false);
+      resetCreateAllianceForm();
       await refreshAlliance();
+      if (allianceCountdownIntervalId) window.clearInterval(allianceCountdownIntervalId);
+      allianceCountdownIntervalId = window.setInterval(() => {
+        if (!root.classList.contains("hidden") && allianceRefreshHandler) {
+          allianceRefreshHandler().catch(() => {});
+        }
+      }, 1000);
+    });
+    createToggleBtn.addEventListener("click", () => {
+      setCreateAllianceModalVisible(true);
     });
     createBtn.addEventListener("click", async () => {
       const name = String(createName.value || "").trim();
+      const description = String(createDescription.value || "").trim();
       if (!name) {
         pushEvent("Zadej název aliance.");
         return;
       }
       if (!window.Empire.token) {
         const state = getLocalAllianceState();
-        const newAlliance = createLocalAlliance(state, name);
+        const newAlliance = createLocalAlliance(state, {
+          name,
+          description,
+          iconKey: selectedAllianceIconKey
+        });
         saveLocalAllianceState(state);
         pushEvent(`Aliance ${newAlliance.name} byla vytvořena.`);
         await refreshAlliance();
         syncGuestAllianceLabel(newAlliance.name);
+        setCreateAllianceModalVisible(false);
+        resetCreateAllianceForm();
         return;
       }
-      const result = await window.Empire.API.createAlliance(name);
+      const result = await window.Empire.API.createAlliance(name, description, selectedAllianceIconKey);
       if (result.error) {
         pushEvent(`Aliance: ${result.error}`);
         return;
       }
       pushEvent("Aliance byla vytvořena.");
       await refreshAlliance();
+      setCreateAllianceModalVisible(false);
+      resetCreateAllianceForm();
       const profile = await window.Empire.API.getProfile();
       updateProfile(profile);
     });
     leaveBtn.addEventListener("click", async () => {
+      setAllianceLeaveModalVisible(true);
+    });
+    leaveConfirmBtn.addEventListener("click", async () => {
       if (!window.Empire.token) {
         const state = getLocalAllianceState();
         leaveLocalAlliance(state);
@@ -7384,6 +8200,7 @@ window.Empire.UI = (() => {
         pushEvent("Alianci jsi opustil.");
         await refreshAlliance();
         syncGuestAllianceLabel("Žádná");
+        setAllianceLeaveModalVisible(false);
         return;
       }
       const result = await window.Empire.API.leaveAlliance();
@@ -7393,42 +8210,89 @@ window.Empire.UI = (() => {
       }
       pushEvent("Alianci jsi opustil.");
       await refreshAlliance();
+      setAllianceLeaveModalVisible(false);
       const profile = await window.Empire.API.getProfile();
       updateProfile(profile);
     });
-    inviteBtn.addEventListener("click", async () => {
-      const name = String(inviteName.value || "").trim();
-      if (!name) {
-        pushEvent("Zadej jméno člena pro pozvánku.");
-        return;
-      }
-      if (!window.Empire.token) {
-        const state = getLocalAllianceState();
-        const result = inviteLocalAllianceMember(state, name);
-        if (result.error) {
-          pushEvent(`Aliance: ${result.error}`);
-          return;
-        }
-        saveLocalAllianceState(state);
-        pushEvent(`Člen ${name} byl přidán do aliance.`);
-        inviteName.value = "";
-        await refreshAlliance();
-        return;
-      }
-      pushEvent("Pozvánky do aliance přes backend zatím nejsou napojené.");
-    });
+    if (leaveModalBackdrop) leaveModalBackdrop.addEventListener("click", () => setAllianceLeaveModalVisible(false));
+    if (leaveModalCloseBtn) leaveModalCloseBtn.addEventListener("click", () => setAllianceLeaveModalVisible(false));
+    if (leaveCancelBtn) leaveCancelBtn.addEventListener("click", () => setAllianceLeaveModalVisible(false));
     if (backdrop) backdrop.addEventListener("click", () => {
       root.classList.add("hidden");
+      setAllianceLeaveModalVisible(false);
+      setCreateAllianceModalVisible(false);
+      setAllianceManagementModalVisible(false);
+      if (allianceCountdownIntervalId) {
+        window.clearInterval(allianceCountdownIntervalId);
+        allianceCountdownIntervalId = null;
+      }
       setMobileTopbarCoveredByPrimaryModal(false);
     });
     if (closeBtn) closeBtn.addEventListener("click", () => {
       root.classList.add("hidden");
+      setAllianceLeaveModalVisible(false);
+      setCreateAllianceModalVisible(false);
+      setAllianceManagementModalVisible(false);
+      if (allianceCountdownIntervalId) {
+        window.clearInterval(allianceCountdownIntervalId);
+        allianceCountdownIntervalId = null;
+      }
       setMobileTopbarCoveredByPrimaryModal(false);
+    });
+    if (createModalBackdrop) createModalBackdrop.addEventListener("click", () => {
+      setCreateAllianceModalVisible(false);
+    });
+    if (createModalCloseBtn) createModalCloseBtn.addEventListener("click", () => {
+      setCreateAllianceModalVisible(false);
+    });
+    if (managementModalBackdrop) managementModalBackdrop.addEventListener("click", () => {
+      setAllianceManagementModalVisible(false);
+    });
+    if (managementModalCloseBtn) managementModalCloseBtn.addEventListener("click", () => {
+      setAllianceManagementModalVisible(false);
+    });
+    managementInviteBtn.addEventListener("click", async () => {
+      const username = String(managementInviteName.value || "").trim();
+      if (!username) {
+        pushEvent("Zadej jméno hráče pro pozvánku.");
+        return;
+      }
+      if (!window.Empire.token) {
+        const state = getLocalAllianceState();
+        const result = sendLocalAllianceManagementInvite(state, username);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        saveLocalAllianceState(state);
+        managementInviteName.value = "";
+        pushEvent("Přímá pozvánka byla odeslána.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+        return;
+      }
+      const result = await window.Empire.API.sendAllianceManagementInvite(username);
+      if (result.error) {
+        pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+        return;
+      }
+      managementInviteName.value = "";
+      pushEvent("Přímá pozvánka byla odeslána.");
+      if (allianceRefreshHandler) await allianceRefreshHandler();
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
-        root.classList.add("hidden");
-        setMobileTopbarCoveredByPrimaryModal(false);
+        if (!createModal.classList.contains("hidden")) {
+          setCreateAllianceModalVisible(false);
+        } else if (!managementModal.classList.contains("hidden")) {
+          setAllianceManagementModalVisible(false);
+        } else {
+          root.classList.add("hidden");
+          if (allianceCountdownIntervalId) {
+            window.clearInterval(allianceCountdownIntervalId);
+            allianceCountdownIntervalId = null;
+          }
+          setMobileTopbarCoveredByPrimaryModal(false);
+        }
       }
     });
     chatSend.addEventListener("click", async () => {
@@ -7447,62 +8311,343 @@ window.Empire.UI = (() => {
       chatInput.value = "";
       renderAllianceChat(state.chat);
     });
+    renderAllianceIconPicker();
+    setCreateAllianceModalVisible(false);
+    setAllianceManagementModalVisible(false);
   }
 
-  function renderAllianceState(activeAlliance, alliances) {
+  function getAllianceIconOption(iconKey) {
+    const normalized = String(iconKey || "").trim() || DEFAULT_ALLIANCE_ICON_KEY;
+    return ALLIANCE_ICON_OPTIONS.find((icon) => icon.key === normalized)
+      || ALLIANCE_ICON_OPTIONS[0];
+  }
+
+  function escapeAllianceMarkup(value) {
+    return String(value || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll("\"", "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function renderAllianceIdentityMarkup(alliance) {
+    const icon = getAllianceIconOption(alliance?.icon_key || alliance?.iconKey);
+    const name = escapeAllianceMarkup(alliance?.name || "Aliance");
+    const label = escapeAllianceMarkup(icon.label);
+    const symbol = escapeAllianceMarkup(icon.symbol);
+    return `
+      <span class="alliance-badge-markup" title="${label}">
+        <span class="alliance-badge-markup__icon" aria-hidden="true">${symbol}</span>
+        <span class="alliance-badge-markup__name">${name}</span>
+      </span>
+    `;
+  }
+
+  function formatAllianceError(errorKey) {
+    switch (String(errorKey || "").trim()) {
+      case "alliance_full":
+        return "Aliance je plná.";
+      case "member_exists":
+        return "Tento člen už v alianci je.";
+      case "no_active_alliance":
+        return "Nejsi v žádné aktivní alianci.";
+      case "already_in_alliance":
+        return "Už jsi v alianci.";
+      case "request_pending":
+        return "Pozvánka už byla odeslána.";
+      case "missing_request":
+        return "Pozvánka nebyla nalezena.";
+      case "not_alliance_owner":
+        return "Tuto pozvánku může řešit jen vlastník aliance.";
+      case "cannot_invite_self":
+        return "Do vlastní aliance si pozvánku neposíláš.";
+      case "missing_player":
+        return "Tento hráč nebyl nalezen.";
+      case "player_has_alliance":
+        return "Hráč už je v jiné alianci.";
+      case "invite_pending":
+        return "Tomuto hráči už čeká přímá pozvánka.";
+      case "missing_invite":
+        return "Pozvání nebylo nalezeno.";
+      case "not_invite_target":
+        return "Tohle pozvání není určené tobě.";
+      case "cannot_remove_leader":
+        return "Leadera nelze vyhodit.";
+      case "missing_member":
+        return "Člen aliance nebyl nalezen.";
+      case "member_ready_active":
+        return "Tento člen je stále v READY okně.";
+      case "vote_already_open":
+        return "Pro tohoto člena už běží hlasování.";
+      case "missing_vote":
+        return "Hlasování nebylo nalezeno.";
+      case "vote_already_cast":
+        return "V tomto hlasování už jsi hlasoval.";
+      case "cannot_vote_self":
+        return "O vlastním vyhození hlasování nespustíš.";
+      case "cannot_vote_target":
+        return "Cílový člen o svém vyhození hlasovat nemůže.";
+      default:
+        return String(errorKey || "Neznámá chyba.");
+    }
+  }
+
+  function computeLocalAllianceReadyState(readyAt) {
+    const readyTimestamp = readyAt ? new Date(readyAt).getTime() : 0;
+    const dueAt = readyTimestamp ? readyTimestamp + ALLIANCE_READY_WINDOW_MS : 0;
+    const now = Date.now();
+    return {
+      readyAt: readyAt || null,
+      readyDueAt: dueAt ? new Date(dueAt).toISOString() : null,
+      isReadyWindowActive: Boolean(dueAt && dueAt > now),
+      isReadyOverdue: !dueAt || dueAt <= now
+    };
+  }
+
+  function formatAllianceDueLabel(isoValue) {
+    if (!isoValue) return "READY chybí";
+    const dueMs = new Date(isoValue).getTime();
+    if (!Number.isFinite(dueMs)) return "READY chybí";
+    const delta = Math.max(0, dueMs - Date.now());
+    const totalMinutes = Math.ceil(delta / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  }
+
+  function formatAllianceDueLabelSeconds(isoValue) {
+    if (!isoValue) return "00:00:00";
+    const dueMs = new Date(isoValue).getTime();
+    if (!Number.isFinite(dueMs)) return "00:00:00";
+    const deltaSeconds = Math.max(0, Math.floor((dueMs - Date.now()) / 1000));
+    const hours = Math.floor(deltaSeconds / 3600);
+    const minutes = Math.floor((deltaSeconds % 3600) / 60);
+    const seconds = deltaSeconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  function formatAllianceRelativeTime(isoValue) {
+    const timestamp = new Date(isoValue).getTime();
+    if (!Number.isFinite(timestamp)) return "-";
+    const diffMs = Math.max(0, Date.now() - timestamp);
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 1) return "právě teď";
+    if (diffMinutes < 60) return `před ${diffMinutes} min`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `před ${diffHours} h`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `před ${diffDays} d`;
+  }
+
+  function countOwnedDistrictsForAllianceMember(memberName) {
+    const normalizedMemberName = normalizeOwnerName(memberName);
+    if (!normalizedMemberName) return 0;
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    return districts.reduce((sum, district) => {
+      return sum + (normalizeOwnerName(district?.owner) === normalizedMemberName ? 1 : 0);
+    }, 0);
+  }
+
+  function getAllianceMemberVisualData(member) {
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const ownedDistrict = districts.find((district) => normalizeOwnerName(district?.owner) === normalizeOwnerName(member?.username));
+    const sectorCount = countOwnedDistrictsForAllianceMember(member?.username);
+    const faction = formatFactionLabel(
+      member?.gang_structure
+      || member?.gangStructure
+      || ownedDistrict?.ownerFaction
+      || ownedDistrict?.ownerStructure
+      || resolveDemoOwnerFaction(member?.username || "")
+    );
+    const avatar = String(
+      member?.avatar
+      || member?.ownerAvatar
+      || ownedDistrict?.ownerAvatar
+      || resolveDemoOwnerAvatar(member?.username || "")
+    ).trim();
+    const color = normalizeHexColor(
+      member?.gang_color
+      || member?.gangColor
+      || ownedDistrict?.ownerColor
+      || null
+    );
+    return {
+      sectorCount,
+      sectorLabel: formatSectorCountLabel(sectorCount),
+      faction,
+      avatar,
+      color
+    };
+  }
+
+  function renderAllianceMemberCard(member, kickVotes = []) {
+    const openVote = (kickVotes || []).find((vote) => String(vote.target_player_id) === String(member.id));
+    const memberStatus = member.role === "leader"
+      ? `<span class="alliance-ready-state alliance-ready-state--leader">Leader</span>`
+      : member.isReadyWindowActive
+        ? `<span class="alliance-ready-state alliance-ready-state--ok">READY ${formatAllianceDueLabelSeconds(member.readyDueAt)}</span>`
+        : `<span class="alliance-ready-state alliance-ready-state--bad">READY chybí</span>`;
+    const voteStatus = openVote ? `<span class="alliance-member__vote">Hlasování ${openVote.yes_votes}/${openVote.required_votes}</span>` : "";
+    const visual = getAllianceMemberVisualData(member);
+    const avatarMarkup = visual.avatar
+      ? `<button class="alliance-member__avatar-btn" type="button" data-alliance-member-avatar="${escapeAllianceMarkup(member.username || "Hráč")}" data-alliance-member-avatar-src="${escapeAllianceMarkup(visual.avatar)}" data-alliance-member-avatar-meta="${escapeAllianceMarkup(`${visual.faction} • ${visual.sectorLabel}`)}"><img class="alliance-member__avatar" src="${escapeAllianceMarkup(visual.avatar)}" alt="Avatar ${escapeAllianceMarkup(member.username || "Hráč")}" loading="lazy" /></button>`
+      : `<div class="alliance-member__avatar alliance-member__avatar--empty">${escapeAllianceMarkup(String(member?.username || "?").slice(0, 1).toUpperCase())}</div>`;
+    const colorMarkup = visual.color
+      ? `<span class="alliance-member__color"><span class="alliance-member__color-dot" style="background:${visual.color}"></span>${visual.color.toUpperCase()}</span>`
+      : `<span class="alliance-member__color alliance-member__color--empty">Bez barvy</span>`;
+    return `
+      <div class="alliance-member">
+        <div class="alliance-member__top">
+          ${avatarMarkup}
+          <div class="alliance-member__identity">
+            <strong>${escapeAllianceMarkup(member.username || "Hráč")} <span class="alliance-member__sector-count">(${visual.sectorLabel})</span></strong>
+            <span>${escapeAllianceMarkup(member.gang_name || "Gang")}</span>
+          </div>
+        </div>
+        <div class="alliance-member__meta">
+          <span>${escapeAllianceMarkup(visual.faction)}</span>
+          ${colorMarkup}
+        </div>
+        <div class="alliance-member__status">
+          ${memberStatus}
+          ${voteStatus}
+        </div>
+      </div>
+    `;
+  }
+
+  function bindAllianceMemberAvatarLightbox(root = document) {
+    const lightbox = document.getElementById("alliance-member-lightbox");
+    const image = document.getElementById("alliance-member-lightbox-image");
+    const title = document.getElementById("alliance-member-lightbox-title");
+    const meta = document.getElementById("alliance-member-lightbox-meta");
+    const closeBtn = document.getElementById("alliance-member-lightbox-close");
+    const backdrop = document.getElementById("alliance-member-lightbox-backdrop");
+    if (!lightbox || !image || !title || !meta) return;
+
+    const close = () => lightbox.classList.add("hidden");
+    if (closeBtn && !closeBtn.dataset.boundAllianceLightbox) {
+      closeBtn.dataset.boundAllianceLightbox = "1";
+      closeBtn.addEventListener("click", close);
+    }
+    if (backdrop && !backdrop.dataset.boundAllianceLightbox) {
+      backdrop.dataset.boundAllianceLightbox = "1";
+      backdrop.addEventListener("click", close);
+    }
+
+    root.querySelectorAll("[data-alliance-member-avatar]").forEach((button) => {
+      if (button.dataset.boundAllianceLightbox) return;
+      button.dataset.boundAllianceLightbox = "1";
+      button.addEventListener("click", () => {
+        const src = String(button.getAttribute("data-alliance-member-avatar-src") || "").trim();
+        if (!src) return;
+        image.src = src;
+        title.textContent = String(button.getAttribute("data-alliance-member-avatar") || "Člen aliance").trim() || "Člen aliance";
+        meta.textContent = String(button.getAttribute("data-alliance-member-avatar-meta") || "").trim();
+        lightbox.classList.remove("hidden");
+      });
+    });
+  }
+
+  function renderAllianceState(activeAlliance, alliances, incomingInvites = []) {
     const activePanel = document.getElementById("alliance-active-panel");
+    const playerInvitesPanel = document.getElementById("alliance-player-invites-panel");
     const listPanel = document.getElementById("alliance-list-panel");
     const leaveBtn = document.getElementById("alliance-leave-btn");
-    if (!activePanel || !listPanel || !leaveBtn) return;
+    const createToggleBtn = document.getElementById("alliance-create-toggle-btn");
+    const createEntry = document.getElementById("alliance-create-entry");
+    if (!activePanel || !playerInvitesPanel || !listPanel || !leaveBtn || !createToggleBtn) return;
 
     leaveBtn.classList.toggle("hidden", !activeAlliance);
+    createToggleBtn.classList.toggle("hidden", Boolean(activeAlliance));
+    if (createEntry) createEntry.classList.toggle("hidden", Boolean(activeAlliance));
+    activePanel.classList.toggle("alliance-active-panel--occupied", Boolean(activeAlliance));
+    listPanel.classList.toggle("hidden", Boolean(activeAlliance));
 
     if (activeAlliance) {
-      const gangColor = resolveStoredGangColor();
+      const currentPlayerReady = activeAlliance.current_player_ready || computeLocalAllianceReadyState(null);
+      const readyStateClass = currentPlayerReady.isReadyWindowActive
+        ? "alliance-ready-state alliance-ready-state--ok"
+        : "alliance-ready-state alliance-ready-state--bad";
+      const readyTimerClass = currentPlayerReady.isReadyWindowActive
+        ? "alliance-ready-panel__timer alliance-ready-panel__timer--ok"
+        : "alliance-ready-panel__timer alliance-ready-panel__timer--bad";
+      const roleBadge = activeAlliance.current_player_role === "leader"
+        ? `<span class="alliance-ready-state alliance-ready-state--leader">Leader</span>`
+        : `<span class="alliance-ready-state alliance-ready-state--leader">Člen</span>`;
       activePanel.innerHTML = `
-        <div class="modal__row">
-          <span>Aktivní aliance</span>
-          <strong>${activeAlliance.name}</strong>
-        </div>
-        <div class="modal__row">
-          <span>Tvoje barva gangu</span>
-          <strong>${renderGangColorChipMarkup(gangColor)}</strong>
-        </div>
-        <div class="modal__row">
-          <span>Bonus income</span>
-          <strong>+${activeAlliance.bonus_income_pct || 0}%</strong>
-        </div>
-        <div class="modal__row">
-          <span>Bonus influence</span>
-          <strong>+${activeAlliance.bonus_influence_pct || 0}%</strong>
-        </div>
-        <div class="modal__row">
-          <span>Bonus heat control</span>
-          <strong>${activeAlliance.heat_control_text || "-8% heat"}</strong>
-        </div>
-        <div class="modal__row">
-          <span>Členové</span>
-          <strong>${activeAlliance.member_count || 0}</strong>
-        </div>
-        <div class="alliance-members">
-          ${(activeAlliance.members || [])
-            .map((member) => `<div class="alliance-member">${member.username} • ${member.gang_name}</div>`)
-            .join("")}
+        <div class="alliance-active-card">
+          <div class="alliance-active-card__top">
+            <div class="alliance-active-card__badge-wrap">
+              <div class="alliance-active-card__badge">${renderAllianceIdentityMarkup(activeAlliance)}</div>
+              <div class="alliance-active-card__description">
+                <span>Popisek</span>
+                <strong>${escapeAllianceMarkup(DEFAULT_ALLIANCE_DESCRIPTION)}</strong>
+              </div>
+              <div class="alliance-active-card__badges">
+                ${roleBadge}
+                <span class="${readyStateClass}">${currentPlayerReady.isReadyWindowActive ? "READY aktivní" : "READY vypršelo"}</span>
+              </div>
+            </div>
+            <div class="alliance-ready-panel">
+              <button class="btn btn--primary alliance-ready-btn" id="alliance-ready-btn">READY</button>
+              <div class="alliance-ready-panel__meta">
+                <strong class="${readyTimerClass}">${formatAllianceDueLabelSeconds(currentPlayerReady.readyDueAt)}</strong>
+              </div>
+            </div>
+          </div>
+          <div class="alliance-active-card__grid">
+            <div class="alliance-active-card__stat">
+              <span>Členové</span>
+              <strong>${activeAlliance.member_count || 0}/${ALLIANCE_MAX_MEMBERS}</strong>
+            </div>
+            <div class="alliance-active-card__stat">
+              <span>Income</span>
+              <strong>+${activeAlliance.bonus_income_pct || 0}%</strong>
+            </div>
+            <div class="alliance-active-card__stat">
+              <span>Influence</span>
+              <strong>+${activeAlliance.bonus_influence_pct || 0}%</strong>
+            </div>
+            <div class="alliance-active-card__stat alliance-active-card__stat--wide">
+              <span>Heat control</span>
+              <strong>${activeAlliance.heat_control_text || "-8% heat"}</strong>
+            </div>
+          </div>
+          <div class="alliance-members">
+            ${(activeAlliance.members || [])
+              .map((member) => renderAllianceMemberCard(member, activeAlliance.kick_votes || []))
+              .join("")}
+          </div>
         </div>
       `;
     } else {
-      const gangColor = resolveStoredGangColor();
       activePanel.innerHTML = `
         <div class="modal__row">
           <span>Aktivní aliance</span>
           <strong>Žádná</strong>
         </div>
-        <div class="modal__row">
-          <span>Tvoje barva gangu</span>
-          <strong>${renderGangColorChipMarkup(gangColor)}</strong>
-        </div>
       `;
     }
+
+    playerInvitesPanel.innerHTML = !activeAlliance && incomingInvites.length ? `
+      <div class="alliance-pending-panel">
+        <div class="alliance-pending-panel__title">Příchozí pozvání do aliance</div>
+        ${incomingInvites.map((invite) => `
+          <div class="alliance-request-item">
+            <div class="alliance-request-item__copy">
+              <strong>${escapeAllianceMarkup(invite.alliance_name || "Aliance")}</strong>
+              <span>${escapeAllianceMarkup(invite.inviter_username || "Hráč")} tě zve do aliance.</span>
+            </div>
+            <div class="alliance-request-item__actions">
+              <button class="btn btn--primary" data-player-invite-accept="${invite.id}">Přijmout</button>
+              <button class="btn btn--ghost" data-player-invite-reject="${invite.id}">Odmítnout</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    ` : "";
 
     listPanel.innerHTML = `
       <div class="alliance-list">
@@ -7511,10 +8656,13 @@ window.Empire.UI = (() => {
             (alliance) => `
               <div class="alliance-list__item">
                 <div>
-                  <div class="alliance-list__name">${alliance.name}</div>
-                  <div class="alliance-list__meta">${alliance.member_count || 0} členů • +${alliance.bonus_income_pct || 0}% income • +${alliance.bonus_influence_pct || 0}% influence</div>
+                  <div class="alliance-list__name">${renderAllianceIdentityMarkup(alliance)}</div>
+                  <div class="alliance-list__description">${escapeAllianceMarkup(alliance.description || "Bez popisku")}</div>
+                  <div class="alliance-list__meta">${alliance.member_count || 0}/${ALLIANCE_MAX_MEMBERS} členů • +${alliance.bonus_income_pct || 0}% income • +${alliance.bonus_influence_pct || 0}% influence</div>
                 </div>
-                <button class="btn btn--ghost" data-alliance-join="${alliance.id}">Připojit</button>
+                <button class="btn btn--ghost" data-alliance-request="${alliance.id}" ${Number(alliance.member_count || 0) >= ALLIANCE_MAX_MEMBERS || alliance.has_pending_request || activeAlliance ? "disabled" : ""}>
+                  ${alliance.has_pending_request ? "Pozvánka odeslána" : "Poslat pozvánku"}
+                </button>
               </div>
             `
           )
@@ -7522,28 +8670,381 @@ window.Empire.UI = (() => {
       </div>
     `;
 
-    listPanel.querySelectorAll("[data-alliance-join]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const allianceId = button.getAttribute("data-alliance-join");
-        if (!allianceId) return;
+    const managementOpenBtn = document.getElementById("alliance-management-open-btn");
+    const managementFooterBtn = document.getElementById("alliance-management-footer-btn");
+    const readyBtn = document.getElementById("alliance-ready-btn");
+    if (managementFooterBtn) managementFooterBtn.classList.toggle("hidden", !activeAlliance);
+    bindAllianceMemberAvatarLightbox(activePanel);
+    if (managementOpenBtn) {
+      managementOpenBtn.addEventListener("click", () => {
+        document.getElementById("alliance-management-modal")?.classList.remove("hidden");
+      });
+    }
+    if (managementFooterBtn) {
+      managementFooterBtn.addEventListener("click", () => {
+        document.getElementById("alliance-management-modal")?.classList.remove("hidden");
+      });
+    }
+    if (readyBtn) {
+      readyBtn.addEventListener("click", async () => {
         if (!window.Empire.token) {
           const state = getLocalAllianceState();
-          const joined = joinLocalAlliance(state, allianceId);
+          const result = markLocalAllianceReady(state);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
           saveLocalAllianceState(state);
-          pushEvent(`Připojil ses k alianci ${joined?.name || ""}.`);
+          pushEvent("READY potvrzen.");
           if (allianceRefreshHandler) await allianceRefreshHandler();
-          syncGuestAllianceLabel(joined?.name || "Žádná");
           return;
         }
-        const result = await window.Empire.API.joinAlliance(allianceId);
+        const result = await window.Empire.API.markAllianceReady();
         if (result.error) {
-          pushEvent(`Aliance: ${result.error}`);
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
           return;
         }
-        pushEvent("Připojil ses k alianci.");
+        pushEvent("READY potvrzen.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+      });
+    }
+
+    playerInvitesPanel.querySelectorAll("[data-player-invite-accept]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const inviteId = button.getAttribute("data-player-invite-accept");
+        if (!inviteId) return;
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const result = respondToLocalAllianceMemberInvite(state, inviteId, true);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("Pozvání do aliance bylo přijato.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          syncGuestAllianceLabel(result.allianceName || "Žádná");
+          return;
+        }
+        const result = await window.Empire.API.respondToAllianceMemberInvite(inviteId, true);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("Pozvání do aliance bylo přijato.");
         if (allianceRefreshHandler) await allianceRefreshHandler();
         const profile = await window.Empire.API.getProfile();
         updateProfile(profile);
+      });
+    });
+
+    playerInvitesPanel.querySelectorAll("[data-player-invite-reject]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const inviteId = button.getAttribute("data-player-invite-reject");
+        if (!inviteId) return;
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const result = respondToLocalAllianceMemberInvite(state, inviteId, false);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("Pozvání do aliance bylo odmítnuto.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          return;
+        }
+        const result = await window.Empire.API.respondToAllianceMemberInvite(inviteId, false);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("Pozvání do aliance bylo odmítnuto.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+      });
+    });
+
+    listPanel.querySelectorAll("[data-alliance-request]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const allianceId = button.getAttribute("data-alliance-request");
+        if (!allianceId) return;
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const request = requestLocalAllianceInvite(state, allianceId);
+          if (request?.error) {
+            pushEvent(`Aliance: ${formatAllianceError(request.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("Pozvánka byla odeslána.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          return;
+        }
+        const result = await window.Empire.API.requestAllianceInvite(allianceId);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("Pozvánka byla odeslána.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+      });
+    });
+  }
+
+  function renderAllianceManagementState(activeAlliance) {
+    const panel = document.getElementById("alliance-management-panel");
+    const inviteInput = document.getElementById("alliance-management-invite-name");
+    const inviteBtn = document.getElementById("alliance-management-invite-btn");
+    if (!panel) return;
+    if (!activeAlliance) {
+      if (inviteInput) inviteInput.disabled = true;
+      if (inviteBtn) inviteBtn.disabled = true;
+      panel.innerHTML = `
+        <div class="alliance-pending-panel">
+          <div class="alliance-request-item alliance-request-item--empty">Nejsi ve vlastní alianci.</div>
+        </div>
+      `;
+      return;
+    }
+    const isLeader = activeAlliance.current_player_role === "leader";
+    if (inviteInput) inviteInput.disabled = !isLeader;
+    if (inviteBtn) inviteBtn.disabled = !isLeader;
+
+    const pendingRequests = Array.isArray(activeAlliance.pending_requests) ? activeAlliance.pending_requests : [];
+    const outgoingInvites = Array.isArray(activeAlliance.outgoing_invites) ? activeAlliance.outgoing_invites : [];
+    const kickVotes = Array.isArray(activeAlliance.kick_votes) ? activeAlliance.kick_votes : [];
+    const members = Array.isArray(activeAlliance.members) ? activeAlliance.members : [];
+    const auditLogs = Array.isArray(activeAlliance.audit_logs) ? activeAlliance.audit_logs : [];
+    const currentPlayerReady = activeAlliance.current_player_ready || computeLocalAllianceReadyState(null);
+    panel.innerHTML = `
+      <div class="alliance-management-ready">
+        <div class="alliance-management-ready__copy">
+          <span>READY status</span>
+          <strong>${currentPlayerReady.isReadyWindowActive ? "Aktivní okno" : "Je potřeba potvrdit"}</strong>
+        </div>
+        <div class="alliance-management-ready__actions">
+          <button class="btn btn--primary alliance-ready-btn alliance-ready-btn--management" id="alliance-management-ready-btn">READY</button>
+          <strong class="${currentPlayerReady.isReadyWindowActive ? "alliance-ready-panel__timer alliance-ready-panel__timer--ok" : "alliance-ready-panel__timer alliance-ready-panel__timer--bad"}">${formatAllianceDueLabelSeconds(currentPlayerReady.readyDueAt)}</strong>
+        </div>
+      </div>
+      <div class="alliance-pending-panel">
+        <div class="alliance-pending-panel__title">Členové aliance</div>
+        ${members.map((member) => {
+          const openVote = kickVotes.find((vote) => String(vote.target_player_id) === String(member.id));
+          const canStartVote = member.role !== "leader" && member.isReadyOverdue;
+          const visual = getAllianceMemberVisualData(member);
+          const avatarMarkup = visual.avatar
+            ? `<button class="alliance-member__avatar-btn alliance-member__avatar-btn--management" type="button" data-alliance-member-avatar="${escapeAllianceMarkup(member.username || "Hráč")}" data-alliance-member-avatar-src="${escapeAllianceMarkup(visual.avatar)}" data-alliance-member-avatar-meta="${escapeAllianceMarkup(`${visual.faction} • ${visual.sectorLabel}`)}"><img class="alliance-member__avatar" src="${escapeAllianceMarkup(visual.avatar)}" alt="Avatar ${escapeAllianceMarkup(member.username || "Hráč")}" loading="lazy" /></button>`
+            : `<div class="alliance-member__avatar alliance-member__avatar--empty">${escapeAllianceMarkup(String(member?.username || "?").slice(0, 1).toUpperCase())}</div>`;
+          return `
+            <div class="alliance-request-item">
+              ${avatarMarkup}
+              <div class="alliance-request-item__copy">
+                <strong>${escapeAllianceMarkup(member.username || "Hráč")} (${visual.sectorLabel}) • ${member.role === "leader" ? "Leader" : "Člen"}</strong>
+                <span>${escapeAllianceMarkup(member.gang_name || "Gang")} • ${escapeAllianceMarkup(visual.faction)} • ${visual.color ? visual.color.toUpperCase() : "Bez barvy"}</span>
+                <span>${member.isReadyWindowActive ? `READY aktivní ještě ${formatAllianceDueLabelSeconds(member.readyDueAt)}` : "READY chybí, lze řešit vyhození."}</span>
+              </div>
+              <div class="alliance-request-item__actions">
+                ${isLeader && member.role !== "leader" ? `<button class="btn btn--ghost" data-alliance-member-remove="${member.id}">Vyhodit</button>` : ""}
+                ${canStartVote && !openVote ? `<button class="btn btn--primary" data-alliance-kick-start="${member.id}">Spustit hlasování</button>` : ""}
+                ${openVote ? `<button class="btn btn--primary" data-alliance-kick-cast="${openVote.id}">Hlasovat (${openVote.yes_votes}/${openVote.required_votes})</button>` : ""}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+      ${isLeader ? `<div class="alliance-pending-panel">
+        <div class="alliance-pending-panel__title">Žádosti o vstup</div>
+        ${pendingRequests.length ? pendingRequests.map((request) => `
+          <div class="alliance-request-item">
+            <div class="alliance-request-item__copy">
+              <strong>${escapeAllianceMarkup(request.username || "Hráč")}</strong>
+              <span>${escapeAllianceMarkup(request.gang_name || "Gang")} chce vstoupit do aliance.</span>
+            </div>
+            <div class="alliance-request-item__actions">
+              <button class="btn btn--primary" data-alliance-request-accept="${request.id}">Potvrdit</button>
+              <button class="btn btn--ghost" data-alliance-request-reject="${request.id}">Odmítnout</button>
+            </div>
+          </div>
+        `).join("") : `<div class="alliance-request-item alliance-request-item--empty">Žádné čekající žádosti.</div>`}
+      </div>
+      <div class="alliance-pending-panel">
+        <div class="alliance-pending-panel__title">Odeslané přímé pozvánky</div>
+        ${outgoingInvites.length ? outgoingInvites.map((invite) => `
+          <div class="alliance-request-item">
+            <div class="alliance-request-item__copy">
+              <strong>${escapeAllianceMarkup(invite.username || "Hráč")}</strong>
+              <span>${escapeAllianceMarkup(invite.gang_name || "Gang")} čeká na odpověď.</span>
+            </div>
+          </div>
+        `).join("") : `<div class="alliance-request-item alliance-request-item--empty">Žádné aktivní přímé pozvánky.</div>`}
+      </div>` : ""}
+      <div class="alliance-pending-panel">
+        <div class="alliance-pending-panel__title">Audit log aliance</div>
+        ${auditLogs.length ? auditLogs.map((entry) => `
+          <div class="alliance-request-item alliance-request-item--log">
+            <div class="alliance-request-item__copy">
+              <strong>${escapeAllianceMarkup(entry.message || "Aliance akce")}</strong>
+              <span>${escapeAllianceMarkup(formatAllianceRelativeTime(entry.created_at))}</span>
+            </div>
+          </div>
+        `).join("") : `<div class="alliance-request-item alliance-request-item--empty">Audit log je zatím prázdný.</div>`}
+      </div>
+    `;
+
+    const managementReadyBtn = document.getElementById("alliance-management-ready-btn");
+    bindAllianceMemberAvatarLightbox(panel);
+    if (managementReadyBtn) {
+      managementReadyBtn.addEventListener("click", async () => {
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const result = markLocalAllianceReady(state);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("READY potvrzen.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          return;
+        }
+        const result = await window.Empire.API.markAllianceReady();
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("READY potvrzen.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+      });
+    }
+
+    panel.querySelectorAll("[data-alliance-request-accept]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const requestId = button.getAttribute("data-alliance-request-accept");
+        if (!requestId) return;
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const result = respondToLocalAllianceRequest(state, requestId, true);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("Žádost byla potvrzena.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          return;
+        }
+        const result = await window.Empire.API.respondToAllianceInvite(requestId, true);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("Žádost byla potvrzena.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+      });
+    });
+
+    panel.querySelectorAll("[data-alliance-request-reject]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const requestId = button.getAttribute("data-alliance-request-reject");
+        if (!requestId) return;
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const result = respondToLocalAllianceRequest(state, requestId, false);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("Žádost byla odmítnuta.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          return;
+        }
+        const result = await window.Empire.API.respondToAllianceInvite(requestId, false);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("Žádost byla odmítnuta.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+      });
+    });
+
+    panel.querySelectorAll("[data-alliance-member-remove]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const memberId = button.getAttribute("data-alliance-member-remove");
+        if (!memberId) return;
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const result = removeLocalAllianceMember(state, memberId);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("Člen byl vyhozen z aliance.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          return;
+        }
+        const result = await window.Empire.API.removeAllianceMember(memberId);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("Člen byl vyhozen z aliance.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+      });
+    });
+
+    panel.querySelectorAll("[data-alliance-kick-start]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const memberId = button.getAttribute("data-alliance-kick-start");
+        if (!memberId) return;
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const result = startLocalAllianceKickVote(state, memberId);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("Hlasování o vyhození bylo zahájeno.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          return;
+        }
+        const result = await window.Empire.API.startAllianceKickVote(memberId);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("Hlasování o vyhození bylo zahájeno.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
+      });
+    });
+
+    panel.querySelectorAll("[data-alliance-kick-cast]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const voteId = button.getAttribute("data-alliance-kick-cast");
+        if (!voteId) return;
+        if (!window.Empire.token) {
+          const state = getLocalAllianceState();
+          const result = castLocalAllianceKickVote(state, voteId);
+          if (result.error) {
+            pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+            return;
+          }
+          saveLocalAllianceState(state);
+          pushEvent("Hlas pro vyhození byl zaznamenán.");
+          if (allianceRefreshHandler) await allianceRefreshHandler();
+          return;
+        }
+        const result = await window.Empire.API.castAllianceKickVote(voteId);
+        if (result.error) {
+          pushEvent(`Aliance: ${formatAllianceError(result.error)}`);
+          return;
+        }
+        pushEvent("Hlas pro vyhození byl zaznamenán.");
+        if (allianceRefreshHandler) await allianceRefreshHandler();
       });
     });
   }
@@ -7560,6 +9061,65 @@ window.Empire.UI = (() => {
       .join("");
   }
 
+  function buildAllianceTenBlackoutLocalAllianceState(ownerName, allyName) {
+    const allianceId = "scenario-blackout-alliance";
+    const allianceName = `${ownerName} + ${allyName}`;
+    const nowIso = new Date().toISOString();
+    return {
+      activeAllianceId: allianceId,
+      alliances: [
+        {
+          id: allianceId,
+          name: allianceName,
+          description: "Blackout dvojice drzi sektor 102 a vede nocni kontrolu mesta.",
+          icon_key: "lightning",
+          owner_player_id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+          bonus_income_pct: 6,
+          bonus_influence_pct: 5,
+          heat_control_text: "-8% heat",
+          members: [
+            {
+              id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+              username: ownerName,
+              gang_name: cachedProfile?.gangName || ownerName,
+              alliance_ready_at: nowIso
+            },
+            {
+              id: "scenario-blackout-ally",
+              username: allyName,
+              gang_name: "Piškoti",
+              alliance_ready_at: null
+            }
+          ]
+        }
+      ],
+      requests: [
+        {
+          id: "scenario-blackout-zabijak-request",
+          alliance_id: allianceId,
+          player_id: "scenario-blackout-zabijak",
+          username: "Zabijak",
+          gang_name: "District 143 + 121"
+        }
+      ],
+      memberInvites: [],
+      kickVotes: [],
+      notifications: [],
+      auditLogs: [
+        {
+          id: "scenario-blackout-audit-1",
+          alliance_id: allianceId,
+          message: "Zabijak poslal zadost o vstup do aliance.",
+          created_at: nowIso
+        }
+      ],
+      chat: [
+        { time: "20:12", author: allyName, text: "Drzim district 102. Blackout jede." },
+        { time: "20:18", author: "System", text: "Zabijak zadal o vstup do aliance." }
+      ]
+    };
+  }
+
   function getLocalAllianceState() {
     try {
       const parsed = JSON.parse(localStorage.getItem(LOCAL_ALLIANCE_KEY) || "null");
@@ -7573,25 +9133,36 @@ window.Empire.UI = (() => {
         {
           id: "alliance-neon-vipers",
           name: "Neon Vipers",
+          description: "Rychlé přesuny, tlak na periferii a čisté vpády pod neonem.",
+          icon_key: "lightning",
+          owner_player_id: "owner-neon-vipers",
           bonus_income_pct: 8,
           bonus_influence_pct: 4,
           heat_control_text: "-6% heat",
           members: [
-            { username: "Raven", gang_name: "North Vultures" },
-            { username: "Lira", gang_name: "Chrome Echo" }
+            { id: "owner-neon-vipers", username: "Raven", gang_name: "North Vultures", alliance_ready_at: new Date().toISOString() },
+            { id: "member-neon-lira", username: "Lira", gang_name: "Chrome Echo", alliance_ready_at: null }
           ]
         },
         {
           id: "alliance-black-sun",
           name: "Black Sun Pact",
+          description: "Tichá infiltrace, vydírání a chirurgické zásahy proti rivalům.",
+          icon_key: "eye_triangle",
+          owner_player_id: "owner-black-sun",
           bonus_income_pct: 5,
           bonus_influence_pct: 7,
           heat_control_text: "-10% heat",
           members: [
-            { username: "Hex", gang_name: "Dusk Syndicate" }
+            { id: "owner-black-sun", username: "Hex", gang_name: "Dusk Syndicate", alliance_ready_at: new Date().toISOString() }
           ]
         }
       ],
+      requests: [],
+      memberInvites: [],
+      kickVotes: [],
+      notifications: [],
+      auditLogs: [],
       chat: [
         { time: "09:12", author: "Raven", text: "Potřebujeme posily na sever." },
         { time: "09:14", author: "Lira", text: "Posílám tým, 5 minut." }
@@ -7607,6 +9178,11 @@ window.Empire.UI = (() => {
       JSON.stringify({
         activeAllianceId: state.activeAllianceId || null,
         alliances: state.alliances || [],
+        requests: state.requests || [],
+        memberInvites: state.memberInvites || [],
+        kickVotes: state.kickVotes || [],
+        notifications: state.notifications || [],
+        auditLogs: state.auditLogs || [],
         chat: state.chat || []
       })
     );
@@ -7614,34 +9190,74 @@ window.Empire.UI = (() => {
 
   function withActiveAlliance(state) {
     const activeAlliance = (state.alliances || []).find((item) => item.id === state.activeAllianceId) || null;
+    const requests = Array.isArray(state.requests) ? state.requests : [];
+    const memberInvites = Array.isArray(state.memberInvites) ? state.memberInvites : [];
+    const kickVotes = Array.isArray(state.kickVotes) ? state.kickVotes : [];
     return {
       ...state,
       activeAlliance: activeAlliance
         ? {
             ...activeAlliance,
-            owner_player_id: "guest-player",
-            member_count: (activeAlliance.members || []).length
+            owner_player_id: activeAlliance.owner_player_id || LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+            description: String(activeAlliance.description || "").trim(),
+            icon_key: String(activeAlliance.icon_key || activeAlliance.iconKey || DEFAULT_ALLIANCE_ICON_KEY).trim() || DEFAULT_ALLIANCE_ICON_KEY,
+            current_player_role: String(activeAlliance.owner_player_id || "") === LOCAL_ALLIANCE_REQUEST_PLAYER_ID ? "leader" : "member",
+            current_player_ready: computeLocalAllianceReadyState(
+              (activeAlliance.members || []).find((member) => String(member.id || "") === LOCAL_ALLIANCE_REQUEST_PLAYER_ID)?.alliance_ready_at || null
+            ),
+            member_count: (activeAlliance.members || []).length,
+            members: (activeAlliance.members || []).map((member) => ({
+              ...member,
+              role: String(member.id || "") === String(activeAlliance.owner_player_id || "") ? "leader" : "member",
+              ...computeLocalAllianceReadyState(member.alliance_ready_at || null)
+            })),
+            pending_requests: requests.filter((request) => request.alliance_id === activeAlliance.id),
+            outgoing_invites: memberInvites.filter((invite) => invite.alliance_id === activeAlliance.id),
+            kick_votes: kickVotes.filter((vote) => vote.alliance_id === activeAlliance.id && vote.status === "open"),
+            audit_logs: (state.auditLogs || []).filter((entry) => entry.alliance_id === activeAlliance.id).slice(-20).reverse()
           }
         : null,
       alliances: (state.alliances || []).map((alliance) => ({
         ...alliance,
         owner_player_id: alliance.owner_player_id || "guest-owner",
-        member_count: (alliance.members || []).length
-      }))
+        description: String(alliance.description || "").trim() || DEFAULT_ALLIANCE_DESCRIPTION,
+        icon_key: String(alliance.icon_key || alliance.iconKey || DEFAULT_ALLIANCE_ICON_KEY).trim() || DEFAULT_ALLIANCE_ICON_KEY,
+        member_count: (alliance.members || []).length,
+        has_pending_request: requests.some((request) => request.alliance_id === alliance.id && request.player_id === LOCAL_ALLIANCE_REQUEST_PLAYER_ID)
+      })),
+      incomingInvites: memberInvites.filter((invite) => invite.target_player_id === LOCAL_ALLIANCE_REQUEST_PLAYER_ID)
     };
   }
 
-  function createLocalAlliance(state, name) {
+  function appendLocalAllianceAuditLog(state, allianceId, message) {
+    state.auditLogs = state.auditLogs || [];
+    state.auditLogs.push({
+      id: `audit-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      alliance_id: allianceId,
+      message,
+      created_at: new Date().toISOString()
+    });
+    state.auditLogs = state.auditLogs.slice(-40);
+  }
+
+  function createLocalAlliance(state, options) {
+    const name = String(options?.name || "").trim();
+    const description = String(options?.description || "").trim() || DEFAULT_ALLIANCE_DESCRIPTION;
+    const iconKey = String(options?.iconKey || DEFAULT_ALLIANCE_ICON_KEY).trim() || DEFAULT_ALLIANCE_ICON_KEY;
     const alliance = {
       id: `alliance-${Date.now()}`,
       name,
+      description,
+      icon_key: iconKey,
+      owner_player_id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
       bonus_income_pct: 6,
       bonus_influence_pct: 5,
       heat_control_text: "-8% heat",
-      members: [{ username: "Ty", gang_name: localStorage.getItem("empire_gang_name") || "Guest Crew" }]
+      members: [{ id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID, username: "Ty", gang_name: localStorage.getItem("empire_gang_name") || "Guest Crew", alliance_ready_at: new Date().toISOString() }]
     };
     state.alliances.unshift(alliance);
     state.activeAllianceId = alliance.id;
+    appendLocalAllianceAuditLog(state, alliance.id, "Aliance byla založena.");
     appendLocalAllianceChat(state, {
       author: "System",
       text: `Aliance ${name} byla založena.`
@@ -7649,22 +9265,80 @@ window.Empire.UI = (() => {
     return alliance;
   }
 
-  function joinLocalAlliance(state, allianceId) {
+  function requestLocalAllianceInvite(state, allianceId) {
     const alliance = (state.alliances || []).find((item) => item.id === allianceId);
     if (!alliance) return null;
-    if (!(alliance.members || []).some((member) => member.username === "Ty")) {
-      alliance.members = alliance.members || [];
-      alliance.members.push({
-        username: "Ty",
-        gang_name: localStorage.getItem("empire_gang_name") || "Guest Crew"
-      });
+    if (state.activeAllianceId) {
+      return { error: "already_in_alliance" };
     }
-    state.activeAllianceId = alliance.id;
+    const currentMembers = Array.isArray(alliance.members) ? alliance.members.length : 0;
+    if (currentMembers >= ALLIANCE_MAX_MEMBERS) {
+      return { error: "alliance_full" };
+    }
+    state.requests = state.requests || [];
+    if (state.requests.some((request) => request.alliance_id === alliance.id && request.player_id === LOCAL_ALLIANCE_REQUEST_PLAYER_ID)) {
+      return { error: "request_pending" };
+    }
+    state.requests.push({
+      id: `alliance-request-${Date.now()}`,
+      alliance_id: alliance.id,
+      player_id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+      username: "Ty",
+      gang_name: localStorage.getItem("empire_gang_name") || "Guest Crew"
+    });
     appendLocalAllianceChat(state, {
       author: "System",
-      text: `Připojil ses k alianci ${alliance.name}.`
+      text: `Poslal jsi pozvánku do aliance ${alliance.name}.`
     });
-    return alliance;
+    appendLocalAllianceAuditLog(state, alliance.id, "Byla odeslána žádost o vstup do aliance.");
+    return { ok: true };
+  }
+
+  function sendLocalAllianceManagementInvite(state, username) {
+    const active = (state.alliances || []).find((item) => item.id === state.activeAllianceId);
+    if (!active) {
+      return { error: "no_active_alliance" };
+    }
+    if (String(active.owner_player_id || "") !== LOCAL_ALLIANCE_REQUEST_PLAYER_ID) {
+      return { error: "not_alliance_owner" };
+    }
+    if (active.members.length >= ALLIANCE_MAX_MEMBERS) {
+      return { error: "alliance_full" };
+    }
+    const normalized = String(username || "").trim();
+    if (!normalized) {
+      return { error: "missing_player" };
+    }
+    if (normalized.toLowerCase() === "ty") {
+      return { error: "cannot_invite_self" };
+    }
+    const normalizedTarget = normalized.toLowerCase();
+    const playerAlreadyInAlliance = (state.alliances || []).some((alliance) =>
+      Array.isArray(alliance.members) && alliance.members.some((member) => String(member?.username || "").trim().toLowerCase() === normalizedTarget)
+    );
+    if (playerAlreadyInAlliance) {
+      return { error: "player_has_alliance" };
+    }
+    state.memberInvites = state.memberInvites || [];
+    if (state.memberInvites.some((invite) => invite.alliance_id === active.id && invite.username.toLowerCase() === normalized.toLowerCase())) {
+      return { error: "invite_pending" };
+    }
+    state.memberInvites.push({
+      id: `alliance-member-invite-${Date.now()}`,
+      alliance_id: active.id,
+      target_player_id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+      inviter_player_id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+      username: normalized,
+      gang_name: "Nezávislý gang",
+      alliance_name: active.name,
+      inviter_username: "Ty"
+    });
+    appendLocalAllianceChat(state, {
+      author: "System",
+      text: `Byla odeslána přímá pozvánka hráči ${normalized}.`
+    });
+    appendLocalAllianceAuditLog(state, active.id, `Byla odeslána přímá pozvánka hráči ${normalized}.`);
+    return { ok: true };
   }
 
   function leaveLocalAlliance(state) {
@@ -7679,24 +9353,176 @@ window.Empire.UI = (() => {
     state.activeAllianceId = null;
   }
 
-  function inviteLocalAllianceMember(state, name) {
+  function respondToLocalAllianceRequest(state, requestId, accept) {
+    state.requests = state.requests || [];
+    const requestIndex = state.requests.findIndex((request) => request.id === requestId);
+    if (requestIndex === -1) {
+      return { error: "missing_request" };
+    }
+    const request = state.requests[requestIndex];
     const active = (state.alliances || []).find((item) => item.id === state.activeAllianceId);
-    if (!active) {
-      return { error: "no_active_alliance" };
+    if (!active || active.id !== request.alliance_id) {
+      return { error: "not_alliance_owner" };
     }
-    active.members = active.members || [];
-    if (active.members.some((member) => member.username.toLowerCase() === name.toLowerCase())) {
-      return { error: "member_exists" };
+    if (accept) {
+      active.members = active.members || [];
+      if (active.members.length >= ALLIANCE_MAX_MEMBERS) {
+        return { error: "alliance_full" };
+      }
+      if (!active.members.some((member) => member.username === request.username)) {
+        active.members.push({
+          id: request.player_id,
+          username: request.username,
+          gang_name: request.gang_name || "Guest Crew",
+          alliance_ready_at: null
+        });
+      }
+      appendLocalAllianceChat(state, {
+        author: "System",
+        text: `${request.username} byl přijat do aliance ${active.name}.`
+      });
+      state.notifications = state.notifications || [];
+      state.notifications.push({
+        id: `alliance-note-${Date.now()}`,
+        message: "Tva zadost o vstup do aliance byla prijata."
+      });
+    } else {
+      appendLocalAllianceChat(state, {
+        author: "System",
+        text: `${request.username} byl odmítnut z aliance ${active.name}.`
+      });
+      state.notifications = state.notifications || [];
+      state.notifications.push({
+        id: `alliance-note-${Date.now()}`,
+        message: "Tva zadost o vstup do aliance byla odmitnuta."
+      });
     }
-    active.members.push({
-      username: name,
-      gang_name: "Guest Wing"
-    });
-    appendLocalAllianceChat(state, {
-      author: "System",
-      text: `${name} byl pozván do aliance ${active.name}.`
-    });
+    state.requests.splice(requestIndex, 1);
     return { ok: true };
+  }
+
+  function respondToLocalAllianceMemberInvite(state, inviteId, accept) {
+    state.memberInvites = state.memberInvites || [];
+    const inviteIndex = state.memberInvites.findIndex((invite) => invite.id === inviteId);
+    if (inviteIndex === -1) {
+      return { error: "missing_invite" };
+    }
+    const invite = state.memberInvites[inviteIndex];
+    if (accept) {
+      if (state.activeAllianceId) {
+        return { error: "already_in_alliance" };
+      }
+      const alliance = (state.alliances || []).find((item) => item.id === invite.alliance_id);
+      if (!alliance) {
+        return { error: "missing_alliance" };
+      }
+      if ((alliance.members || []).length >= ALLIANCE_MAX_MEMBERS) {
+        return { error: "alliance_full" };
+      }
+      alliance.members = alliance.members || [];
+      alliance.members.push({
+        id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+        username: "Ty",
+        gang_name: localStorage.getItem("empire_gang_name") || "Guest Crew",
+        alliance_ready_at: new Date().toISOString()
+      });
+      state.activeAllianceId = alliance.id;
+      state.notifications = state.notifications || [];
+      state.notifications.push({
+        id: `alliance-note-${Date.now()}`,
+        message: "Hrac prijal tvoji pozvanku do aliance."
+      });
+      state.memberInvites.splice(inviteIndex, 1);
+      return { ok: true, allianceName: alliance.name };
+    }
+
+    state.notifications = state.notifications || [];
+    state.notifications.push({
+      id: `alliance-note-${Date.now()}`,
+      message: "Hrac odmitl tvoji pozvanku do aliance."
+    });
+    state.memberInvites.splice(inviteIndex, 1);
+    return { ok: true };
+  }
+
+  function markLocalAllianceReady(state) {
+    const active = (state.alliances || []).find((item) => item.id === state.activeAllianceId);
+    if (!active) return { error: "no_active_alliance" };
+    const member = (active.members || []).find((item) => String(item.id || "") === LOCAL_ALLIANCE_REQUEST_PLAYER_ID);
+    if (!member) return { error: "missing_member" };
+    member.alliance_ready_at = new Date().toISOString();
+    appendLocalAllianceAuditLog(state, active.id, "Člen potvrdil READY.");
+    return { ok: true };
+  }
+
+  function removeLocalAllianceMember(state, memberId) {
+    const active = (state.alliances || []).find((item) => item.id === state.activeAllianceId);
+    if (!active) return { error: "no_active_alliance" };
+    if (String(active.owner_player_id || "") !== LOCAL_ALLIANCE_REQUEST_PLAYER_ID) return { error: "not_alliance_owner" };
+    if (String(memberId || "") === LOCAL_ALLIANCE_REQUEST_PLAYER_ID) return { error: "cannot_remove_leader" };
+    const nextMembers = (active.members || []).filter((member) => String(member.id || "") !== String(memberId || ""));
+    if (nextMembers.length === (active.members || []).length) return { error: "missing_member" };
+    active.members = nextMembers;
+    state.kickVotes = (state.kickVotes || []).filter((vote) => String(vote.target_player_id || "") !== String(memberId || ""));
+    appendLocalAllianceAuditLog(state, active.id, "Leader vyhodil člena z aliance.");
+    return { ok: true };
+  }
+
+  function startLocalAllianceKickVote(state, memberId) {
+    const active = (state.alliances || []).find((item) => item.id === state.activeAllianceId);
+    if (!active) return { error: "no_active_alliance" };
+    const target = (active.members || []).find((member) => String(member.id || "") === String(memberId || ""));
+    if (!target) return { error: "missing_member" };
+    if (String(target.id || "") === String(active.owner_player_id || "")) return { error: "cannot_remove_leader" };
+    if (!computeLocalAllianceReadyState(target.alliance_ready_at || null).isReadyOverdue) return { error: "member_ready_active" };
+    state.kickVotes = state.kickVotes || [];
+    if (state.kickVotes.some((vote) => vote.alliance_id === active.id && vote.target_player_id === target.id && vote.status === "open")) {
+      return { error: "vote_already_open" };
+    }
+    const eligibleVoters = Math.max((active.members || []).length - 1, 0);
+    const vote = {
+      id: `kick-vote-${Date.now()}`,
+      alliance_id: active.id,
+      target_player_id: target.id,
+      target_username: target.username,
+      started_by_player_id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+      eligible_voters: eligibleVoters,
+      required_votes: Math.floor(eligibleVoters / 2) + 1,
+      yes_votes: 1,
+      voters: [LOCAL_ALLIANCE_REQUEST_PLAYER_ID],
+      status: "open"
+    };
+    state.kickVotes.push(vote);
+    appendLocalAllianceAuditLog(state, active.id, `Bylo zahájeno hlasování o vyhození člena ${target.username}.`);
+    return resolveLocalAllianceKickVote(state, vote.id);
+  }
+
+  function castLocalAllianceKickVote(state, voteId) {
+    state.kickVotes = state.kickVotes || [];
+    const vote = state.kickVotes.find((item) => item.id === voteId && item.status === "open");
+    if (!vote) return { error: "missing_vote" };
+    if (String(vote.target_player_id || "") === LOCAL_ALLIANCE_REQUEST_PLAYER_ID) return { error: "cannot_vote_target" };
+    vote.voters = vote.voters || [];
+    if (vote.voters.includes(LOCAL_ALLIANCE_REQUEST_PLAYER_ID)) return { error: "vote_already_cast" };
+    vote.voters.push(LOCAL_ALLIANCE_REQUEST_PLAYER_ID);
+    vote.yes_votes = Number(vote.yes_votes || 0) + 1;
+    appendLocalAllianceAuditLog(state, vote.alliance_id, "Byl odevzdán hlas pro vyhození člena.");
+    return resolveLocalAllianceKickVote(state, voteId);
+  }
+
+  function resolveLocalAllianceKickVote(state, voteId) {
+    const vote = (state.kickVotes || []).find((item) => item.id === voteId && item.status === "open");
+    if (!vote) return { error: "missing_vote" };
+    if (Number(vote.yes_votes || 0) >= Number(vote.required_votes || 1)) {
+      const active = (state.alliances || []).find((item) => item.id === vote.alliance_id);
+      if (active) {
+        active.members = (active.members || []).filter((member) => String(member.id || "") !== String(vote.target_player_id || ""));
+      }
+      vote.status = "passed";
+      appendLocalAllianceAuditLog(state, vote.alliance_id, "Aliance odhlasovala vyhození člena.");
+      return { ok: true, removed: true };
+    }
+    return { ok: true, removed: false };
   }
 
   function appendLocalAllianceChat(state, message) {
@@ -9312,14 +11138,9 @@ window.Empire.UI = (() => {
 
   function updateRound(round) {
     if (!round) return;
-    const roundEnds = document.getElementById("round-ends");
-    const roundDays = document.getElementById("round-days");
-    if (roundEnds) {
-      roundEnds.textContent = round.roundEndsAt || "-";
-    }
-    if (roundDays) {
-      roundDays.textContent = round.daysRemaining != null ? round.daysRemaining : "-";
-    }
+    roundStatusState = { ...round };
+    renderRoundStatusState();
+    startRoundPhaseTicker();
   }
 
   function pushEvent(text) {

@@ -9,7 +9,7 @@ const {
   projectHeatGain
 } = require("./drugService");
 
-const DISTRICT_DESTROY_CHANCE = 0.1;
+const DISTRICT_DESTROY_CHANCE = 0.08;
 const COMBAT_WEAPON_TIERS = Object.freeze({
   attack: [
     { name: "Baseballová pálka", requiredMembers: 50, power: 10 },
@@ -50,7 +50,17 @@ async function attackDistrict({ playerId, districtId }) {
 
     if (cooldown.rowCount > 0) {
       const nextAttack = cooldown.rows[0].next_attack_at;
-      if (nextAttack && new Date(nextAttack) > new Date()) {
+      const now = Date.now();
+      let nextAttackMs = nextAttack ? new Date(nextAttack).getTime() : 0;
+      const maxAllowedCooldownMs = now + (ATTACK_COOLDOWN_SECONDS * 1000);
+      if (nextAttackMs > maxAllowedCooldownMs) {
+        await client.query(
+          "UPDATE cooldowns SET next_attack_at = $1 WHERE player_id = $2",
+          [new Date(maxAllowedCooldownMs), playerId]
+        );
+        nextAttackMs = maxAllowedCooldownMs;
+      }
+      if (nextAttackMs > now) {
         await client.query("ROLLBACK");
         return { ok: false, error: "cooldown" };
       }
@@ -170,37 +180,68 @@ async function attackDistrict({ playerId, districtId }) {
     const attackerInfluence = player.influence_points || 0;
 
     const defensePenalty = typeDefensePenalty(district.type);
-    const attackerCombatPower = Number(attackerDrugs.modifiers.attackPowerMultiplier || 1)
+    const attackerPower = Number(attackerDrugs.modifiers.attackPowerMultiplier || 1)
       * (1 + Number(attackerWeaponTier.power || 0) / 100);
-    const defenderCombatPower = Number(defenderDrugs?.modifiers?.defensePowerMultiplier || 1)
+    const defenderPower = Number(defenderDrugs?.modifiers?.defensePowerMultiplier || 1)
       * (1 + Number(defenderWeaponTier?.power || 0) / 100);
-    const combatPowerDelta = ((attackerCombatPower / Math.max(0.1, defenderCombatPower)) - 1) * 0.25;
-    const baseChance = 0.5
-      + (attackerInfluence - defenderInfluence) / 200
-      - defensePenalty
-      + combatPowerDelta;
-    const successChance = Math.min(0.95, Math.max(0.1, baseChance));
-    const success = Math.random() < successChance;
-    const influenceChange = Math.floor((10 + Math.random() * 16) * typeInfluenceMultiplier(district.type));
+    const attackScore = attackerPower * (1 + Math.max(0, Number(attackerInfluence || 0)) / 500);
+    const defenseScore = defenderPower * (1 + Math.max(0, Number(defenderInfluence || 0)) / 500) * (1 + defensePenalty);
+
+    const catastrophe = Math.random() < DISTRICT_DESTROY_CHANCE;
+    let outcomeKey = "failure";
+    if (catastrophe) {
+      outcomeKey = "catastrophe";
+    } else if (attackScore > defenseScore) {
+      outcomeKey = Math.random() < 0.7 ? "total_success" : "pyrrhic_victory";
+    }
+
+    const attackPowerDisplay = Math.max(1, Math.round(attackScore * 100));
+    const defensePowerDisplay = Math.max(1, Math.round(defenseScore * 100));
+    const attackStrengthGap = attackPowerDisplay - defensePowerDisplay;
 
     let newInfluence = district.influence_level;
     let newOwner = district.owner_player_id;
+    let destroyed = false;
+    let defenderDefenseLossPct = 0;
+    let defenderInfluenceLossPct = 0;
+    let districtDestroyed = false;
 
-    if (success) {
-      newInfluence = Math.min(MAX_INFLUENCE, district.influence_level + influenceChange);
-      if (!district.owner_player_id || newInfluence >= MAX_INFLUENCE) {
-        newOwner = playerId;
-      }
-    } else {
-      newInfluence = Math.max(0, district.influence_level - influenceChange);
-      if (newInfluence === 0) {
-        newOwner = null;
-      }
+    if (outcomeKey === "total_success") {
+      newInfluence = MAX_INFLUENCE;
+      newOwner = playerId;
+      defenderDefenseLossPct = 100;
+      defenderInfluenceLossPct = 100;
+    } else if (outcomeKey === "pyrrhic_victory") {
+      newInfluence = Math.max(0, Math.floor(Number(district.influence_level || 0) * 0.75));
+      defenderDefenseLossPct = 100;
+      defenderInfluenceLossPct = 25;
+    } else if (outcomeKey === "failure") {
+      newInfluence = Math.max(0, Math.floor(Number(district.influence_level || 0) * 0.8));
+      defenderDefenseLossPct = 20;
+      defenderInfluenceLossPct = 20;
+    } else if (outcomeKey === "catastrophe") {
+      destroyed = true;
+      districtDestroyed = true;
+      newInfluence = 0;
+      newOwner = null;
+      defenderDefenseLossPct = 100;
+      defenderInfluenceLossPct = 100;
     }
-    const destroyed = Math.random() < DISTRICT_DESTROY_CHANCE;
+
     if (destroyed) {
       newInfluence = 0;
       newOwner = null;
+    }
+
+    if (district.owner_player_id && defenderDefenseLossPct > 0) {
+      const defenseLossMultiplier = Math.max(0, 1 - (defenderDefenseLossPct / 100));
+      await client.query(
+        `UPDATE players
+            SET defense = GREATEST(0, FLOOR(defense * $1)::int),
+                updated_at = NOW()
+          WHERE id = $2`,
+        [defenseLossMultiplier, district.owner_player_id]
+      );
     }
 
     await client.query(
@@ -214,7 +255,10 @@ async function attackDistrict({ playerId, districtId }) {
       [newInfluence, newOwner, destroyed, districtId]
     );
 
-    const baseInfluenceGain = success ? Math.ceil(influenceChange / 4) : Math.floor(influenceChange / 8);
+    const influenceChange = Math.floor((10 + Math.random() * 16) * typeInfluenceMultiplier(district.type));
+    const baseInfluenceGain = outcomeKey === "total_success"
+      ? Math.ceil(influenceChange / 4)
+      : Math.floor(influenceChange / 8);
     const influenceGain = Math.max(
       0,
       Math.floor(baseInfluenceGain * Number(attackerDrugs.modifiers.influenceGainMultiplier || 1))
@@ -242,7 +286,7 @@ async function attackDistrict({ playerId, districtId }) {
     await client.query(
       `INSERT INTO combat_logs (attacker_player_id, district_id, defender_player_id, success, attack_cost, influence_change)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [playerId, districtId, district.owner_player_id, success, attackCost, influenceChange]
+      [playerId, districtId, district.owner_player_id, outcomeKey === "total_success", attackCost, influenceChange]
     );
 
     const nextAttackAt = new Date(Date.now() + ATTACK_COOLDOWN_SECONDS * 1000);
@@ -257,13 +301,23 @@ async function attackDistrict({ playerId, districtId }) {
 
     return {
       ok: true,
-      success,
-      destroyed,
+      success: outcomeKey === "total_success",
+      outcomeKey,
+      destroyed: districtDestroyed,
       influenceChange,
       heatGain: attackHeatGain,
       sourceDistrictId,
       newOwnerId: newOwner,
-      newInfluence
+      newInfluence,
+      attackPower: attackPowerDisplay,
+      defensePower: defensePowerDisplay,
+      attackerLossPct: outcomeKey === "pyrrhic_victory" ? 50 : (outcomeKey === "failure" || outcomeKey === "catastrophe" ? 100 : 0),
+      defenderLossPct: defenderDefenseLossPct,
+      districtLossPct: defenderInfluenceLossPct,
+      message: formatAttackOutcomeMessage({
+        outcomeKey,
+        destroyed: districtDestroyed
+      })
     };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -271,6 +325,19 @@ async function attackDistrict({ playerId, districtId }) {
   } finally {
     client.release();
   }
+}
+
+function formatAttackOutcomeMessage({ outcomeKey, destroyed }) {
+  if (destroyed || outcomeKey === "catastrophe") {
+    return "Všechno shořelo do prdele. Baráky, lidi, zásoby. Jen popel a smrad. Tady už není co brát, jen prázdná díra.";
+  }
+  if (outcomeKey === "total_success") {
+    return "Rozjebali jste je na kusy. District je tvůj. Kdo tam ještě dýchá, už maká pro tebe nebo chcípne do rána.";
+  }
+  if (outcomeKey === "pyrrhic_victory") {
+    return "Sejmul jsi jejich obranu, ale tvoji lidi šli do sraček s nima. Půlka chcípla, zbraně v hajzlu. District pořád stojí ale sotva.";
+  }
+  return "Totální průser. Vběhli jste tam jak idioti a nechali tam krev i výbavu. Oni taky něco ztratili, ale ty jsi ten, co dostal přes držku.";
 }
 
 async function estimateGangMembers(client, playerId) {
