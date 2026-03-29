@@ -565,11 +565,30 @@ body::before {
 }
 
 .nav-btn--profile {
-  border: 1px solid rgba(244, 114, 182, 0.5);
-  color: #fbcfe8;
-  background: rgba(244, 114, 182, 0.08);
-  box-shadow: 0 0 16px rgba(244, 114, 182, 0.35);
+  position: relative;
+  border: 1px solid rgba(236, 72, 153, 0.58);
+  color: #fdf2f8;
+  background:
+    linear-gradient(135deg, rgba(131, 24, 67, 0.92), rgba(30, 27, 75, 0.9)),
+    radial-gradient(circle at 18% 10%, rgba(251, 207, 232, 0.22), transparent 58%);
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.15),
+    0 0 18px rgba(244, 114, 182, 0.32),
+    inset 0 0 14px rgba(253, 242, 248, 0.06);
   letter-spacing: 0.4px;
+  font-weight: 700;
+  padding: 8px 14px;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.nav-btn--profile:hover {
+  border-color: rgba(251, 207, 232, 0.86);
+  color: #fff7fb;
+  box-shadow:
+    0 0 0 1px rgba(251, 207, 232, 0.2),
+    0 0 20px rgba(244, 114, 182, 0.42),
+    inset 0 0 16px rgba(253, 242, 248, 0.12);
 }
 
 .nav-btn--settings {
@@ -11237,6 +11256,11 @@ body::before {
   .topbar__nav {
     width: 100%;
     justify-content: center;
+  }
+
+  .nav-btn--profile {
+    font-size: 11px;
+    padding: 7px 12px;
   }
 
   .topbar__right {
