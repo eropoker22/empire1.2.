@@ -1406,23 +1406,39 @@ body::before {
 
 .profile-heat-panel {
   border: 1px solid rgba(248, 113, 113, 0.42);
-  background: rgba(127, 29, 29, 0.24);
-  color: #fecaca;
-  border-radius: 10px;
-  padding: 6px 10px;
-  min-width: 132px;
-  text-align: right;
+  background:
+    linear-gradient(135deg, rgba(127, 29, 29, 0.78), rgba(24, 24, 27, 0.94)),
+    radial-gradient(circle at top left, rgba(252, 165, 165, 0.16), transparent 58%);
+  color: #ffe4e6;
+  border-radius: 12px;
+  padding: 7px 12px;
+  min-width: 142px;
+  text-align: center;
   cursor: pointer;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  box-shadow:
+    0 0 0 1px rgba(248, 113, 113, 0.12),
+    0 0 18px rgba(239, 68, 68, 0.16),
+    inset 0 0 14px rgba(255, 228, 230, 0.05);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
 }
 
 .profile-heat-panel strong {
-  letter-spacing: 0.08em;
+  display: block;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-shadow:
+    0 0 12px rgba(251, 113, 133, 0.28),
+    0 0 20px rgba(220, 38, 38, 0.18);
 }
 
 .profile-heat-panel:hover {
   border-color: rgba(252, 165, 165, 0.8);
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.38);
+  box-shadow:
+    0 0 0 1px rgba(252, 165, 165, 0.16),
+    0 0 18px rgba(239, 68, 68, 0.34),
+    inset 0 0 16px rgba(255, 228, 230, 0.08);
   transform: translateY(-1px);
 }
 
@@ -5203,7 +5219,7 @@ body::before {
   #district-modal {
     align-items: start;
     justify-items: center;
-    padding-top: 88px;
+    padding-top: calc(var(--desktop-topbar-offset, 68px) + 20px);
     padding-bottom: 18px;
   }
 
@@ -5235,9 +5251,7 @@ body::before {
   }
 
   #district-modal .modal__body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
+    display: block;
     gap: 6px;
     overflow: visible;
     padding: 8px;
@@ -5246,12 +5260,7 @@ body::before {
   #district-modal .modal__row,
   #district-modal .modal__gallery,
   #district-modal .modal__actions {
-    margin-bottom: 0;
-  }
-
-  #district-modal .modal__gallery,
-  #district-modal .modal__actions {
-    grid-column: 1 / -1;
+    margin-bottom: 5px;
   }
 
   #district-modal .modal__row {
@@ -5271,14 +5280,14 @@ body::before {
   }
 
   #district-modal .modal__actions {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     padding-top: 6px;
   }
 
   #district-modal .modal__actions .btn {
-    min-width: 0;
+    min-width: 110px;
     min-height: 34px;
     padding: 7px 8px;
     font-size: 12px;
@@ -5290,7 +5299,7 @@ body::before {
   }
 
   #district-modal .district-buildings {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 6px;
   }
 
@@ -5876,6 +5885,7 @@ body::before {
 #district-modal,
 #district-defense-modal,
 #spy-confirm-modal,
+#raid-confirm-modal,
 #attack-confirm-modal,
 #occupy-confirm-modal,
 #spy-result-modal,
@@ -5889,6 +5899,7 @@ body::before {
 #district-modal .modal__backdrop,
 #district-defense-modal .modal__backdrop,
 #spy-confirm-modal .modal__backdrop,
+#raid-confirm-modal .modal__backdrop,
 #attack-confirm-modal .modal__backdrop,
 #occupy-confirm-modal .modal__backdrop,
 #spy-result-modal .modal__backdrop,
@@ -5901,6 +5912,7 @@ body::before {
 #district-modal .modal__content,
 #district-defense-modal .modal__content,
 #spy-confirm-modal .modal__content,
+#raid-confirm-modal .modal__content,
 #attack-confirm-modal .modal__content,
 #occupy-confirm-modal .modal__content,
 #spy-result-modal .modal__content,
@@ -6360,6 +6372,261 @@ body::before {
   border-left: 4px solid #ff4e7a;
 }
 
+#gang-heat-modal {
+  place-items: center;
+  padding: 16px;
+}
+
+#gang-heat-modal .modal__backdrop {
+  inset: 0;
+}
+
+.gang-heat-modal__content {
+  width: min(700px, 94vw);
+  border: 1px solid rgba(248, 250, 252, 0.14);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.54), 0 0 28px rgba(251, 191, 36, 0.18);
+}
+
+.gang-heat-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gang-heat-modal__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  gap: 12px;
+}
+
+.gang-heat-modal__hero,
+.gang-heat-modal__panel,
+.gang-heat-modal__actions,
+.gang-heat-modal__level {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(8, 14, 26, 0.82));
+  box-shadow: inset 0 0 18px rgba(148, 163, 184, 0.06);
+}
+
+.gang-heat-modal__hero {
+  padding: 14px;
+}
+
+.gang-heat-modal__value {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1;
+  color: #f8fafc;
+}
+
+.gang-heat-modal__tier {
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.gang-heat-modal__desc {
+  margin-top: 6px;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.gang-heat-modal__actions {
+  display: grid;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+
+.gang-heat-modal__actions .btn {
+  min-height: 48px;
+  padding: 11px 14px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.gang-heat-modal__actions .btn:first-of-type {
+  border-color: rgba(248, 113, 113, 0.38);
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.88), rgba(24, 24, 27, 0.92));
+  color: #fee2e2;
+  box-shadow: 0 0 18px rgba(248, 113, 113, 0.14);
+}
+
+.gang-heat-modal__actions .btn:last-of-type {
+  border-color: rgba(34, 211, 238, 0.34);
+  background: linear-gradient(135deg, rgba(8, 47, 73, 0.9), rgba(15, 23, 42, 0.94));
+  color: #ecfeff;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.12);
+}
+
+.gang-heat-modal__cost-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: -2px;
+  padding: 0 4px;
+}
+
+.gang-heat-modal__cost {
+  font-size: 10px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.gang-heat-modal__levels {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.gang-heat-modal__toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gang-heat-modal__toolbar .btn {
+  min-height: 34px;
+  padding: 7px 12px;
+}
+
+.gang-heat-modal__level {
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gang-heat-modal__level strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.gang-heat-modal__level span {
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.gang-heat-modal__level.is-active {
+  border-color: rgba(251, 191, 36, 0.48);
+  box-shadow: inset 0 0 18px rgba(251, 191, 36, 0.08), 0 0 16px rgba(251, 191, 36, 0.14);
+}
+
+.gang-heat-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gang-heat-modal__panel {
+  padding: 12px;
+}
+
+.gang-heat-modal__panel h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #f8fafc;
+}
+
+.gang-heat-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 196px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.78) rgba(8, 14, 26, 0.62);
+}
+
+.gang-heat-modal__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.gang-heat-modal__list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(8, 14, 26, 0.72);
+  box-shadow: inset 0 0 12px rgba(34, 211, 238, 0.08);
+}
+
+.gang-heat-modal__list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.94), rgba(96, 165, 250, 0.88));
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.3);
+}
+
+.gang-heat-modal__item,
+.gang-heat-modal__empty {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.65);
+  padding: 10px;
+}
+
+.gang-heat-modal__item strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.gang-heat-modal__delta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gang-heat-modal__delta-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  position: relative;
+  overflow: hidden;
+}
+
+.gang-heat-modal__delta-badge.is-rise {
+  color: #fee2e2;
+  background: rgba(127, 29, 29, 0.85);
+  box-shadow: 0 0 12px rgba(248, 113, 113, 0.18), inset 0 0 10px rgba(254, 226, 226, 0.08);
+}
+
+.gang-heat-modal__delta-badge.is-fall {
+  color: #ecfeff;
+  background: rgba(8, 47, 73, 0.9);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.16), inset 0 0 10px rgba(236, 254, 255, 0.08);
+}
+
+.gang-heat-modal__delta-badge::before {
+  display: inline-block;
+  margin-right: 5px;
+  font-size: 10px;
+}
+
+.gang-heat-modal__delta-badge.is-rise::before {
+  content: "▲";
+}
+
+.gang-heat-modal__delta-badge.is-fall::before {
+  content: "▼";
+}
+
+.gang-heat-modal__item span,
+.gang-heat-modal__item small,
+.gang-heat-modal__empty {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
 @media (max-width: 1060px) {
   .police-heat-grid {
     grid-template-columns: 1fr;
@@ -6371,6 +6638,21 @@ body::before {
 }
 
 @media (max-width: 720px) {
+  .gang-heat-modal__top,
+  .gang-heat-modal__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gang-heat-modal__levels {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gang-heat-modal__cost-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
   .police-heat-modal__content {
     width: min(98vw, 98vw);
     border-radius: 14px;
@@ -11119,6 +11401,7 @@ body::before {
   body.mobile-hide-topbar #alliance-modal,
   body.mobile-hide-topbar #storage-modal,
   body.mobile-hide-topbar #leaderboard-modal,
+  body.mobile-hide-topbar #gang-heat-modal,
   body.mobile-hide-topbar #district-modal {
     padding-top: calc(8px + env(safe-area-inset-top));
   }
@@ -11142,6 +11425,7 @@ body::before {
 
   body.mobile-hide-topbar #storage-modal .modal__content,
   body.mobile-hide-topbar #leaderboard-modal .modal__content,
+  body.mobile-hide-topbar #gang-heat-modal .modal__content,
   body.mobile-hide-topbar #district-modal .modal__content {
     max-height: calc(100dvh - 22px - env(safe-area-inset-bottom));
   }
@@ -11157,8 +11441,10 @@ body::before {
   }
 
   body.mobile-hide-topbar #district-modal,
+  body.mobile-hide-topbar #gang-heat-modal,
   body.mobile-hide-topbar #district-defense-modal,
   body.mobile-hide-topbar #spy-confirm-modal,
+  body.mobile-hide-topbar #raid-confirm-modal,
   body.mobile-hide-topbar #attack-confirm-modal,
   body.mobile-hide-topbar #occupy-confirm-modal,
   body.mobile-hide-topbar #spy-result-modal,
@@ -11170,8 +11456,10 @@ body::before {
   }
 
   body.mobile-hide-topbar #district-modal .modal__content,
+  body.mobile-hide-topbar #gang-heat-modal .modal__content,
   body.mobile-hide-topbar #district-defense-modal .modal__content,
   body.mobile-hide-topbar #spy-confirm-modal .modal__content,
+  body.mobile-hide-topbar #raid-confirm-modal .modal__content,
   body.mobile-hide-topbar #attack-confirm-modal .modal__content,
   body.mobile-hide-topbar #occupy-confirm-modal .modal__content,
   body.mobile-hide-topbar #spy-result-modal .modal__content,

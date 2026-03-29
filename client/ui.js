@@ -175,6 +175,8 @@ window.Empire.UI = (() => {
   const DEFAULT_ALLIANCE_DESCRIPTION = "Aliance která všechny zabije";
   const PLAYER_SCENARIO_STORAGE_KEY = "empire_active_player_scenario";
   const DISTRICT_RAID_LOCK_STORAGE_KEY = "empire_district_raid_lock_until_v1";
+  const HEAT_JOURNAL_STORAGE_KEY = "empire_heat_journal_v1";
+  const HEAT_DIRTY_REDUCTION_STORAGE_KEY = "empire_heat_dirty_reduction_v1";
   const MARKET_SERVER_RESOURCES = Object.freeze([
     { resourceKey: "neon_dust", name: "Neon Dust" },
     { resourceKey: "pulse_shot", name: "Pulse Shot" },
@@ -247,6 +249,13 @@ window.Empire.UI = (() => {
   const RAID_BASE_COOLDOWN_MS = 30 * 1000;
   const RAID_ACTION_DURATION_MS = 20 * 1000;
   const DISTRICT_RAID_LOCK_MS = 2 * 60 * 60 * 1000;
+  const GANG_HEAT_DIRTY_COST = 500;
+  const GANG_HEAT_DIRTY_REDUCTION = 10;
+  const GANG_HEAT_CLEAN_COST = 300;
+  const GANG_HEAT_CLEAN_REDUCTION = 15;
+  const GANG_HEAT_DIRTY_TRIGGER_WINDOW_MS = 30 * 60 * 1000;
+  const GANG_HEAT_DIRTY_TRIGGER_COUNT = 3;
+  const GANG_HEAT_POLICE_DURATION_MS = 60 * 1000;
   const OWNER_RAID_STORAGE_KEY = "empire_owner_raid_storage_v1";
   const DISTRICT_RAID_STASH_STORAGE_KEY = "empire_district_raid_stash_v1";
   const OCCUPY_ACTION_DURATION_MS = 20 * 1000;
@@ -1288,7 +1297,16 @@ window.Empire.UI = (() => {
   let defenseModalRefreshTimer = null;
   let defenseModalState = { districtId: null, message: "", selectedWeaponCounts: {} };
   let spyConfirmModalState = { districtId: null };
+  let raidConfirmModalState = { districtId: null };
   let occupyConfirmModalState = { districtId: null };
+  const GANG_HEAT_LEVELS = Object.freeze([
+    { stars: 1, label: "Stupeň 1", title: "Základní dohled", description: "Jsi skoro pod radarem. Jen lehké sledování a občasná pozornost." },
+    { stars: 2, label: "Stupeň 2", title: "Podezřelý", description: "Policie tě začíná vnímat. Přibývají kontroly a drobný tlak." },
+    { stars: 3, label: "Stupeň 3", title: "Známý problém", description: "Tvoje síť je viditelná. Hrozí častější zásahy a sledování." },
+    { stars: 4, label: "Stupeň 4", title: "Rizikový cíl", description: "Jsi konkrétní cíl. Razie a blokace jsou výrazně pravděpodobnější." },
+    { stars: 5, label: "Stupeň 5", title: "Prioritní cíl", description: "Bezpečnostní složky se na tebe soustředí. Tlak je trvalý a agresivní." },
+    { stars: 6, label: "Stupeň 6", title: "Totální hon", description: "Nejtěžší stupeň. Tvůj gang je veřejný nepřítel a systém po tobě jde naplno." }
+  ]);
   let cachedSpyCount = null;
   let isSpyCountShownInTopbar = false;
   let topbarStatSwitchTimer = null;
@@ -1315,8 +1333,7 @@ window.Empire.UI = (() => {
     { stars: 3, min: 75, max: 149 },
     { stars: 4, min: 150, max: 299 },
     { stars: 5, min: 300, max: 499 },
-    { stars: 6, min: 500, max: 999 },
-    { stars: 7, min: 1000, max: Number.POSITIVE_INFINITY }
+    { stars: 6, min: 500, max: Number.POSITIVE_INFINITY }
   ];
 
   function init() {
@@ -1363,13 +1380,40 @@ window.Empire.UI = (() => {
     };
   }
 
+  function buildRoundStatusPresetForMode(mode) {
+    const normalizedMode = String(mode || "").trim().toLowerCase();
+    if (normalizedMode === "day") {
+      return {
+        currentGameDay: 1,
+        timeLabel: "06:00",
+        phaseKey: "day",
+        phaseLabel: "DEN"
+      };
+    }
+    if (normalizedMode === "blackout") {
+      return {
+        currentGameDay: 3,
+        timeLabel: "20:30",
+        phaseKey: "night",
+        subPhaseKey: "blackout",
+        phaseLabel: "NOC-BLACKOUT"
+      };
+    }
+    return {
+      currentGameDay: 3,
+      timeLabel: "20:30",
+      phaseKey: "night",
+      phaseLabel: "NOC"
+    };
+  }
+
   function resolveEffectiveRoundMode(phaseKey, subPhaseKey = "") {
     const normalizedPhaseKey = String(phaseKey || "").trim().toLowerCase();
     const normalizedSubPhaseKey = String(subPhaseKey || "").trim().toLowerCase();
     if (normalizedSubPhaseKey === "blackout" && normalizedPhaseKey === "night") {
       return {
         mapMode: "blackout",
-        phaseLabel: "BLACKOUT"
+        phaseLabel: "NOC-BLACKOUT"
       };
     }
     return {
@@ -1463,6 +1507,10 @@ window.Empire.UI = (() => {
 
     const syncState = () => {
       const activeMode = String(window.Empire.Map?.getMapMode?.() || "night").trim().toLowerCase();
+      if (!activePlayerScenarioKey || activePlayerScenarioKey === "alliance-ten-blackout") {
+        roundStatusOverride = buildRoundStatusPresetForMode(activeMode);
+        renderRoundStatusState();
+      }
       buttons.forEach((button) => {
         const mode = String(button.getAttribute("data-map-mode") || "").trim().toLowerCase();
         button.classList.toggle("is-active", mode === activeMode);
@@ -1474,7 +1522,9 @@ window.Empire.UI = (() => {
       button.addEventListener("click", () => {
         const mode = String(button.getAttribute("data-map-mode") || "").trim().toLowerCase();
         if (!mode) return;
+        roundStatusOverride = buildRoundStatusPresetForMode(mode);
         window.Empire.Map?.setMapMode?.(mode);
+        renderRoundStatusState();
         syncState();
       });
     });
@@ -1498,6 +1548,11 @@ window.Empire.UI = (() => {
         document.documentElement.style.setProperty("--mobile-topbar-offset", `${Math.ceil(topbar.offsetHeight)}px`);
       } else {
         document.documentElement.style.removeProperty("--mobile-topbar-offset");
+      }
+      if (topbar && !media.matches) {
+        document.documentElement.style.setProperty("--desktop-topbar-offset", `${Math.ceil(topbar.offsetHeight)}px`);
+      } else {
+        document.documentElement.style.removeProperty("--desktop-topbar-offset");
       }
     };
 
@@ -1713,9 +1768,11 @@ window.Empire.UI = (() => {
       "alliance-modal",
       "storage-modal",
       "leaderboard-modal",
+      "gang-heat-modal",
       "district-modal",
       "district-defense-modal",
       "spy-confirm-modal",
+      "raid-confirm-modal",
       "occupy-confirm-modal",
       "spy-result-modal",
       "raid-result-modal",
@@ -2102,8 +2159,10 @@ window.Empire.UI = (() => {
     initAttackResultModal();
     initRaidResultModal();
     initSpyConfirmModal();
+    initRaidConfirmModal();
     initOccupyConfirmModal();
     initSpyResultModal();
+    initGangHeatModal();
     initEventFeedControls();
     initPlayerScenarioButtons();
     document.getElementById("attack-btn").addEventListener("click", async () => {
@@ -2140,7 +2199,7 @@ window.Empire.UI = (() => {
           pushEvent(`Krádež je na cooldownu ještě ${formatRaidCooldownLabel(cooldownMs)}.`);
           return;
         }
-        startRaidAction(window.Empire.selectedDistrict);
+        openRaidConfirmModal(window.Empire.selectedDistrict);
       });
     }
 
@@ -4756,6 +4815,12 @@ window.Empire.UI = (() => {
     spyConfirmModalState = { districtId: null };
   }
 
+  function closeRaidConfirmModal() {
+    const root = document.getElementById("raid-confirm-modal");
+    if (root) root.classList.add("hidden");
+    raidConfirmModalState = { districtId: null };
+  }
+
   function renderSpyConfirmModal() {
     const root = document.getElementById("spy-confirm-modal");
     const districtEl = document.getElementById("spy-confirm-modal-district");
@@ -4808,6 +4873,100 @@ window.Empire.UI = (() => {
         district: district || null
       }
     }));
+  }
+
+  function renderRaidConfirmModal() {
+    const root = document.getElementById("raid-confirm-modal");
+    const districtEl = document.getElementById("raid-confirm-modal-district");
+    const durationEl = document.getElementById("raid-confirm-modal-duration");
+    const noteEl = document.getElementById("raid-confirm-modal-note");
+    const confirmBtn = document.getElementById("raid-confirm-modal-confirm");
+    if (!root || root.classList.contains("hidden")) return;
+    if (!districtEl || !durationEl || !noteEl || !confirmBtn) return;
+
+    const district = resolveDistrictById(raidConfirmModalState.districtId);
+    const availability = evaluateDistrictActionAvailability(district, "raid");
+    const durationMs = resolveRaidDurationWithBoosts();
+    districtEl.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    durationEl.textContent = formatAttackDurationLabel(durationMs);
+
+    let noteText = "Opravdu chceš spustit krádež tohoto distriktu?";
+    let canConfirm = true;
+    if (!district) {
+      noteText = "Nejprve vyber distrikt.";
+      canConfirm = false;
+    } else if (!availability.allowed) {
+      noteText = availability.reason;
+      canConfirm = false;
+    } else if (isRaidActionRunning()) {
+      noteText = "Krádež už právě probíhá. Současně může běžet jen jedna.";
+      canConfirm = false;
+    } else {
+      const cooldownMs = getRaidCooldownRemainingMs();
+      if (cooldownMs > 0) {
+        noteText = `Krádež je na cooldownu ještě ${formatRaidCooldownLabel(cooldownMs)}.`;
+        canConfirm = false;
+      } else {
+        noteText = `Akce potrvá ${formatAttackDurationLabel(durationMs)}. Po dokončení se district zamkne na 2h pro další krádež.`;
+      }
+    }
+
+    noteEl.textContent = noteText;
+    confirmBtn.disabled = !canConfirm;
+  }
+
+  function openRaidConfirmModal(district) {
+    const root = document.getElementById("raid-confirm-modal");
+    if (!root) return;
+    raidConfirmModalState = { districtId: district?.id ?? null };
+    root.classList.remove("hidden");
+    renderRaidConfirmModal();
+  }
+
+  function startRaidActionFromModal() {
+    const district = resolveDistrictById(raidConfirmModalState.districtId);
+    if (!district) {
+      renderRaidConfirmModal();
+      return;
+    }
+    const availability = evaluateDistrictActionAvailability(district, "raid");
+    if (!availability.allowed) {
+      pushEvent(availability.reason);
+      renderRaidConfirmModal();
+      return;
+    }
+    if (isRaidActionRunning()) {
+      pushEvent("Krádež už právě probíhá. Současně může běžet jen jedna.");
+      renderRaidConfirmModal();
+      return;
+    }
+    const cooldownMs = getRaidCooldownRemainingMs();
+    if (cooldownMs > 0) {
+      pushEvent(`Krádež je na cooldownu ještě ${formatRaidCooldownLabel(cooldownMs)}.`);
+      renderRaidConfirmModal();
+      return;
+    }
+    closeRaidConfirmModal();
+    startRaidAction(district);
+  }
+
+  function initRaidConfirmModal() {
+    const root = document.getElementById("raid-confirm-modal");
+    const backdrop = document.getElementById("raid-confirm-modal-backdrop");
+    const closeBtn = document.getElementById("raid-confirm-modal-close");
+    const cancelBtn = document.getElementById("raid-confirm-modal-cancel");
+    const confirmBtn = document.getElementById("raid-confirm-modal-confirm");
+    if (!root) return;
+
+    if (backdrop) backdrop.addEventListener("click", closeRaidConfirmModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeRaidConfirmModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeRaidConfirmModal);
+    if (confirmBtn) confirmBtn.addEventListener("click", startRaidActionFromModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeRaidConfirmModal();
+      }
+    });
   }
 
   function startSpyActionFromModal() {
@@ -5771,23 +5930,11 @@ window.Empire.UI = (() => {
       const totalOwned = ownDistrictCount + allyDistrictCount;
       baseProfile.districts = ownDistrictCount;
       baseProfile.alliance = `${ownerName} + spojenec (2/4 • ${totalOwned} sektorů)`;
-      roundStatusOverride = activePlayerScenarioKey === "alliance-ten-blackout"
-        ? {
-            currentGameDay: 3,
-            timeLabel: "20:30",
-            phaseKey: "night",
-            subPhaseKey: "blackout",
-            phaseLabel: "BLACKOUT"
-          }
-        : {
-            currentGameDay: 3,
-            timeLabel: "20:30",
-            phaseKey: "night",
-            phaseLabel: "NOC"
-          };
-      if (activePlayerScenarioKey === "alliance-ten-blackout") {
+      roundStatusOverride = buildRoundStatusPresetForMode(
+        activePlayerScenarioKey === "alliance-ten-blackout" ? "blackout" : "night"
+      );
+      {
         setScenarioAllianceOwners([blackoutAllyName]);
-        scenarioPoliceIncidentIds = [143, 38];
         nextDistricts = nextDistricts.map((district) => {
           const districtId = Number(district?.id);
           if (districtId === 143 || districtId === 121) {
@@ -5861,6 +6008,9 @@ window.Empire.UI = (() => {
         setScenarioEnemyOwners([enemyOneName, enemyTwoName, blackoutSecondEnemyName, blackoutThirdEnemyName, blackoutFourthEnemyName, blackoutFifthEnemyName]);
         baseProfile.alliance = `${blackoutAllianceName} (Leader • 2/4)`;
         baseProfile.districts = countOwnedDistrictsForOwner(nextDistricts, ownerName);
+      }
+      if (activePlayerScenarioKey === "alliance-ten-blackout") {
+        scenarioPoliceIncidentIds = [143, 38];
       }
       pushEvent(`Ukázka: ${ownerName} drží ${ownDistrictCount} sektorů, spojenec ${allyDistrictCount}.`);
       pushEvent(`Hrozba: nepřátelská aliance (${enemyOneName} + ${enemyTwoName}) drží ${enemyDistrictCount} sousedních sektorů.`);
@@ -8338,10 +8488,138 @@ window.Empire.UI = (() => {
     return heat.toFixed(1).replace(/\.0$/, "");
   }
 
+  function readGangHeatJournal() {
+    try {
+      const raw = localStorage.getItem(HEAT_JOURNAL_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveGangHeatJournal(entries) {
+    const safeEntries = Array.isArray(entries) ? entries.slice(0, 40) : [];
+    localStorage.setItem(HEAT_JOURNAL_STORAGE_KEY, JSON.stringify(safeEntries));
+    return safeEntries;
+  }
+
+  function clearGangHeatJournal() {
+    localStorage.setItem(HEAT_JOURNAL_STORAGE_KEY, JSON.stringify([]));
+  }
+
+  function appendGangHeatJournalEntry(type, amount, reason, createdAt = Date.now()) {
+    const safeType = String(type || "").trim().toLowerCase();
+    if (safeType !== "rise" && safeType !== "fall") return null;
+    const safeAmount = Math.max(0, Number(amount) || 0);
+    const safeReason = String(reason || "").trim();
+    if (!safeAmount || !safeReason) return null;
+    const current = readGangHeatJournal();
+    current.unshift({
+      type: safeType,
+      amount: Math.round(safeAmount * 10) / 10,
+      reason: safeReason,
+      createdAt: Math.max(0, Math.floor(Number(createdAt) || Date.now()))
+    });
+    saveGangHeatJournal(current);
+    return current[0];
+  }
+
+  function formatRelativeHeatTime(timestamp) {
+    const diffMs = Math.max(0, Date.now() - Math.max(0, Number(timestamp) || 0));
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 1) return "právě teď";
+    if (diffMinutes < 60) return `před ${diffMinutes} min`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `před ${diffHours} h`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `před ${diffDays} d`;
+  }
+
+  function getOwnedPlayerDistricts() {
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    return districts.filter((district) => isDistrictOwnedByPlayer(district));
+  }
+
+  function spendDirtyCash(amount) {
+    const required = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
+    if (required <= 0) return { ok: true, spent: 0 };
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy);
+    if (money.dirtyMoney < required) {
+      return { ok: false, reason: "insufficient_dirty_cash", available: money.dirtyMoney };
+    }
+    money.dirtyMoney -= required;
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    updateEconomy(economy);
+    return { ok: true, spent: required };
+  }
+
+  function setPlayerWantedHeat(nextHeat, reason = "", type = "fall") {
+    const safeHeat = clampWantedHeat(nextHeat);
+    const currentProfile = window.Empire.player && typeof window.Empire.player === "object"
+      ? window.Empire.player
+      : {};
+    const previousHeat = resolveWantedLevel(currentProfile);
+    const updatedProfile = {
+      ...currentProfile,
+      heat: safeHeat,
+      wantedLevel: safeHeat,
+      wanted: safeHeat,
+      policeHeat: safeHeat,
+      police_heat: safeHeat
+    };
+    updateProfile(updatedProfile);
+    window.Empire.PoliceHeat?.setExternalHeat?.(safeHeat, updatedProfile);
+    if (reason) {
+      appendGangHeatJournalEntry(type, Math.abs(safeHeat - previousHeat), reason);
+    }
+    return safeHeat;
+  }
+
+  function readDirtyHeatReductionTimestamps() {
+    try {
+      const raw = localStorage.getItem(HEAT_DIRTY_REDUCTION_STORAGE_KEY);
+      const parsed = JSON.parse(raw || "[]");
+      return Array.isArray(parsed) ? parsed.map((value) => Number(value)).filter(Number.isFinite) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveDirtyHeatReductionTimestamps(entries) {
+    const safeEntries = Array.isArray(entries) ? entries.filter((value) => Number.isFinite(Number(value))) : [];
+    localStorage.setItem(HEAT_DIRTY_REDUCTION_STORAGE_KEY, JSON.stringify(safeEntries));
+    return safeEntries;
+  }
+
+  function registerDirtyHeatReductionAndMaybeTriggerPolice() {
+    const now = Date.now();
+    const recent = readDirtyHeatReductionTimestamps()
+      .filter((timestamp) => now - Number(timestamp) <= GANG_HEAT_DIRTY_TRIGGER_WINDOW_MS);
+    recent.push(now);
+    saveDirtyHeatReductionTimestamps(recent);
+    if (recent.length < GANG_HEAT_DIRTY_TRIGGER_COUNT) return false;
+    saveDirtyHeatReductionTimestamps([]);
+    const ownedDistricts = getOwnedPlayerDistricts();
+    if (!ownedDistricts.length) return false;
+    const target = ownedDistricts[Math.floor(Math.random() * ownedDistricts.length)];
+    if (!target?.id) return false;
+    window.Empire.Map?.markDistrictPoliceAction?.(target.id, {
+      durationMs: GANG_HEAT_POLICE_DURATION_MS,
+      source: "heat-dirty-reduction"
+    });
+    pushEvent(`Podezřelé praní heatu přitáhlo policii do distriktu ${target.name || `#${target.id}`}.`);
+    return true;
+  }
+
   function resolveWantedStars(heatValue) {
     const heat = clampWantedHeat(heatValue);
     const tier = WANTED_HEAT_TIERS.find((entry) => heat >= entry.min && heat <= entry.max);
-    return tier ? tier.stars : 7;
+    return tier ? tier.stars : 6;
   }
 
   function updateProfileWantedStars(heatValue) {
@@ -8355,8 +8633,8 @@ window.Empire.UI = (() => {
     });
     const heat = clampWantedHeat(heatValue);
     const heatLabel = formatWantedHeat(heat);
-    root.setAttribute("aria-label", `Stupeň hledanosti ${activeStars}/7 (${heatLabel} heat)`);
-    root.title = `Hledanost: ${activeStars}/7 (${heatLabel} heat)`;
+    root.setAttribute("aria-label", `Stupeň hledanosti ${activeStars}/6 (${heatLabel} heat)`);
+    root.title = `Hledanost: ${activeStars}/6 (${heatLabel} heat)`;
   }
 
   function resolveWantedLevel(profile) {
@@ -8450,9 +8728,123 @@ window.Empire.UI = (() => {
     hydrateProfileModal(profile);
     updateWeaponsPopover();
     updateDefensePopover();
+    renderGangHeatModal();
     syncMapVisionContext();
     refreshMarketBuildingShortcuts();
     window.Empire.Map?.render?.();
+  }
+
+  function closeGangHeatModal() {
+    const root = document.getElementById("gang-heat-modal");
+    if (root) root.classList.add("hidden");
+  }
+
+  function renderGangHeatModal() {
+    const root = document.getElementById("gang-heat-modal");
+    if (!root || root.classList.contains("hidden")) return;
+    const valueEl = document.getElementById("gang-heat-modal-value");
+    const tierEl = document.getElementById("gang-heat-modal-tier");
+    const descEl = document.getElementById("gang-heat-modal-desc");
+    const levelsEl = document.getElementById("gang-heat-modal-levels");
+    const riseListEl = document.getElementById("gang-heat-rise-list");
+    const fallListEl = document.getElementById("gang-heat-fall-list");
+    const currentHeat = resolveWantedLevel(cachedProfile || window.Empire.player || {});
+    const currentStars = resolveWantedStars(currentHeat);
+    const currentLevel = GANG_HEAT_LEVELS.find((entry) => entry.stars === currentStars) || GANG_HEAT_LEVELS[0];
+    if (valueEl) valueEl.textContent = formatWantedHeat(currentHeat);
+    if (tierEl) tierEl.textContent = `${currentLevel.label} • ${currentLevel.title}`;
+    if (descEl) descEl.textContent = currentLevel.description;
+
+    if (levelsEl) {
+      levelsEl.innerHTML = GANG_HEAT_LEVELS.map((entry) => `
+        <div class="gang-heat-modal__level ${entry.stars === currentStars ? "is-active" : ""}">
+          <strong>${entry.label}</strong>
+          <span>${entry.title}</span>
+        </div>
+      `).join("");
+    }
+
+    const entries = readGangHeatJournal();
+    const rising = entries.filter((entry) => entry?.type === "rise").slice(0, 6);
+    const falling = entries.filter((entry) => entry?.type === "fall").slice(0, 6);
+    const renderList = (items, emptyText) => items.length
+      ? items.map((entry) => `
+          <div class="gang-heat-modal__item">
+            <strong>${entry.reason}</strong>
+            <span class="gang-heat-modal__delta-row">
+              <em class="gang-heat-modal__delta-badge ${entry.type === "rise" ? "is-rise" : "is-fall"}">${entry.type === "rise" ? "+heat" : "-heat"}</em>
+              <span>${entry.amount > 0 ? `${entry.type === "rise" ? "+" : "-"}${entry.amount} heat` : ""}</span>
+            </span>
+            <small>${formatRelativeHeatTime(entry.createdAt)}</small>
+          </div>
+        `).join("")
+      : `<div class="gang-heat-modal__empty">${emptyText}</div>`;
+    if (riseListEl) riseListEl.innerHTML = renderList(rising, "Zatím bez nových důvodů růstu.");
+    if (fallListEl) fallListEl.innerHTML = renderList(falling, "Zatím bez nových důvodů poklesu.");
+  }
+
+  function openGangHeatModal() {
+    const root = document.getElementById("gang-heat-modal");
+    if (!root) return;
+    root.classList.remove("hidden");
+    renderGangHeatModal();
+  }
+
+  function handleGangHeatReduction(mode) {
+    const currentHeat = resolveWantedLevel(cachedProfile || window.Empire.player || {});
+    if (mode === "dirty") {
+      const spendResult = spendDirtyCash(GANG_HEAT_DIRTY_COST);
+      if (!spendResult.ok) {
+        pushEvent("Nemáš dost špinavých peněz na snížení heatu.");
+        renderGangHeatModal();
+        return;
+      }
+      const nextHeat = Math.max(0, currentHeat - GANG_HEAT_DIRTY_REDUCTION);
+      setPlayerWantedHeat(nextHeat, "Uplacení tlaku špinavými penězi", "fall");
+      pushEvent(`Heat snížen o ${GANG_HEAT_DIRTY_REDUCTION} za $${GANG_HEAT_DIRTY_COST} dirty.`);
+      registerDirtyHeatReductionAndMaybeTriggerPolice();
+      renderGangHeatModal();
+      return;
+    }
+    const spendResult = trySpendCleanCash(GANG_HEAT_CLEAN_COST);
+    if (!spendResult.ok) {
+      pushEvent("Nemáš dost čistých peněz na snížení heatu.");
+      renderGangHeatModal();
+      return;
+    }
+    const nextHeat = Math.max(0, currentHeat - GANG_HEAT_CLEAN_REDUCTION);
+    setPlayerWantedHeat(nextHeat, "Legální krytí a zahlazení stop", "fall");
+    pushEvent(`Heat snížen o ${GANG_HEAT_CLEAN_REDUCTION} za $${GANG_HEAT_CLEAN_COST} clean.`);
+    renderGangHeatModal();
+  }
+
+  function initGangHeatModal() {
+    const trigger = document.getElementById("profile-heat-panel");
+    const root = document.getElementById("gang-heat-modal");
+    const backdrop = document.getElementById("gang-heat-modal-backdrop");
+    const closeBtn = document.getElementById("gang-heat-modal-close");
+    const dirtyBtn = document.getElementById("gang-heat-dirty-btn");
+    const cleanBtn = document.getElementById("gang-heat-clean-btn");
+    const clearLogBtn = document.getElementById("gang-heat-clear-log-btn");
+    if (trigger) {
+      trigger.addEventListener("click", () => openGangHeatModal());
+    }
+    if (!root) return;
+    if (backdrop) backdrop.addEventListener("click", closeGangHeatModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeGangHeatModal);
+    if (dirtyBtn) dirtyBtn.addEventListener("click", () => handleGangHeatReduction("dirty"));
+    if (cleanBtn) cleanBtn.addEventListener("click", () => handleGangHeatReduction("clean"));
+    if (clearLogBtn) {
+      clearLogBtn.addEventListener("click", () => {
+        clearGangHeatJournal();
+        renderGangHeatModal();
+      });
+    }
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeGangHeatModal();
+      }
+    });
   }
 
   function setGuestMode(isGuest) {

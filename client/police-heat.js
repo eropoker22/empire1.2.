@@ -54,23 +54,13 @@
         },
         {
           id: 6,
-          name: "Veřejný nepřítel",
+          name: "Totální hon",
           minHeat: 500,
-          maxHeat: 999,
+          maxHeat: Number.POSITIVE_INFINITY,
           policeAggression: 6,
           messageFrequency: 2 * 60 * 1000,
           raidChanceMultiplier: 1.65,
-          description: "Agresivní zásahy, blokace a těžké postihy."
-        },
-        {
-          id: 7,
-          name: "Totální hon",
-          minHeat: 1000,
-          maxHeat: Number.POSITIVE_INFINITY,
-          policeAggression: 7,
-          messageFrequency: 90 * 1000,
-          raidChanceMultiplier: 2.15,
-          description: "Koordinované operace a téměř permanentní tlak."
+          description: "Koordinované operace, blokace a téměř permanentní tlak."
         }
       ];
 
@@ -92,8 +82,7 @@
         3: 2.0,
         4: 1.5,
         5: 1.0,
-        6: 0.6,
-        7: 0.25
+        6: 0.6
       };
 
       const OPERATION_CATEGORIES = {

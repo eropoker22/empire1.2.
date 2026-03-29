@@ -4054,7 +4054,22 @@ window.Empire.Map = (() => {
     return 0;
   }
 
-  function addPlayerHeatFromBuilding(amount) {
+  function appendHeatJournalEntry(type, amount, reason, createdAt = Date.now()) {
+    try {
+      const raw = localStorage.getItem("empire_heat_journal_v1");
+      const current = raw ? JSON.parse(raw) : [];
+      const entries = Array.isArray(current) ? current : [];
+      entries.unshift({
+        type: String(type || "").trim().toLowerCase(),
+        amount: Math.max(0, Math.round((Number(amount) || 0) * 10) / 10),
+        reason: String(reason || "").trim(),
+        createdAt: Math.max(0, Math.floor(Number(createdAt) || Date.now()))
+      });
+      localStorage.setItem("empire_heat_journal_v1", JSON.stringify(entries.slice(0, 40)));
+    } catch {}
+  }
+
+  function addPlayerHeatFromBuilding(amount, reason = "Provoz budov a akce") {
     const delta = Math.max(0, Number(amount) || 0);
     if (!delta) return readCurrentPlayerHeatValue();
     const nextHeat = Math.max(0, readCurrentPlayerHeatValue() + delta);
@@ -4081,6 +4096,8 @@ window.Empire.Map = (() => {
     if (typeof setExternalHeat === "function") {
       setExternalHeat(nextHeat, nextProfile);
     }
+
+    appendHeatJournalEntry("rise", delta, reason);
 
     return nextHeat;
   }

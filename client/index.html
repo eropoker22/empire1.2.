@@ -158,7 +158,6 @@
           </div>
 
           <div class="card compact-action-card" id="leaderboard-card">
-            <p class="muted">Pořadí gangů podle síly, vlivu a kontroly města.</p>
             <button class="btn events-hero" id="leaderboard-open">
               Leaderboard
             </button>
@@ -269,7 +268,6 @@
                 <span class="profile-wanted-stars__star" data-profile-wanted-star="4" aria-hidden="true">★</span>
                 <span class="profile-wanted-stars__star" data-profile-wanted-star="5" aria-hidden="true">★</span>
                 <span class="profile-wanted-stars__star" data-profile-wanted-star="6" aria-hidden="true">★</span>
-                <span class="profile-wanted-stars__star" data-profile-wanted-star="7" aria-hidden="true">★</span>
               </div>
             </div>
             <div class="profile-row">
@@ -460,6 +458,33 @@
           <div class="modal__actions spy-confirm-modal__actions">
             <button class="btn btn--ghost" id="spy-confirm-modal-cancel" type="button">Odmítnout</button>
             <button class="btn btn--warn" id="spy-confirm-modal-confirm" type="button">Potvrdit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="raid-confirm-modal" class="modal hidden">
+      <div id="raid-confirm-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content spy-confirm-modal__content">
+        <div class="modal__header">
+          <h3>Potvrzení krádeže</h3>
+          <button class="modal__close" id="raid-confirm-modal-close" type="button" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body spy-confirm-modal__body">
+          <div class="modal__row">
+            <span>Cíl</span>
+            <strong id="raid-confirm-modal-district">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Trvání</span>
+            <strong id="raid-confirm-modal-duration">20s</strong>
+          </div>
+          <p class="muted spy-confirm-modal__note" id="raid-confirm-modal-note">
+            Opravdu chceš spustit krádež?
+          </p>
+          <div class="modal__actions spy-confirm-modal__actions">
+            <button class="btn btn--ghost" id="raid-confirm-modal-cancel" type="button">Zrušit</button>
+            <button class="btn btn--warn" id="raid-confirm-modal-confirm" type="button">Potvrdit krádež</button>
           </div>
         </div>
       </div>
@@ -1065,6 +1090,47 @@
                 <h4>Police Operations Log</h4>
                 <div class="police-heat-op-list" id="ui-operation-list"></div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="gang-heat-modal" class="modal hidden">
+      <div id="gang-heat-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content gang-heat-modal__content">
+        <div class="modal__header">
+          <h3>Heat</h3>
+          <button class="modal__close" id="gang-heat-modal-close" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body gang-heat-modal__body">
+          <div class="gang-heat-modal__top">
+            <div class="gang-heat-modal__hero">
+              <div class="gang-heat-modal__value" id="gang-heat-modal-value">0</div>
+              <div class="gang-heat-modal__tier" id="gang-heat-modal-tier">Stupeň 1</div>
+              <div class="gang-heat-modal__desc" id="gang-heat-modal-desc">Základní dohled.</div>
+            </div>
+            <div class="gang-heat-modal__actions">
+              <button class="btn btn--ghost" id="gang-heat-dirty-btn" type="button">Snížit špinavými penězi</button>
+              <button class="btn btn--primary" id="gang-heat-clean-btn" type="button">Snížit čistými penězi</button>
+            </div>
+            <div class="gang-heat-modal__cost-row">
+              <div class="gang-heat-modal__cost">Cena $500 dirty • -10 heat</div>
+              <div class="gang-heat-modal__cost">Cena $300 clean • -15 heat</div>
+            </div>
+          </div>
+          <div class="gang-heat-modal__levels" id="gang-heat-modal-levels"></div>
+          <div class="gang-heat-modal__toolbar">
+            <button class="btn btn--ghost" id="gang-heat-clear-log-btn" type="button">Vymazat zprávy</button>
+          </div>
+          <div class="gang-heat-modal__grid">
+            <div class="gang-heat-modal__panel">
+              <h4>Proč heat roste</h4>
+              <div class="gang-heat-modal__list" id="gang-heat-rise-list"></div>
+            </div>
+            <div class="gang-heat-modal__panel">
+              <h4>Proč heat klesá</h4>
+              <div class="gang-heat-modal__list" id="gang-heat-fall-list"></div>
             </div>
           </div>
         </div>
