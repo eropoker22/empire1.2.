@@ -932,6 +932,7 @@ window.Empire.Map = (() => {
   const DISTRICT_GOSSIP_STORAGE_KEY = "empire_district_gossip_history_v1";
   const DISTRICT_GOSSIP_MAX_PER_DISTRICT = 40;
   const DISTRICT_GOSSIP_DEMO_SEED_KEY = "empire_district_gossip_demo_seed_v1";
+  const DISTRICT_GOSSIP_DISABLED_INTEL_TYPES = new Set(["attack_success", "attack_failed", "raid_started"]);
 
   const BUILDING_INCOME_CLEAN_RATIO = 0.9;
   const BUILDING_INCOME_DIRTY_RATIO = 0.1;
@@ -962,6 +963,7 @@ window.Empire.Map = (() => {
     state.mapMode = resolveStoredMapMode();
 
     clearSpyGeneratedGossipOnRefresh();
+    clearDisabledIntelTypeDistrictGossipOnRefresh();
     resetPharmacyProducedStateOnRefresh();
     loadMapImage(state.mapMode);
     generateCity();
@@ -4575,6 +4577,27 @@ window.Empire.Map = (() => {
     return "komodita";
   }
 
+  function clearDisabledIntelTypeDistrictGossipOnRefresh() {
+    const nextStore = {};
+    let changed = false;
+    Object.entries(districtGossipStore || {}).forEach(([districtId, entries]) => {
+      const currentEntries = Array.isArray(entries) ? entries : [];
+      const filteredEntries = currentEntries.filter((entry) => {
+        const intelType = String(entry?.intelType || "").trim().toLowerCase();
+        return !DISTRICT_GOSSIP_DISABLED_INTEL_TYPES.has(intelType);
+      });
+      if (filteredEntries.length !== currentEntries.length) {
+        changed = true;
+      }
+      if (filteredEntries.length) {
+        nextStore[districtId] = filteredEntries;
+      }
+    });
+    if (!changed) return;
+    districtGossipStore = nextStore;
+    saveDistrictGossipStore();
+  }
+
   function formatMarketSideLabel(side) {
     return String(side || "").trim().toLowerCase() === "sell" ? "prodejní" : "nákupní";
   }
@@ -4634,6 +4657,7 @@ window.Empire.Map = (() => {
   function recordIntelEvent(payload = {}) {
     const type = String(payload?.type || "").trim().toLowerCase();
     if (!type) return [];
+    if (DISTRICT_GOSSIP_DISABLED_INTEL_TYPES.has(type)) return [];
     const targets = resolveIntelEventDistrictTargets(payload);
     if (!targets.length) return [];
     const now = Date.now();
