@@ -11,6 +11,12 @@
   --success: #34d399;
 }
 
+html,
+body,
+#app {
+  touch-action: manipulation;
+}
+
 .onboarding-overlay {
   position: fixed;
   inset: 0;
@@ -2013,6 +2019,11 @@ body::before {
   width: 18px;
   height: 18px;
   fill: currentColor;
+}
+
+.auth-footer__link--instagram svg {
+  width: 16px;
+  height: 16px;
 }
 
 .auth-footer__link:hover {
@@ -11262,6 +11273,30 @@ body::before {
     display: block;
   }
 
+  #boost-modal .modal__content {
+    width: min(92vw, 460px);
+    max-height: calc(100dvh - 20px - env(safe-area-inset-bottom));
+  }
+
+  #boost-modal .modal__body {
+    gap: 6px;
+  }
+
+  #boost-modal .boost-modal__body {
+    min-height: 0;
+  }
+
+  #boost-modal .boost-modal__panel {
+    min-height: 260px;
+    height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 128px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 128px - env(safe-area-inset-bottom));
+  }
+
+  #boost-modal .boost-modal__list {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
   .leaderboard-entry--server {
     grid-template-columns: auto auto 1fr;
   }
@@ -12742,6 +12777,36 @@ body.mobile-storage-modal-open {
 
   #building-detail-modal .building-info-card__stats {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  #building-detail-modal {
+    padding-top: calc(var(--mobile-topbar-offset, 176px) + 10px);
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  #building-detail-modal .modal__backdrop {
+    inset: calc(var(--mobile-topbar-offset, 176px) + 10px) 0 0 0;
+  }
+
+  #building-detail-modal .building-detail-modal__content {
+    width: min(100vw - 16px, 560px);
+    height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 16px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 16px - env(safe-area-inset-bottom));
+    border-radius: 14px;
+  }
+
+  #building-detail-modal .modal__body {
+    padding-bottom: 10px;
+  }
+
+  #building-detail-modal .building-detail-tabs {
+    gap: 6px;
+  }
+
+  #building-detail-modal .building-detail-tabs__btn {
+    padding: 8px 10px;
+    font-size: 11px;
   }
 
   .modal__body {
