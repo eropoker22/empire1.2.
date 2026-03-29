@@ -13116,6 +13116,25 @@ body.mobile-storage-modal-open {
     inset: calc(var(--mobile-topbar-offset, 176px) + 10px) 0 0 0;
   }
 
+  #settings-modal {
+    align-items: start;
+    padding-top: calc(var(--mobile-topbar-offset, 176px) + 20px);
+  }
+
+  #settings-modal .modal__backdrop {
+    inset: calc(var(--mobile-topbar-offset, 176px) + 20px) 0 0 0;
+    background: rgba(7, 8, 15, 0.72);
+    backdrop-filter: blur(6px);
+  }
+
+  #settings-modal .modal__content {
+    width: min(520px, calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - var(--mobile-topbar-offset, 176px) - 40px - env(safe-area-inset-bottom));
+    overflow: auto;
+    margin-top: 0;
+  }
+
   .modal__content {
     padding: 14px;
     max-height: calc(100dvh - 20px);

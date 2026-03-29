@@ -2008,6 +2008,7 @@ window.Empire.UI = (() => {
       "storage-modal",
       "leaderboard-modal",
       "gang-heat-modal",
+      "settings-modal",
       "district-modal",
       "district-defense-modal",
       "spy-confirm-modal",
