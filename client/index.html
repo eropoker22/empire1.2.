@@ -1232,13 +1232,6 @@
               <span class="toggle__track"></span>
             </label>
           </div>
-          <div class="modal__row settings-modal__row settings-modal__row--toggle">
-            <span class="settings-modal__label">Notifikace</span>
-            <label class="toggle settings-toggle">
-              <input id="settings-notifications" type="checkbox" checked />
-              <span class="toggle__track"></span>
-            </label>
-          </div>
           <div class="modal__row settings-modal__row">
             <span class="settings-modal__label">Kvalita efektů</span>
             <div class="select">
@@ -1255,6 +1248,31 @@
               <select id="settings-language">
                 <option value="cs">Čeština</option>
                 <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-modal__section-title">Mapa</div>
+          <div class="modal__row settings-modal__row settings-modal__row--toggle">
+            <span class="settings-modal__label">Čáry distriktů</span>
+            <label class="toggle settings-toggle">
+              <input id="settings-map-district-borders" type="checkbox" checked />
+              <span class="toggle__track"></span>
+            </label>
+          </div>
+          <div class="modal__row settings-modal__row settings-modal__row--toggle">
+            <span class="settings-modal__label">Znaky aliancí</span>
+            <label class="toggle settings-toggle">
+              <input id="settings-map-alliance-symbols" type="checkbox" checked />
+              <span class="toggle__track"></span>
+            </label>
+          </div>
+          <div class="modal__row settings-modal__row">
+            <span class="settings-modal__label">Viditelnost mapy</span>
+            <div class="select">
+              <select id="settings-map-visibility">
+                <option value="all">Všechny distrikty</option>
+                <option value="hide-enemies">Skrýt nepřátele</option>
+                <option value="only-player">Jen moje distrikty</option>
               </select>
             </div>
           </div>

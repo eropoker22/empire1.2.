@@ -413,7 +413,10 @@ window.Empire.UI = (() => {
     music: true,
     notifications: true,
     effectsQuality: "high",
-    language: "cs"
+    language: "cs",
+    mapDistrictBorders: true,
+    mapAllianceSymbols: true,
+    mapVisibilityMode: "all"
   });
 
   const districtBuildingCatalog = {
@@ -7244,6 +7247,7 @@ window.Empire.UI = (() => {
 
   function syncMapVisionContext() {
     if (!window.Empire.Map?.setVisionContext) return;
+    const settings = getSettingsState();
     window.Empire.Map.setVisionContext({
       fogPreviewMode: scenarioVisionEnabled,
       alliedOwnerNames: Array.from(getActiveAllianceOwnerNames()),
@@ -7251,7 +7255,10 @@ window.Empire.UI = (() => {
       allowEnemyModalIntelInFog: scenarioVisionEnabled,
       uniqueOwnerColors: scenarioVisionEnabled && scenarioUniqueOwnerColors,
       districtBorderMode: selectedMapBorderMode,
-      unknownNeutralFillEnabled
+      unknownNeutralFillEnabled,
+      showDistrictBorders: Boolean(settings.mapDistrictBorders),
+      showAllianceSymbols: Boolean(settings.mapAllianceSymbols),
+      districtVisibilityMode: normalizeMapVisibilityMode(settings.mapVisibilityMode)
     });
   }
 
@@ -12407,7 +12414,7 @@ window.Empire.UI = (() => {
     const allianceBtn = document.getElementById("alliance-btn");
     if (!allianceBtn) return;
 
-    const normalized = String(allianceName || "").trim();
+    const normalized = extractAllianceDisplayName(allianceName);
     if (!normalized || normalized === "Žádná") {
       allianceBtn.textContent = "Aliance";
       return;
@@ -12423,40 +12430,92 @@ window.Empire.UI = (() => {
     const saveBtn = document.getElementById("settings-save-btn");
     const soundInput = document.getElementById("settings-sound");
     const musicInput = document.getElementById("settings-music");
-    const notificationsInput = document.getElementById("settings-notifications");
     const effectsQualitySelect = document.getElementById("settings-effects-quality");
     const languageSelect = document.getElementById("settings-language");
+    const mapDistrictBordersInput = document.getElementById("settings-map-district-borders");
+    const mapAllianceSymbolsInput = document.getElementById("settings-map-alliance-symbols");
+    const mapVisibilitySelect = document.getElementById("settings-map-visibility");
     if (!root) return;
+    let settingsSnapshot = null;
 
     const applySettingsToForm = () => {
       const settings = getSettingsState();
       if (soundInput) soundInput.checked = settings.sound;
       if (musicInput) musicInput.checked = settings.music;
-      if (notificationsInput) notificationsInput.checked = settings.notifications;
       if (effectsQualitySelect) effectsQualitySelect.value = settings.effectsQuality;
       if (languageSelect) languageSelect.value = settings.language;
+      if (mapDistrictBordersInput) mapDistrictBordersInput.checked = Boolean(settings.mapDistrictBorders);
+      if (mapAllianceSymbolsInput) mapAllianceSymbolsInput.checked = Boolean(settings.mapAllianceSymbols);
+      if (mapVisibilitySelect) mapVisibilitySelect.value = normalizeMapVisibilityMode(settings.mapVisibilityMode);
+    };
+
+    const captureFormSettings = () => ({
+      sound: Boolean(soundInput?.checked),
+      music: Boolean(musicInput?.checked),
+      notifications: Boolean(getSettingsState().notifications),
+      effectsQuality: effectsQualitySelect?.value || DEFAULT_SETTINGS.effectsQuality,
+      language: languageSelect?.value || DEFAULT_SETTINGS.language,
+      mapDistrictBorders: Boolean(mapDistrictBordersInput?.checked),
+      mapAllianceSymbols: Boolean(mapAllianceSymbolsInput?.checked),
+      mapVisibilityMode: normalizeMapVisibilityMode(mapVisibilitySelect?.value)
+    });
+
+    const writeFormSettings = () => {
+      const settings = captureFormSettings();
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      syncMapVisionContext();
+    };
+
+    const revertSettingsPreview = () => {
+      if (!settingsSnapshot) return;
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settingsSnapshot));
+      syncMapVisionContext();
+      applySettingsToForm();
+    };
+
+    const closeSettingsModal = (options = {}) => {
+      const shouldRevert = Boolean(options.revert);
+      if (shouldRevert) {
+        revertSettingsPreview();
+      }
+      settingsSnapshot = null;
+      root.classList.add("hidden");
     };
 
     const saveSettings = () => {
       const settings = {
-        sound: Boolean(soundInput?.checked),
-        music: Boolean(musicInput?.checked),
-        notifications: Boolean(notificationsInput?.checked),
-        effectsQuality: effectsQualitySelect?.value || DEFAULT_SETTINGS.effectsQuality,
-        language: languageSelect?.value || DEFAULT_SETTINGS.language
+        ...captureFormSettings()
       };
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      syncMapVisionContext();
+      settingsSnapshot = settings;
       root.classList.add("hidden");
       pushEvent("Nastavení bylo uloženo.");
     };
 
+    const onLiveChange = () => {
+      writeFormSettings();
+    };
+
     applySettingsToForm();
-    if (backdrop) backdrop.addEventListener("click", () => root.classList.add("hidden"));
-    if (closeBtn) closeBtn.addEventListener("click", () => root.classList.add("hidden"));
+    if (soundInput) soundInput.addEventListener("change", onLiveChange);
+    if (musicInput) musicInput.addEventListener("change", onLiveChange);
+    if (effectsQualitySelect) effectsQualitySelect.addEventListener("change", onLiveChange);
+    if (languageSelect) languageSelect.addEventListener("change", onLiveChange);
+    if (mapDistrictBordersInput) mapDistrictBordersInput.addEventListener("change", onLiveChange);
+    if (mapAllianceSymbolsInput) mapAllianceSymbolsInput.addEventListener("change", onLiveChange);
+    if (mapVisibilitySelect) mapVisibilitySelect.addEventListener("change", onLiveChange);
+    if (backdrop) backdrop.addEventListener("click", () => closeSettingsModal({ revert: true }));
+    if (closeBtn) closeBtn.addEventListener("click", () => closeSettingsModal({ revert: true }));
     if (saveBtn) saveBtn.addEventListener("click", saveSettings);
-    root.addEventListener("settings:open", applySettingsToForm);
+    root.addEventListener("settings:open", () => {
+      settingsSnapshot = getSettingsState();
+      applySettingsToForm();
+    });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") root.classList.add("hidden");
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeSettingsModal({ revert: true });
+      }
     });
   }
 
@@ -13744,7 +13803,9 @@ window.Empire.UI = (() => {
       wantedLockEl.title = active ? `Aktivní ochrana po razii: ${formatDurationLabel(until - Date.now())}` : "Bez aktivní ochrany po razii";
     }
     setText("profile-modal-raid-protection", formatPoliceRaidProtectionLabel(profile));
-    setText("profile-modal-alliance", profile.alliance || "Žádná");
+    const allianceLabel = String(profile.gangName || guestGangName || profile.alliance || "Žádná").trim();
+    const districtCount = Number.isFinite(Number(profile.districts)) ? Math.max(0, Math.floor(Number(profile.districts))) : 0;
+    setText("profile-modal-alliance", allianceLabel ? `${allianceLabel} (${districtCount})` : "Žádná");
     setText("profile-modal-districts", profile.districts || 0);
     const profileHasMoneyData =
       profile.cleanMoney !== undefined ||
@@ -13782,6 +13843,12 @@ window.Empire.UI = (() => {
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
+  }
+
+  function normalizeMapVisibilityMode(value) {
+    const mode = String(value || "").trim().toLowerCase();
+    if (mode === "all" || mode === "hide-enemies" || mode === "only-player") return mode;
+    return DEFAULT_SETTINGS.mapVisibilityMode;
   }
 
   function animateMoneyStatValue(element, delta) {

@@ -36,7 +36,10 @@ window.Empire.Map = (() => {
       allowEnemyModalIntelInFog: false,
       uniqueOwnerColors: false,
       districtBorderMode: "player",
-      unknownNeutralFillEnabled: false
+      unknownNeutralFillEnabled: false,
+      showDistrictBorders: true,
+      showAllianceSymbols: true,
+      districtVisibilityMode: "all"
     },
     alliancePatternCache: new Map(),
     distinctOwnerColorByName: new Map(),
@@ -9671,6 +9674,7 @@ window.Empire.Map = (() => {
   }
 
   function drawDistrictTopCutLine(ctx) {
+    if (!shouldDrawDistrictBorders()) return;
     const cutY = resolveDistrictTopNoDrawY();
     ctx.save();
     ctx.beginPath();
@@ -9734,13 +9738,16 @@ window.Empire.Map = (() => {
     state.districts.forEach((district) => {
       const fill = districtFill(district);
       const destroyed = isDistrictDestroyed(district);
+      const hiddenByMode = shouldHideDistrictByVisibilityMode(district);
       const districtKey = normalizeDistrictId(district?.id);
       const attackMarker = districtKey ? state.attackedDistricts.get(districtKey) : null;
       const policeAction = districtKey ? state.policeDistrictActions.get(districtKey) : null;
       const spyAction = districtKey ? state.spyDistrictActions.get(districtKey) : null;
       const raidAction = districtKey ? state.raidDistrictActions.get(districtKey) : null;
       ctx.fillStyle = fill;
-      ctx.strokeStyle = destroyed ? "rgba(24, 24, 27, 0.94)" : borderStroke;
+      ctx.strokeStyle = destroyed || hiddenByMode || !shouldDrawDistrictBorders()
+        ? "rgba(0,0,0,0)"
+        : borderStroke;
       ctx.lineWidth = 1;
 
       ctx.beginPath();
@@ -9750,10 +9757,12 @@ window.Empire.Map = (() => {
       });
       ctx.closePath();
       ctx.fill();
-      ctx.stroke();
+      if (!hiddenByMode && shouldDrawDistrictBorders()) {
+        ctx.stroke();
+      }
       drawDistrictAllianceIcon(ctx, district);
 
-      if (district.id === state.hoverId || district.id === state.selectedId) {
+      if (!hiddenByMode && shouldDrawDistrictBorders() && (district.id === state.hoverId || district.id === state.selectedId)) {
         ctx.strokeStyle = district.id === state.selectedId ? "#facc15" : "#38bdf8";
         ctx.lineWidth = 3;
         ctx.stroke();
@@ -11427,6 +11436,8 @@ window.Empire.Map = (() => {
 
   function drawDistrictAllianceIcon(ctx, district) {
     if (!ctx || !district?.owner || isDistrictDestroyed(district)) return;
+    if (state.vision.showAllianceSymbols === false) return;
+    if (shouldHideDistrictByVisibilityMode(district)) return;
     const symbol = resolveDistrictAllianceIconSymbol(district);
     if (!symbol) return;
     const bounds = polygonBounds(district.polygon);
@@ -11634,6 +11645,10 @@ window.Empire.Map = (() => {
       return "rgba(9, 9, 11, 0.9)";
     }
 
+    if (shouldHideDistrictByVisibilityMode(district)) {
+      return resolveHiddenDistrictFill();
+    }
+
     if (state.vision.uniqueOwnerColors && district?.owner) {
       if (isDistrictOwnedByPlayer(district)) {
         const playerFill = resolveDistinctOwnerFill(district.owner, 0.5);
@@ -11725,6 +11740,24 @@ window.Empire.Map = (() => {
     return "player";
   }
 
+  function normalizeDistrictVisibilityMode(value) {
+    const mode = String(value || "").trim().toLowerCase();
+    if (mode === "all" || mode === "hide-enemies" || mode === "only-player") return mode;
+    return "all";
+  }
+
+  function shouldHideDistrictByVisibilityMode(district) {
+    const mode = normalizeDistrictVisibilityMode(state.vision.districtVisibilityMode);
+    if (mode === "all") return false;
+    if (mode === "hide-enemies") return isDistrictOwnedByEnemy(district);
+    if (mode === "only-player") return !isDistrictOwnedByPlayer(district);
+    return false;
+  }
+
+  function shouldDrawDistrictBorders() {
+    return state.vision.showDistrictBorders !== false;
+  }
+
   function resolveDistrictBorderStroke() {
     const mode = normalizeDistrictBorderMode(state.vision.districtBorderMode);
     if (mode === "white") return "rgba(248,250,252,0.9)";
@@ -11789,6 +11822,10 @@ window.Empire.Map = (() => {
     const channelsFromFill = parseCssColorChannels(districtFill(district));
     if (channelsFromFill) return channelsFromFill;
     return [34, 211, 238];
+  }
+
+  function resolveHiddenDistrictFill() {
+    return "rgba(0,0,0,0)";
   }
 
   function applyDistrictModalAccent(district) {
@@ -12288,6 +12325,9 @@ window.Empire.Map = (() => {
     state.vision.uniqueOwnerColors = Boolean(context.uniqueOwnerColors);
     state.vision.districtBorderMode = normalizeDistrictBorderMode(context.districtBorderMode);
     state.vision.unknownNeutralFillEnabled = Boolean(context.unknownNeutralFillEnabled);
+    state.vision.showDistrictBorders = context.showDistrictBorders !== false;
+    state.vision.showAllianceSymbols = context.showAllianceSymbols !== false;
+    state.vision.districtVisibilityMode = normalizeDistrictVisibilityMode(context.districtVisibilityMode);
     state.vision.alliedOwnerNames = new Set(
       allied
         .map((value) => normalizeName(value))
