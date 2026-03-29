@@ -142,6 +142,9 @@
       };
 
       const POLICE_TICK_MS = 15 * 1000;
+      const POLICE_TARGETING_INTERVAL_MS = 65 * 60 * 1000;
+      const POLICE_EXTREME_HEAT_THRESHOLD = 500;
+      const POLICE_RAID_PROTECTION_MS = 5 * 60 * 60 * 1000;
       const MAX_MESSAGES = 80;
       const MAX_OP_LOG = 120;
 
@@ -258,10 +261,13 @@
         policeSystem: {
           globalAlertLevel: 1,
           lastPoliceTick: Date.now(),
+          lastTargetingAt: 0,
+          lastExtremeOverrideAt: 0,
           lastMessageTick: 0,
           activeOperations: [],
           operationHistory: [],
           raidCooldownsByPlayer: {},
+          raidProtectionByPlayer: {},
           policeMessageTemplates: POLICE_MESSAGE_TEMPLATES,
           heatTierConfig: HEAT_TIERS
         },
@@ -339,6 +345,194 @@
         return Boolean(effect && Number(effect.endsAt || 0) > nowMs());
       }
 
+      function resolveStealthHeatMultiplier(player) {
+        const safePlayer = player && typeof player === "object" ? player : {};
+        const candidates = [
+          safePlayer.stealthBuild,
+          safePlayer.stealth_build,
+          safePlayer.buildType,
+          safePlayer.build_type,
+          safePlayer.specialBuild,
+          safePlayer.special_build,
+          safePlayer.playStyle,
+          safePlayer.play_style,
+          safePlayer.strategy,
+          safePlayer.style
+        ];
+        for (let i = 0; i < candidates.length; i += 1) {
+          const value = candidates[i];
+          if (value === true) return 0.8;
+          if (typeof value === "string" && value.trim().toLowerCase().includes("stealth")) return 0.8;
+        }
+        return 1;
+      }
+
+      function normalizePoliceText(value) {
+        return String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim();
+      }
+
+      function getPlayerOwnedBuildings(player, buildings) {
+        const safePlayer = player && typeof player === "object" ? player : {};
+        const safeBuildings = Array.isArray(buildings) ? buildings : [];
+        return safeBuildings.filter((building) => String(building?.ownerId || "").trim() === String(safePlayer.id || "").trim());
+      }
+
+      function scorePlaystyleFromBuildingsAndEconomy(player, districts, buildings) {
+        const safePlayer = player && typeof player === "object" ? player : {};
+        const ownedBuildings = getPlayerOwnedBuildings(safePlayer, buildings);
+        const ownedDistricts = Array.isArray(districts) ? districts.filter((district) => String(district?.ownerId || "").trim() === String(safePlayer.id || "").trim()) : [];
+        const normalizedNames = ownedBuildings.map((building) => normalizePoliceText(building?.type || ""));
+        const totalDrugs = getTotalDrugs(safePlayer);
+        const cleanCash = Math.max(0, Number(safePlayer.cash || 0));
+        const dirtyCash = Math.max(0, Number(safePlayer.dirtyCash || 0));
+        const attackWeapons = Math.max(0, Number(safePlayer.weapons || 0));
+        const defenseWeapons = Math.max(0, Number(safePlayer.defense || 0));
+        const materials = Math.max(0, Number(safePlayer.materials || 0));
+        const gangMembers = Math.max(0, Number(safePlayer.gangMembers || 0));
+        const districtCount = ownedDistricts.length;
+
+        const matches = {
+          financial: [
+            "bank",
+            "exchange",
+            "casino",
+            "market",
+            "office",
+            "vip",
+            "lobby",
+            "centr",
+            "smen",
+            "obchod",
+            "restaur",
+            "shop"
+          ],
+          drug: [
+            "drug",
+            "dealer",
+            "lab",
+            "tunnel",
+            "pharmacy",
+            "klinika",
+            "chem",
+            "smoke",
+            "narc"
+          ],
+          weapons: [
+            "zbroj",
+            "tovarn",
+            "warehouse",
+            "sklad",
+            "armory",
+            "factory",
+            "garage",
+            "security",
+            "camera",
+            "combat"
+          ],
+          arrests: [
+            "apartment",
+            "blok",
+            "recruit",
+            "brainwash",
+            "school",
+            "clinic",
+            "residential",
+            "housing",
+            "popul",
+            "resid"
+          ]
+        };
+
+        const scores = {
+          financial: 0,
+          drug: 0,
+          weapons: 0,
+          arrests: 0,
+          total: 0
+        };
+
+        normalizedNames.forEach((name) => {
+          if (!name) return;
+          if (matches.financial.some((needle) => name.includes(needle))) scores.financial += 3;
+          if (matches.drug.some((needle) => name.includes(needle))) scores.drug += 3;
+          if (matches.weapons.some((needle) => name.includes(needle))) scores.weapons += 3;
+          if (matches.arrests.some((needle) => name.includes(needle))) scores.arrests += 3;
+        });
+
+        scores.financial += Math.min(12, Math.floor((cleanCash + dirtyCash) / 250000));
+        scores.financial += Math.min(8, Math.floor(dirtyCash / 120000));
+        scores.drug += Math.min(16, Math.floor(totalDrugs / 8));
+        scores.weapons += Math.min(16, Math.floor((attackWeapons + defenseWeapons + materials) / 10));
+        scores.arrests += Math.min(16, Math.floor(gangMembers / 120));
+        scores.arrests += Math.min(6, districtCount);
+
+        const ranked = Object.entries(scores)
+          .sort((a, b) => b[1] - a[1]);
+        const [topKey, topScore] = ranked[0] || ["total", 0];
+        const secondScore = Number(ranked[1]?.[1] || 0);
+        if (topScore <= 0) return { key: "total", label: "Celková razie", icon: "⚠️", scores };
+        if (topScore - secondScore <= 1 && topScore < 8) {
+          return { key: "total", label: "Celková razie", icon: "⚠️", scores };
+        }
+        if (topKey === "financial") return { key: "financial", label: "Finanční zásah", icon: "💰", scores };
+        if (topKey === "drug") return { key: "drug", label: "Drogová razie", icon: "🧪", scores };
+        if (topKey === "weapons") return { key: "weapons", label: "Zbrojní zásah", icon: "🛡️", scores };
+        if (topKey === "arrests") return { key: "arrests", label: "Zatýkací vlna", icon: "👥", scores };
+        return { key: "total", label: "Celková razie", icon: "⚠️", scores };
+      }
+
+      function resolvePoliceRaidSpecialtyFromPlaystyleValue(playstyleValue) {
+        const normalized = String(playstyleValue || "").trim().toLowerCase();
+        if (!normalized) return { key: "total", label: "Celková razie", icon: "⚠️" };
+        if (
+          normalized.includes("stealth")
+          || normalized.includes("shadow")
+          || normalized.includes("covert")
+          || normalized.includes("money")
+          || normalized.includes("cash")
+          || normalized.includes("finance")
+          || normalized.includes("economic")
+          || normalized.includes("bank")
+        ) return { key: "financial", label: "Finanční zásah", icon: "💰" };
+        if (normalized.includes("drug") || normalized.includes("narc") || normalized.includes("chem") || normalized.includes("dealer") || normalized.includes("lab")) {
+          return { key: "drug", label: "Drogová razie", icon: "🧪" };
+        }
+        if (normalized.includes("weapon") || normalized.includes("armory") || normalized.includes("gun") || normalized.includes("combat") || normalized.includes("military")) {
+          return { key: "weapons", label: "Zbrojní zásah", icon: "🛡️" };
+        }
+        if (normalized.includes("police") || normalized.includes("law") || normalized.includes("order") || normalized.includes("arrest") || normalized.includes("control") || normalized.includes("security")) {
+          return { key: "arrests", label: "Zatýkací vlna", icon: "👥" };
+        }
+        if (normalized.includes("total") || normalized.includes("all") || normalized.includes("coordinated") || normalized.includes("hard")) {
+          return { key: "total", label: "Celková razie", icon: "⚠️" };
+        }
+        return { key: "total", label: "Celková razie", icon: "⚠️" };
+      }
+
+      function resolvePoliceRaidSpecialtyFromPlayer(player, districts, buildings) {
+        const safePlayer = player && typeof player === "object" ? player : {};
+        const playstyle = safePlayer.playStyle
+          || safePlayer.play_style
+          || safePlayer.strategy
+          || safePlayer.style
+          || safePlayer.raidPlaystyle
+          || safePlayer.raid_playstyle
+          || "";
+        if (String(playstyle || "").trim()) {
+          return resolvePoliceRaidSpecialtyFromPlaystyleValue(playstyle);
+        }
+        return scorePlaystyleFromBuildingsAndEconomy(safePlayer, districts, buildings);
+      }
+
+      function getEffectiveHeatValue(player) {
+        const rawHeat = Math.max(0, Number(player?.totalHeat || 0));
+        return Math.max(0, Math.round(rawHeat * resolveStealthHeatMultiplier(player)));
+      }
+
       // ==================================================
       // 4) REQUIRED CORE FUNCTIONS
       // ==================================================
@@ -349,8 +543,9 @@
       }
 
       function updateHeatTier(player) {
-        const previous = getHeatTier(player.heatTier ? HEAT_TIERS[player.heatTier - 1]?.minHeat : player.totalHeat);
-        const next = getHeatTier(player.totalHeat);
+        const effectiveHeat = getEffectiveHeatValue(player);
+        const previous = getHeatTier(player.heatTier ? HEAT_TIERS[player.heatTier - 1]?.minHeat : effectiveHeat);
+        const next = getHeatTier(effectiveHeat);
         player.heatTier = next.id;
         state.policeSystem.globalAlertLevel = next.policeAggression;
 
@@ -368,7 +563,8 @@
       }
 
       function getHeatProgress(player) {
-        const tier = getHeatTier(player.totalHeat);
+        const effectiveHeat = getEffectiveHeatValue(player);
+        const tier = getHeatTier(effectiveHeat);
         const nextTier = HEAT_TIERS.find((entry) => entry.id === tier.id + 1) || null;
         if (!nextTier) {
           return {
@@ -380,17 +576,17 @@
         }
         const currentRangeStart = tier.minHeat;
         const currentRangeEnd = nextTier.minHeat;
-        const ratio = (player.totalHeat - currentRangeStart) / Math.max(1, currentRangeEnd - currentRangeStart);
+        const ratio = (effectiveHeat - currentRangeStart) / Math.max(1, currentRangeEnd - currentRangeStart);
         return {
           currentTier: tier,
           nextTier,
           progressPct: clamp(Math.round(ratio * 100), 0, 100),
-          remainingHeat: Math.max(0, nextTier.minHeat - player.totalHeat)
+          remainingHeat: Math.max(0, nextTier.minHeat - effectiveHeat)
         };
       }
 
       function getHeatDecayRate(player) {
-        const tier = getHeatTier(player.totalHeat);
+        const tier = getHeatTier(getEffectiveHeatValue(player));
         let ratePerHour = Number(HEAT_DECAY_BY_TIER[tier.id] || 0);
 
         const activeOps = state.policeSystem.activeOperations.filter(
@@ -436,7 +632,7 @@
       function calculateDistrictPolicePressure(district, player, buildings) {
         if (!district || district.ownerId !== player.id) return 0;
         const districtBuildings = buildings.filter((building) => building.districtId === district.id && building.ownerId === player.id);
-        const heatFactor = player.totalHeat * 0.08;
+        const heatFactor = getEffectiveHeatValue(player) * 0.08;
         const buildingFactor = districtBuildings.reduce(
           (sum, building) => sum + Number(BUILDING_POLICE_PRIORITY[building.type] || 1),
           0
@@ -447,6 +643,248 @@
         const rawPressure = 4 + heatFactor + buildingFactor + disabledFactor + lockFactor + recencyFactor;
         const smoothed = district.policePressure * 0.55 + rawPressure * 0.45;
         return clamp(Math.round(smoothed), 0, 100);
+      }
+
+      function calculateEconomicStrength(player, districts, buildings) {
+        const safePlayer = player && typeof player === "object" ? player : {};
+        const safeDistricts = Array.isArray(districts) ? districts : [];
+        const safeBuildings = Array.isArray(buildings) ? buildings : [];
+        const ownedDistricts = safeDistricts.filter((district) => district.ownerId === safePlayer.id);
+        const ownedBuildings = safeBuildings.filter((building) => building.ownerId === safePlayer.id);
+        const districtCount = Number.isFinite(Number(safePlayer.ownedDistrictCount))
+          ? Math.max(0, Math.floor(Number(safePlayer.ownedDistrictCount)))
+          : ownedDistricts.length;
+        const cash = Math.max(0, Number(safePlayer.cash || 0));
+        const dirtyCash = Math.max(0, Number(safePlayer.dirtyCash || 0));
+        const influence = Math.max(0, Number(safePlayer.influence || 0));
+        const drugs = Math.max(0, Number(getTotalDrugs(safePlayer) || 0));
+        const rawValue =
+          cash
+          + dirtyCash
+          + (districtCount * 9000)
+          + (ownedBuildings.length * 1800)
+          + (drugs * 1200)
+          + (influence * 250);
+        const normalized = Math.log10(rawValue + 1) / Math.log10(2_500_000 + 1);
+        return clamp(Math.round(normalized * 100), 0, 100);
+      }
+
+      function calculateAggressionRecencyScore(player) {
+        const lastAggressiveAt = Number(player?.lastIllegalActionAt || 0);
+        if (!Number.isFinite(lastAggressiveAt) || lastAggressiveAt <= 0) return 0;
+        const elapsedMs = Math.max(0, nowMs() - lastAggressiveAt);
+        const elapsedHours = elapsedMs / 3600000;
+        return clamp(Math.round(100 - (elapsedHours / 24) * 100), 0, 100);
+      }
+
+      function calculateReputationFearScore(player, districts) {
+        const safeDistricts = Array.isArray(districts) ? districts : [];
+        const ownedDistricts = safeDistricts.filter((district) => district.ownerId === player.id);
+        if (!ownedDistricts.length) return 0;
+        const avgPressure = ownedDistricts.reduce((sum, district) => sum + Number(district.policePressure || 0), 0) / ownedDistricts.length;
+        const lockedCount = ownedDistricts.filter((district) => district.isLockedByPolice).length;
+        const activeOps = state.policeSystem.activeOperations.filter(
+          (operation) => operation.playerId === player.id && operation.endsAt > nowMs()
+        ).length;
+        return clamp(Math.round(avgPressure + (lockedCount * 12) + (activeOps * 8)), 0, 100);
+      }
+
+      function calculatePoliceScore(player, districts, buildings) {
+        const safePlayer = player && typeof player === "object" ? player : {};
+        const safeDistricts = Array.isArray(districts) ? districts : [];
+        const safeBuildings = Array.isArray(buildings) ? buildings : [];
+        const ownedDistricts = safeDistricts.filter((district) => district.ownerId === safePlayer.id);
+        const districtCount = Number.isFinite(Number(safePlayer.ownedDistrictCount))
+          ? Math.max(0, Math.floor(Number(safePlayer.ownedDistrictCount)))
+          : ownedDistricts.length;
+        const heatComponent = clamp(Math.round(getEffectiveHeatValue(safePlayer) / 6), 0, 100);
+        const economicComponent = calculateEconomicStrength(safePlayer, safeDistricts, safeBuildings);
+        const districtComponent = clamp(Math.round((districtCount / 12) * 100), 0, 100);
+        const aggressionComponent = calculateAggressionRecencyScore(safePlayer);
+        const reputationComponent = calculateReputationFearScore(safePlayer, safeDistricts);
+        const score = (
+          heatComponent * 0.4
+          + economicComponent * 0.2
+          + districtComponent * 0.15
+          + aggressionComponent * 0.15
+          + reputationComponent * 0.1
+        );
+        return clamp(Math.round(score), 0, 100);
+      }
+
+      function updatePoliceScore(player, districts, buildings) {
+        const score = calculatePoliceScore(player, districts, buildings);
+        player.policeScore = score;
+        return score;
+      }
+
+      function getCurrentPolicePhaseContext() {
+        const roundSnapshot = window.Empire?.getRoundStatusSnapshot?.() || null;
+        const mapMode = String(window.Empire?.Map?.getMapMode?.() || "").trim().toLowerCase();
+        const phaseKey = String(roundSnapshot?.currentPhaseKey || mapMode || "night").trim().toLowerCase();
+        const subPhaseKey = String(roundSnapshot?.currentSubPhaseKey || "").trim().toLowerCase();
+        const phaseLabel = String(roundSnapshot?.currentSubPhaseLabel || "").trim().toUpperCase()
+          || (subPhaseKey === "blackout" ? "NOC-BLACKOUT" : phaseKey === "day" ? "DEN" : "NOC");
+        const phaseStartedAt = Number(roundSnapshot?.phaseStartedAt || 0);
+        const phaseSessionKey = phaseStartedAt > 0
+          ? `${phaseKey}:${phaseStartedAt}:${subPhaseKey || "base"}`
+          : `${phaseKey}:${subPhaseKey || "base"}`;
+        return {
+          phaseKey: phaseKey === "blackout" ? "blackout" : phaseKey,
+          subPhaseKey,
+          phaseLabel,
+          phaseStartedAt: Number.isFinite(phaseStartedAt) && phaseStartedAt > 0 ? phaseStartedAt : null,
+          phaseSessionKey
+        };
+      }
+
+      function getPoliceRaidLimitForPhase(phaseKey) {
+        const normalized = String(phaseKey || "").trim().toLowerCase();
+        if (normalized === "blackout") return 3;
+        if (normalized === "day") return 1;
+        return 2;
+      }
+
+      function resolvePoliceRaidSpecialtyFromOperationType(operationType) {
+        const normalized = String(operationType || "").trim().toLowerCase();
+        if (!normalized) return { key: "total", label: "Celková razie", icon: "⚠️" };
+        if (normalized.includes("cash") || normalized.includes("dirty")) return { key: "financial", label: "Finanční zásah", icon: "💰" };
+        if (normalized.includes("drug") || normalized.includes("warehouse")) return { key: "drug", label: "Drogová razie", icon: "🧪" };
+        if (normalized.includes("weapon") || normalized.includes("building_shutdown")) return { key: "weapons", label: "Zbrojní zásah", icon: "🛡️" };
+        if (normalized.includes("apartment") || normalized.includes("district_lock")) return { key: "arrests", label: "Zatýkací vlna", icon: "👥" };
+        if (normalized.includes("coordinated")) return { key: "total", label: "Celková razie", icon: "⚠️" };
+        if (normalized.includes("control") || normalized.includes("warning")) return { key: "financial", label: "Finanční zásah", icon: "💰" };
+        return { key: "total", label: "Celková razie", icon: "⚠️" };
+      }
+
+      function isPoliceRaidOperationType(operationType) {
+        return new Set([
+          "cash_seizure",
+          "warehouse_raid",
+          "district_lock",
+          "apartment_search",
+          "drug_seizure",
+          "dirty_cash_seizure",
+          "building_shutdown",
+          "coordinated_operation"
+        ]).has(String(operationType || "").trim());
+      }
+
+      function countPoliceRaidsForPhaseSession(phaseSessionKey) {
+        const key = String(phaseSessionKey || "").trim();
+        if (!key) return 0;
+        return state.policeSystem.operationHistory.reduce((count, operation) => {
+          if (!operation || operation.phaseSessionKey !== key) return count;
+          return count + (isPoliceRaidOperationType(operation.type) ? 1 : 0);
+        }, 0);
+      }
+
+      function getPoliceTargetPool() {
+        const directPools = [];
+        const candidateSources = [
+          window.Empire?.players,
+          window.Empire?.allPlayers,
+          window.Empire?.leaderboardPlayers,
+          window.Empire?.profiles,
+          window.Empire?.playerRoster,
+          state.players
+        ];
+        candidateSources.forEach((source) => {
+          if (Array.isArray(source)) directPools.push(...source);
+        });
+
+        const districtSources = [
+          ...(Array.isArray(window.Empire?.districts) ? window.Empire.districts : []),
+          ...(Array.isArray(state.districts) ? state.districts : [])
+        ];
+        const ownerCandidates = new Map();
+        districtSources.forEach((district) => {
+          const ownerId = String(district?.ownerId || district?.ownerPlayerId || "").trim();
+          if (!ownerId) return;
+          if (ownerCandidates.has(ownerId)) return;
+          ownerCandidates.set(ownerId, {
+            id: ownerId,
+            name: String(district?.ownerNick || district?.owner || ownerId).trim() || ownerId,
+            totalHeat: Number(district?.ownerHeat || district?.policePressure || 0),
+            cash: Number(district?.ownerCash || 0),
+            dirtyCash: Number(district?.ownerDirtyCash || 0),
+            influence: Number(district?.ownerInfluence || 0),
+            lastIllegalActionAt: Number(district?.lastPoliceActionAt || 0)
+          });
+        });
+        directPools.push(...ownerCandidates.values());
+
+        if (!directPools.length) {
+          directPools.push(state.player);
+        } else if (!directPools.some((entry) => entry && entry.id === state.player.id)) {
+          directPools.push(state.player);
+        }
+
+        const seen = new Set();
+        return directPools.filter((player) => {
+          const key = String(player?.id || player?.playerId || player?.name || "").trim();
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
+      function getHeatValueForCandidate(candidate) {
+        const explicit = [
+          candidate?.totalHeat,
+          candidate?.heat,
+          candidate?.wantedLevel,
+          candidate?.wanted,
+          candidate?.policeHeat,
+          candidate?.police_heat
+        ];
+        for (let i = 0; i < explicit.length; i += 1) {
+          const parsed = Number(explicit[i]);
+          if (Number.isFinite(parsed)) return Math.max(0, Math.floor(parsed));
+        }
+        return 0;
+      }
+
+      function rankPoliceTargetCandidates(candidates, districts, buildings) {
+        const safeCandidates = Array.isArray(candidates) ? candidates : [];
+        return safeCandidates
+          .map((candidate) => {
+            const score = calculatePoliceScore(candidate, districts, buildings);
+            const heat = getEffectiveHeatValue(candidate) || getHeatValueForCandidate(candidate);
+            return { player: candidate, score, heat };
+          })
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            if (b.heat !== a.heat) return b.heat - a.heat;
+            return String(a.player?.name || a.player?.id || "").localeCompare(String(b.player?.name || b.player?.id || ""));
+          });
+      }
+
+      function pickPoliceTargetFromTopFive(ranked) {
+        const topFive = Array.isArray(ranked) ? ranked.slice(0, 5) : [];
+        if (!topFive.length) return null;
+        const weights = [40, 30, 20, 10, 5];
+        const pool = topFive.map((entry, index) => ({
+          ...entry,
+          weight: weights[index] || 5
+        }));
+        return weightedPick(pool, (entry) => entry.weight) || pool[0] || null;
+      }
+
+      function pickPoliceTargetFromMidPool(ranked) {
+        const midPool = Array.isArray(ranked) ? ranked.slice(5, 10) : [];
+        if (!midPool.length) return null;
+        const weights = [22, 18, 14, 10, 8];
+        const pool = midPool.map((entry, index) => ({
+          ...entry,
+          weight: weights[index] || 8
+        }));
+        return weightedPick(pool, (entry) => entry.weight) || pool[0] || null;
+      }
+
+      function findExtremeHeatCandidate(ranked) {
+        const pool = Array.isArray(ranked) ? ranked : [];
+        return pool.find((entry) => entry.heat >= POLICE_EXTREME_HEAT_THRESHOLD) || null;
       }
 
       function updateDistrictPolicePressure(player, districts, buildings) {
@@ -494,7 +932,7 @@
       }
 
       function maybeSendPoliceMessage(player) {
-        const tier = getHeatTier(player.totalHeat);
+        const tier = getHeatTier(getEffectiveHeatValue(player));
         const currentTime = nowMs();
         if (currentTime - state.policeSystem.lastMessageTick < tier.messageFrequency) {
           return null;
@@ -505,8 +943,10 @@
         const avgPressure = ownedDistricts.length
           ? ownedDistricts.reduce((sum, district) => sum + district.policePressure, 0) / ownedDistricts.length
           : 0;
+        const policeScore = updatePoliceScore(player, state.districts, state.buildings);
+        const scoreFactor = clamp(policeScore / 100, 0, 1);
 
-        const messageChance = clamp(0.16 + tier.policeAggression * 0.07 + avgPressure / 280, 0.05, 0.95);
+        const messageChance = clamp(0.16 + tier.policeAggression * 0.07 + avgPressure / 280 + scoreFactor * 0.14, 0.05, 0.95);
         if (Math.random() > messageChance) return null;
 
         const typesByTier = {
@@ -548,8 +988,10 @@
       function choosePoliceTarget(player, districts, buildings) {
         const ownedDistricts = districts.filter((district) => district.ownerId === player.id);
         if (!ownedDistricts.length) return null;
+        const policeScore = Number(player.policeScore || calculatePoliceScore(player, districts, buildings));
+        const scoreFactor = clamp(policeScore / 100, 0, 1);
 
-        const district = weightedPick(ownedDistricts, (entry) => 8 + entry.policePressure * 1.7);
+        const district = weightedPick(ownedDistricts, (entry) => 8 + entry.policePressure * 1.7 + scoreFactor * 6);
         if (!district) return null;
 
         const districtBuildings = buildings.filter(
@@ -564,25 +1006,59 @@
         return { district, building };
       }
 
-      function choosePoliceOperationType(player, target, heatTier) {
-        const tier = heatTier || getHeatTier(player.totalHeat);
-        const candidates = Object.entries(OPERATION_TYPE_CONFIG)
-          .filter(([, config]) => tier.id >= config.minTier)
-          .map(([type, config]) => {
-            let weight = Number(config.weight || 0);
-            if (type === "warehouse_raid" && target?.building?.type === "Warehouse") weight *= 1.9;
-            if (type === "apartment_search" && target?.building?.type === "Apartment Block") weight *= 2.1;
+      function choosePoliceOperationType(player, target, districts, buildings) {
+        const specialty = resolvePoliceRaidSpecialtyFromPlayer(player, districts, buildings);
+        const targetBuildingType = normalizePoliceText(target?.building?.type || "");
+        const candidateSets = {
+          financial: [
+            ["cash_seizure", 42],
+            ["dirty_cash_seizure", 34],
+            ["district_control", 24]
+          ],
+          drug: [
+            ["drug_seizure", 44],
+            ["warehouse_raid", 34],
+            ["district_control", 22]
+          ],
+          weapons: [
+            ["building_shutdown", 42],
+            ["warehouse_raid", 34],
+            ["district_control", 24]
+          ],
+          arrests: [
+            ["apartment_search", 44],
+            ["district_lock", 34],
+            ["coordinated_operation", 22]
+          ],
+          total: [
+            ["coordinated_operation", 30],
+            ["district_lock", 22],
+            ["building_shutdown", 18],
+            ["dirty_cash_seizure", 16],
+            ["drug_seizure", 14]
+          ]
+        };
+
+        const baseCandidates = candidateSets[specialty.key] || candidateSets.total;
+        const candidates = baseCandidates
+          .map(([type, baseWeight]) => {
+            const config = OPERATION_TYPE_CONFIG[type];
+            if (!config) return null;
+            let weight = Number(baseWeight || 0);
+            if (type === "warehouse_raid" && targetBuildingType.includes("warehouse")) weight *= 1.8;
+            if (type === "apartment_search" && (targetBuildingType.includes("apartment") || targetBuildingType.includes("blok"))) weight *= 2.1;
             if (type === "building_shutdown" && target?.building) {
               weight *= 1 + Number(BUILDING_POLICE_PRIORITY[target.building.type] || 1) / 10;
             }
-            if (type === "coordinated_operation" && tier.id >= 7) weight *= 1.45;
+            if (type === "district_lock" && specialty.key === "arrests") weight *= 1.2;
+            if (type === "coordinated_operation" && specialty.key === "total") weight *= 1.35;
             return { type, config, weight };
           })
-          .filter((entry) => entry.weight > 0);
+          .filter((entry) => entry && entry.weight > 0);
 
-        if (!candidates.length) return "warning_notice";
+        if (!candidates.length) return "district_control";
         const picked = weightedPick(candidates, (entry) => entry.weight);
-        return picked ? picked.type : "warning_notice";
+        return picked ? picked.type : "district_control";
       }
 
       function ensureCooldownStore(playerId) {
@@ -596,10 +1072,42 @@
         return state.policeSystem.raidCooldownsByPlayer[playerId];
       }
 
+      function ensureRaidProtectionStore() {
+        if (!state.policeSystem.raidProtectionByPlayer) {
+          state.policeSystem.raidProtectionByPlayer = {};
+        }
+        return state.policeSystem.raidProtectionByPlayer;
+      }
+
+      function getPoliceRaidProtectionUntil(player) {
+        const playerId = String(player?.id || player?.playerId || "").trim();
+        if (!playerId) return 0;
+        const store = ensureRaidProtectionStore();
+        const direct = Number(player?.policeRaidProtectionUntil || 0);
+        const stored = Number(store[playerId] || 0);
+        return Math.max(0, direct, stored);
+      }
+
+      function setPoliceRaidProtection(player, untilTimestamp) {
+        const playerId = String(player?.id || player?.playerId || "").trim();
+        if (!playerId) return 0;
+        const safeUntil = Math.max(0, Number(untilTimestamp) || 0);
+        const store = ensureRaidProtectionStore();
+        store[playerId] = safeUntil;
+        if (player && typeof player === "object") {
+          player.policeRaidProtectionUntil = safeUntil;
+        }
+        return safeUntil;
+      }
+
+      function isPoliceRaidProtected(player, atTime = nowMs()) {
+        return getPoliceRaidProtectionUntil(player) > Math.max(0, Number(atTime) || 0);
+      }
+
       function isOperationOffCooldown(player, operationType, force) {
         if (force) return true;
         const currentTime = nowMs();
-        const tier = getHeatTier(player.totalHeat);
+        const tier = getHeatTier(getEffectiveHeatValue(player));
         const store = ensureCooldownStore(player.id);
         const config = OPERATION_TYPE_CONFIG[operationType];
         if (!config) return false;
@@ -623,43 +1131,76 @@
 
       function maybeTriggerPoliceOperation(player, districts, buildings, options = {}) {
         const force = Boolean(options.force);
-        const tier = getHeatTier(player.totalHeat);
+        const currentTime = nowMs();
+        const phaseContext = getCurrentPolicePhaseContext();
+        const candidatePool = getPoliceTargetPool();
+        const rankedCandidates = rankPoliceTargetCandidates(candidatePool, districts, buildings);
+        const extremeCandidate = findExtremeHeatCandidate(rankedCandidates);
+        const eligibleRanks = force || extremeCandidate
+          ? rankedCandidates
+          : rankedCandidates.filter((entry) => !isPoliceRaidProtected(entry.player, currentTime));
+        const randomMidRoll = !force && !extremeCandidate && Math.random() < 0.18;
+        const eligibleTarget = extremeCandidate || (randomMidRoll
+          ? pickPoliceTargetFromMidPool(eligibleRanks)
+          : pickPoliceTargetFromTopFive(eligibleRanks));
+        if (!eligibleTarget) return null;
 
-        if (!force) {
-          const ownedDistricts = districts.filter((district) => district.ownerId === player.id);
-          const averagePressure = ownedDistricts.length
-            ? ownedDistricts.reduce((sum, district) => sum + district.policePressure, 0) / ownedDistricts.length
-            : 0;
-          const pressureFactor = averagePressure / 220;
-          const baseChance = (0.045 * tier.policeAggression + pressureFactor * 0.35) * tier.raidChanceMultiplier;
-          const chance = clamp(baseChance, 0.03, 0.88);
-          if (Math.random() > chance) return null;
+        if (!force && !extremeCandidate && currentTime - Number(state.policeSystem.lastTargetingAt || 0) < POLICE_TARGETING_INTERVAL_MS) {
+          return null;
         }
 
-        const target = choosePoliceTarget(player, districts, buildings);
+        const targetPlayer = eligibleTarget.player || player;
+        let actualPlayer = targetPlayer;
+        let target = choosePoliceTarget(actualPlayer, districts, buildings);
+        if (!target && actualPlayer.id !== player.id) {
+          actualPlayer = player;
+          target = choosePoliceTarget(actualPlayer, districts, buildings);
+        }
         if (!target) return null;
-        let operationType = choosePoliceOperationType(player, target, tier);
-        if (!isOperationOffCooldown(player, operationType, force)) {
+        const targetTier = getHeatTier(getEffectiveHeatValue(actualPlayer) || getHeatValueForCandidate(actualPlayer) || actualPlayer.totalHeat || 0);
+
+        const shouldForce = force || Boolean(extremeCandidate);
+        let operationType = choosePoliceOperationType(actualPlayer, target, districts, buildings);
+        const currentRaidCount = countPoliceRaidsForPhaseSession(phaseContext.phaseSessionKey);
+        const raidLimit = getPoliceRaidLimitForPhase(phaseContext.phaseKey);
+        if (!shouldForce && isPoliceRaidOperationType(operationType) && currentRaidCount >= raidLimit) {
+          return null;
+        }
+        if (!isOperationOffCooldown(actualPlayer, operationType, shouldForce)) {
           const fallback = ["warning_notice", "district_control", "drug_seizure"].find((type) =>
-            isOperationOffCooldown(player, type, force)
+            isOperationOffCooldown(actualPlayer, type, shouldForce)
           );
           if (!fallback) return null;
           operationType = fallback;
         }
 
         const opConfig = OPERATION_TYPE_CONFIG[operationType];
+        const raidSpecialty = resolvePoliceRaidSpecialtyFromPlayer(actualPlayer, districts, buildings);
         const operation = {
           id: `op-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-          playerId: player.id,
+          playerId: actualPlayer.id,
           districtId: target.district?.id || null,
           type: operationType,
-          startedAt: nowMs(),
-          endsAt: nowMs() + Number(opConfig.durationMs || 0),
+          startedAt: currentTime,
+          endsAt: currentTime + Number(opConfig.durationMs || 0),
           result: "pending",
-          severity: opConfig.severity
+          severity: opConfig.severity,
+          phaseKey: phaseContext.phaseKey,
+          phaseSessionKey: phaseContext.phaseSessionKey,
+          raidSpecialtyKey: raidSpecialty.key,
+          raidSpecialtyLabel: raidSpecialty.label,
+          raidSpecialtyIcon: raidSpecialty.icon,
+          playStyle: actualPlayer.playStyle || actualPlayer.play_style || actualPlayer.strategy || actualPlayer.style || ""
         };
-        executePoliceOperation(player, operation, districts, buildings);
-        markOperationCooldown(player, operationType);
+        executePoliceOperation(actualPlayer, operation, districts, buildings);
+        if (isPoliceRaidOperationType(operationType)) {
+          setPoliceRaidProtection(actualPlayer, currentTime + POLICE_RAID_PROTECTION_MS);
+        }
+        markOperationCooldown(actualPlayer, operationType);
+        state.policeSystem.lastTargetingAt = currentTime;
+        if (extremeCandidate) {
+          state.policeSystem.lastExtremeOverrideAt = currentTime;
+        }
         return operation;
       }
 
@@ -968,6 +1509,16 @@
         if (state.policeSystem.operationHistory.length > MAX_OP_LOG) {
           state.policeSystem.operationHistory.length = MAX_OP_LOG;
         }
+
+        if (district) {
+          window.Empire?.Map?.markDistrictPoliceAction?.(district.id, {
+            durationMs: operation.endsAt - operation.startedAt,
+            source: "police-operation",
+            operationType: operation.type,
+            raidSpecialtyKey: operation.raidSpecialtyKey,
+            raidSpecialtyLabel: operation.raidSpecialtyLabel
+          });
+        }
       }
 
       function updatePoliceTimedStates(player, districts, buildings) {
@@ -996,6 +1547,13 @@
           }
         });
 
+        const raidProtectionStore = ensureRaidProtectionStore();
+        Object.keys(raidProtectionStore).forEach((playerId) => {
+          if (currentTime >= Number(raidProtectionStore[playerId] || 0)) {
+            delete raidProtectionStore[playerId];
+          }
+        });
+
         player.lockedDistricts = districts
           .filter((district) => district.isLockedByPolice && district.ownerId === player.id)
           .map((district) => district.id);
@@ -1014,6 +1572,7 @@
         applyHeatDecay(player);
         updateHeatTier(player);
         updateDistrictPolicePressure(player, districts, buildings);
+        updatePoliceScore(player, districts, buildings);
         maybeSendPoliceMessage(player);
         maybeTriggerPoliceOperation(player, districts, buildings);
         state.policeSystem.lastPoliceTick = nowMs();
@@ -1033,8 +1592,9 @@
       function renderHeatPanel() {
         const player = state.player;
         const progress = getHeatProgress(player);
-        const tier = getHeatTier(player.totalHeat);
-        document.getElementById("ui-total-heat").textContent = player.totalHeat.toLocaleString("cs-CZ");
+        const effectiveHeat = getEffectiveHeatValue(player);
+        const tier = getHeatTier(effectiveHeat);
+        document.getElementById("ui-total-heat").textContent = effectiveHeat.toLocaleString("cs-CZ");
         document.getElementById("ui-heat-tier").textContent = `${tier.id}/7 - ${tier.name}`;
         document.getElementById("ui-alert-level").textContent = String(state.policeSystem.globalAlertLevel);
         document.getElementById("ui-active-ops").textContent = String(state.policeSystem.activeOperations.length);
@@ -1205,6 +1765,8 @@
         applyHeatDecay,
         calculateDistrictPolicePressure,
         updateDistrictPolicePressure,
+        calculatePoliceScore,
+        updatePoliceScore,
         maybeSendPoliceMessage,
         createPoliceMessage,
         maybeTriggerPoliceOperation,
@@ -1260,6 +1822,24 @@
           if (Number.isFinite(influence)) player.influence = Math.max(0, Math.floor(influence));
           const gangMembers = Number(profile.population ?? profile.gangMembers);
           if (Number.isFinite(gangMembers)) player.gangMembers = Math.max(0, Math.floor(gangMembers));
+          [
+            "stealthBuild",
+            "stealth_build",
+            "playStyle",
+            "play_style",
+            "strategy",
+            "style",
+            "raidPlaystyle",
+            "raid_playstyle",
+            "buildType",
+            "build_type",
+            "specialBuild",
+            "special_build",
+          ].forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(profile, key)) {
+              player[key] = profile[key];
+            }
+          });
         }
 
         function syncEconomySnapshot() {

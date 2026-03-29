@@ -255,7 +255,152 @@ window.Empire.UI = (() => {
   const GANG_HEAT_CLEAN_REDUCTION = 15;
   const GANG_HEAT_DIRTY_TRIGGER_WINDOW_MS = 30 * 60 * 1000;
   const GANG_HEAT_DIRTY_TRIGGER_COUNT = 3;
-  const GANG_HEAT_POLICE_DURATION_MS = 60 * 1000;
+  const GANG_HEAT_POLICE_DURATION_MS = 60 * 60 * 1000;
+  const POLICE_RAID_TIER1 = Object.freeze({
+    cleanConfiscationPct: 2,
+    dirtyConfiscationPctMin: 8,
+    dirtyConfiscationPctMax: 15,
+    arrestsPct: 12,
+    influencePenaltyPct: 5,
+    incomePenaltyPct: 10
+  });
+  const POLICE_RAID_TIER2 = Object.freeze({
+    cleanConfiscationPctMin: 2,
+    cleanConfiscationPctMax: 7,
+    dirtyConfiscationPctMin: 16,
+    dirtyConfiscationPctMax: 20,
+    drugLossPct: 5,
+    arrestsPctMin: 3,
+    arrestsPctMax: 7,
+    attackWeaponLossPct: 3,
+    influencePenaltyPctMin: 6,
+    influencePenaltyPctMax: 8,
+    incomePenaltyPct: 20,
+    productionPenaltyPct: 10
+  });
+  const POLICE_RAID_TIER3 = Object.freeze({
+    incomePenaltyPctMin: 21,
+    incomePenaltyPctMax: 26,
+    cleanConfiscationPctMin: 2,
+    cleanConfiscationPctMax: 7,
+    dirtyConfiscationPctMin: 16,
+    dirtyConfiscationPctMax: 20,
+    drugLossPctMin: 6,
+    drugLossPctMax: 9,
+    arrestsPctMin: 7,
+    arrestsPctMax: 12,
+    attackWeaponLossPctMin: 3,
+    attackWeaponLossPctMax: 8,
+    defenseWeaponLossPctMin: 3,
+    defenseWeaponLossPctMax: 8,
+    influencePenaltyPctMin: 8,
+    influencePenaltyPctMax: 12,
+    labProductionPenaltyPctMin: 11,
+    labProductionPenaltyPctMax: 13,
+    armoryProductionPenaltyPctMin: 8,
+    armoryProductionPenaltyPctMax: 13
+  });
+  const POLICE_RAID_TIER4 = Object.freeze({
+    incomePenaltyPctMin: 26,
+    incomePenaltyPctMax: 33,
+    cleanConfiscationPctMin: 7,
+    cleanConfiscationPctMax: 12,
+    dirtyConfiscationPctMin: 18,
+    dirtyConfiscationPctMax: 23,
+    drugLossPctMin: 10,
+    drugLossPctMax: 15,
+    arrestsPctMin: 11,
+    arrestsPctMax: 17,
+    attackWeaponLossPct: 11,
+    defenseWeaponLossPct: 11,
+    attackPowerPenaltyPct: 8,
+    defensePowerPenaltyPct: 10,
+    influencePenaltyPctMin: 11,
+    influencePenaltyPctMax: 14,
+    labProductionPenaltyPctMin: 13,
+    labProductionPenaltyPctMax: 15,
+    armoryProductionPenaltyPctMin: 12,
+    armoryProductionPenaltyPctMax: 16
+  });
+  const POLICE_RAID_TIER5 = Object.freeze({
+    incomePenaltyPctMin: 32,
+    incomePenaltyPctMax: 40,
+    cleanConfiscationPctMin: 14,
+    cleanConfiscationPctMax: 18,
+    dirtyConfiscationPctMin: 23,
+    dirtyConfiscationPctMax: 28,
+    materialLossPct: 30,
+    drugLossPctMin: 15,
+    drugLossPctMax: 17,
+    arrestsPctMin: 18,
+    arrestsPctMax: 23,
+    attackWeaponLossPct: 13,
+    defenseWeaponLossPct: 14,
+    attackPowerPenaltyPct: 15,
+    defensePowerPenaltyPct: 15,
+    influencePenaltyPctMin: 14,
+    influencePenaltyPctMax: 17,
+    productionFreezePct: 100
+  });
+  const POLICE_RAID_TIER6 = Object.freeze({
+    incomePenaltyPct: 100,
+    cleanConfiscationPct: 25,
+    dirtyConfiscationPct: 45,
+    drugLossPct: 23,
+    materialLossPct: 35,
+    arrestsPct: 30,
+    attackWeaponLossPct: 20,
+    defenseWeaponLossPct: 20,
+    attackPowerPenaltyPct: 30,
+    defensePowerPenaltyPct: 30,
+    influencePenaltyPct: 25,
+    productionFreezePct: 100
+  });
+  const POLICE_RAID_SPECIALTIES = Object.freeze({
+    financial: Object.freeze({ label: "Finanční zásah", icon: "💰" }),
+    drug: Object.freeze({ label: "Drogová razie", icon: "🧪" }),
+    weapons: Object.freeze({ label: "Zbrojní zásah", icon: "🛡️" }),
+    arrests: Object.freeze({ label: "Zatýkací vlna", icon: "👥" }),
+    total: Object.freeze({ label: "Celková razie", icon: "⚠️" })
+  });
+  const POLICE_RAID_PRODUCTION_PENALTY_STORAGE_KEY = "empire_police_raid_prod_penalty_until_v1";
+  const POLICE_RAID_INCOME_PENALTY_STORAGE_KEY = "empire_police_raid_income_penalty_map_v1";
+  const POLICE_RAID_COMBAT_PENALTY_STORAGE_KEY = "empire_police_raid_combat_penalty_v1";
+  const POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY = "empire_police_raid_building_action_lock_v1";
+  const POLICE_RAID_FACTORY_SUPPLIES_STORAGE_KEY = "empire_factory_player_supplies_v1";
+  const appliedPoliceRaidImpactKeys = new Set();
+  const POLICE_ACTION_TIER_MESSAGES = Object.freeze({
+    1: Object.freeze({
+      title: "LEHKÁ KONTROLA",
+      tone: "is-tier-1",
+      text: "Policie se tu jen motá. Pár otázek, pár pohledů zatím nic, co by tě mělo rozhodit."
+    }),
+    2: Object.freeze({
+      title: "🟡 PODEZŘENÍ",
+      tone: "is-tier-2",
+      text: "Začínají čmuchat víc, než je zdrávo. Někdo něco řekl a oni to berou vážně."
+    }),
+    3: Object.freeze({
+      title: "🟠 TLAK NA DISTRICT",
+      tone: "is-tier-3",
+      text: "Už to není náhoda. Kontroly, výslechy, lidi mizí z ulic. Policie tlačí a začíná to smrdět průserem."
+    }),
+    4: Object.freeze({
+      title: "🔴 AKTIVNÍ RAZIE",
+      tone: "is-tier-4",
+      text: "Vlítli tam bez varování. Dveře v hajzlu, lidi na zemi. Berou všechno, co najdou a neptají se."
+    }),
+    5: Object.freeze({
+      title: "🔴 BRUTÁLNÍ ZÁTAH",
+      tone: "is-tier-5",
+      text: "Tohle už není razie, to je masakr. Mlátí, berou, ničí. Kdo se pohne blbě, skončí v pytli."
+    }),
+    6: Object.freeze({
+      title: "TOTÁLNÍ ČISTKA",
+      tone: "is-tier-6",
+      text: "Vlítli tam naplno. Sebrali cash, lidi i výbavu. District je vyčištěnej do mrtva a nikdo už tam nic neuhájí."
+    })
+  });
   const OWNER_RAID_STORAGE_KEY = "empire_owner_raid_storage_v1";
   const DISTRICT_RAID_STASH_STORAGE_KEY = "empire_district_raid_stash_v1";
   const OCCUPY_ACTION_DURATION_MS = 20 * 1000;
@@ -1311,6 +1456,7 @@ window.Empire.UI = (() => {
   let isSpyCountShownInTopbar = false;
   let topbarStatSwitchTimer = null;
   let roundPhaseTimer = null;
+  let policeRaidProtectionTimer = null;
   let roundStatusState = null;
   let roundStatusOverride = null;
   let spyRecoveryIntervalId = null;
@@ -1352,6 +1498,7 @@ window.Empire.UI = (() => {
     initMobileModalTopbarResourceVisibility();
     initGlobalModalScrollLock();
     initMapModeControls();
+    startPoliceRaidProtectionTicker();
     if (!window.Empire.token) {
       enforceLocalGuestStorageDefaults();
       syncGuestEconomyFromMarket();
@@ -1366,37 +1513,27 @@ window.Empire.UI = (() => {
     const body = document.body;
     if (!body) return;
     const html = document.documentElement;
-    let lockedScrollY = 0;
 
     const applyLock = (locked) => {
       if (locked) {
         if (body.classList.contains("modal-scroll-locked")) return;
-        lockedScrollY = Math.max(0, Math.floor(window.scrollY || window.pageYOffset || 0));
         const scrollbarCompensation = Math.max(0, window.innerWidth - (html?.clientWidth || window.innerWidth));
-        body.dataset.modalScrollLockY = String(lockedScrollY);
         body.classList.add("modal-scroll-locked");
-        body.style.position = "fixed";
-        body.style.top = `-${lockedScrollY}px`;
-        body.style.left = "0";
-        body.style.right = "0";
-        body.style.width = "100%";
         body.style.overflow = "hidden";
+        if (html) {
+          html.style.overflow = "hidden";
+        }
         body.style.paddingRight = scrollbarCompensation > 0 ? `${scrollbarCompensation}px` : "";
         return;
       }
 
       if (!body.classList.contains("modal-scroll-locked")) return;
-      const restoreY = Number(body.dataset.modalScrollLockY || lockedScrollY || 0);
       body.classList.remove("modal-scroll-locked");
-      body.style.position = "";
-      body.style.top = "";
-      body.style.left = "";
-      body.style.right = "";
-      body.style.width = "";
       body.style.overflow = "";
+      if (html) {
+        html.style.overflow = "";
+      }
       body.style.paddingRight = "";
-      delete body.dataset.modalScrollLockY;
-      window.scrollTo(0, Number.isFinite(restoreY) ? Math.max(0, Math.floor(restoreY)) : 0);
     };
 
     const applyState = () => {
@@ -1445,9 +1582,10 @@ window.Empire.UI = (() => {
     if (normalizedMode === "day") {
       return {
         currentGameDay: 1,
-        timeLabel: "06:00",
+        timeLabel: "09:15",
         phaseKey: "day",
-        phaseLabel: "DEN"
+        phaseLabel: "DEN",
+        phaseStartedAt: Date.now()
       };
     }
     if (normalizedMode === "blackout") {
@@ -1456,14 +1594,16 @@ window.Empire.UI = (() => {
         timeLabel: "20:30",
         phaseKey: "night",
         subPhaseKey: "blackout",
-        phaseLabel: "NOC-BLACKOUT"
+        phaseLabel: "NOC-BLACKOUT",
+        phaseStartedAt: Date.now()
       };
     }
     return {
       currentGameDay: 3,
       timeLabel: "20:30",
       phaseKey: "night",
-      phaseLabel: "NOC"
+      phaseLabel: "NOC",
+      phaseStartedAt: Date.now()
     };
   }
 
@@ -1521,7 +1661,7 @@ window.Empire.UI = (() => {
     const displayPhaseKey = effectiveMode.mapMode || "";
     const displayPhaseLabel = override?.phaseLabel || roundStatusState?.currentSubPhaseLabel || effectiveMode.phaseLabel || "-";
     const displayGameDay = override?.currentGameDay || phaseSnapshot?.currentGameDay || 1;
-    const displayClockLabel = override?.timeLabel || clockSnapshot?.label || roundStatusState?.currentGameTimeLabel || "06:00";
+    const displayClockLabel = override?.timeLabel || clockSnapshot?.label || roundStatusState?.currentGameTimeLabel || "09:15";
     const totalGameDays = Math.max(1, Math.floor(Number(roundStatusState?.totalGameDays) || fallbackTotalGameDays));
     if (roundEnds) {
       roundEnds.textContent = roundStatusState?.roundEndsAt || "-";
@@ -1553,6 +1693,44 @@ window.Empire.UI = (() => {
     renderRoundStatusState();
     roundPhaseTimer = setInterval(() => {
       renderRoundStatusState();
+    }, 1000);
+  }
+
+  function stopPoliceRaidProtectionTicker() {
+    if (!policeRaidProtectionTimer) return;
+    clearInterval(policeRaidProtectionTimer);
+    policeRaidProtectionTimer = null;
+  }
+
+  function syncPoliceRaidProtectionDisplays() {
+    const profile = cachedProfile || window.Empire.player || {};
+    const protectionText = `Ochrana po razii: ${formatPoliceRaidProtectionLabel(profile)}`;
+    const gangHeatProtection = document.getElementById("gang-heat-modal-protection");
+    if (gangHeatProtection && !gangHeatProtection.closest(".hidden")) {
+      gangHeatProtection.textContent = protectionText;
+    }
+    const profileProtection = document.getElementById("profile-modal-raid-protection");
+    if (profileProtection && !profileProtection.closest(".hidden")) {
+      profileProtection.textContent = formatPoliceRaidProtectionLabel(profile);
+    }
+    const wantedEl = document.getElementById("profile-modal-wanted");
+    const wantedLockEl = document.getElementById("profile-modal-wanted-lock");
+    if (wantedEl && !wantedEl.closest(".hidden")) {
+      wantedEl.title = `Hledanost: ${formatWantedHeat(resolveWantedLevel(profile))} | ${formatPoliceRaidProtectionLabel(profile)}`;
+    }
+    if (wantedLockEl) {
+      const until = resolvePoliceRaidProtectionUntil(profile);
+      const active = until > Date.now();
+      wantedLockEl.classList.toggle("hidden", !active);
+      wantedLockEl.title = active ? `Aktivní ochrana po razii: ${formatDurationLabel(until - Date.now())}` : "Bez aktivní ochrany po razii";
+    }
+  }
+
+  function startPoliceRaidProtectionTicker() {
+    stopPoliceRaidProtectionTicker();
+    syncPoliceRaidProtectionDisplays();
+    policeRaidProtectionTimer = setInterval(() => {
+      syncPoliceRaidProtectionDisplays();
     }, 1000);
   }
 
@@ -1824,9 +2002,6 @@ window.Empire.UI = (() => {
     const topbarHiddenModalIds = new Set([
       "events-modal",
       "buildings-modal",
-      "market-modal",
-      "boost-modal",
-      "alliance-modal",
       "storage-modal",
       "leaderboard-modal",
       "gang-heat-modal",
@@ -1837,6 +2012,7 @@ window.Empire.UI = (() => {
       "occupy-confirm-modal",
       "spy-result-modal",
       "raid-result-modal",
+      "police-action-result-modal",
       "attack-modal",
       "attack-confirm-modal",
       "attack-result-modal"
@@ -1852,7 +2028,12 @@ window.Empire.UI = (() => {
 
       const openModals = modalNodes.filter((modal) => !modal.classList.contains("hidden"));
       const shouldHideTopbar = openModals.some((modal) => topbarHiddenModalIds.has(modal.id));
-      const keepStatsVisible = openModals.some((modal) => modal.id === "building-detail-modal");
+      const keepStatsVisible = openModals.some((modal) => (
+        modal.id === "building-detail-modal"
+        || modal.id === "market-modal"
+        || modal.id === "boost-modal"
+        || modal.id === "alliance-modal"
+      ));
       const shouldHideStats = openModals.length > 0 && !keepStatsVisible;
       document.body.classList.toggle("mobile-hide-topbar", shouldHideTopbar);
       document.body.classList.toggle("mobile-hide-topbar-stats", shouldHideStats);
@@ -2211,6 +2392,7 @@ window.Empire.UI = (() => {
     initMarketBuildingShortcuts();
     initLeaderboardModal();
     initStorageModal();
+    initMoneyStatSkipControls();
     initInfluenceSpyToggle();
     initWeaponsModal();
     initWeaponsPopover();
@@ -2219,6 +2401,7 @@ window.Empire.UI = (() => {
     initAttackConfirmModal();
     initAttackResultModal();
     initRaidResultModal();
+    initPoliceActionResultModal();
     initSpyConfirmModal();
     initRaidConfirmModal();
     initOccupyConfirmModal();
@@ -2734,6 +2917,23 @@ window.Empire.UI = (() => {
       avatar: avatarPool[index % avatarPool.length]
     }));
 
+    window.Empire = window.Empire || {};
+    window.Empire.leaderboardServerPlayers = currentServerEntries.map((entry) => ({
+      id: `leaderboard-${entry.rank}-${entry.nick}`,
+      name: entry.nick,
+      nick: entry.nick,
+      avatar: entry.avatar,
+      totalHeat: Math.max(0, Math.floor(Number(entry.influenceRate || 0) / 4)),
+      heat: Math.max(0, Math.floor(Number(entry.influenceRate || 0) / 4)),
+      influence: Math.max(0, Math.floor(Number(entry.influenceRate || 0))),
+      ownedDistrictCount: Math.max(0, Math.floor(Number(entry.capturedSectors || 0) / 4)),
+      districtCount: Math.max(0, Math.floor(Number(entry.capturedSectors || 0) / 4)),
+      cash: Math.max(0, Math.floor(Number(entry.influenceRate || 0) * 120)),
+      dirtyCash: Math.max(0, Math.floor(Number(entry.influenceRate || 0) * 70)),
+      lastIllegalActionAt: Date.now() - Math.max(1, entry.rank) * 20 * 60 * 1000,
+      policePressure: Math.max(0, Math.floor(Number(entry.influenceRate || 0) / 12))
+    }));
+
     const monthlyEntries = Array.from({ length: 40 }, (_, index) => ({
       rank: index + 1,
       nick: nickPool[index],
@@ -2954,6 +3154,45 @@ window.Empire.UI = (() => {
         button.disabled = false;
       }
     });
+  }
+
+  function initMoneyStatSkipControls() {
+    const cleanWrap = document.getElementById("stat-clean-wrap");
+    const dirtyWrap = document.getElementById("stat-dirty-wrap");
+    const cleanMoney = document.getElementById("stat-clean-money");
+    const dirtyMoney = document.getElementById("stat-dirty-money");
+    if (!cleanWrap && !dirtyWrap && !cleanMoney && !dirtyMoney) return;
+
+    const skipToLatest = (kind) => {
+      const money = resolveMoneyBreakdown(cachedEconomy || {});
+      if (kind === "clean") {
+        syncMoneyStatToCachedValue(cleanMoney || cleanWrap, money.cleanMoney);
+        return;
+      }
+      syncMoneyStatToCachedValue(dirtyMoney || dirtyWrap, money.dirtyMoney);
+    };
+
+    const bind = (element, kind) => {
+      if (!element || element.dataset.moneySkipBound === "1") return;
+      element.dataset.moneySkipBound = "1";
+      element.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        skipToLatest(kind);
+      });
+      element.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        skipToLatest(kind);
+      });
+      if (!element.hasAttribute("role")) element.setAttribute("role", "button");
+      if (!element.hasAttribute("tabindex")) element.setAttribute("tabindex", "0");
+    };
+
+    bind(cleanWrap, "clean");
+    bind(cleanMoney, "clean");
+    bind(dirtyWrap, "dirty");
+    bind(dirtyMoney, "dirty");
   }
 
   function hydrateStorageModalValues() {
@@ -3442,6 +3681,7 @@ window.Empire.UI = (() => {
     closeAttackConfirmModal();
     closeAttackResultModal();
     closeRaidResultModal();
+    closePoliceActionResultModal();
     closeDefenseModal();
     closeSpyConfirmModal();
     closeOccupyConfirmModal();
@@ -3474,10 +3714,12 @@ window.Empire.UI = (() => {
       })
       .filter(Boolean);
     const members = Math.max(0, Math.floor(Number(availability?.totalUsedMembers || 0)));
-    const attackPower = attackWeaponStats.reduce((sum, item) => {
+    const attackPowerRaw = attackWeaponStats.reduce((sum, item) => {
       const count = Math.max(0, Math.floor(Number(availability?.selection?.[item.name] || 0)));
       return sum + (count * Number(item.power || 0));
     }, 0);
+    const combatPenalty = getPoliceRaidCombatPenalty();
+    const attackPower = Math.max(0, Math.floor(attackPowerRaw * (1 - Math.max(0, Number(combatPenalty.attackPct || 0)) / 100)));
     return {
       nickname: nick,
       faction: formatFactionLabel(factionRaw),
@@ -3507,10 +3749,16 @@ window.Empire.UI = (() => {
       Number(snapshot?.self?.power || 0),
       Number(snapshot?.ally?.power || 0)
     ].reduce((max, value) => Math.max(max, Number.isFinite(value) ? value : 0), 0);
-    if (knownPower > 0) return Math.max(0, Math.floor(knownPower));
+    const combatPenalty = getPoliceRaidCombatPenalty();
+    if (knownPower > 0) {
+      const reduced = knownPower * (1 - Math.max(0, Number(combatPenalty.defensePct || 0)) / 100);
+      return Math.max(0, Math.floor(reduced));
+    }
     const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
     const influence = Math.max(0, Math.floor(Number(district?.influence || district?.influence_level || 0)));
-    return Math.max(26, Math.floor(influence * 1.5 + buildings.length * 26 + (district?.owner ? 48 : 12)));
+    const fallback = Math.max(26, Math.floor(influence * 1.5 + buildings.length * 26 + (district?.owner ? 48 : 12)));
+    const reducedFallback = fallback * (1 - Math.max(0, Number(combatPenalty.defensePct || 0)) / 100);
+    return Math.max(26, Math.floor(reducedFallback));
   }
 
   function resolveAttackOutcomeMeta(outcomeKey) {
@@ -4315,7 +4563,9 @@ window.Empire.UI = (() => {
     content.classList.remove("is-clean-success", "is-dirty-fail", "is-disaster", "is-alert");
     if (tone) content.classList.add(tone);
     title.textContent = String(payload.title || "Výsledek krádeže").trim() || "Výsledek krádeže";
-    summary.textContent = String(payload.summary || "").trim();
+    const summaryText = String(payload.summary || "").trim();
+    summary.textContent = summaryText;
+    summary.hidden = !summaryText;
     const rows = Array.isArray(payload.rows) ? payload.rows : [];
     details.innerHTML = rows.map((row) => `
       <div class="modal__row">
@@ -4340,6 +4590,1186 @@ window.Empire.UI = (() => {
         closeAllPopupWindows();
       }
     });
+  }
+
+  function closePoliceActionResultModal() {
+    const root = document.getElementById("police-action-result-modal");
+    if (root) {
+      root.classList.add("hidden");
+      root.style.zIndex = "";
+    }
+  }
+
+  function openPoliceActionResultModal(payload = {}) {
+    closeAllPopupWindows();
+    const root = document.getElementById("police-action-result-modal");
+    const content = document.getElementById("police-action-result-modal-content");
+    const title = document.getElementById("police-action-result-modal-title");
+    const badge = document.getElementById("police-action-result-modal-badge");
+    const details = document.getElementById("police-action-result-modal-details");
+    if (!root || !content || !title || !badge || !details) return;
+
+    const tone = String(payload.tone || "").trim();
+    content.classList.remove("is-tier-1", "is-tier-2", "is-tier-3", "is-tier-4", "is-tier-5", "is-tier-6");
+    if (tone) content.classList.add(tone);
+
+    title.textContent = String(payload.title || "Policejní akce").trim() || "Policejní akce";
+    badge.textContent = String(payload.badge || "").trim() || "Policejní zásah";
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    details.innerHTML = rows.map((row) => `
+      <div class="modal__row">
+        <span>${row.label}</span>
+        <strong>${row.value}</strong>
+      </div>
+    `).join("");
+    root.style.zIndex = "9999";
+    root.classList.remove("hidden");
+  }
+
+  function initPoliceActionResultModal() {
+    const root = document.getElementById("police-action-result-modal");
+    const backdrop = document.getElementById("police-action-result-modal-backdrop");
+    const closeBtn = document.getElementById("police-action-result-modal-close");
+    const okBtn = document.getElementById("police-action-result-modal-ok");
+    if (!root) return;
+    if (backdrop) backdrop.addEventListener("click", closeAllPopupWindows);
+    if (closeBtn) closeBtn.addEventListener("click", closeAllPopupWindows);
+    if (okBtn) okBtn.addEventListener("click", closeAllPopupWindows);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeAllPopupWindows();
+      }
+    });
+
+      document.addEventListener("empire:police-action-started", (event) => {
+        const detail = event?.detail && typeof event.detail === "object" ? event.detail : {};
+        const source = String(detail.source || "").trim().toLowerCase();
+        if (source.startsWith("scenario-")) return;
+
+      const wantedHeat = resolveWantedLevel(cachedProfile || window.Empire.player || {});
+      const wantedTier = resolveWantedStars(wantedHeat);
+      const tierEntry = POLICE_ACTION_TIER_MESSAGES[wantedTier] || POLICE_ACTION_TIER_MESSAGES[1];
+      const districtId = Number(detail.districtId);
+      const district = Number.isFinite(districtId)
+        ? (Array.isArray(window.Empire.districts) ? window.Empire.districts.find((item) => Number(item?.id) === districtId) : null)
+        : null;
+      const districtName = String(district?.name || "").trim() || `District #${detail.districtId ?? "-"}`;
+      if (district && isDistrictOwnedByPlayer(district)) {
+        if (wantedTier === 1) {
+          applyPoliceRaidTier1Impacts(detail, district);
+        } else if (wantedTier === 2) {
+          applyPoliceRaidTier2Impacts(detail, district);
+        } else if (wantedTier === 3) {
+          applyPoliceRaidTier3Impacts(detail, district);
+        } else if (wantedTier === 4) {
+          applyPoliceRaidTier4Impacts(detail, district);
+        } else if (wantedTier === 5) {
+          applyPoliceRaidTier5Impacts(detail, district);
+        } else if (wantedTier === 6) {
+          applyPoliceRaidTier6Impacts(detail, district);
+        }
+      }
+      const specialty =
+        resolvePoliceRaidSpecialtyFromOperationType(detail.operationType, detail)
+        || resolvePoliceRaidSpecialty(wantedTier, detail);
+
+      openPoliceActionResultModal({
+        title: "Policejní akce",
+        badge: `Stupeň ${wantedTier}/6 • ${specialty.label}`,
+        tone: tierEntry.tone,
+        summary: tierEntry.text,
+        rows: [
+          { label: "Hláška", value: tierEntry.title },
+          { label: "District", value: districtName },
+          { label: "Typ razie", value: `${specialty.icon} ${specialty.label}` }
+        ]
+      });
+    });
+  }
+
+  function buildPoliceRaidImpactKey(detail = {}) {
+    const districtId = String(detail?.districtId ?? "").trim();
+    const startedAt = Math.max(0, Math.floor(Number(detail?.startedAt) || 0));
+    const source = String(detail?.source || "police-action").trim() || "police-action";
+    return `${districtId}:${startedAt}:${source}`;
+  }
+
+  function getPoliceRaidImpactMap() {
+    if (!window.Empire._localPoliceRaidImpacts || !(window.Empire._localPoliceRaidImpacts instanceof Map)) {
+      window.Empire._localPoliceRaidImpacts = new Map();
+    }
+    return window.Empire._localPoliceRaidImpacts;
+  }
+
+  function applyPoliceRaidTier1Impacts(detail, district) {
+    const impactKey = buildPoliceRaidImpactKey(detail);
+    if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
+    appliedPoliceRaidImpactKeys.add(impactKey);
+
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy || {});
+    const cleanPct = POLICE_RAID_TIER1.cleanConfiscationPct;
+    const dirtyPctRoll = Math.floor(
+      POLICE_RAID_TIER1.dirtyConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER1.dirtyConfiscationPctMax - POLICE_RAID_TIER1.dirtyConfiscationPctMin + 1)
+    );
+    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanPct / 100));
+    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyPctRoll / 100));
+
+    money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
+    money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+
+    const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * POLICE_RAID_TIER1.influencePenaltyPct / 100));
+    const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
+    economy.influence = nextInfluence;
+    updateEconomy(economy);
+
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty =
+      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
+      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 1);
+    updateProfile({
+      ...currentProfile,
+      influence: nextInfluence
+    });
+
+    const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
+    const arrested = Math.max(0, Math.floor(population * POLICE_RAID_TIER1.arrestsPct / 100));
+    if (arrested > 0) consumeGangMembers(arrested);
+
+    const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
+    setPoliceRaidIncomePenaltyForOwnedDistricts(POLICE_RAID_TIER1.incomePenaltyPct, expiresAt);
+    const impactRecord = {
+      key: impactKey,
+      districtId: Number(district?.id),
+      startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
+      expiresAt,
+      tier: 1,
+      incomePenaltyPct: POLICE_RAID_TIER1.incomePenaltyPct,
+      cleanLoss,
+      cleanLossPct: cleanPct,
+      dirtyLoss,
+      dirtyLossPct: dirtyPctRoll,
+      arrested,
+      arrestsPct: POLICE_RAID_TIER1.arrestsPct,
+      influenceLoss,
+      influenceLossPct: POLICE_RAID_TIER1.influencePenaltyPct,
+      raidSpecialtyKey: raidSpecialty.key,
+      raidSpecialtyLabel: raidSpecialty.label,
+      spyBlocked: true
+    };
+    getPoliceRaidImpactMap().set(impactKey, impactRecord);
+    pushEvent(
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 1: income -${POLICE_RAID_TIER1.incomePenaltyPct}%, `
+      + `zabaveno $${cleanLoss} clean a $${dirtyLoss} dirty, zatčeno ${arrested} lidí, vliv -${influenceLoss}.`
+    );
+    return impactRecord;
+  }
+
+  function setPoliceRaidProductionPenalty(buildingKey, pct, untilTimestamp) {
+    const key = String(buildingKey || "").trim().toLowerCase();
+    if (!key) return null;
+    const safePct = Math.max(0, Math.floor(Number(pct) || 0));
+    const safeUntil = Math.max(0, Math.floor(Number(untilTimestamp) || 0));
+    let store = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_PRODUCTION_PENALTY_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        store = parsed;
+      }
+    } catch {}
+    const nowMs = Date.now();
+    Object.keys(store).forEach((entryKey) => {
+      const entry = store[entryKey];
+      const until = Math.max(0, Math.floor(Number(entry?.until || 0)));
+      if (until <= nowMs) delete store[entryKey];
+    });
+    const currentUntil = Math.max(0, Math.floor(Number(store[key]?.until || 0)));
+    if (safeUntil > currentUntil) {
+      store[key] = { pct: safePct, until: safeUntil };
+      localStorage.setItem(POLICE_RAID_PRODUCTION_PENALTY_STORAGE_KEY, JSON.stringify(store));
+    }
+    return store[key] || null;
+  }
+
+  function setPoliceRaidIncomePenaltyForDistrict(districtId, pct, untilTimestamp) {
+    const key = String(districtId || "").trim();
+    if (!key) return null;
+    const safePct = Math.max(0, Math.floor(Number(pct) || 0));
+    const safeUntil = Math.max(0, Math.floor(Number(untilTimestamp) || 0));
+    let store = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_INCOME_PENALTY_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        store = parsed;
+      }
+    } catch {}
+    const nowMs = Date.now();
+    Object.keys(store).forEach((entryKey) => {
+      const entry = store[entryKey];
+      const until = Math.max(0, Math.floor(Number(entry?.until || 0)));
+      if (until <= nowMs) delete store[entryKey];
+    });
+    const currentUntil = Math.max(0, Math.floor(Number(store[key]?.until || 0)));
+    if (safeUntil > currentUntil) {
+      store[key] = { pct: safePct, until: safeUntil };
+      localStorage.setItem(POLICE_RAID_INCOME_PENALTY_STORAGE_KEY, JSON.stringify(store));
+    }
+    return store[key] || null;
+  }
+
+  function setPoliceRaidIncomePenaltyForOwnedDistricts(pct, untilTimestamp) {
+    const safePct = Math.max(0, Math.floor(Number(pct) || 0));
+    const safeUntil = Math.max(0, Math.floor(Number(untilTimestamp) || 0));
+    const ownedDistricts = getOwnedPlayerDistricts();
+    if (!ownedDistricts.length || safePct <= 0 || safeUntil <= 0) return 0;
+    let applied = 0;
+    ownedDistricts.forEach((district) => {
+      if (!district?.id) return;
+      const entry = setPoliceRaidIncomePenaltyForDistrict(district.id, safePct, safeUntil);
+      if (entry) applied += 1;
+    });
+    return applied;
+  }
+
+  function setPoliceRaidCombatPenalty(attackPenaltyPct, defensePenaltyPct, untilTimestamp) {
+    const safeUntil = Math.max(0, Math.floor(Number(untilTimestamp) || 0));
+    if (safeUntil <= 0) return null;
+    const nextAttackPct = Math.max(0, Math.floor(Number(attackPenaltyPct) || 0));
+    const nextDefensePct = Math.max(0, Math.floor(Number(defensePenaltyPct) || 0));
+    let current = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_COMBAT_PENALTY_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) current = parsed;
+    } catch {}
+    const currentUntil = Math.max(0, Math.floor(Number(current?.until || 0)));
+    if (safeUntil > currentUntil) {
+      current = {
+        attackPct: nextAttackPct,
+        defensePct: nextDefensePct,
+        until: safeUntil
+      };
+      localStorage.setItem(POLICE_RAID_COMBAT_PENALTY_STORAGE_KEY, JSON.stringify(current));
+    }
+    return current;
+  }
+
+  function getPoliceRaidCombatPenalty(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_COMBAT_PENALTY_STORAGE_KEY) || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { attackPct: 0, defensePct: 0, until: 0 };
+      const until = Math.max(0, Math.floor(Number(parsed.until || 0)));
+      if (until <= nowMs) {
+        localStorage.removeItem(POLICE_RAID_COMBAT_PENALTY_STORAGE_KEY);
+        return { attackPct: 0, defensePct: 0, until: 0 };
+      }
+      return {
+        attackPct: Math.max(0, Math.floor(Number(parsed.attackPct || 0))),
+        defensePct: Math.max(0, Math.floor(Number(parsed.defensePct || 0))),
+        until
+      };
+    } catch {
+      return { attackPct: 0, defensePct: 0, until: 0 };
+    }
+  }
+
+  function setPoliceRaidBuildingActionLock(lockKey, untilTimestamp) {
+    const key = String(lockKey || "").trim().toLowerCase();
+    if (!key) return null;
+    const safeUntil = Math.max(0, Math.floor(Number(untilTimestamp) || 0));
+    if (safeUntil <= 0) return null;
+    let store = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) store = parsed;
+    } catch {}
+    const currentUntil = Math.max(0, Math.floor(Number(store[key] || 0)));
+    if (safeUntil > currentUntil) {
+      store[key] = safeUntil;
+      localStorage.setItem(POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY, JSON.stringify(store));
+    }
+    return store;
+  }
+
+  function applyPoliceRaidMaterialConfiscation(economyRef, lossPct) {
+    const safeLossPct = Math.max(0, Math.floor(Number(lossPct) || 0));
+    if (safeLossPct <= 0) {
+      return { totalLoss: 0, lossPct: 0, byResource: {} };
+    }
+
+    const economy = economyRef && typeof economyRef === "object" ? economyRef : ensureEconomyCache();
+    const byResource = {};
+    let totalLoss = 0;
+
+    const keyMap = {
+      metalParts: "metal_parts",
+      techCore: "tech_core",
+      combatModule: "combat_module"
+    };
+    Object.keys(keyMap).forEach((economyKey) => {
+      const current = Math.max(0, Math.floor(Number(economy[economyKey] || 0)));
+      const loss = Math.max(0, Math.floor(current * safeLossPct / 100));
+      if (loss <= 0) {
+        byResource[economyKey] = 0;
+        return;
+      }
+      economy[economyKey] = Math.max(0, current - loss);
+      byResource[economyKey] = loss;
+      totalLoss += loss;
+    });
+    economy.materials = Math.max(
+      0,
+      Math.floor(Number(economy.metalParts || 0) + Number(economy.techCore || 0) + Number(economy.combatModule || 0))
+    );
+
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_FACTORY_SUPPLIES_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        ["metalParts", "techCore", "combatModule"].forEach((resourceKey) => {
+          const current = Math.max(0, Math.floor(Number(parsed[resourceKey] || 0)));
+          const loss = Math.max(0, Math.floor(current * safeLossPct / 100));
+          parsed[resourceKey] = Math.max(0, current - loss);
+        });
+        localStorage.setItem(POLICE_RAID_FACTORY_SUPPLIES_STORAGE_KEY, JSON.stringify(parsed));
+      }
+    } catch {}
+
+    return { totalLoss, lossPct: safeLossPct, byResource };
+  }
+
+  function isPoliceRaidAllActionsBlocked(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY) || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+      const lockUntil = Math.max(0, Math.floor(Number(parsed.all_actions_blocked || 0)));
+      if (lockUntil <= nowMs) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function applyPoliceRaidTier2Impacts(detail, district) {
+    const impactKey = buildPoliceRaidImpactKey(detail);
+    if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
+    appliedPoliceRaidImpactKeys.add(impactKey);
+
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy || {});
+    const cleanLossPct = Math.floor(
+      POLICE_RAID_TIER2.cleanConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER2.cleanConfiscationPctMax - POLICE_RAID_TIER2.cleanConfiscationPctMin + 1)
+    );
+    const dirtyLossPct = Math.floor(
+      POLICE_RAID_TIER2.dirtyConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER2.dirtyConfiscationPctMax - POLICE_RAID_TIER2.dirtyConfiscationPctMin + 1)
+    );
+    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
+    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
+    money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
+    money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
+
+    const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
+      ? { ...economy.drugInventory }
+      : {};
+    let totalDrugLoss = 0;
+    storageDrugTypes.forEach((drug) => {
+      const current = Math.max(0, Math.floor(Number(drugInventory[drug.key] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER2.drugLossPct / 100));
+      if (loss > 0) {
+        drugInventory[drug.key] = Math.max(0, current - loss);
+        totalDrugLoss += loss;
+      } else {
+        drugInventory[drug.key] = current;
+      }
+    });
+    const totalDrugs = storageDrugTypes.reduce((sum, drug) => sum + Number(drugInventory[drug.key] || 0), 0);
+
+    const currentWeapons = resolveWeaponCounts();
+    const nextWeapons = { ...currentWeapons };
+    let attackWeaponLoss = 0;
+    attackWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER2.attackWeaponLossPct / 100));
+      if (loss > 0) {
+        nextWeapons[item.name] = Math.max(0, current - loss);
+        attackWeaponLoss += loss;
+      } else {
+        nextWeapons[item.name] = current;
+      }
+    });
+    if (attackWeaponLoss > 0) {
+      persistWeaponCounts(nextWeapons);
+    }
+
+    const influenceLossPct = Math.floor(
+      POLICE_RAID_TIER2.influencePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER2.influencePenaltyPctMax - POLICE_RAID_TIER2.influencePenaltyPctMin + 1)
+    );
+    const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
+    const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
+
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    economy.drugInventory = drugInventory;
+    economy.drugs = totalDrugs;
+    economy.influence = nextInfluence;
+    economy.weapons = getAttackWeaponTotal(nextWeapons);
+    economy.weaponsDetail = { ...nextWeapons };
+    updateEconomy(economy);
+
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty =
+      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
+      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 2);
+    updateProfile({
+      ...currentProfile,
+      influence: nextInfluence
+    });
+
+    const arrestsPct = Math.floor(
+      POLICE_RAID_TIER2.arrestsPctMin
+      + Math.random() * (POLICE_RAID_TIER2.arrestsPctMax - POLICE_RAID_TIER2.arrestsPctMin + 1)
+    );
+    const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
+    const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
+    if (arrested > 0) consumeGangMembers(arrested);
+
+    const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
+    setPoliceRaidIncomePenaltyForOwnedDistricts(POLICE_RAID_TIER2.incomePenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("lab", POLICE_RAID_TIER2.productionPenaltyPct, expiresAt);
+
+    const impactRecord = {
+      key: impactKey,
+      districtId: Number(district?.id),
+      startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
+      expiresAt,
+      tier: 2,
+      incomePenaltyPct: POLICE_RAID_TIER2.incomePenaltyPct,
+      cleanLoss,
+      cleanLossPct,
+      dirtyLoss,
+      dirtyLossPct,
+      drugLoss: totalDrugLoss,
+      drugLossPct: POLICE_RAID_TIER2.drugLossPct,
+      arrested,
+      arrestsPct,
+      attackWeaponLoss,
+      attackWeaponLossPct: POLICE_RAID_TIER2.attackWeaponLossPct,
+      influenceLoss,
+      influenceLossPct,
+      productionPenaltyPct: POLICE_RAID_TIER2.productionPenaltyPct,
+      raidSpecialtyKey: raidSpecialty.key,
+      raidSpecialtyLabel: raidSpecialty.label,
+      spyBlocked: true,
+      raidBlocked: true
+    };
+    getPoliceRaidImpactMap().set(impactKey, impactRecord);
+    pushEvent(
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 2: income -${POLICE_RAID_TIER2.incomePenaltyPct}%, `
+      + `clean -${cleanLossPct}% ($${cleanLoss}), dirty -${dirtyLossPct}% ($${dirtyLoss}), `
+      + `drogy -${POLICE_RAID_TIER2.drugLossPct}% (${totalDrugLoss}), zatčeno ${arrested} (${arrestsPct}%), `
+      + `út. zbraně -${POLICE_RAID_TIER2.attackWeaponLossPct}% (${attackWeaponLoss}), vliv -${influenceLossPct}% (${influenceLoss}).`
+    );
+    return impactRecord;
+  }
+
+  function applyPoliceRaidTier3Impacts(detail, district) {
+    const impactKey = buildPoliceRaidImpactKey(detail);
+    if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
+    appliedPoliceRaidImpactKeys.add(impactKey);
+
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy || {});
+    const cleanLossPct = Math.floor(
+      POLICE_RAID_TIER3.cleanConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER3.cleanConfiscationPctMax - POLICE_RAID_TIER3.cleanConfiscationPctMin + 1)
+    );
+    const dirtyLossPct = Math.floor(
+      POLICE_RAID_TIER3.dirtyConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER3.dirtyConfiscationPctMax - POLICE_RAID_TIER3.dirtyConfiscationPctMin + 1)
+    );
+    const incomePenaltyPct = Math.floor(
+      POLICE_RAID_TIER3.incomePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER3.incomePenaltyPctMax - POLICE_RAID_TIER3.incomePenaltyPctMin + 1)
+    );
+    const drugLossPct = Math.floor(
+      POLICE_RAID_TIER3.drugLossPctMin
+      + Math.random() * (POLICE_RAID_TIER3.drugLossPctMax - POLICE_RAID_TIER3.drugLossPctMin + 1)
+    );
+    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
+    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
+    money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
+    money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
+
+    const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
+      ? { ...economy.drugInventory }
+      : {};
+    let totalDrugLoss = 0;
+    storageDrugTypes.forEach((drug) => {
+      const current = Math.max(0, Math.floor(Number(drugInventory[drug.key] || 0)));
+      const loss = Math.max(0, Math.floor(current * drugLossPct / 100));
+      if (loss > 0) {
+        drugInventory[drug.key] = Math.max(0, current - loss);
+        totalDrugLoss += loss;
+      } else {
+        drugInventory[drug.key] = current;
+      }
+    });
+    const totalDrugs = storageDrugTypes.reduce((sum, drug) => sum + Number(drugInventory[drug.key] || 0), 0);
+
+    const attackLossPct = Math.floor(
+      POLICE_RAID_TIER3.attackWeaponLossPctMin
+      + Math.random() * (POLICE_RAID_TIER3.attackWeaponLossPctMax - POLICE_RAID_TIER3.attackWeaponLossPctMin + 1)
+    );
+    const defenseLossPct = Math.floor(
+      POLICE_RAID_TIER3.defenseWeaponLossPctMin
+      + Math.random() * (POLICE_RAID_TIER3.defenseWeaponLossPctMax - POLICE_RAID_TIER3.defenseWeaponLossPctMin + 1)
+    );
+    const currentAttackWeapons = resolveWeaponCounts();
+    const nextAttackWeapons = { ...currentAttackWeapons };
+    let attackWeaponLoss = 0;
+    attackWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextAttackWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * attackLossPct / 100));
+      if (loss > 0) {
+        nextAttackWeapons[item.name] = Math.max(0, current - loss);
+        attackWeaponLoss += loss;
+      } else {
+        nextAttackWeapons[item.name] = current;
+      }
+    });
+    if (attackWeaponLoss > 0) {
+      persistWeaponCounts(nextAttackWeapons);
+    }
+
+    const currentDefenseWeapons = resolveDefenseCounts();
+    const nextDefenseWeapons = { ...currentDefenseWeapons };
+    let defenseWeaponLoss = 0;
+    defenseWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextDefenseWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * defenseLossPct / 100));
+      if (loss > 0) {
+        nextDefenseWeapons[item.name] = Math.max(0, current - loss);
+        defenseWeaponLoss += loss;
+      } else {
+        nextDefenseWeapons[item.name] = current;
+      }
+    });
+    if (defenseWeaponLoss > 0) {
+      persistDefenseCounts(nextDefenseWeapons);
+    }
+
+    const influenceLossPct = Math.floor(
+      POLICE_RAID_TIER3.influencePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER3.influencePenaltyPctMax - POLICE_RAID_TIER3.influencePenaltyPctMin + 1)
+    );
+    const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
+    const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
+
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    economy.drugInventory = drugInventory;
+    economy.drugs = totalDrugs;
+    economy.influence = nextInfluence;
+    economy.weapons = getAttackWeaponTotal(nextAttackWeapons);
+    economy.weaponsDetail = { ...nextAttackWeapons };
+    economy.defense = getDefenseWeaponTotal(nextDefenseWeapons);
+    economy.defenseDetail = { ...nextDefenseWeapons };
+    updateEconomy(economy);
+
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty =
+      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
+      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 3);
+    updateProfile({
+      ...currentProfile,
+      influence: nextInfluence
+    });
+
+    const arrestsPct = Math.floor(
+      POLICE_RAID_TIER3.arrestsPctMin
+      + Math.random() * (POLICE_RAID_TIER3.arrestsPctMax - POLICE_RAID_TIER3.arrestsPctMin + 1)
+    );
+    const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
+    const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
+    if (arrested > 0) consumeGangMembers(arrested);
+
+    const labProductionPenaltyPct = Math.floor(
+      POLICE_RAID_TIER3.labProductionPenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER3.labProductionPenaltyPctMax - POLICE_RAID_TIER3.labProductionPenaltyPctMin + 1)
+    );
+    const armoryProductionPenaltyPct = Math.floor(
+      POLICE_RAID_TIER3.armoryProductionPenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER3.armoryProductionPenaltyPctMax - POLICE_RAID_TIER3.armoryProductionPenaltyPctMin + 1)
+    );
+
+    const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
+    setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("lab", labProductionPenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("armory", armoryProductionPenaltyPct, expiresAt);
+
+    const impactRecord = {
+      key: impactKey,
+      districtId: Number(district?.id),
+      startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
+      expiresAt,
+      tier: 3,
+      incomePenaltyPct,
+      cleanLoss,
+      cleanLossPct,
+      dirtyLoss,
+      dirtyLossPct,
+      drugLoss: totalDrugLoss,
+      drugLossPct,
+      arrested,
+      arrestsPct,
+      attackWeaponLoss,
+      attackWeaponLossPct: attackLossPct,
+      defenseWeaponLoss,
+      defenseWeaponLossPct: defenseLossPct,
+      influenceLoss,
+      influenceLossPct,
+      labProductionPenaltyPct,
+      armoryProductionPenaltyPct,
+      raidSpecialtyKey: raidSpecialty.key,
+      raidSpecialtyLabel: raidSpecialty.label,
+      spyBlocked: true,
+      raidBlocked: true,
+      attackBlocked: true
+    };
+    getPoliceRaidImpactMap().set(impactKey, impactRecord);
+    pushEvent(
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 3: income -${incomePenaltyPct}%, `
+      + `clean -${cleanLossPct}% ($${cleanLoss}), dirty -${dirtyLossPct}% ($${dirtyLoss}), `
+      + `drogy -${drugLossPct}% (${totalDrugLoss}), zatčeno ${arrested} (${arrestsPct}%), `
+      + `út. zbraně -${attackLossPct}% (${attackWeaponLoss}), obr. zbraně -${defenseLossPct}% (${defenseWeaponLoss}), `
+      + `vliv -${influenceLossPct}% (${influenceLoss}), lab/drug -${labProductionPenaltyPct}%, zbrojovka -${armoryProductionPenaltyPct}%.`
+    );
+    return impactRecord;
+  }
+
+  function applyPoliceRaidTier4Impacts(detail, district) {
+    const impactKey = buildPoliceRaidImpactKey(detail);
+    if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
+    appliedPoliceRaidImpactKeys.add(impactKey);
+
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy || {});
+    const cleanLossPct = Math.floor(
+      POLICE_RAID_TIER4.cleanConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER4.cleanConfiscationPctMax - POLICE_RAID_TIER4.cleanConfiscationPctMin + 1)
+    );
+    const dirtyLossPct = Math.floor(
+      POLICE_RAID_TIER4.dirtyConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER4.dirtyConfiscationPctMax - POLICE_RAID_TIER4.dirtyConfiscationPctMin + 1)
+    );
+    const incomePenaltyPct = Math.floor(
+      POLICE_RAID_TIER4.incomePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER4.incomePenaltyPctMax - POLICE_RAID_TIER4.incomePenaltyPctMin + 1)
+    );
+    const drugLossPct = Math.floor(
+      POLICE_RAID_TIER4.drugLossPctMin
+      + Math.random() * (POLICE_RAID_TIER4.drugLossPctMax - POLICE_RAID_TIER4.drugLossPctMin + 1)
+    );
+    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
+    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
+    money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
+    money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
+
+    const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
+      ? { ...economy.drugInventory }
+      : {};
+    let totalDrugLoss = 0;
+    storageDrugTypes.forEach((drug) => {
+      const current = Math.max(0, Math.floor(Number(drugInventory[drug.key] || 0)));
+      const loss = Math.max(0, Math.floor(current * drugLossPct / 100));
+      if (loss > 0) {
+        drugInventory[drug.key] = Math.max(0, current - loss);
+        totalDrugLoss += loss;
+      } else {
+        drugInventory[drug.key] = current;
+      }
+    });
+    const totalDrugs = storageDrugTypes.reduce((sum, drug) => sum + Number(drugInventory[drug.key] || 0), 0);
+
+    const currentAttackWeapons = resolveWeaponCounts();
+    const nextAttackWeapons = { ...currentAttackWeapons };
+    let attackWeaponLoss = 0;
+    attackWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextAttackWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER4.attackWeaponLossPct / 100));
+      if (loss > 0) {
+        nextAttackWeapons[item.name] = Math.max(0, current - loss);
+        attackWeaponLoss += loss;
+      } else {
+        nextAttackWeapons[item.name] = current;
+      }
+    });
+    if (attackWeaponLoss > 0) {
+      persistWeaponCounts(nextAttackWeapons);
+    }
+
+    const currentDefenseWeapons = resolveDefenseCounts();
+    const nextDefenseWeapons = { ...currentDefenseWeapons };
+    let defenseWeaponLoss = 0;
+    defenseWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextDefenseWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER4.defenseWeaponLossPct / 100));
+      if (loss > 0) {
+        nextDefenseWeapons[item.name] = Math.max(0, current - loss);
+        defenseWeaponLoss += loss;
+      } else {
+        nextDefenseWeapons[item.name] = current;
+      }
+    });
+    if (defenseWeaponLoss > 0) {
+      persistDefenseCounts(nextDefenseWeapons);
+    }
+
+    const influenceLossPct = Math.floor(
+      POLICE_RAID_TIER4.influencePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER4.influencePenaltyPctMax - POLICE_RAID_TIER4.influencePenaltyPctMin + 1)
+    );
+    const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
+    const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
+
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    economy.drugInventory = drugInventory;
+    economy.drugs = totalDrugs;
+    economy.influence = nextInfluence;
+    economy.weapons = getAttackWeaponTotal(nextAttackWeapons);
+    economy.weaponsDetail = { ...nextAttackWeapons };
+    economy.defense = getDefenseWeaponTotal(nextDefenseWeapons);
+    economy.defenseDetail = { ...nextDefenseWeapons };
+    updateEconomy(economy);
+
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty =
+      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
+      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 4);
+    updateProfile({
+      ...currentProfile,
+      influence: nextInfluence
+    });
+
+    const arrestsPct = Math.floor(
+      POLICE_RAID_TIER4.arrestsPctMin
+      + Math.random() * (POLICE_RAID_TIER4.arrestsPctMax - POLICE_RAID_TIER4.arrestsPctMin + 1)
+    );
+    const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
+    const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
+    if (arrested > 0) consumeGangMembers(arrested);
+
+    const labProductionPenaltyPct = Math.floor(
+      POLICE_RAID_TIER4.labProductionPenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER4.labProductionPenaltyPctMax - POLICE_RAID_TIER4.labProductionPenaltyPctMin + 1)
+    );
+    const armoryProductionPenaltyPct = Math.floor(
+      POLICE_RAID_TIER4.armoryProductionPenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER4.armoryProductionPenaltyPctMax - POLICE_RAID_TIER4.armoryProductionPenaltyPctMin + 1)
+    );
+
+    const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
+    setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("lab", labProductionPenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("armory", armoryProductionPenaltyPct, expiresAt);
+    setPoliceRaidCombatPenalty(
+      POLICE_RAID_TIER4.attackPowerPenaltyPct,
+      POLICE_RAID_TIER4.defensePowerPenaltyPct,
+      expiresAt
+    );
+    setPoliceRaidBuildingActionLock("pharmacy_factory_special", expiresAt);
+
+    const impactRecord = {
+      key: impactKey,
+      districtId: Number(district?.id),
+      startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
+      expiresAt,
+      tier: 4,
+      incomePenaltyPct,
+      cleanLoss,
+      cleanLossPct,
+      dirtyLoss,
+      dirtyLossPct,
+      drugLoss: totalDrugLoss,
+      drugLossPct,
+      arrested,
+      arrestsPct,
+      attackWeaponLoss,
+      attackWeaponLossPct: POLICE_RAID_TIER4.attackWeaponLossPct,
+      defenseWeaponLoss,
+      defenseWeaponLossPct: POLICE_RAID_TIER4.defenseWeaponLossPct,
+      attackPowerPenaltyPct: POLICE_RAID_TIER4.attackPowerPenaltyPct,
+      defensePowerPenaltyPct: POLICE_RAID_TIER4.defensePowerPenaltyPct,
+      influenceLoss,
+      influenceLossPct,
+      labProductionPenaltyPct,
+      armoryProductionPenaltyPct,
+      raidSpecialtyKey: raidSpecialty.key,
+      raidSpecialtyLabel: raidSpecialty.label,
+      spyBlocked: true,
+      raidBlocked: true,
+      attackBlocked: true,
+      occupyBlocked: true,
+      pharmacyFactorySpecialBlocked: true
+    };
+    getPoliceRaidImpactMap().set(impactKey, impactRecord);
+    pushEvent(
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 4: income -${incomePenaltyPct}%, `
+      + `clean -${cleanLossPct}% ($${cleanLoss}), dirty -${dirtyLossPct}% ($${dirtyLoss}), `
+      + `drogy -${drugLossPct}% (${totalDrugLoss}), zatčeno ${arrested} (${arrestsPct}%), `
+      + `út. zbraně -${POLICE_RAID_TIER4.attackWeaponLossPct}% (${attackWeaponLoss}), `
+      + `obr. zbraně -${POLICE_RAID_TIER4.defenseWeaponLossPct}% (${defenseWeaponLoss}), `
+      + `síla útok -${POLICE_RAID_TIER4.attackPowerPenaltyPct}%, síla obrana -${POLICE_RAID_TIER4.defensePowerPenaltyPct}%, `
+      + `vliv -${influenceLossPct}% (${influenceLoss}), lab/drug -${labProductionPenaltyPct}%, zbrojovka -${armoryProductionPenaltyPct}%.`
+    );
+    return impactRecord;
+  }
+
+  function applyPoliceRaidTier5Impacts(detail, district) {
+    const impactKey = buildPoliceRaidImpactKey(detail);
+    if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
+    appliedPoliceRaidImpactKeys.add(impactKey);
+
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy || {});
+    const cleanLossPct = Math.floor(
+      POLICE_RAID_TIER5.cleanConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER5.cleanConfiscationPctMax - POLICE_RAID_TIER5.cleanConfiscationPctMin + 1)
+    );
+    const dirtyLossPct = Math.floor(
+      POLICE_RAID_TIER5.dirtyConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER5.dirtyConfiscationPctMax - POLICE_RAID_TIER5.dirtyConfiscationPctMin + 1)
+    );
+    const incomePenaltyPct = Math.floor(
+      POLICE_RAID_TIER5.incomePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER5.incomePenaltyPctMax - POLICE_RAID_TIER5.incomePenaltyPctMin + 1)
+    );
+    const drugLossPct = Math.floor(
+      POLICE_RAID_TIER5.drugLossPctMin
+      + Math.random() * (POLICE_RAID_TIER5.drugLossPctMax - POLICE_RAID_TIER5.drugLossPctMin + 1)
+    );
+    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
+    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
+    money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
+    money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
+
+    const materialLossResult = applyPoliceRaidMaterialConfiscation(economy, POLICE_RAID_TIER5.materialLossPct);
+
+    const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
+      ? { ...economy.drugInventory }
+      : {};
+    let totalDrugLoss = 0;
+    storageDrugTypes.forEach((drug) => {
+      const current = Math.max(0, Math.floor(Number(drugInventory[drug.key] || 0)));
+      const loss = Math.max(0, Math.floor(current * drugLossPct / 100));
+      if (loss > 0) {
+        drugInventory[drug.key] = Math.max(0, current - loss);
+        totalDrugLoss += loss;
+      } else {
+        drugInventory[drug.key] = current;
+      }
+    });
+    const totalDrugs = storageDrugTypes.reduce((sum, drug) => sum + Number(drugInventory[drug.key] || 0), 0);
+
+    const currentAttackWeapons = resolveWeaponCounts();
+    const nextAttackWeapons = { ...currentAttackWeapons };
+    let attackWeaponLoss = 0;
+    attackWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextAttackWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER5.attackWeaponLossPct / 100));
+      if (loss > 0) {
+        nextAttackWeapons[item.name] = Math.max(0, current - loss);
+        attackWeaponLoss += loss;
+      } else {
+        nextAttackWeapons[item.name] = current;
+      }
+    });
+    if (attackWeaponLoss > 0) persistWeaponCounts(nextAttackWeapons);
+
+    const currentDefenseWeapons = resolveDefenseCounts();
+    const nextDefenseWeapons = { ...currentDefenseWeapons };
+    let defenseWeaponLoss = 0;
+    defenseWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextDefenseWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER5.defenseWeaponLossPct / 100));
+      if (loss > 0) {
+        nextDefenseWeapons[item.name] = Math.max(0, current - loss);
+        defenseWeaponLoss += loss;
+      } else {
+        nextDefenseWeapons[item.name] = current;
+      }
+    });
+    if (defenseWeaponLoss > 0) persistDefenseCounts(nextDefenseWeapons);
+
+    const influenceLossPct = Math.floor(
+      POLICE_RAID_TIER5.influencePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER5.influencePenaltyPctMax - POLICE_RAID_TIER5.influencePenaltyPctMin + 1)
+    );
+    const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
+    const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
+
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    economy.drugInventory = drugInventory;
+    economy.drugs = totalDrugs;
+    economy.influence = nextInfluence;
+    economy.weapons = getAttackWeaponTotal(nextAttackWeapons);
+    economy.weaponsDetail = { ...nextAttackWeapons };
+    economy.defense = getDefenseWeaponTotal(nextDefenseWeapons);
+    economy.defenseDetail = { ...nextDefenseWeapons };
+    updateEconomy(economy);
+
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty =
+      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
+      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 5);
+    updateProfile({
+      ...currentProfile,
+      influence: nextInfluence
+    });
+
+    const arrestsPct = Math.floor(
+      POLICE_RAID_TIER5.arrestsPctMin
+      + Math.random() * (POLICE_RAID_TIER5.arrestsPctMax - POLICE_RAID_TIER5.arrestsPctMin + 1)
+    );
+    const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
+    const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
+    if (arrested > 0) consumeGangMembers(arrested);
+
+    const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
+    setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("lab", POLICE_RAID_TIER5.productionFreezePct, expiresAt);
+    setPoliceRaidProductionPenalty("armory", POLICE_RAID_TIER5.productionFreezePct, expiresAt);
+    setPoliceRaidProductionPenalty("factory", POLICE_RAID_TIER5.productionFreezePct, expiresAt);
+    setPoliceRaidCombatPenalty(
+      POLICE_RAID_TIER5.attackPowerPenaltyPct,
+      POLICE_RAID_TIER5.defensePowerPenaltyPct,
+      expiresAt
+    );
+    setPoliceRaidBuildingActionLock("pharmacy_factory_special", expiresAt);
+    setPoliceRaidBuildingActionLock("all_special_buildings", expiresAt);
+
+    const impactRecord = {
+      key: impactKey,
+      districtId: Number(district?.id),
+      startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
+      expiresAt,
+      tier: 5,
+      incomePenaltyPct,
+      cleanLoss,
+      cleanLossPct,
+      dirtyLoss,
+      dirtyLossPct,
+      materialLoss: materialLossResult.totalLoss,
+      materialLossPct: materialLossResult.lossPct,
+      drugLoss: totalDrugLoss,
+      drugLossPct,
+      arrested,
+      arrestsPct,
+      attackWeaponLoss,
+      attackWeaponLossPct: POLICE_RAID_TIER5.attackWeaponLossPct,
+      defenseWeaponLoss,
+      defenseWeaponLossPct: POLICE_RAID_TIER5.defenseWeaponLossPct,
+      attackPowerPenaltyPct: POLICE_RAID_TIER5.attackPowerPenaltyPct,
+      defensePowerPenaltyPct: POLICE_RAID_TIER5.defensePowerPenaltyPct,
+      influenceLoss,
+      influenceLossPct,
+      labProductionPenaltyPct: POLICE_RAID_TIER5.productionFreezePct,
+      armoryProductionPenaltyPct: POLICE_RAID_TIER5.productionFreezePct,
+      factoryProductionPenaltyPct: POLICE_RAID_TIER5.productionFreezePct,
+      productionFrozen: true,
+      raidSpecialtyKey: raidSpecialty.key,
+      raidSpecialtyLabel: raidSpecialty.label,
+      spyBlocked: true,
+      raidBlocked: true,
+      attackBlocked: true,
+      occupyBlocked: true,
+      pharmacyFactorySpecialBlocked: true,
+      allSpecialBuildingsBlocked: true
+    };
+    getPoliceRaidImpactMap().set(impactKey, impactRecord);
+    pushEvent(
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 5: income -${incomePenaltyPct}%, `
+      + `clean -${cleanLossPct}% ($${cleanLoss}), dirty -${dirtyLossPct}% ($${dirtyLoss}), `
+      + `materiály -${POLICE_RAID_TIER5.materialLossPct}% (${materialLossResult.totalLoss}), `
+      + `drogy -${drugLossPct}% (${totalDrugLoss}), zatčeno ${arrested} (${arrestsPct}%), `
+      + `út. zbraně -${POLICE_RAID_TIER5.attackWeaponLossPct}% (${attackWeaponLoss}), `
+      + `obr. zbraně -${POLICE_RAID_TIER5.defenseWeaponLossPct}% (${defenseWeaponLoss}), `
+      + `síla útok -${POLICE_RAID_TIER5.attackPowerPenaltyPct}%, síla obrana -${POLICE_RAID_TIER5.defensePowerPenaltyPct}%, `
+      + `vliv -${influenceLossPct}% (${influenceLoss}), výroba zmražená na 1h.`
+    );
+    return impactRecord;
+  }
+
+  function applyPoliceRaidTier6Impacts(detail, district) {
+    const impactKey = buildPoliceRaidImpactKey(detail);
+    if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
+    appliedPoliceRaidImpactKeys.add(impactKey);
+
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy || {});
+    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * POLICE_RAID_TIER6.cleanConfiscationPct / 100));
+    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * POLICE_RAID_TIER6.dirtyConfiscationPct / 100));
+    money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
+    money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
+
+    const materialLossResult = applyPoliceRaidMaterialConfiscation(economy, POLICE_RAID_TIER6.materialLossPct);
+
+    const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
+      ? { ...economy.drugInventory }
+      : {};
+    let totalDrugLoss = 0;
+    storageDrugTypes.forEach((drug) => {
+      const current = Math.max(0, Math.floor(Number(drugInventory[drug.key] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER6.drugLossPct / 100));
+      if (loss > 0) {
+        drugInventory[drug.key] = Math.max(0, current - loss);
+        totalDrugLoss += loss;
+      } else {
+        drugInventory[drug.key] = current;
+      }
+    });
+    const totalDrugs = storageDrugTypes.reduce((sum, drug) => sum + Number(drugInventory[drug.key] || 0), 0);
+
+    const currentAttackWeapons = resolveWeaponCounts();
+    const nextAttackWeapons = { ...currentAttackWeapons };
+    let attackWeaponLoss = 0;
+    attackWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextAttackWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER6.attackWeaponLossPct / 100));
+      if (loss > 0) {
+        nextAttackWeapons[item.name] = Math.max(0, current - loss);
+        attackWeaponLoss += loss;
+      } else {
+        nextAttackWeapons[item.name] = current;
+      }
+    });
+    if (attackWeaponLoss > 0) persistWeaponCounts(nextAttackWeapons);
+
+    const currentDefenseWeapons = resolveDefenseCounts();
+    const nextDefenseWeapons = { ...currentDefenseWeapons };
+    let defenseWeaponLoss = 0;
+    defenseWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextDefenseWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER6.defenseWeaponLossPct / 100));
+      if (loss > 0) {
+        nextDefenseWeapons[item.name] = Math.max(0, current - loss);
+        defenseWeaponLoss += loss;
+      } else {
+        nextDefenseWeapons[item.name] = current;
+      }
+    });
+    if (defenseWeaponLoss > 0) persistDefenseCounts(nextDefenseWeapons);
+
+    const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * POLICE_RAID_TIER6.influencePenaltyPct / 100));
+    const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
+
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    economy.drugInventory = drugInventory;
+    economy.drugs = totalDrugs;
+    economy.influence = nextInfluence;
+    economy.weapons = getAttackWeaponTotal(nextAttackWeapons);
+    economy.weaponsDetail = { ...nextAttackWeapons };
+    economy.defense = getDefenseWeaponTotal(nextDefenseWeapons);
+    economy.defenseDetail = { ...nextDefenseWeapons };
+    updateEconomy(economy);
+
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty =
+      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
+      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 6);
+    updateProfile({
+      ...currentProfile,
+      influence: nextInfluence
+    });
+
+    const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
+    const arrested = Math.max(0, Math.floor(population * POLICE_RAID_TIER6.arrestsPct / 100));
+    if (arrested > 0) consumeGangMembers(arrested);
+
+    const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
+    setPoliceRaidIncomePenaltyForOwnedDistricts(POLICE_RAID_TIER6.incomePenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("lab", POLICE_RAID_TIER6.productionFreezePct, expiresAt);
+    setPoliceRaidProductionPenalty("armory", POLICE_RAID_TIER6.productionFreezePct, expiresAt);
+    setPoliceRaidProductionPenalty("factory", POLICE_RAID_TIER6.productionFreezePct, expiresAt);
+    setPoliceRaidBuildingActionLock("pharmacy_factory_special", expiresAt);
+    setPoliceRaidBuildingActionLock("all_special_buildings", expiresAt);
+    setPoliceRaidBuildingActionLock("all_actions_blocked", expiresAt);
+    setPoliceRaidCombatPenalty(
+      POLICE_RAID_TIER6.attackPowerPenaltyPct,
+      POLICE_RAID_TIER6.defensePowerPenaltyPct,
+      expiresAt
+    );
+
+    const impactRecord = {
+      key: impactKey,
+      districtId: Number(district?.id),
+      startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
+      expiresAt,
+      tier: 6,
+      incomePenaltyPct: POLICE_RAID_TIER6.incomePenaltyPct,
+      cleanLoss,
+      cleanLossPct: POLICE_RAID_TIER6.cleanConfiscationPct,
+      dirtyLoss,
+      dirtyLossPct: POLICE_RAID_TIER6.dirtyConfiscationPct,
+      materialLoss: materialLossResult.totalLoss,
+      materialLossPct: materialLossResult.lossPct,
+      drugLoss: totalDrugLoss,
+      drugLossPct: POLICE_RAID_TIER6.drugLossPct,
+      arrested,
+      arrestsPct: POLICE_RAID_TIER6.arrestsPct,
+      attackWeaponLoss,
+      attackWeaponLossPct: POLICE_RAID_TIER6.attackWeaponLossPct,
+      defenseWeaponLoss,
+      defenseWeaponLossPct: POLICE_RAID_TIER6.defenseWeaponLossPct,
+      attackPowerPenaltyPct: POLICE_RAID_TIER6.attackPowerPenaltyPct,
+      defensePowerPenaltyPct: POLICE_RAID_TIER6.defensePowerPenaltyPct,
+      influenceLoss,
+      influenceLossPct: POLICE_RAID_TIER6.influencePenaltyPct,
+      labProductionPenaltyPct: POLICE_RAID_TIER6.productionFreezePct,
+      armoryProductionPenaltyPct: POLICE_RAID_TIER6.productionFreezePct,
+      factoryProductionPenaltyPct: POLICE_RAID_TIER6.productionFreezePct,
+      productionFrozen: true,
+      raidSpecialtyKey: raidSpecialty.key,
+      raidSpecialtyLabel: raidSpecialty.label,
+      spyBlocked: true,
+      raidBlocked: true,
+      attackBlocked: true,
+      occupyBlocked: true,
+      pharmacyFactorySpecialBlocked: true,
+      allSpecialBuildingsBlocked: true,
+      allActionsBlocked: true
+    };
+    getPoliceRaidImpactMap().set(impactKey, impactRecord);
+    pushEvent(
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 6: income zastaveno, clean -${POLICE_RAID_TIER6.cleanConfiscationPct}%, `
+      + `dirty -${POLICE_RAID_TIER6.dirtyConfiscationPct}%, materiály -${POLICE_RAID_TIER6.materialLossPct}%, `
+      + `drogy -${POLICE_RAID_TIER6.drugLossPct}%, zatčeno ${arrested} (${POLICE_RAID_TIER6.arrestsPct}%), `
+      + `út. zbraně -${POLICE_RAID_TIER6.attackWeaponLossPct}%, obr. zbraně -${POLICE_RAID_TIER6.defenseWeaponLossPct}%, `
+      + `síla útok -${POLICE_RAID_TIER6.attackPowerPenaltyPct}%, síla obrana -${POLICE_RAID_TIER6.defensePowerPenaltyPct}%, `
+      + `vliv -${POLICE_RAID_TIER6.influencePenaltyPct}%, všechno ztichlo a je zamčeno.`
+    );
+    return impactRecord;
   }
 
   function isDistrictUnownedForSpyOutcome(district) {
@@ -5480,6 +6910,17 @@ window.Empire.UI = (() => {
       return { allowed: false, reason: "Distrikt je zničený a nepoužitelný." };
     }
 
+    if (hasActivePoliceRaidImpactLock("allActionsBlocked") || isPoliceRaidAllActionsBlocked()) {
+      return { allowed: false, reason: "Během policejní razie jsou všechny akce dočasně zakázány." };
+    }
+
+    if (action === "attack" && hasActivePoliceRaidImpactLock("attackBlocked")) {
+      return { allowed: false, reason: "Během policejní razie je útok dočasně zakázán." };
+    }
+    if (action === "occupy" && hasActivePoliceRaidImpactLock("occupyBlocked")) {
+      return { allowed: false, reason: "Během policejní razie je obsazování dočasně zakázáno." };
+    }
+
     if (isDistrictDefendableByPlayer(district)) {
       if (action === "attack") {
         return { allowed: false, reason: "Vlastní nebo alianční distrikt nelze napadnout. Použij Obranu." };
@@ -5528,6 +6969,12 @@ window.Empire.UI = (() => {
     }
 
     if (action === "raid" || action === "spy") {
+      if (action === "spy" && hasActivePoliceRaidImpactLock("spyBlocked")) {
+        return { allowed: false, reason: "Během policejní razie je špehování dočasně zakázáno." };
+      }
+      if (action === "raid" && hasActivePoliceRaidImpactLock("raidBlocked")) {
+        return { allowed: false, reason: "Během policejní razie je vykrádání dočasně zakázáno." };
+      }
       if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_SPY_DISTRICT_ID) {
         return { allowed: true, reason: "" };
       }
@@ -5846,6 +7293,88 @@ window.Empire.UI = (() => {
     if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
     if (hours > 0) return `${hours}h`;
     return `${minutes}m`;
+  }
+
+  function resolvePoliceRaidSpecialtyKey(tier, detail = {}) {
+    const explicitType = String(
+      detail?.operationType
+      || detail?.operation_type
+      || detail?.type
+      || detail?.raidSpecialtyKey
+      || detail?.raidSpecialty
+      || detail?.playStyle
+      || detail?.play_style
+      || detail?.strategy
+      || detail?.style
+      || ""
+    ).trim().toLowerCase();
+    if (explicitType.includes("stealth") || explicitType.includes("shadow") || explicitType.includes("covert")) return "financial";
+    if (explicitType.includes("money") || explicitType.includes("cash") || explicitType.includes("bank") || explicitType.includes("finance") || explicitType.includes("economic")) return "financial";
+    if (explicitType.includes("drug") || explicitType.includes("narc") || explicitType.includes("chem") || explicitType.includes("dealer") || explicitType.includes("lab")) return "drug";
+    if (explicitType.includes("weapon") || explicitType.includes("armory") || explicitType.includes("gun") || explicitType.includes("combat") || explicitType.includes("military")) return "weapons";
+    if (explicitType.includes("police") || explicitType.includes("law") || explicitType.includes("order") || explicitType.includes("arrest") || explicitType.includes("control") || explicitType.includes("security")) return "arrests";
+    if (explicitType.includes("cash") || explicitType.includes("dirty") || explicitType.includes("money")) return "financial";
+    if (explicitType.includes("drug")) return "drug";
+    if (explicitType.includes("warehouse") || explicitType.includes("building") || explicitType.includes("weapon")) return "weapons";
+    if (explicitType.includes("apartment") || explicitType.includes("district_lock") || explicitType.includes("arrest")) return "arrests";
+    const safeTier = Math.max(1, Math.floor(Number(tier) || 1));
+    if (safeTier <= 1) return "financial";
+    if (safeTier === 2) return "drug";
+    if (safeTier === 3) return "weapons";
+    if (safeTier === 4) return "arrests";
+    return "total";
+  }
+
+  function resolvePoliceRaidSpecialty(tier, detail = {}) {
+    const key = resolvePoliceRaidSpecialtyKey(tier, detail);
+    return {
+      key,
+      ...(POLICE_RAID_SPECIALTIES[key] || POLICE_RAID_SPECIALTIES.total)
+    };
+  }
+
+  function resolvePoliceRaidSpecialtyFromProfile(profile, tier = null) {
+    const source = profile && typeof profile === "object" ? profile : {};
+    const playstyle = String(
+      source.playStyle
+      || source.play_style
+      || source.strategy
+      || source.style
+      || source.raidPlaystyle
+      || source.raid_playstyle
+      || ""
+    ).trim();
+    if (playstyle) {
+      const specialty = resolvePoliceRaidSpecialtyKey(tier ?? 1, { playStyle: playstyle });
+      return POLICE_RAID_SPECIALTIES[specialty] || POLICE_RAID_SPECIALTIES.total;
+    }
+    return resolvePoliceRaidSpecialty(tier ?? 1, source);
+  }
+
+  function resolvePoliceRaidSpecialtyFromOperationType(operationType, detail = {}) {
+    if (detail?.raidSpecialtyKey) {
+      return POLICE_RAID_SPECIALTIES[String(detail.raidSpecialtyKey).trim().toLowerCase()] || null;
+    }
+    const normalized = String(
+      operationType
+      || detail?.operationType
+      || detail?.type
+      || detail?.playStyle
+      || detail?.play_style
+      || detail?.strategy
+      || detail?.style
+      || ""
+    ).trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized.includes("stealth") || normalized.includes("shadow") || normalized.includes("covert")) return POLICE_RAID_SPECIALTIES.financial;
+    if (normalized.includes("cash") || normalized.includes("dirty")) return POLICE_RAID_SPECIALTIES.financial;
+    if (normalized.includes("money") || normalized.includes("finance") || normalized.includes("economic") || normalized.includes("bank")) return POLICE_RAID_SPECIALTIES.financial;
+    if (normalized.includes("drug") || normalized.includes("warehouse") || normalized.includes("dealer") || normalized.includes("chem") || normalized.includes("lab")) return POLICE_RAID_SPECIALTIES.drug;
+    if (normalized.includes("weapon") || normalized.includes("building_shutdown") || normalized.includes("armory") || normalized.includes("gun") || normalized.includes("combat")) return POLICE_RAID_SPECIALTIES.weapons;
+    if (normalized.includes("apartment") || normalized.includes("district_lock") || normalized.includes("arrest") || normalized.includes("police") || normalized.includes("law") || normalized.includes("order")) return POLICE_RAID_SPECIALTIES.arrests;
+    if (normalized.includes("coordinated")) return POLICE_RAID_SPECIALTIES.total;
+    if (normalized.includes("warning") || normalized.includes("control")) return POLICE_RAID_SPECIALTIES.financial;
+    return null;
   }
 
   function resolveStoredGangColor() {
@@ -7454,7 +8983,7 @@ window.Empire.UI = (() => {
       typeList.innerHTML = buildingDistrictTypes
         .map(
           (type) => `
-            <button class="buildings-modal__type-btn ${type.key === selectedType ? "is-active" : ""}" data-building-type="${type.key}">
+            <button class="buildings-modal__type-btn buildings-modal__type-btn--${type.key} ${type.key === selectedType ? "is-active" : ""}" data-building-type="${type.key}">
               ${type.label}
             </button>
           `
@@ -7470,11 +8999,10 @@ window.Empire.UI = (() => {
         content.classList.remove("buildings-modal__content--with-bg");
         content.style.backgroundImage = "";
         detail.innerHTML = `
-          <section class="buildings-modal__detail-card">
-            <div class="buildings-modal__detail-title">Vyber distrikt</div>
-            <div class="buildings-modal__detail-meta">Krok 1 • Klikni na typ distriktu vlevo.</div>
-            <div class="buildings-modal__empty">Po výběru distriktu uvidíš dostupné typy budov.</div>
-          </section>
+        <section class="buildings-modal__detail-card">
+          <div class="buildings-modal__detail-title">Vyber distrikt</div>
+          <div class="buildings-modal__empty">Po výběru distriktu uvidíš dostupné typy budov.</div>
+        </section>
         `;
         return;
       }
@@ -7493,7 +9021,7 @@ window.Empire.UI = (() => {
         : "";
 
       detail.innerHTML = `
-        <section class="buildings-modal__detail-card">
+        <section class="buildings-modal__detail-card" data-building-district-type="${selected.key}">
           <div class="buildings-modal__detail-title">${selected.label}</div>
           <div class="buildings-modal__detail-meta">${formatDistrictType(selected.key)}</div>
           ${detailState.markup}
@@ -7561,6 +9089,8 @@ window.Empire.UI = (() => {
           : null
       };
       if (window.Empire.Map?.showBuildingDetail) {
+        root.classList.add("hidden");
+        setMobileTopbarCoveredByPrimaryModal(false);
         window.Empire.Map.showBuildingDetail(detailInput, pseudoDistrict);
       }
     });
@@ -7625,7 +9155,6 @@ window.Empire.UI = (() => {
       selectedBaseName: activeBaseName,
       markup: `
       <div class="buildings-modal__group">
-        <div class="buildings-modal__group-title">Krok 1 • Typ budovy</div>
         <div class="buildings-modal__building-grid">
           ${baseTypes
             .map((item) => {
@@ -7646,7 +9175,6 @@ window.Empire.UI = (() => {
         </div>
       </div>
       <div class="buildings-modal__group">
-        <div class="buildings-modal__group-title">Krok 2 • Vyber konkrétní budovu</div>
         <div class="buildings-modal__building-grid">
           ${activeBaseName
             ? scopedEntries
@@ -8600,6 +10128,28 @@ window.Empire.UI = (() => {
     return Math.max(0, Math.min(WANTED_HEAT_MAX, Math.round(parsed * 10) / 10));
   }
 
+  function resolveStealthHeatMultiplier(profile) {
+    const safeProfile = profile && typeof profile === "object" ? profile : {};
+    const candidates = [
+      safeProfile.stealthBuild,
+      safeProfile.stealth_build,
+      safeProfile.buildType,
+      safeProfile.build_type,
+      safeProfile.specialBuild,
+      safeProfile.special_build,
+      safeProfile.playStyle,
+      safeProfile.play_style,
+      safeProfile.strategy,
+      safeProfile.style
+    ];
+    for (let i = 0; i < candidates.length; i += 1) {
+      const value = candidates[i];
+      if (value === true) return 0.8;
+      if (typeof value === "string" && value.trim().toLowerCase().includes("stealth")) return 0.8;
+    }
+    return 1;
+  }
+
   function formatWantedHeat(value) {
     const heat = clampWantedHeat(value);
     if (Math.abs(heat - Math.round(heat)) < 0.001) {
@@ -8758,6 +10308,7 @@ window.Empire.UI = (() => {
   }
 
   function resolveWantedLevel(profile) {
+    const stealthMultiplier = resolveStealthHeatMultiplier(profile || window.Empire?.player || {});
     const explicitCandidates = [
       profile?.wantedLevel,
       profile?.wanted_level,
@@ -8771,7 +10322,7 @@ window.Empire.UI = (() => {
     for (let i = 0; i < explicitCandidates.length; i += 1) {
       const parsed = Number(explicitCandidates[i]);
       if (Number.isFinite(parsed)) {
-        return clampWantedHeat(parsed);
+        return clampWantedHeat(parsed * stealthMultiplier);
       }
     }
 
@@ -8789,7 +10340,29 @@ window.Empire.UI = (() => {
       + dirtyMoney / 12000
       + population / 25000
     );
-    return clampWantedHeat(score * 10);
+    return clampWantedHeat(score * 10 * stealthMultiplier);
+  }
+
+  function resolvePoliceRaidProtectionUntil(profile) {
+    const explicitCandidates = [
+      profile?.policeRaidProtectionUntil,
+      profile?.police_raid_protection_until,
+      window.Empire?.PoliceHeat?.state?.player?.policeRaidProtectionUntil,
+      window.Empire?.PoliceHeat?.state?.player?.police_raid_protection_until
+    ];
+    for (let i = 0; i < explicitCandidates.length; i += 1) {
+      const parsed = Number(explicitCandidates[i]);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+    return 0;
+  }
+
+  function formatPoliceRaidProtectionLabel(profile) {
+    const until = resolvePoliceRaidProtectionUntil(profile);
+    if (!until) return "Bez ochrany";
+    const remaining = until - Date.now();
+    if (remaining <= 0) return "Bez ochrany";
+    return `Aktivní ${formatDurationLabel(remaining)}`;
   }
 
   function formatAllianceProfileSummary(profile) {
@@ -8865,6 +10438,7 @@ window.Empire.UI = (() => {
     const valueEl = document.getElementById("gang-heat-modal-value");
     const tierEl = document.getElementById("gang-heat-modal-tier");
     const descEl = document.getElementById("gang-heat-modal-desc");
+    const protectionEl = document.getElementById("gang-heat-modal-protection");
     const levelsEl = document.getElementById("gang-heat-modal-levels");
     const riseListEl = document.getElementById("gang-heat-rise-list");
     const fallListEl = document.getElementById("gang-heat-fall-list");
@@ -8874,6 +10448,9 @@ window.Empire.UI = (() => {
     if (valueEl) valueEl.textContent = formatWantedHeat(currentHeat);
     if (tierEl) tierEl.textContent = `${currentLevel.label} • ${currentLevel.title}`;
     if (descEl) descEl.textContent = currentLevel.description;
+    if (protectionEl) {
+      protectionEl.textContent = `Ochrana po razii: ${formatPoliceRaidProtectionLabel(cachedProfile || window.Empire.player || {})}`;
+    }
 
     if (levelsEl) {
       levelsEl.innerHTML = GANG_HEAT_LEVELS.map((entry) => `
@@ -8908,6 +10485,230 @@ window.Empire.UI = (() => {
     if (!root) return;
     root.classList.remove("hidden");
     renderGangHeatModal();
+  }
+
+  function getActiveOwnedPoliceRaidContext() {
+    const snapshot = window.Empire.Map?.getPoliceActionSnapshot?.();
+    if (!snapshot || !Array.isArray(snapshot.actions) || !snapshot.actions.length) return null;
+    const nowMs = Math.max(0, Math.floor(Number(snapshot.now) || Date.now()));
+    const impactMap = getPoliceRaidImpactMap();
+    impactMap.forEach((value, key) => {
+      if (!value || Number(value.expiresAt || 0) <= nowMs) {
+        impactMap.delete(key);
+      }
+    });
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const actions = snapshot.actions
+      .map((action) => {
+        const districtId = Number(action?.districtId);
+        if (!Number.isFinite(districtId)) return null;
+        const district = districts.find((entry) => Number(entry?.id) === districtId);
+        if (!district || !isDistrictOwnedByPlayer(district)) return null;
+        return {
+          ...action,
+          district
+        };
+      })
+      .filter(Boolean);
+    if (!actions.length) return null;
+    actions.sort((a, b) => Number(b.remainingMs || 0) - Number(a.remainingMs || 0));
+    return {
+      action: actions[0],
+      actions,
+      activeCount: actions.length,
+      incomePenaltyPct: Math.max(0, Math.floor(Number(snapshot.incomePenaltyPct || 0)))
+    };
+  }
+
+  function hasActivePoliceRaidImpactLock(fieldName) {
+    const activeRaid = getActiveOwnedPoliceRaidContext();
+    if (!activeRaid || !Array.isArray(activeRaid.actions)) return false;
+    return activeRaid.actions.some((entry) => {
+      const key = buildPoliceRaidImpactKey(entry || {});
+      const impact = key ? getPoliceRaidImpactMap().get(key) : null;
+      return Boolean(impact?.[fieldName]);
+    });
+  }
+
+  function isPoliceRaidBuildingSpecialActionsLocked(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY) || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+      let changed = false;
+      let hasActiveLock = false;
+      ["pharmacy_factory_special", "all_special_buildings"].forEach((lockKey) => {
+        const until = Math.max(0, Math.floor(Number(parsed[lockKey] || 0)));
+        if (until > nowMs) {
+          hasActiveLock = true;
+          return;
+        }
+        if (parsed[lockKey]) {
+          delete parsed[lockKey];
+          changed = true;
+        }
+      });
+      if (changed) {
+        localStorage.setItem(POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY, JSON.stringify(parsed));
+      }
+      return hasActiveLock;
+    } catch {
+      return false;
+    }
+  }
+
+  function openGangHeatPanelOrRaidImpactModal() {
+    const raidContext = getActiveOwnedPoliceRaidContext();
+    if (!raidContext) {
+      openGangHeatModal();
+      return;
+    }
+    const wantedHeat = resolveWantedLevel(cachedProfile || window.Empire.player || {});
+    const wantedTier = resolveWantedStars(wantedHeat);
+    const district = raidContext.action?.district || null;
+    const districtName = String(district?.name || "").trim() || `District #${raidContext.action?.districtId || "-"}`;
+    const remainingMs = Math.max(0, Math.floor(Number(raidContext.action?.remainingMs || 0)));
+    const activeCount = Math.max(1, Math.floor(Number(raidContext.activeCount || 1)));
+    const affectedLabel = activeCount === 1 ? "1 district" : `${activeCount} districty`;
+    const impactKey = buildPoliceRaidImpactKey(raidContext.action || {});
+    const impact = impactKey ? getPoliceRaidImpactMap().get(impactKey) : null;
+    const tier = Math.max(1, Math.floor(Number(impact?.tier || wantedTier)));
+    const specialty =
+      resolvePoliceRaidSpecialtyFromOperationType(raidContext?.action?.operationType, impact)
+      || resolvePoliceRaidSpecialty(tier, impact || {});
+    const incomePenaltyPct = Math.max(0, Math.floor(Number(impact?.incomePenaltyPct || raidContext.incomePenaltyPct || POLICE_RAID_TIER1.incomePenaltyPct)));
+    const summary = tier === 1
+      ? "Razia 1. stupně probíhá. Aktivní dopady: income -10%, zabavení peněz, zatčení obyvatel, vliv -5% a zákaz špehování."
+      : tier === 2
+        ? "Razia 2. stupně probíhá. Aktivní dopady: income -20%, zabavení peněz, drogy -5%, zatčení 3-7%, út. zbraně -3%, vliv -6 až -8%, zákaz špehování i krádeže, výroba Lékárna/Drug Lab -10%."
+      : tier === 3
+        ? "Razia 3. stupně probíhá. Aktivní dopady: income -21 až -26%, zabavení peněz, drogy -6 až -9%, zatčení 7-12%, ztráty útočných i obranných zbraní, vliv -8 až -12%, zákaz špehování/vykradení/útoku a výrobní postihy."
+      : tier === 4
+        ? "Razia 4. stupně probíhá. Aktivní dopady: income -26 až -33%, výrazné zabavení skladu, ztráty lidí i zbraní, síla obrany -10%, síla útoku -8%, zákaz špehování/vykradení/útoku/obsazení, blok speciálních akcí Lékárna/Továrna a silnější výrobní postihy."
+      : tier === 5
+        ? "Razia 5. stupně probíhá. Aktivní dopady: income -32 až -40%, masivní zabavení clean/dirty i materiálů, silné ztráty lidí a zbraní, síla útoku/obrany -15%, zákaz hlavních akcí i speciálních akcí ve 4 budovách, výroba je zmražená."
+      : tier === 6
+              ? "Razia 6. stupně probíhá. Aktivní dopady: income zastaveno, zabavení clean/dirty, materiálů i drog, velké ztráty obyvatel a zbraní, síla útoku/obrany -30% a všechny akce včetně budov jsou zakázané."
+            : "Razia právě probíhá. Dopady podle stupně doplníme v dalších krocích.";
+    const tierRows = tier === 1
+      ? [
+        { label: "Zabavení clean", value: `${Math.max(0, Math.floor(Number(impact?.cleanLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.cleanLossPct || POLICE_RAID_TIER1.cleanConfiscationPct)))}%)` },
+        { label: "Zabavení dirty", value: `${Math.max(0, Math.floor(Number(impact?.dirtyLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.dirtyLossPct || POLICE_RAID_TIER1.dirtyConfiscationPctMin)))}%)` },
+        { label: "Zatčení obyvatel", value: `${Math.max(0, Math.floor(Number(impact?.arrested || 0)))} (${Math.max(0, Math.floor(Number(impact?.arrestsPct || POLICE_RAID_TIER1.arrestsPct)))}%)` },
+        { label: "Pokles vlivu", value: `-${Math.max(0, Math.floor(Number(impact?.influenceLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.influenceLossPct || POLICE_RAID_TIER1.influencePenaltyPct)))}%)` },
+        { label: "Špehování", value: "ZAKÁZÁNO" }
+      ]
+      : tier === 2
+        ? [
+          { label: "Zabavení clean", value: `${Math.max(0, Math.floor(Number(impact?.cleanLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.cleanLossPct || POLICE_RAID_TIER2.cleanConfiscationPctMin)))}%)` },
+          { label: "Zabavení dirty", value: `${Math.max(0, Math.floor(Number(impact?.dirtyLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.dirtyLossPct || POLICE_RAID_TIER2.dirtyConfiscationPctMin)))}%)` },
+          { label: "Drogy", value: `-${Math.max(0, Math.floor(Number(impact?.drugLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.drugLossPct || POLICE_RAID_TIER2.drugLossPct)))}%)` },
+          { label: "Zatčení obyvatel", value: `${Math.max(0, Math.floor(Number(impact?.arrested || 0)))} (${Math.max(0, Math.floor(Number(impact?.arrestsPct || POLICE_RAID_TIER2.arrestsPctMin)))}%)` },
+          { label: "Útočné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.attackWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.attackWeaponLossPct || POLICE_RAID_TIER2.attackWeaponLossPct)))}%)` },
+          { label: "Pokles vlivu", value: `-${Math.max(0, Math.floor(Number(impact?.influenceLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.influenceLossPct || POLICE_RAID_TIER2.influencePenaltyPctMin)))}%)` },
+          { label: "Špehování", value: "ZAKÁZÁNO" },
+          { label: "Vykrást", value: "ZAKÁZÁNO" },
+          { label: "Výroba Lékárna / Drug Lab", value: `-${Math.max(0, Math.floor(Number(impact?.productionPenaltyPct || POLICE_RAID_TIER2.productionPenaltyPct)))}%` }
+        ]
+        : tier === 3
+          ? [
+            { label: "Zabavení clean", value: `${Math.max(0, Math.floor(Number(impact?.cleanLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.cleanLossPct || POLICE_RAID_TIER3.cleanConfiscationPctMin)))}%)` },
+            { label: "Zabavení dirty", value: `${Math.max(0, Math.floor(Number(impact?.dirtyLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.dirtyLossPct || POLICE_RAID_TIER3.dirtyConfiscationPctMin)))}%)` },
+            { label: "Drogy", value: `-${Math.max(0, Math.floor(Number(impact?.drugLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.drugLossPct || POLICE_RAID_TIER3.drugLossPctMin)))}%)` },
+            { label: "Zatčení obyvatel", value: `${Math.max(0, Math.floor(Number(impact?.arrested || 0)))} (${Math.max(0, Math.floor(Number(impact?.arrestsPct || POLICE_RAID_TIER3.arrestsPctMin)))}%)` },
+            { label: "Útočné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.attackWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.attackWeaponLossPct || POLICE_RAID_TIER3.attackWeaponLossPctMin)))}%)` },
+            { label: "Obranné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.defenseWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.defenseWeaponLossPct || POLICE_RAID_TIER3.defenseWeaponLossPctMin)))}%)` },
+            { label: "Pokles vlivu", value: `-${Math.max(0, Math.floor(Number(impact?.influenceLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.influenceLossPct || POLICE_RAID_TIER3.influencePenaltyPctMin)))}%)` },
+            { label: "Špehování", value: "ZAKÁZÁNO" },
+            { label: "Vykrást", value: "ZAKÁZÁNO" },
+            { label: "Útok", value: "ZAKÁZÁNO" },
+            { label: "Výroba Lékárna / Drug Lab", value: `-${Math.max(0, Math.floor(Number(impact?.labProductionPenaltyPct || POLICE_RAID_TIER3.labProductionPenaltyPctMin)))}%` },
+            { label: "Výroba Zbrojovka", value: `-${Math.max(0, Math.floor(Number(impact?.armoryProductionPenaltyPct || POLICE_RAID_TIER3.armoryProductionPenaltyPctMin)))}%` }
+          ]
+          : tier === 4
+            ? [
+              { label: "Zabavení clean", value: `${Math.max(0, Math.floor(Number(impact?.cleanLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.cleanLossPct || POLICE_RAID_TIER4.cleanConfiscationPctMin)))}%)` },
+              { label: "Zabavení dirty", value: `${Math.max(0, Math.floor(Number(impact?.dirtyLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.dirtyLossPct || POLICE_RAID_TIER4.dirtyConfiscationPctMin)))}%)` },
+              { label: "Drogy", value: `-${Math.max(0, Math.floor(Number(impact?.drugLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.drugLossPct || POLICE_RAID_TIER4.drugLossPctMin)))}%)` },
+              { label: "Zatčení obyvatel", value: `${Math.max(0, Math.floor(Number(impact?.arrested || 0)))} (${Math.max(0, Math.floor(Number(impact?.arrestsPct || POLICE_RAID_TIER4.arrestsPctMin)))}%)` },
+              { label: "Útočné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.attackWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.attackWeaponLossPct || POLICE_RAID_TIER4.attackWeaponLossPct)))}%)` },
+              { label: "Obranné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.defenseWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.defenseWeaponLossPct || POLICE_RAID_TIER4.defenseWeaponLossPct)))}%)` },
+              { label: "Síla Obrana", value: `-${Math.max(0, Math.floor(Number(impact?.defensePowerPenaltyPct || POLICE_RAID_TIER4.defensePowerPenaltyPct)))}%` },
+              { label: "Síla Útok", value: `-${Math.max(0, Math.floor(Number(impact?.attackPowerPenaltyPct || POLICE_RAID_TIER4.attackPowerPenaltyPct)))}%` },
+              { label: "Pokles vlivu", value: `-${Math.max(0, Math.floor(Number(impact?.influenceLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.influenceLossPct || POLICE_RAID_TIER4.influencePenaltyPctMin)))}%)` },
+              { label: "Špehování", value: "ZAKÁZÁNO" },
+              { label: "Vykrást", value: "ZAKÁZÁNO" },
+              { label: "Útok", value: "ZAKÁZÁNO" },
+              { label: "Obsadit", value: "ZAKÁZÁNO" },
+              { label: "Spec. akce Lékárna/Továrna", value: "ZAKÁZÁNO" },
+              { label: "Výroba Lékárna / Drug Lab", value: `-${Math.max(0, Math.floor(Number(impact?.labProductionPenaltyPct || POLICE_RAID_TIER4.labProductionPenaltyPctMin)))}%` },
+              { label: "Výroba Zbrojovka", value: `-${Math.max(0, Math.floor(Number(impact?.armoryProductionPenaltyPct || POLICE_RAID_TIER4.armoryProductionPenaltyPctMin)))}%` }
+            ]
+          : tier === 5
+              ? [
+                { label: "Zabavení clean", value: `${Math.max(0, Math.floor(Number(impact?.cleanLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.cleanLossPct || POLICE_RAID_TIER5.cleanConfiscationPctMin)))}%)` },
+                { label: "Zabavení dirty", value: `${Math.max(0, Math.floor(Number(impact?.dirtyLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.dirtyLossPct || POLICE_RAID_TIER5.dirtyConfiscationPctMin)))}%)` },
+                { label: "Materiály", value: `-${Math.max(0, Math.floor(Number(impact?.materialLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.materialLossPct || POLICE_RAID_TIER5.materialLossPct)))}%)` },
+                { label: "Drogy", value: `-${Math.max(0, Math.floor(Number(impact?.drugLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.drugLossPct || POLICE_RAID_TIER5.drugLossPctMin)))}%)` },
+                { label: "Zatčení obyvatel", value: `${Math.max(0, Math.floor(Number(impact?.arrested || 0)))} (${Math.max(0, Math.floor(Number(impact?.arrestsPct || POLICE_RAID_TIER5.arrestsPctMin)))}%)` },
+                { label: "Útočné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.attackWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.attackWeaponLossPct || POLICE_RAID_TIER5.attackWeaponLossPct)))}%)` },
+                { label: "Obranné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.defenseWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.defenseWeaponLossPct || POLICE_RAID_TIER5.defenseWeaponLossPct)))}%)` },
+                { label: "Síla Obrana", value: `-${Math.max(0, Math.floor(Number(impact?.defensePowerPenaltyPct || POLICE_RAID_TIER5.defensePowerPenaltyPct)))}%` },
+                { label: "Síla Útok", value: `-${Math.max(0, Math.floor(Number(impact?.attackPowerPenaltyPct || POLICE_RAID_TIER5.attackPowerPenaltyPct)))}%` },
+                { label: "Pokles vlivu", value: `-${Math.max(0, Math.floor(Number(impact?.influenceLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.influenceLossPct || POLICE_RAID_TIER5.influencePenaltyPctMin)))}%)` },
+                { label: "Špehování", value: "ZAKÁZÁNO" },
+                { label: "Vykrást", value: "ZAKÁZÁNO" },
+                { label: "Útok", value: "ZAKÁZÁNO" },
+                { label: "Obsadit", value: "ZAKÁZÁNO" },
+                { label: "Spec. akce Lékárna/Továrna", value: "ZAKÁZÁNO" },
+                { label: "Spec. akce Drug Lab/Zbrojovka", value: "ZAKÁZÁNO" },
+                { label: "Výroba budov", value: "ZMRAŽENO (1h)" }
+              ]
+            : tier === 6
+              ? [
+                { label: "Zabavení clean", value: `${Math.max(0, Math.floor(Number(impact?.cleanLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.cleanLossPct || POLICE_RAID_TIER6.cleanConfiscationPct)))}%)` },
+                { label: "Zabavení dirty", value: `${Math.max(0, Math.floor(Number(impact?.dirtyLoss || 0)))}$ (${Math.max(0, Math.floor(Number(impact?.dirtyLossPct || POLICE_RAID_TIER6.dirtyConfiscationPct)))}%)` },
+                { label: "Materiály", value: `-${Math.max(0, Math.floor(Number(impact?.materialLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.materialLossPct || POLICE_RAID_TIER6.materialLossPct)))}%)` },
+                { label: "Drogy", value: `-${Math.max(0, Math.floor(Number(impact?.drugLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.drugLossPct || POLICE_RAID_TIER6.drugLossPct)))}%)` },
+                { label: "Zatčení obyvatel", value: `${Math.max(0, Math.floor(Number(impact?.arrested || 0)))} (${Math.max(0, Math.floor(Number(impact?.arrestsPct || POLICE_RAID_TIER6.arrestsPct)))}%)` },
+                { label: "Útočné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.attackWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.attackWeaponLossPct || POLICE_RAID_TIER6.attackWeaponLossPct)))}%)` },
+                { label: "Obranné zbraně", value: `-${Math.max(0, Math.floor(Number(impact?.defenseWeaponLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.defenseWeaponLossPct || POLICE_RAID_TIER6.defenseWeaponLossPct)))}%)` },
+                { label: "Síla Obrana", value: `-${Math.max(0, Math.floor(Number(impact?.defensePowerPenaltyPct || POLICE_RAID_TIER6.defensePowerPenaltyPct)))}%` },
+                { label: "Síla Útok", value: `-${Math.max(0, Math.floor(Number(impact?.attackPowerPenaltyPct || POLICE_RAID_TIER6.attackPowerPenaltyPct)))}%` },
+                { label: "Pokles vlivu", value: `-${Math.max(0, Math.floor(Number(impact?.influenceLoss || 0)))} (${Math.max(0, Math.floor(Number(impact?.influenceLossPct || POLICE_RAID_TIER6.influencePenaltyPct)))}%)` },
+                { label: "Špehování", value: "ZAKÁZÁNO" },
+                { label: "Vykrást", value: "ZAKÁZÁNO" },
+                { label: "Útok", value: "ZAKÁZÁNO" },
+                { label: "Obsadit", value: "ZAKÁZÁNO" },
+                { label: "Spec. akce budov", value: "ZAKÁZÁNO" },
+                { label: "Výroba budov", value: "ZASTAVENA" }
+              ]
+        : [];
+    const toneClass = tier >= 6
+      ? "is-tier-6"
+      : tier === 5
+        ? "is-tier-5"
+        : tier === 4
+          ? "is-tier-4"
+          : tier === 3
+            ? "is-tier-3"
+            : tier === 2
+              ? "is-tier-2"
+              : "is-tier-1";
+    openPoliceActionResultModal({
+      title: "Dopady razie",
+      badge: `Razia aktivní • ${specialty.label} • Stupeň ${wantedTier}/6 • Tier ${tier}`,
+      tone: toneClass,
+      summary: "",
+      rows: [
+        { label: "Zasažený district", value: districtName },
+        { label: "Aktivně zasaženo", value: affectedLabel },
+        { label: "Typ razie", value: `${specialty.icon} ${specialty.label}` },
+        { label: "Snížení income", value: `-${incomePenaltyPct}% (1h)` },
+        ...tierRows,
+        { label: "Zbývající čas", value: formatDurationLabel(remainingMs) }
+      ]
+    });
   }
 
   function handleGangHeatReduction(mode) {
@@ -8947,7 +10748,12 @@ window.Empire.UI = (() => {
     const cleanBtn = document.getElementById("gang-heat-clean-btn");
     const clearLogBtn = document.getElementById("gang-heat-clear-log-btn");
     if (trigger) {
-      trigger.addEventListener("click", () => openGangHeatModal());
+      trigger.addEventListener("click", () => openGangHeatPanelOrRaidImpactModal());
+      trigger.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openGangHeatPanelOrRaidImpactModal();
+      });
     }
     if (!root) return;
     if (backdrop) backdrop.addEventListener("click", closeGangHeatModal);
@@ -9136,7 +10942,7 @@ window.Empire.UI = (() => {
     allianceRefreshHandler = refreshAlliance;
 
     openBtn.addEventListener("click", async () => {
-      setMobileTopbarCoveredByPrimaryModal(true);
+      setMobileTopbarCoveredByPrimaryModal(false);
       root.classList.remove("hidden");
       setCreateAllianceModalVisible(false);
       setAllianceManagementModalVisible(false);
@@ -10746,7 +12552,7 @@ window.Empire.UI = (() => {
 
     openBtn.addEventListener("click", async () => {
       state.tab = "server";
-      setMobileTopbarCoveredByPrimaryModal(true);
+      setMobileTopbarCoveredByPrimaryModal(false);
       root.classList.remove("hidden");
       await refreshMarket();
     });
@@ -11205,10 +13011,6 @@ window.Empire.UI = (() => {
         if (normalizedChanged) {
           saveLocalMarketState(parsed);
         }
-        if (parsed.myOrders.length) {
-          parsed.myOrders = [];
-          saveLocalMarketState(parsed);
-        }
         const dirty = Number(parsed.balances.dirtyMoney || 0);
         if (!Number.isFinite(dirty) || dirty < GUEST_DEFAULT_DIRTY_MONEY) {
           parsed.balances.dirtyMoney = GUEST_DEFAULT_DIRTY_MONEY;
@@ -11294,6 +13096,9 @@ window.Empire.UI = (() => {
     state.balances.metalParts = 20;
     state.balances.techCore = 20;
     state.balances.combatModule = 20;
+    if (Array.isArray(state.myOrders) && state.myOrders.length) {
+      state.myOrders = [];
+    }
     saveLocalMarketState(state);
   }
 
@@ -11925,7 +13730,20 @@ window.Empire.UI = (() => {
     setText("profile-modal-gang", profile.gangName || guestGangName || "-");
     setText("profile-modal-faction", factionLabel);
     setText("profile-modal-influence", influenceValue);
-    setText("profile-modal-wanted", formatWantedHeat(wantedLevel));
+    const wantedText = formatWantedHeat(wantedLevel);
+    setText("profile-modal-wanted", wantedText);
+    const wantedEl = document.getElementById("profile-modal-wanted");
+    if (wantedEl) {
+      wantedEl.title = `Hledanost: ${wantedText} | ${formatPoliceRaidProtectionLabel(profile)}`;
+    }
+    const wantedLockEl = document.getElementById("profile-modal-wanted-lock");
+    if (wantedLockEl) {
+      const until = resolvePoliceRaidProtectionUntil(profile);
+      const active = until > Date.now();
+      wantedLockEl.classList.toggle("hidden", !active);
+      wantedLockEl.title = active ? `Aktivní ochrana po razii: ${formatDurationLabel(until - Date.now())}` : "Bez aktivní ochrany po razii";
+    }
+    setText("profile-modal-raid-protection", formatPoliceRaidProtectionLabel(profile));
     setText("profile-modal-alliance", profile.alliance || "Žádná");
     setText("profile-modal-districts", profile.districts || 0);
     const profileHasMoneyData =
@@ -12018,6 +13836,14 @@ window.Empire.UI = (() => {
       }
     }, MONEY_STAT_COUNT_TICK_MS);
     moneyStatCountIntervals.set(element, intervalId);
+  }
+
+  function syncMoneyStatToCachedValue(element, value, options = {}) {
+    if (!element) return;
+    stopMoneyStatCounter(element);
+    const safeValue = Math.max(0, Math.floor(Number(value) || 0));
+    const prefix = String(options?.prefix ?? "$");
+    element.textContent = `${prefix}${safeValue}`;
   }
 
   function updateEconomy(economy) {
@@ -12384,6 +14210,41 @@ window.Empire.UI = (() => {
     startRoundPhaseTicker();
   }
 
+  function getRoundStatusSnapshot() {
+    const override = roundStatusOverride && typeof roundStatusOverride === "object" ? roundStatusOverride : null;
+    const state = roundStatusState && typeof roundStatusState === "object" ? roundStatusState : null;
+    if (!state && !override) return null;
+
+    const source = override || state;
+    const phaseSnapshot = state ? resolveRoundPhaseSnapshot(state) : null;
+    const clockSnapshot = state ? resolveRoundClockSnapshot(state) : null;
+    const basePhaseKey = source?.phaseKey || phaseSnapshot?.phaseKey || state?.currentPhaseKey || "";
+    const activeSubPhaseKey = source?.subPhaseKey || state?.currentSubPhaseKey || "";
+    const effectiveMode = resolveEffectiveRoundMode(basePhaseKey, activeSubPhaseKey);
+    const phaseDurationMs = Math.max(0, Math.floor(Number(state?.phaseDurationMs || source?.phaseDurationMs) || 0));
+    const roundStartedAt = Number(state?.roundStartedAt || source?.phaseStartedAt || source?.roundStartedAt || 0);
+    const currentPhaseIndex = roundStartedAt && phaseDurationMs
+      ? Math.floor(Math.max(0, Date.now() - roundStartedAt) / phaseDurationMs)
+      : 0;
+    const phaseStartedAt = roundStartedAt && phaseDurationMs
+      ? roundStartedAt + (currentPhaseIndex * phaseDurationMs)
+      : null;
+
+    return {
+      ...(state || {}),
+      ...(override || {}),
+      currentPhaseKey: effectiveMode.mapMode || basePhaseKey || "",
+      currentSubPhaseKey: activeSubPhaseKey || "",
+      currentSubPhaseLabel: source?.phaseLabel || state?.currentSubPhaseLabel || effectiveMode.phaseLabel || "",
+      currentGameDay: source?.currentGameDay || phaseSnapshot?.currentGameDay || 1,
+      currentGameTimeLabel: source?.timeLabel || clockSnapshot?.label || state?.currentGameTimeLabel || "09:15",
+      phaseStartedAt,
+      phaseDurationMs,
+      roundStartedAt,
+      currentPhaseIndex
+    };
+  }
+
   function pushEvent(text) {
     const container = document.getElementById("event-items");
     if (!container) return;
@@ -12421,6 +14282,7 @@ window.Empire.UI = (() => {
     refreshMarketBuildingShortcuts,
     handleMarketUpdate,
     getDistrictRaidLockRemainingMs,
+    getRoundStatusSnapshot,
     setGuestMode,
     initProfileModal,
     initSettingsModal,

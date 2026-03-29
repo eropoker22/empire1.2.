@@ -54,15 +54,20 @@ window.Empire.Map = (() => {
   const DISTRICT_ATTACK_MARKER_DEFAULT_DURATION_MS = 8 * 60 * 1000;
   const DISTRICT_ATTACK_MARKER_MIN_DURATION_MS = 15 * 1000;
   const DISTRICT_ATTACK_MARKER_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
-  const DISTRICT_POLICE_ACTION_DEFAULT_DURATION_MS = 10 * 60 * 1000;
-  const DISTRICT_POLICE_ACTION_MIN_DURATION_MS = 30 * 1000;
+  const DISTRICT_POLICE_ACTION_DEFAULT_DURATION_MS = 60 * 60 * 1000;
+  const DISTRICT_POLICE_ACTION_MIN_DURATION_MS = 60 * 60 * 1000;
   const DISTRICT_POLICE_ACTION_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+  const DISTRICT_POLICE_INCOME_PENALTY_PCT = 10;
+  const POLICE_RAID_INCOME_PENALTY_STORAGE_KEY = "empire_police_raid_income_penalty_map_v1";
   const DISTRICT_SPY_ACTION_DEFAULT_DURATION_MS = 20 * 1000;
   const DISTRICT_SPY_ACTION_MIN_DURATION_MS = 5 * 1000;
   const DISTRICT_SPY_ACTION_MAX_DURATION_MS = 30 * 60 * 1000;
   const DISTRICT_RAID_ACTION_DEFAULT_DURATION_MS = 20 * 1000;
   const DISTRICT_RAID_ACTION_MIN_DURATION_MS = 5 * 1000;
   const DISTRICT_RAID_ACTION_MAX_DURATION_MS = 30 * 60 * 1000;
+  const POLICE_RAID_PRODUCTION_PENALTY_STORAGE_KEY = "empire_police_raid_prod_penalty_until_v1";
+  const POLICE_RAID_PRODUCTION_PENALTY_PCT = 10;
+  const POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY = "empire_police_raid_building_action_lock_v1";
   const DISTRICT_ATTACK_ANIMATION_INTERVAL_MS = 120;
   const DISTRICT_TOP_NO_DRAW_RATIO = 0.08;
   const DOWNTOWN_VERTICAL_OFFSET_RATIO = 0.04;
@@ -2037,10 +2042,11 @@ window.Empire.Map = (() => {
   function calculatePharmacyProductionRates(levelMultiplier = 1) {
     const multiplier = Math.max(0, Number(levelMultiplier) || 0);
     const buildingMultiplier = 1 + getPharmacyProductionBonusPct() / 100;
+    const policePenaltyMultiplier = Math.max(0, 1 - getGlobalPoliceRaidProductionPenaltyPct("lab", Date.now()) / 100);
     return {
-      chemicalsPerHour: PHARMACY_CONFIG.baseProductionPerHour.chemicals * multiplier * buildingMultiplier,
-      biomassPerHour: PHARMACY_CONFIG.baseProductionPerHour.biomass * multiplier * buildingMultiplier,
-      stimPackPerHour: PHARMACY_CONFIG.baseProductionPerHour.stimPack * multiplier * buildingMultiplier
+      chemicalsPerHour: PHARMACY_CONFIG.baseProductionPerHour.chemicals * multiplier * buildingMultiplier * policePenaltyMultiplier,
+      biomassPerHour: PHARMACY_CONFIG.baseProductionPerHour.biomass * multiplier * buildingMultiplier * policePenaltyMultiplier,
+      stimPackPerHour: PHARMACY_CONFIG.baseProductionPerHour.stimPack * multiplier * buildingMultiplier * policePenaltyMultiplier
     };
   }
 
@@ -2285,7 +2291,10 @@ window.Empire.Map = (() => {
       0.1,
       levelMultiplier * (1 + networkProductionBonusPct / 100)
     );
-    const rates = calculateFactoryProductionRates(totalProductionMultiplier);
+    const factoryPenaltyPct = getGlobalPoliceRaidProductionPenaltyPct("factory", nowMs);
+    const factoryPenaltyMultiplier = Math.max(0, 1 - factoryPenaltyPct / 100);
+    const effectiveProductionMultiplier = totalProductionMultiplier * factoryPenaltyMultiplier;
+    const rates = calculateFactoryProductionRates(effectiveProductionMultiplier);
     const produced = createFactoryResourceMap({}, false);
     const applyHeat = options?.applyHeat !== false;
     let heatAdded = 0;
@@ -2314,10 +2323,15 @@ window.Empire.Map = (() => {
         return;
       }
 
+      if (effectiveProductionMultiplier <= 0) {
+        slot.lastTick = nowMs;
+        return;
+      }
+
       if (slot.mode === "craft" || slot.resourceKey === "combatModule") {
         const scaledDurationMs = Math.max(
           1,
-          Math.round(FACTORY_CONFIG.combatModule.durationMs / totalProductionMultiplier)
+          Math.round(FACTORY_CONFIG.combatModule.durationMs / effectiveProductionMultiplier)
         );
         const cycleRaw =
           elapsedMs / scaledDurationMs
@@ -2394,7 +2408,7 @@ window.Empire.Map = (() => {
       rates,
       produced,
       levelMultiplier,
-      totalProductionMultiplier,
+      totalProductionMultiplier: effectiveProductionMultiplier,
       ownedFactoryCount,
       networkProductionBonusPct,
       activeSlots,
@@ -2551,9 +2565,9 @@ window.Empire.Map = (() => {
   }
 
   function calculateArmoryProductionRates(levelMultiplier = 1, options = {}) {
-    const multiplier = Math.max(0.1, Number(levelMultiplier) || 1);
-    const attackMultiplier = Math.max(0.1, Number(options?.attackMultiplier) || 1);
-    const defenseMultiplier = Math.max(0.1, Number(options?.defenseMultiplier) || 1);
+    const multiplier = Math.max(0, Number(levelMultiplier) || 0);
+    const attackMultiplier = Math.max(0, Number(options?.attackMultiplier) || 0);
+    const defenseMultiplier = Math.max(0, Number(options?.defenseMultiplier) || 0);
     return ARMORY_WEAPON_KEYS.reduce((acc, key) => {
       const weapon = ARMORY_CONFIG.weapons[key];
       const basePerHour = 3600000 / Math.max(1, Number(weapon.durationMs || 1));
@@ -2642,9 +2656,11 @@ window.Empire.Map = (() => {
       levelMultiplier * (1 + networkProductionBonusPct / 100)
     );
     const boostSnapshot = getArmoryBoostSnapshot(stateRef, nowMs);
+    const armoryPenaltyPct = getGlobalPoliceRaidProductionPenaltyPct("armory", nowMs);
+    const armoryPenaltyMultiplier = Math.max(0, 1 - armoryPenaltyPct / 100);
     const rates = calculateArmoryProductionRates(baseProductionMultiplier, {
-      attackMultiplier: boostSnapshot.attackProductionMultiplier,
-      defenseMultiplier: boostSnapshot.defenseProductionMultiplier
+      attackMultiplier: boostSnapshot.attackProductionMultiplier * armoryPenaltyMultiplier,
+      defenseMultiplier: boostSnapshot.defenseProductionMultiplier * armoryPenaltyMultiplier
     });
     const produced = createArmoryWeaponMap({}, false);
     const applyHeat = options?.applyHeat !== false;
@@ -2687,7 +2703,12 @@ window.Empire.Map = (() => {
       const categoryProductionMultiplier = baseProductionMultiplier
         * (slot.category === "defense"
           ? boostSnapshot.defenseProductionMultiplier
-          : boostSnapshot.attackProductionMultiplier);
+          : boostSnapshot.attackProductionMultiplier)
+        * armoryPenaltyMultiplier;
+      if (categoryProductionMultiplier <= 0) {
+        slot.lastTick = nowMs;
+        return;
+      }
       const scaledDurationMs = Math.max(1, Math.round(Number(weapon.durationMs || 1) / categoryProductionMultiplier));
       const rawCycles = (elapsedMs / scaledDurationMs) + Number(slot.productionRemainder || 0);
       const cycles = Math.max(0, Math.floor(rawCycles));
@@ -3195,6 +3216,10 @@ window.Empire.Map = (() => {
         && now < Number(this.player.activeDrugEffects.overdriveCrash.endsAt || 0)
       ) {
         multiplier *= 1 - DRUG_LAB_CONFIG.overdriveCrashPenaltyPct / 100;
+      }
+      const policePenaltyPct = getGlobalPoliceRaidProductionPenaltyPct("lab", now);
+      if (policePenaltyPct > 0) {
+        multiplier *= 1 - policePenaltyPct / 100;
       }
       return Math.max(0, multiplier);
     }
@@ -4411,6 +4436,8 @@ window.Empire.Map = (() => {
   }
 
   function getDistrictCashIncomeBoostPct(districtOrId, now = Date.now()) {
+    const districtRecord = resolveDistrictRecord(districtOrId);
+    const districtKey = normalizeDistrictId(districtRecord?.id ?? districtOrId);
     const districtPart = resolveDistrictIdentityPart(districtOrId);
     if (!districtPart) return 0;
     const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
@@ -4424,7 +4451,128 @@ window.Empire.Map = (() => {
       boostPct += EXCHANGE_BUILDING_CONFIG.actionBoosts.districtIncomeBonusPct * getExchangeLevelMultiplier(snapshot.level);
     });
 
-    return Math.max(0, boostPct);
+    if (districtKey) {
+      const policePenaltyPct = getPoliceRaidIncomePenaltyPctForDistrict(districtKey, nowMs);
+      if (policePenaltyPct > 0) {
+        boostPct -= policePenaltyPct;
+      }
+    }
+
+    return boostPct;
+  }
+
+  function getPoliceRaidIncomePenaltyPctForDistrict(districtKey, nowMs = Date.now()) {
+    const districtPart = normalizeDistrictId(districtKey);
+    if (!districtPart) return 0;
+    let penaltyPct = 0;
+    const policeAction = state.policeDistrictActions.get(districtPart);
+    if (policeAction && Number(policeAction.expiresAt || 0) > nowMs) {
+      penaltyPct = Math.max(penaltyPct, DISTRICT_POLICE_INCOME_PENALTY_PCT);
+    }
+
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_INCOME_PENALTY_STORAGE_KEY) || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return penaltyPct;
+      }
+      const entry = parsed[districtPart];
+      const until = Math.max(0, Math.floor(Number(entry?.until || 0)));
+      const pct = Math.max(0, Math.floor(Number(entry?.pct || 0)));
+      if (until > nowMs && pct > 0) {
+        penaltyPct = Math.max(penaltyPct, pct);
+      }
+    } catch {}
+
+    return penaltyPct;
+  }
+
+  function getGlobalPoliceRaidProductionPenaltyPct(buildingKey = "lab", now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    try {
+      const raw = localStorage.getItem(POLICE_RAID_PRODUCTION_PENALTY_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const key = String(buildingKey || "lab").trim().toLowerCase() || "lab";
+          const entry = parsed[key];
+          const until = Math.max(0, Math.floor(Number(entry?.until || 0)));
+          const pct = Math.max(0, Math.floor(Number(entry?.pct || 0)));
+          if (until > nowMs && pct > 0) {
+            return pct;
+          }
+          return 0;
+        }
+      }
+    } catch {}
+    let blockedUntil = 0;
+    try {
+      blockedUntil = Math.max(0, Math.floor(Number(localStorage.getItem(POLICE_RAID_PRODUCTION_PENALTY_STORAGE_KEY) || 0)));
+    } catch {}
+    return nowMs < blockedUntil ? POLICE_RAID_PRODUCTION_PENALTY_PCT : 0;
+  }
+
+  function isPoliceRaidSpecialActionBlockedForBuilding(buildingType = "", now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const normalized = String(buildingType || "").trim().toLowerCase();
+    if (!normalized) return false;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY) || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+      const allActionsBlockedUntil = Math.max(0, Math.floor(Number(parsed.all_actions_blocked || 0)));
+      if (allActionsBlockedUntil > nowMs) return true;
+      const pharmacyFactoryLockUntil = Math.max(0, Math.floor(Number(parsed.pharmacy_factory_special || 0)));
+      const allSpecialBuildingsLockUntil = Math.max(0, Math.floor(Number(parsed.all_special_buildings || 0)));
+      if (allSpecialBuildingsLockUntil > nowMs) {
+        return (
+          normalized === "pharmacy"
+          || normalized === "factory"
+          || normalized === "armory"
+          || normalized === "drug-lab"
+          || normalized === "druglab"
+        );
+      }
+      if (pharmacyFactoryLockUntil <= nowMs) return false;
+      return normalized === "pharmacy" || normalized === "factory";
+    } catch {
+      return false;
+    }
+  }
+
+  function isPoliceRaidAllActionsBlocked(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    try {
+      const parsed = JSON.parse(localStorage.getItem(POLICE_RAID_BUILDING_ACTION_LOCK_STORAGE_KEY) || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+      return Math.max(0, Math.floor(Number(parsed.all_actions_blocked || 0))) > nowMs;
+    } catch {
+      return false;
+    }
+  }
+
+  function getPoliceActionSnapshot(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    pruneExpiredPoliceActions(nowMs);
+    const actions = [];
+    state.policeDistrictActions.forEach((marker, districtId) => {
+      const expiresAt = Math.max(0, Math.floor(Number(marker?.expiresAt) || 0));
+      const startedAt = Math.max(0, Math.floor(Number(marker?.startedAt) || 0));
+      const remainingMs = Math.max(0, expiresAt - nowMs);
+      if (remainingMs <= 0) return;
+      actions.push({
+        districtId,
+        source: String(marker?.source || "police-action").trim() || "police-action",
+        startedAt,
+        expiresAt,
+        remainingMs
+      });
+    });
+    actions.sort((a, b) => b.remainingMs - a.remainingMs);
+    return {
+      now: nowMs,
+      activeCount: actions.length,
+      incomePenaltyPct: DISTRICT_POLICE_INCOME_PENALTY_PCT,
+      actions
+    };
   }
 
   function sanitizeDistrictGossipEntry(rawEntry) {
@@ -7306,7 +7454,10 @@ window.Empire.Map = (() => {
 
     const levelMultiplier = getFactoryLevelMultiplier(snapshot.level);
     const totalProductionMultiplier = levelMultiplier * (1 + networkProductionBonusPct / 100);
-    const rates = calculateFactoryProductionRates(totalProductionMultiplier);
+    const factoryPenaltyPct = getGlobalPoliceRaidProductionPenaltyPct("factory", now);
+    const factoryPenaltyMultiplier = Math.max(0, 1 - factoryPenaltyPct / 100);
+    const effectiveProductionMultiplier = totalProductionMultiplier * factoryPenaltyMultiplier;
+    const rates = calculateFactoryProductionRates(effectiveProductionMultiplier);
     const nextLevel = snapshot.level < FACTORY_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? getFactoryUpgradeCost(nextLevel) : 0;
     const resources = createFactoryResourceMap(snapshot.resources);
@@ -7331,7 +7482,7 @@ window.Empire.Map = (() => {
         slotCap: FACTORY_SLOT_STORAGE_CAP,
         perHour: Math.max(0, Number(perHour || 0)),
         effectiveDurationMs: isCraftSlot
-          ? Math.max(1, Math.round(FACTORY_CONFIG.combatModule.durationMs / totalProductionMultiplier))
+          ? Math.max(1, Math.round(FACTORY_CONFIG.combatModule.durationMs / Math.max(0.01, effectiveProductionMultiplier)))
           : 0
       };
     });
@@ -7384,7 +7535,7 @@ window.Empire.Map = (() => {
         heatAddedSinceLastTick: Math.max(0, Math.floor(Number(syncResult.heatAdded || 0))),
         ownedFactoryCount,
         networkProductionBonusPct,
-        productionMultiplier: totalProductionMultiplier,
+        productionMultiplier: effectiveProductionMultiplier,
         primaryContext: activeContext,
         primaryDistrictId: activeDistrict?.id ?? null
       }
@@ -7403,6 +7554,9 @@ window.Empire.Map = (() => {
     const ownedFactoryCount = Math.max(1, primaryTarget.entries.length || 1);
     const networkProductionBonusPct = Math.max(0, (ownedFactoryCount - 1) * 10);
     const now = Date.now();
+    if (isPoliceRaidAllActionsBlocked(now)) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané." };
+    }
     const key = resolveBuildingInstanceKey(context, district);
     const snapshot = getFactoryStateByKey(key, now);
     syncFactoryProduction(snapshot, now, {
@@ -7412,6 +7566,10 @@ window.Empire.Map = (() => {
     });
 
     if (actionId === "1" || actionId === "2" || actionId === "3") {
+      if (isPoliceRaidSpecialActionBlockedForBuilding("factory", now)) {
+        persistFactoryState(key, snapshot);
+        return { ok: false, message: "Speciální akce Továrny jsou během razie dočasně zakázané." };
+      }
       persistFactoryState(key, snapshot);
       return { ok: false, message: "Combat boosty z Combat Module budou napojené v dalším kroku." };
     }
@@ -7562,9 +7720,11 @@ window.Empire.Map = (() => {
     const levelMultiplier = getArmoryLevelMultiplier(snapshot.level);
     const baseProductionMultiplier = levelMultiplier * (1 + networkProductionBonusPct / 100);
     const boostSnapshot = getArmoryBoostSnapshot(snapshot, now);
+    const armoryPenaltyPct = getGlobalPoliceRaidProductionPenaltyPct("armory", now);
+    const armoryPenaltyMultiplier = Math.max(0, 1 - armoryPenaltyPct / 100);
     const rates = calculateArmoryProductionRates(baseProductionMultiplier, {
-      attackMultiplier: boostSnapshot.attackProductionMultiplier,
-      defenseMultiplier: boostSnapshot.defenseProductionMultiplier
+      attackMultiplier: boostSnapshot.attackProductionMultiplier * armoryPenaltyMultiplier,
+      defenseMultiplier: boostSnapshot.defenseProductionMultiplier * armoryPenaltyMultiplier
     });
     const nextLevel = snapshot.level < ARMORY_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? getArmoryUpgradeCost(nextLevel) : 0;
@@ -7579,7 +7739,8 @@ window.Empire.Map = (() => {
       const categoryProductionMultiplier = baseProductionMultiplier
         * (category === "defense"
           ? boostSnapshot.defenseProductionMultiplier
-          : boostSnapshot.attackProductionMultiplier);
+          : boostSnapshot.attackProductionMultiplier)
+        * armoryPenaltyMultiplier;
         return {
           id: Number(slot.id),
           weaponKey: slot.weaponKey,
@@ -7602,7 +7763,7 @@ window.Empire.Map = (() => {
         metalPartsCost: Math.max(0, Math.floor(Number(config?.metalPartsCost || 0))),
         techCoreCost: Math.max(0, Math.floor(Number(config?.techCoreCost || 0))),
         durationMs: Math.max(1, Math.floor(Number(config?.durationMs || 60000))),
-          effectiveDurationMs: Math.max(1, Math.round(Number(config?.durationMs || 60000) / categoryProductionMultiplier)),
+          effectiveDurationMs: Math.max(1, Math.round(Number(config?.durationMs || 60000) / Math.max(0.01, categoryProductionMultiplier))),
           specialEffect: String(config?.specialEffect || ""),
           drawback: String(config?.drawback || ""),
           role: String(config?.role || ""),
@@ -7678,9 +7839,9 @@ window.Empire.Map = (() => {
         heatAddedSinceLastTick: Math.max(0, Math.floor(Number(syncResult.heatAdded || 0))),
         ownedArmoryCount,
         networkProductionBonusPct,
-        productionMultiplier: baseProductionMultiplier,
-        attackProductionMultiplier: baseProductionMultiplier * boostSnapshot.attackProductionMultiplier,
-        defenseProductionMultiplier: baseProductionMultiplier * boostSnapshot.defenseProductionMultiplier,
+        productionMultiplier: baseProductionMultiplier * armoryPenaltyMultiplier,
+        attackProductionMultiplier: baseProductionMultiplier * boostSnapshot.attackProductionMultiplier * armoryPenaltyMultiplier,
+        defenseProductionMultiplier: baseProductionMultiplier * boostSnapshot.defenseProductionMultiplier * armoryPenaltyMultiplier,
         cooldowns: {
           attackBoost: Math.max(0, Number(snapshot.cooldowns.attackBoost || 0) - now),
           defenseBoost: Math.max(0, Number(snapshot.cooldowns.defenseBoost || 0) - now)
@@ -7709,6 +7870,9 @@ window.Empire.Map = (() => {
     const ownedArmoryCount = Math.max(1, primaryTarget.entries.length || 1);
     const networkProductionBonusPct = Math.max(0, ownedArmoryCount * 10);
     const now = Date.now();
+    if (isPoliceRaidAllActionsBlocked(now)) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané." };
+    }
     const key = resolveBuildingInstanceKey(context, district);
     const snapshot = getArmoryStateByKey(key, now);
     applyArmoryPassiveBoostHeat(snapshot, now);
@@ -7728,6 +7892,10 @@ window.Empire.Map = (() => {
     }
 
     if (actionId === "1" || actionId === "2" || actionId === "3") {
+      if (isPoliceRaidSpecialActionBlockedForBuilding("armory", now)) {
+        persistArmoryState(key, snapshot);
+        return { ok: false, message: "Speciální akce Zbrojovky jsou během razie dočasně zakázané." };
+      }
       if (actionId === "1") {
         const cooldownLeft = Math.max(0, Number(snapshot.cooldowns.attackBoost || 0) - now);
         if (cooldownLeft > 0) {
@@ -7943,10 +8111,17 @@ window.Empire.Map = (() => {
   function handlePharmacyBuildingAction(actionId, activeContext) {
     const { district, context } = activeContext;
     const now = Date.now();
+    if (isPoliceRaidAllActionsBlocked(now)) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané." };
+    }
     const key = resolveBuildingInstanceKey(context, district);
     const snapshot = getPharmacyStateByKey(key, now);
     syncPharmacyProduction(snapshot, now);
     if (actionId === "1" || actionId === "2" || actionId === "3") {
+      if (isPoliceRaidSpecialActionBlockedForBuilding("pharmacy", now)) {
+        persistPharmacyState(key, snapshot);
+        return { ok: false, message: "Speciální akce Lékárny jsou během razie dočasně zakázané." };
+      }
       persistPharmacyState(key, snapshot);
       return { ok: false, message: "Boosty aktivuješ přes tlačítko Boost nad mapou." };
     }
@@ -8175,10 +8350,13 @@ window.Empire.Map = (() => {
     if (!inputContext) {
       return { ok: false, message: "Drug Lab: není aktivní detail budovy." };
     }
+    const now = Date.now();
+    if (isPoliceRaidAllActionsBlocked(now)) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané." };
+    }
     const primaryTarget = resolvePrimaryOwnedDrugLabTarget(inputContext, inputDistrict);
     const context = primaryTarget.context || inputContext;
     const district = primaryTarget.district || inputDistrict;
-    const now = Date.now();
     const sync = runDrugLabTick(context, district, now);
     const { core, player, building, inventory } = sync;
     let result = null;
@@ -8310,6 +8488,10 @@ window.Empire.Map = (() => {
   }
 
   function handleDrugLabBuildingAction(actionId, activeContext) {
+    const now = Date.now();
+    if (isPoliceRaidAllActionsBlocked(now)) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané." };
+    }
     if (actionId === "1") return runDrugLabAction("overclock", activeContext);
     if (actionId === "2") return runDrugLabAction("cleanBatch", activeContext);
     if (actionId === "3") return runDrugLabAction("hiddenOperation", activeContext);
@@ -8860,6 +9042,9 @@ window.Empire.Map = (() => {
   }
 
   function handleDrugLabInlineControl(target, activeContext) {
+    if (isPoliceRaidAllActionsBlocked(Date.now())) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané.", silentUiEvent: true };
+    }
     const amountBtn = target.closest("[data-drug-lab-slot-adjust][data-drug-lab-slot-id]");
     if (amountBtn instanceof HTMLElement) {
       const slotId = Number(amountBtn.dataset.drugLabSlotId || 0);
@@ -8894,6 +9079,9 @@ window.Empire.Map = (() => {
     const context = activeContext?.context || null;
     const district = activeContext?.district || null;
     if (!context) return null;
+    if (isPoliceRaidAllActionsBlocked(now)) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané.", silentUiEvent: true };
+    }
     const instanceKey = resolveBuildingInstanceKey(context, district);
     const snapshot = getPharmacyStateByKey(instanceKey, now);
     syncPharmacyProduction(snapshot, now);
@@ -8955,6 +9143,9 @@ window.Empire.Map = (() => {
     const inputContext = activeContext?.context || null;
     const inputDistrict = activeContext?.district || null;
     if (!inputContext) return null;
+    if (isPoliceRaidAllActionsBlocked(now)) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané.", silentUiEvent: true };
+    }
     const primaryTarget = resolvePrimaryOwnedFactoryTarget(inputContext, inputDistrict);
     const context = primaryTarget.context || inputContext;
     const district = primaryTarget.district || inputDistrict;
@@ -9013,6 +9204,9 @@ window.Empire.Map = (() => {
     const inputContext = activeContext?.context || null;
     const inputDistrict = activeContext?.district || null;
     if (!inputContext) return null;
+    if (isPoliceRaidAllActionsBlocked(now)) {
+      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané.", silentUiEvent: true };
+    }
     const primaryTarget = resolvePrimaryOwnedArmoryTarget(inputContext, inputDistrict);
     const context = primaryTarget.context || inputContext;
     const district = primaryTarget.district || inputDistrict;
@@ -10147,14 +10341,25 @@ window.Empire.Map = (() => {
     const now = Date.now();
     const durationMs = resolvePoliceActionDurationMs(options?.durationMs);
     const markerSeed = hashOwner(`${districtKey}:${String(options?.source || "police-action")}:police-action`);
+    const operationType = String(options?.operationType || "").trim();
 
     state.policeDistrictActions.set(districtKey, {
       districtId: districtKey,
       source: String(options?.source || "police-action").trim() || "police-action",
+      operationType,
       startedAt: now,
       expiresAt: now + durationMs,
       seed: markerSeed
     });
+    document.dispatchEvent(new CustomEvent("empire:police-action-started", {
+      detail: {
+        districtId: districtKey,
+        durationMs,
+        source: String(options?.source || "police-action").trim() || "police-action",
+        operationType,
+        startedAt: now
+      }
+    }));
     syncAttackAnimationTicker();
     render();
 
@@ -12051,7 +12256,8 @@ window.Empire.Map = (() => {
     if (policeTargetId != null) {
       markDistrictPoliceAction(policeTargetId, {
         durationMs: update.policeEvent?.durationMs,
-        source: update.policeEvent?.source || "map-update"
+        source: update.policeEvent?.source || "map-update",
+        operationType: update.policeEvent?.operationType || update.policeEvent?.raidSpecialtyKey || ""
       });
     }
     const spyTargetId = update.spyEvent?.targetDistrictId
@@ -12392,6 +12598,11 @@ window.Empire.Map = (() => {
         const context = activeContext?.context || null;
         const buildingName = document.getElementById("building-detail-name")?.textContent || context?.baseName || "Budova";
         const baseName = String(context?.baseName || "").trim();
+        if (isPoliceRaidAllActionsBlocked(Date.now())) {
+          window.Empire.UI?.pushEvent?.("Během policejní razie jsou všechny akce v budovách dočasně zakázané.");
+          refreshActiveBuildingDetailModal();
+          return;
+        }
 
         if (baseName === APARTMENT_BLOCK_NAME) {
           const result = handleApartmentBuildingAction(actionId, activeContext);
@@ -12525,6 +12736,11 @@ window.Empire.Map = (() => {
     root.addEventListener("change", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (isPoliceRaidAllActionsBlocked(Date.now())) {
+        window.Empire.UI?.pushEvent?.("Během policejní razie jsou všechny akce v budovách dočasně zakázané.");
+        refreshActiveBuildingDetailModal();
+        return;
+      }
       const activeContext = resolveActiveBuildingContext();
       const context = activeContext?.context || null;
       const baseName = String(context?.baseName || "").trim();
@@ -12550,6 +12766,11 @@ window.Empire.Map = (() => {
     root.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (isPoliceRaidAllActionsBlocked(Date.now())) {
+        window.Empire.UI?.pushEvent?.("Během policejní razie jsou všechny akce v budovách dočasně zakázané.");
+        refreshActiveBuildingDetailModal();
+        return;
+      }
       const titleActionBtn = target.closest("[data-building-title-action]");
       if (titleActionBtn instanceof HTMLElement) {
         const actionId = String(titleActionBtn.dataset.buildingTitleAction || "").trim();
@@ -14332,6 +14553,7 @@ window.Empire.Map = (() => {
     clearRaidActions: clearAllRaidActions,
     getPharmacyBoostSnapshot,
     usePharmacyBoost,
+    getPoliceActionSnapshot,
     getFactoryBoostSnapshot,
     useFactoryBoost
   };

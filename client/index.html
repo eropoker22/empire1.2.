@@ -248,7 +248,7 @@
             </div>
             <div class="profile-row">
               <span>Čas</span>
-              <strong id="round-game-time">06:00</strong>
+              <strong id="round-game-time">09:15</strong>
             </div>
             <div class="profile-row">
               <span>Fáze</span>
@@ -699,6 +699,23 @@
       </div>
     </div>
 
+    <div id="police-action-result-modal" class="modal hidden">
+      <div id="police-action-result-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content police-action-result-modal__content" id="police-action-result-modal-content">
+        <div class="modal__header">
+          <h3 id="police-action-result-modal-title">Policejní akce</h3>
+          <button class="modal__close" id="police-action-result-modal-close" type="button" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body police-action-result-modal__body">
+          <div class="police-action-result-modal__badge" id="police-action-result-modal-badge">Stupeň 1</div>
+          <div class="police-action-result-modal__details" id="police-action-result-modal-details"></div>
+          <div class="modal__actions">
+            <button class="btn btn--danger" id="police-action-result-modal-ok" type="button">Rozumím</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="storage-modal" class="modal hidden">
       <div id="storage-modal-backdrop" class="modal__backdrop"></div>
       <div class="modal__content">
@@ -981,7 +998,14 @@
           </div>
           <div class="modal__row">
             <span>Hledanost</span>
-            <strong id="profile-modal-wanted">0</strong>
+            <strong class="profile-modal-wanted-value">
+              <span id="profile-modal-wanted">0</span>
+              <span class="profile-modal-wanted-lock hidden" id="profile-modal-wanted-lock" aria-hidden="true" title="Aktivní ochrana po razii">🔒</span>
+            </strong>
+          </div>
+          <div class="modal__row">
+            <span>Ochrana po razii</span>
+            <strong id="profile-modal-raid-protection">-</strong>
           </div>
           <div class="modal__row">
             <span>Aliance</span>
@@ -1109,6 +1133,7 @@
               <div class="gang-heat-modal__value" id="gang-heat-modal-value">0</div>
               <div class="gang-heat-modal__tier" id="gang-heat-modal-tier">Stupeň 1</div>
               <div class="gang-heat-modal__desc" id="gang-heat-modal-desc">Základní dohled.</div>
+              <div class="gang-heat-modal__protection" id="gang-heat-modal-protection">Ochrana po razii: -</div>
             </div>
             <div class="gang-heat-modal__actions">
               <button class="btn btn--ghost" id="gang-heat-dirty-btn" type="button">Snížit špinavými penězi</button>
@@ -1262,9 +1287,6 @@
           <button class="modal__close" id="buildings-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body">
-          <div class="weapons-modal__hint">
-            Postup: Distrikt -> typ budovy -> konkrétní jméno budovy.
-          </div>
           <div class="buildings-modal__layout">
             <div class="buildings-modal__types" id="buildings-type-list"></div>
             <div class="buildings-modal__detail" id="buildings-modal-detail"></div>
