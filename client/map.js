@@ -1170,12 +1170,19 @@ window.Empire.Map = (() => {
       const parsed = JSON.parse(localStorage.getItem(FACTORY_PLAYER_STORAGE_KEY) || "null");
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         const normalized = createFactoryPlayerSupplyMap(parsed);
-        if (!Object.prototype.hasOwnProperty.call(parsed, "combatModule")) {
+        if (!window.Empire?.token) {
+          normalized.metalParts = Math.max(20, Math.floor(Number(normalized.metalParts || 0)));
+          normalized.techCore = Math.max(20, Math.floor(Number(normalized.techCore || 0)));
+          normalized.combatModule = Math.max(20, Math.floor(Number(normalized.combatModule || 0)));
+        } else if (!Object.prototype.hasOwnProperty.call(parsed, "combatModule")) {
           normalized.combatModule = 2;
         }
         return normalized;
       }
     } catch {}
+    if (!window.Empire?.token) {
+      return { metalParts: 20, techCore: 20, combatModule: 20 };
+    }
     return { combatModule: 2 };
   }
 
@@ -12805,7 +12812,12 @@ window.Empire.Map = (() => {
     if (!panelStats || panelStats.classList.contains("hidden")) return;
     const stickyCard = panelStats.querySelector(".armory-card--materials-sticky");
     if (!(stickyCard instanceof HTMLElement)) return;
-    stickyCard.classList.toggle("is-scroll-compact", panelStats.scrollTop > 8);
+    const isCompact = stickyCard.classList.contains("is-scroll-compact");
+    const enterCompactAt = 12;
+    const exitCompactAt = 4;
+    const scrollTop = Math.max(0, Number(panelStats.scrollTop) || 0);
+    const shouldCompact = isCompact ? scrollTop > exitCompactAt : scrollTop > enterCompactAt;
+    stickyCard.classList.toggle("is-scroll-compact", shouldCompact);
   }
 
   function updateBuildingMechanicsPanel(details) {

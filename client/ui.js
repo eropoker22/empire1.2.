@@ -1350,9 +1350,69 @@ window.Empire.UI = (() => {
     initMobileMarketBuildingShortcutsPlacement();
     initMobilePrimaryActionCardsPlacement();
     initMobileModalTopbarResourceVisibility();
+    initGlobalModalScrollLock();
     initMapModeControls();
+    if (!window.Empire.token) {
+      enforceLocalGuestStorageDefaults();
+      syncGuestEconomyFromMarket();
+    }
     syncMapVisionContext();
     refreshGangColorDisplays();
+  }
+
+  function initGlobalModalScrollLock() {
+    const modalNodes = Array.from(document.querySelectorAll(".modal"));
+    if (!modalNodes.length) return;
+    const body = document.body;
+    if (!body) return;
+    const html = document.documentElement;
+    let lockedScrollY = 0;
+
+    const applyLock = (locked) => {
+      if (locked) {
+        if (body.classList.contains("modal-scroll-locked")) return;
+        lockedScrollY = Math.max(0, Math.floor(window.scrollY || window.pageYOffset || 0));
+        const scrollbarCompensation = Math.max(0, window.innerWidth - (html?.clientWidth || window.innerWidth));
+        body.dataset.modalScrollLockY = String(lockedScrollY);
+        body.classList.add("modal-scroll-locked");
+        body.style.position = "fixed";
+        body.style.top = `-${lockedScrollY}px`;
+        body.style.left = "0";
+        body.style.right = "0";
+        body.style.width = "100%";
+        body.style.overflow = "hidden";
+        body.style.paddingRight = scrollbarCompensation > 0 ? `${scrollbarCompensation}px` : "";
+        return;
+      }
+
+      if (!body.classList.contains("modal-scroll-locked")) return;
+      const restoreY = Number(body.dataset.modalScrollLockY || lockedScrollY || 0);
+      body.classList.remove("modal-scroll-locked");
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      body.style.overflow = "";
+      body.style.paddingRight = "";
+      delete body.dataset.modalScrollLockY;
+      window.scrollTo(0, Number.isFinite(restoreY) ? Math.max(0, Math.floor(restoreY)) : 0);
+    };
+
+    const applyState = () => {
+      const hasOpenModal = modalNodes.some((modal) => !modal.classList.contains("hidden"));
+      applyLock(hasOpenModal);
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      if (!mutations?.length) return;
+      applyState();
+    });
+    modalNodes.forEach((modal) => {
+      observer.observe(modal, { attributes: true, attributeFilter: ["class"] });
+    });
+    window.addEventListener("resize", applyState);
+    applyState();
   }
 
   function stopRoundPhaseTicker() {
@@ -1765,6 +1825,7 @@ window.Empire.UI = (() => {
       "events-modal",
       "buildings-modal",
       "market-modal",
+      "boost-modal",
       "alliance-modal",
       "storage-modal",
       "leaderboard-modal",
@@ -2283,9 +2344,48 @@ window.Empire.UI = (() => {
     const root = document.getElementById("boost-modal");
     const backdrop = document.getElementById("boost-modal-backdrop");
     const closeBtn = document.getElementById("boost-modal-close");
+    const modalBody = root?.querySelector(".boost-modal__body") || null;
+    const tabButtons = Array.from(root?.querySelectorAll("[data-boost-tab]") || []);
+    const actionsPanel = document.getElementById("boost-modal-panel-actions");
+    const infoPanel = document.getElementById("boost-modal-panel-info");
     const content = document.getElementById("boost-modal-content");
     const status = document.getElementById("boost-modal-status");
     if (!openBtn || !root || !content) return;
+    let activeTab = "actions";
+    let swipeState = null;
+
+    const isMobileSwipeViewport = () => window.matchMedia("(max-width: 720px)").matches;
+
+    const setTab = (tab) => {
+      activeTab = tab === "info" ? "info" : "actions";
+      root.classList.toggle("is-info-tab", activeTab === "info");
+      if (actionsPanel) actionsPanel.classList.toggle("hidden", activeTab !== "actions");
+      if (infoPanel) infoPanel.classList.toggle("hidden", activeTab !== "info");
+      tabButtons.forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.boostTab === activeTab);
+      });
+    };
+
+    const resetSwipeState = () => {
+      swipeState = null;
+    };
+
+    const finalizeSwipe = () => {
+      if (!swipeState) return;
+      const {
+        startX, startY, lastX, lastY, startedAt
+      } = swipeState;
+      resetSwipeState();
+      if (!isMobileSwipeViewport()) return;
+      const deltaX = lastX - startX;
+      const deltaY = lastY - startY;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+      const duration = Date.now() - startedAt;
+      if (duration > 700 || absX < 34 || absX < absY * 1.15 || absY > 90) return;
+      if (deltaX < 0 && activeTab === "actions") setTab("info");
+      if (deltaX > 0 && activeTab === "info") setTab("actions");
+    };
 
     const pharmacyBoostDefinitions = [
       {
@@ -2457,15 +2557,63 @@ window.Empire.UI = (() => {
       }
     };
 
-    const close = () => root.classList.add("hidden");
+    const close = () => {
+      root.classList.add("hidden");
+      setTab("actions");
+      resetSwipeState();
+    };
     const open = () => {
       render();
+      setTab("actions");
       root.classList.remove("hidden");
     };
 
     openBtn.addEventListener("click", open);
     if (backdrop) backdrop.addEventListener("click", close);
     if (closeBtn) closeBtn.addEventListener("click", close);
+    tabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setTab(button.dataset.boostTab || "actions");
+      });
+    });
+    if (modalBody) {
+      modalBody.addEventListener("touchstart", (event) => {
+        if (root.classList.contains("hidden")) return;
+        if (!isMobileSwipeViewport()) return;
+        if (!event.touches || event.touches.length !== 1) {
+          resetSwipeState();
+          return;
+        }
+        const touch = event.touches[0];
+        swipeState = {
+          startX: touch.clientX,
+          startY: touch.clientY,
+          lastX: touch.clientX,
+          lastY: touch.clientY,
+          startedAt: Date.now()
+        };
+      }, { passive: true });
+      modalBody.addEventListener("touchmove", (event) => {
+        if (!swipeState) return;
+        if (!event.touches || event.touches.length !== 1) {
+          resetSwipeState();
+          return;
+        }
+        const touch = event.touches[0];
+        swipeState.lastX = touch.clientX;
+        swipeState.lastY = touch.clientY;
+      }, { passive: true });
+      modalBody.addEventListener("touchend", (event) => {
+        if (!swipeState) return;
+        if (event.changedTouches && event.changedTouches.length) {
+          const touch = event.changedTouches[0];
+          swipeState.lastX = touch.clientX;
+          swipeState.lastY = touch.clientY;
+        }
+        finalizeSwipe();
+      }, { passive: true });
+      modalBody.addEventListener("touchcancel", resetSwipeState, { passive: true });
+    }
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") close();
     });
@@ -2742,44 +2890,20 @@ window.Empire.UI = (() => {
       if (!mobileMedia.matches) {
         body.classList.remove("mobile-storage-modal-open");
         html.classList.remove("mobile-storage-modal-open");
-        body.style.position = "";
-        body.style.top = "";
-        body.style.left = "";
-        body.style.right = "";
-        body.style.width = "";
-        body.style.overflow = "";
         delete body.dataset.storageScrollLockY;
         return;
       }
 
       if (locked) {
         if (body.classList.contains("mobile-storage-modal-open")) return;
-        const scrollY = Math.max(0, Math.floor(window.scrollY || window.pageYOffset || 0));
-        body.dataset.storageScrollLockY = String(scrollY);
         body.classList.add("mobile-storage-modal-open");
         html.classList.add("mobile-storage-modal-open");
-        body.style.position = "fixed";
-        body.style.top = `-${scrollY}px`;
-        body.style.left = "0";
-        body.style.right = "0";
-        body.style.width = "100%";
-        body.style.overflow = "hidden";
         return;
       }
 
-      const restoreY = Number(body.dataset.storageScrollLockY || "0");
       body.classList.remove("mobile-storage-modal-open");
       html.classList.remove("mobile-storage-modal-open");
-      body.style.position = "";
-      body.style.top = "";
-      body.style.left = "";
-      body.style.right = "";
-      body.style.width = "";
-      body.style.overflow = "";
       delete body.dataset.storageScrollLockY;
-      if (Number.isFinite(restoreY)) {
-        window.scrollTo(0, Math.max(0, Math.floor(restoreY)));
-      }
     };
 
     const close = () => {
@@ -2861,10 +2985,14 @@ window.Empire.UI = (() => {
         ? "chemicals"
         : (item.key === "biomass" ? "biomass" : (item.key === "stimPack" ? "stim" : ""))
     }));
-    const factoryEntries = factorySupplyTypes.map((item) => ({
-      name: item.name,
-      value: Math.max(0, Math.floor(Number(factorySupplies[item.key] || 0)))
-    }));
+    const factoryEntries = factorySupplyTypes.map((item) => {
+      const rawValue = Math.max(0, Math.floor(Number(factorySupplies[item.key] || 0)));
+      const value = window.Empire.token ? rawValue : Math.max(20, rawValue);
+      return {
+        name: item.name,
+        value
+      };
+    });
     const totalDrugs = Number(economy.drugs ?? player.drugs ?? 0);
     const drugInventory = economy.drugInventory || player.drugInventory || null;
     const activeDrugs = economy.activeDrugs || player.activeDrugs || null;
@@ -5767,6 +5895,9 @@ window.Empire.UI = (() => {
   function initPlayerScenarioButtons() {
     const scenarioButtons = Array.from(document.querySelectorAll("[data-player-scenario]"));
     if (!scenarioButtons.length) return;
+    try {
+      localStorage.removeItem(PLAYER_SCENARIO_STORAGE_KEY);
+    } catch {}
 
     const setActiveScenarioButton = (scenarioKey) => {
       scenarioButtons.forEach((candidate) => {
@@ -5778,21 +5909,10 @@ window.Empire.UI = (() => {
       button.addEventListener("click", () => {
         const scenarioKey = button.dataset.playerScenario;
         applyPlayerScenario(scenarioKey);
-        localStorage.setItem(PLAYER_SCENARIO_STORAGE_KEY, String(scenarioKey || ""));
         setActiveScenarioButton(String(scenarioKey || ""));
         refreshGuestBannerVisibility();
       });
     });
-
-    const savedScenarioKey = String(localStorage.getItem(PLAYER_SCENARIO_STORAGE_KEY) || "").trim();
-    const savedScenarioButton = savedScenarioKey
-      ? scenarioButtons.find((button) => button.dataset.playerScenario === savedScenarioKey)
-      : null;
-    if (savedScenarioButton && !window.Empire.token) {
-      applyPlayerScenario(savedScenarioKey);
-      setActiveScenarioButton(savedScenarioKey);
-      refreshGuestBannerVisibility();
-    }
   }
 
   function cloneScenarioPolygon(polygon) {
@@ -11075,6 +11195,16 @@ window.Empire.UI = (() => {
       const parsed = JSON.parse(localStorage.getItem(LOCAL_MARKET_KEY) || "null");
       if (parsed && parsed.balances && Array.isArray(parsed.orderBook) && Array.isArray(parsed.myOrders) && Array.isArray(parsed.recentTrades)) {
         normalizeLocalMarketBalances(parsed.balances);
+        let normalizedChanged = false;
+        ["metalParts", "techCore", "combatModule"].forEach((key) => {
+          if (Number(parsed.balances[key] || 0) !== 20) {
+            parsed.balances[key] = 20;
+            normalizedChanged = true;
+          }
+        });
+        if (normalizedChanged) {
+          saveLocalMarketState(parsed);
+        }
         if (parsed.myOrders.length) {
           parsed.myOrders = [];
           saveLocalMarketState(parsed);
@@ -11102,9 +11232,9 @@ window.Empire.UI = (() => {
         velvetSmoke: 12,
         ghostSerum: 7,
         overdriveX: 3,
-        metalParts: 92,
-        techCore: 48,
-        combatModule: 10,
+        metalParts: 20,
+        techCore: 20,
+        combatModule: 20,
         weapons: 30,
         baseballBat: 8,
         streetPistol: 6,
@@ -11154,6 +11284,17 @@ window.Empire.UI = (() => {
     };
     saveLocalMarketState(seeded);
     return seeded;
+  }
+
+  function enforceLocalGuestStorageDefaults() {
+    if (window.Empire.token) return;
+    const state = getLocalMarketState();
+    if (!state?.balances) return;
+    normalizeLocalMarketBalances(state.balances);
+    state.balances.metalParts = 20;
+    state.balances.techCore = 20;
+    state.balances.combatModule = 20;
+    saveLocalMarketState(state);
   }
 
   function saveLocalMarketState(state) {
@@ -11681,7 +11822,7 @@ window.Empire.UI = (() => {
       balance: money.totalMoney,
       cleanMoney: money.cleanMoney,
       dirtyMoney: money.dirtyMoney,
-      influence: 0,
+      influence: 20,
       drugs: Number(state.balances.drugs || 0),
       drugInventory,
       weapons: Number(state.balances.weapons || 0),

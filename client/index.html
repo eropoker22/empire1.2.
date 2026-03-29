@@ -47,7 +47,7 @@
             </div>
             <div class="stat" id="stat-influence-wrap" role="button" tabindex="0" aria-label="Přepnout mezi vlivem a špehy">
               <span class="stat__label" id="stat-influence-label">Vliv</span>
-              <span class="stat__value" id="stat-influence">0</span>
+              <span class="stat__value" id="stat-influence">20</span>
             </div>
             <div class="stat" id="stat-storage-wrap" role="button" tabindex="0" aria-label="Otevřít sklad">
               <span class="stat__label stat__label--storage">SKLAD</span>
@@ -484,7 +484,7 @@
           </p>
           <div class="modal__actions spy-confirm-modal__actions">
             <button class="btn btn--ghost" id="raid-confirm-modal-cancel" type="button">Zrušit</button>
-            <button class="btn btn--warn" id="raid-confirm-modal-confirm" type="button">Potvrdit krádež</button>
+            <button class="btn btn--primary" id="raid-confirm-modal-confirm" type="button">Potvrdit krádež</button>
           </div>
         </div>
       </div>
@@ -1168,7 +1168,7 @@
               </div>
             </button>
           </div>
-          <div class="events-modal__detail">
+          <div class="events-modal__detail"v e>
             <div class="events-modal__header">
               <div>
                 <div class="events-modal__title" id="events-agent-name">Vyber postavu</div>
@@ -1353,9 +1353,21 @@
           <button class="modal__close" id="boost-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body boost-modal__body">
-          <div class="boost-modal__hint">Budovy: Lékárna + Továrna</div>
-          <div id="boost-modal-content" class="boost-modal__list"></div>
-          <div id="boost-modal-status" class="boost-modal__status"></div>
+          <div class="boost-modal__tabs">
+            <button class="boost-modal__tab is-active" type="button" data-boost-tab="actions">Akce</button>
+            <button class="boost-modal__tab" type="button" data-boost-tab="info">Info</button>
+          </div>
+          <div class="boost-modal__swipe-hint">Potáhni doleva/doprava pro přepnutí záložky</div>
+          <div id="boost-modal-panel-actions" class="boost-modal__panel">
+            <div class="boost-modal__hint">Budovy: Lékárna + Továrna</div>
+            <div id="boost-modal-content" class="boost-modal__list"></div>
+          </div>
+          <div id="boost-modal-panel-info" class="boost-modal__panel hidden">
+            <div class="boost-modal__hint boost-modal__hint--info">
+              Přepínej mezi Lékárna a Továrna boosty. Na mobilu jde přepnout i swipem vlevo/vpravo.
+            </div>
+            <div id="boost-modal-status" class="boost-modal__status"></div>
+          </div>
         </div>
       </div>
     </div>
