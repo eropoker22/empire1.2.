@@ -141,8 +141,9 @@ function initMobileLoginFit() {
   const body = document.body;
   const shell = document.querySelector(".auth-shell");
   const footer = document.querySelector(".auth-footer");
+  const stack = document.querySelector(".auth-mobile-fit-stack");
   const media = window.matchMedia("(max-width: 900px)");
-  if (!body || !shell || !footer) return;
+  if (!body || !shell || !footer || !stack) return;
 
   let frame = 0;
   const fitClasses = ["login-mobile-fit-compact", "login-mobile-fit-tight", "login-mobile-fit-ultra"];
@@ -158,6 +159,7 @@ function initMobileLoginFit() {
   const measure = () => {
     frame = 0;
     fitClasses.forEach((className) => body.classList.remove(className));
+    body.style.removeProperty("--login-mobile-fit-scale");
     if (!media.matches) return;
 
     const availableHeight = Math.max(
@@ -166,7 +168,7 @@ function initMobileLoginFit() {
     );
     if (!availableHeight) return;
 
-    const fitsViewport = () => getOuterHeight(shell) + getOuterHeight(footer) <= availableHeight - 4;
+    const fitsViewport = () => getOuterHeight(stack) <= availableHeight - 4;
     if (fitsViewport()) return;
 
     body.classList.add("login-mobile-fit-compact");
@@ -176,6 +178,13 @@ function initMobileLoginFit() {
     if (fitsViewport()) return;
 
     body.classList.add("login-mobile-fit-ultra");
+    if (fitsViewport()) return;
+
+    const totalHeight = getOuterHeight(stack);
+    if (totalHeight > 0) {
+      const scale = Math.max(0.72, Math.min(1, (availableHeight - 4) / totalHeight));
+      body.style.setProperty("--login-mobile-fit-scale", scale.toFixed(4));
+    }
   };
 
   const requestMeasure = () => {
