@@ -2610,6 +2610,10 @@ window.Empire.UI = (() => {
     applyState();
     window.addEventListener("scroll", requestApply, { passive: true });
     window.addEventListener("resize", requestApply);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", requestApply);
+      window.visualViewport.addEventListener("scroll", requestApply);
+    }
     if (typeof media.addEventListener === "function") {
       media.addEventListener("change", requestApply);
     } else if (typeof media.addListener === "function") {

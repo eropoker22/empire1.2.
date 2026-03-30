@@ -14564,7 +14564,7 @@ body::before {
   }
 
   #city-map {
-    height: min(58vh, 480px);
+    height: min(58dvh, 480px);
   }
 
   .card {
@@ -14621,11 +14621,11 @@ body::before {
     z-index: 90;
     padding: 14px 16px;
     transition:
-      padding 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-      background 0.28s ease,
-      border-color 0.28s ease,
-      box-shadow 0.32s ease,
-      backdrop-filter 0.32s ease;
+      padding 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+      background 0.42s ease,
+      border-color 0.42s ease,
+      box-shadow 0.48s ease,
+      backdrop-filter 0.48s ease;
   }
 
   .brand {
@@ -14634,7 +14634,7 @@ body::before {
     justify-content: center;
     flex-wrap: nowrap;
     gap: 14px;
-    transition: gap 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: gap 0.48s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .brand__tag {
@@ -14644,7 +14644,7 @@ body::before {
   .brand__name {
     font-size: 14px;
     white-space: nowrap;
-    transition: font-size 0.28s ease, opacity 0.28s ease;
+    transition: font-size 0.42s ease, opacity 0.42s ease, transform 0.42s ease;
   }
 
   .brand__logo,
@@ -14654,13 +14654,15 @@ body::before {
   #stat-clean-money,
   #stat-dirty-money {
     transition:
-      width 0.28s ease,
-      height 0.28s ease,
-      gap 0.28s ease,
-      padding 0.28s ease,
-      font-size 0.28s ease,
-      min-height 0.28s ease,
-      box-shadow 0.28s ease;
+      width 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      gap 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      padding 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      font-size 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      min-height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.42s ease,
+      border-radius 0.42s ease,
+      transform 0.42s ease;
   }
 
   .topbar__nav {
@@ -14691,7 +14693,10 @@ body::before {
     overflow: visible;
     padding-bottom: 0;
     align-items: stretch;
-    transition: gap 0.2s ease, transform 0.2s ease;
+    transition:
+      gap 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.32s ease;
   }
 
   .stat {
@@ -14704,18 +14709,23 @@ body::before {
     gap: 4px;
     text-align: center;
     transition:
-      min-height 0.2s ease,
-      padding 0.2s ease,
-      border-radius 0.2s ease,
-      opacity 0.2s ease,
-      box-shadow 0.2s ease;
+      min-height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      padding 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      border-radius 0.42s ease,
+      opacity 0.32s ease,
+      box-shadow 0.42s ease,
+      transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .stat__label {
     min-height: 22px;
     font-size: 10px;
     line-height: 1.1;
-    transition: min-height 0.2s ease, font-size 0.2s ease, opacity 0.2s ease;
+    transition:
+      min-height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      font-size 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.32s ease,
+      letter-spacing 0.42s ease;
   }
 
   .stat__label--storage {
@@ -14731,11 +14741,14 @@ body::before {
 
   .stat__value {
     font-size: 14px;
-    transition: font-size 0.2s ease, line-height 0.2s ease;
+    transition:
+      font-size 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      line-height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   body.is-mobile-topbar-condensed .topbar {
-    padding: 8px 10px 7px;
+    padding: 10px 12px 9px;
     background: rgba(10, 15, 28, 0.94);
     border-bottom-color: rgba(34, 211, 238, 0.12);
     box-shadow: 0 10px 24px rgba(2, 6, 23, 0.24);
@@ -14743,13 +14756,13 @@ body::before {
   }
 
   body.is-mobile-topbar-condensed .brand {
-    gap: 10px;
+    gap: 12px;
   }
 
   body.is-mobile-topbar-condensed .brand__logo {
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
   }
 
   body.is-mobile-topbar-condensed .brand__name {
@@ -14766,22 +14779,22 @@ body::before {
   }
 
   body.is-mobile-topbar-condensed .topbar__stats {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
   body.is-mobile-topbar-condensed .stat {
-    min-height: 38px;
-    padding: 5px 6px;
-    border-radius: 8px;
+    min-height: 48px;
+    padding: 6px 7px;
+    border-radius: 10px;
     gap: 3px;
     box-shadow: inset 0 0 6px rgba(34, 211, 238, 0.08);
   }
 
   body.is-mobile-topbar-condensed .stat__label {
     min-height: 0;
-    font-size: 8px;
-    opacity: 0.72;
+    font-size: 9px;
+    opacity: 0.76;
   }
 
   body.is-mobile-topbar-condensed .stat__label--storage {
@@ -14798,13 +14811,13 @@ body::before {
   }
 
   body.is-mobile-topbar-condensed .stat__value {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1;
   }
 
   body.is-mobile-topbar-condensed #stat-clean-money,
   body.is-mobile-topbar-condensed #stat-dirty-money {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1;
   }
 
@@ -15110,7 +15123,7 @@ body.mobile-storage-modal-open {
   }
 
   #city-map {
-    height: min(52vh, 420px);
+    height: min(52dvh, 420px);
     border-radius: 18px;
   }
 
@@ -16150,7 +16163,7 @@ body.mobile-storage-modal-open {
   }
 
   #city-map {
-    height: min(48vh, 360px);
+    height: min(48dvh, 360px);
   }
 
   .modal {
