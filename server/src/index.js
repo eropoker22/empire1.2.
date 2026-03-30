@@ -7,6 +7,7 @@ const { loadEnv } = require("./config/env");
 const { limiter } = require("./middleware/rateLimit");
 const { initWebSocket } = require("./ws/wsServer");
 const { runIncomeTick } = require("./jobs/incomeTick");
+const { runParkIncomeTick } = require("./jobs/parkIncomeTick");
 const { runRoundTick } = require("./jobs/roundTick");
 
 const authRoutes = require("./routes/auth");
@@ -48,6 +49,10 @@ initWebSocket(server);
 setInterval(() => {
   runIncomeTick().catch((err) => console.error("Income tick failed", err));
 }, 60 * 60 * 1000);
+
+setInterval(() => {
+  runParkIncomeTick().catch((err) => console.error("Park income tick failed", err));
+}, 60 * 1000);
 
 setInterval(() => {
   runRoundTick().catch((err) => console.error("Round tick failed", err));

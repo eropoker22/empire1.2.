@@ -17,11 +17,11 @@ window.Empire.Onboarding = (() => {
     "empire:occupy-started"
   ];
   const DISTRICT_TYPE_GUIDE = [
-    { key: "commercial", label: "Commercial", summary: "penize" },
-    { key: "industrial", label: "Industrial", summary: "produkce" },
-    { key: "park", label: "Park", summary: "drogy / ilegalni operace" },
-    { key: "residential", label: "Residential", summary: "lide / jednotky" },
-    { key: "downtown", label: "Downtown", summary: "vliv / moc" }
+    { key: "commercial", label: "Commercial", summary: "+3 clean +1 dirty cash / min" },
+    { key: "industrial", label: "Industrial", summary: "+3 clean +1 dirty cash / min" },
+    { key: "park", label: "Park", summary: "+2 clean +1 dirty cash / min" },
+    { key: "residential", label: "Residential", summary: "+2 clean +0.5 dirty cash / min" },
+    { key: "downtown", label: "Downtown", summary: "+5 clean +2 dirty cash / min" }
   ];
 
   const fallbackUI = {

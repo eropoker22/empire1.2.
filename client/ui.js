@@ -11,18 +11,18 @@ window.Empire.UI = (() => {
 
   const BASE_WEAPON_POWER = Object.freeze({
     attack: Object.freeze({
-      "Baseballová pálka": 10,
-      "Pouliční pistole": 20,
-      Granát: 30,
-      Samopal: 40,
-      Bazuka: 50
+      "Baseballová pálka": 5,
+      "Pouliční pistole": 10,
+      Granát: 14,
+      Samopal: 18,
+      Bazuka: 30
     }),
     defense: Object.freeze({
-      "Neprůstřelná vesta": 10,
-      "Ocelové barikády": 20,
-      "Bezpečnostní kamery": 30,
-      "Automatické kulometné stanoviště": 40,
-      Alarm: 50
+      "Neprůstřelná vesta": 6,
+      "Ocelové barikády": 12,
+      "Bezpečnostní kamery": 6,
+      "Automatické kulometné stanoviště": 20,
+      Alarm: 10
     })
   });
   const BASE_WEAPON_POPULATION_REQUIREMENTS = Object.freeze({
@@ -72,6 +72,141 @@ window.Empire.UI = (() => {
     { name: "Automatické kulometné stanoviště", power: BASE_WEAPON_POWER.defense["Automatické kulometné stanoviště"], requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.defense["Automatické kulometné stanoviště"] },
     { name: "Alarm", power: BASE_WEAPON_POWER.defense.Alarm, requiredMembers: BASE_WEAPON_POPULATION_REQUIREMENTS.defense.Alarm }
   ];
+
+  function resolveAttackWeaponSpecialText(name) {
+    switch (String(name || "").trim()) {
+      case "Granát":
+        return "Ignoruje 0.3 % obrany za ks";
+      case "Samopal":
+        return "+0.2 power za ks při použití všech 5 attack zbraní";
+      case "Bazuka":
+        return "+0.5 % šance na totální destrukci districtu za ks";
+      default:
+        return "";
+    }
+  }
+
+  function resolveDefenseWeaponSpecialText(name) {
+    switch (String(name || "").trim()) {
+      case "Neprůstřelná vesta":
+        return "-0.5 % ztráty obránců za ks";
+      case "Bezpečnostní kamery":
+        return "5+ ks = velká šance odhalit špeha";
+      case "Automatické kulometné stanoviště":
+        return "-0.3 % síla útoku útočníka za ks";
+      case "Alarm":
+        return "5+ ks = velká šance selhání vykradení";
+      default:
+        return "";
+    }
+  }
+
+  function getDistrictDefenseWeaponCounts(districtId) {
+    const districtKey = String(Number(districtId));
+    if (!districtKey || districtKey === "NaN") return {};
+    const store = readLocalDistrictDefenseAssignments();
+    const districtStore = store[districtKey] && typeof store[districtKey] === "object"
+      ? store[districtKey]
+      : {};
+    return Object.values(districtStore).reduce((acc, entry) => {
+      const weaponCounts = entry?.weaponCounts && typeof entry.weaponCounts === "object"
+        ? entry.weaponCounts
+        : {};
+      Object.entries(weaponCounts).forEach(([weaponName, amount]) => {
+        const safeAmount = Math.max(0, Math.floor(Number(amount || 0)));
+        if (safeAmount > 0) acc[weaponName] = Math.max(0, Math.floor(Number(acc[weaponName] || 0) + safeAmount));
+      });
+      return acc;
+    }, {});
+  }
+
+  function resolveDistrictDefenseSpecialModifiers(districtId) {
+    const weaponCounts = getDistrictDefenseWeaponCounts(districtId);
+    const vestCount = Math.max(0, Math.floor(Number(weaponCounts["Neprůstřelná vesta"] || 0)));
+    const barricadeCount = Math.max(0, Math.floor(Number(weaponCounts["Ocelové barikády"] || 0)));
+    const cameraCount = Math.max(0, Math.floor(Number(weaponCounts["Bezpečnostní kamery"] || 0)));
+    const mgNestCount = Math.max(0, Math.floor(Number(weaponCounts["Automatické kulometné stanoviště"] || 0)));
+    const alarmCount = Math.max(0, Math.floor(Number(weaponCounts.Alarm || 0)));
+    return {
+      weaponCounts,
+      vestCount,
+      barricadeCount,
+      cameraCount,
+      mgNestCount,
+      alarmCount,
+      defenderMemberLossReductionPct: vestCount * 0.5,
+      attackDurationIncreasePct: barricadeCount * 0.02,
+      attackerAttackPenaltyPct: mgNestCount * 0.3,
+      spyDetectionBoostActive: cameraCount >= 5,
+      raidAlarmBoostActive: alarmCount >= 5
+    };
+  }
+
+  function resolveAttackDurationMsForDistrict(district) {
+    const defenseSpecial = resolveDistrictDefenseSpecialModifiers(district?.id);
+    const durationMultiplier = 1 + Math.max(0, Number(defenseSpecial.attackDurationIncreasePct || 0)) / 100;
+    return Math.max(1000, Math.round(ATTACK_ACTION_DURATION_MS * durationMultiplier));
+  }
+
+  function resolveActivatedAttackSpecialEffects(selection, district) {
+    const attackSpecial = getAttackSpecialModifiers(selection);
+    const defenseSpecial = resolveDistrictDefenseSpecialModifiers(district?.id);
+    const effects = [];
+    if (Number(attackSpecial.grenadeDefenseIgnorePct || 0) > 0) {
+      effects.push(`Granát ignoroval ${formatDecimalValue(attackSpecial.grenadeDefenseIgnorePct, 2)} % obrany`);
+    }
+    if (Number(attackSpecial.smgBonusPower || 0) > 0 && attackSpecial.fullSetUsed) {
+      effects.push(`Samopal přidal +${formatDecimalValue(attackSpecial.smgBonusPower, 2)} power za full set`);
+    }
+    if (Number(attackSpecial.bazookaCatastropheChancePct || 0) > 0) {
+      effects.push(`Bazuka přidala +${formatDecimalValue(attackSpecial.bazookaCatastropheChancePct, 2)} % šance na totální destrukci`);
+    }
+    if (Number(defenseSpecial.attackerAttackPenaltyPct || 0) > 0) {
+      effects.push(`Kulometná stanoviště snížila sílu útoku o ${formatDecimalValue(defenseSpecial.attackerAttackPenaltyPct, 2)} %`);
+    }
+    if (Number(defenseSpecial.attackDurationIncreasePct || 0) > 0) {
+      effects.push(`Barikády prodloužily útok o ${formatDecimalValue(defenseSpecial.attackDurationIncreasePct, 2)} %`);
+    }
+    if (Number(defenseSpecial.defenderMemberLossReductionPct || 0) > 0) {
+      effects.push(`Vesty snížily ztráty obránců o ${formatDecimalValue(defenseSpecial.defenderMemberLossReductionPct, 2)} %`);
+    }
+    return effects;
+  }
+
+  function getSelectedAttackWeaponCount(selection, weaponName) {
+    return Math.max(0, Math.floor(Number(selection?.[weaponName] || 0)));
+  }
+
+  function hasFullAttackWeaponSet(selection) {
+    return attackWeaponStats.every((item) => getSelectedAttackWeaponCount(selection, item.name) > 0);
+  }
+
+  function getAttackSpecialModifiers(selection) {
+    const safeSelection = selection && typeof selection === "object" ? selection : {};
+    const grenadeCount = getSelectedAttackWeaponCount(safeSelection, "Granát");
+    const smgCount = getSelectedAttackWeaponCount(safeSelection, "Samopal");
+    const bazookaCount = getSelectedAttackWeaponCount(safeSelection, "Bazuka");
+    const fullSetUsed = hasFullAttackWeaponSet(safeSelection);
+    return {
+      grenadeDefenseIgnorePct: grenadeCount * 0.3,
+      smgBonusPower: fullSetUsed ? smgCount * 0.2 : 0,
+      bazookaCatastropheChancePct: bazookaCount * 0.5,
+      fullSetUsed
+    };
+  }
+
+  function calculateAttackPowerFromSelection(selection) {
+    const safeSelection = selection && typeof selection === "object" ? selection : {};
+    const special = getAttackSpecialModifiers(safeSelection);
+    const rawPower = attackWeaponStats.reduce((sum, item) => {
+      const count = getSelectedAttackWeaponCount(safeSelection, item.name);
+      return sum + (count * Number(item.power || 0));
+    }, 0) + special.smgBonusPower;
+    return {
+      rawPower,
+      special
+    };
+  }
   const DEMO_WEAPON_STACK_SIZE = 10;
   const DEMO_OWNER_AVATAR_POOL = Object.freeze([
     "../img/avatars/Mafia/2854d1df-0f7c-4fe4-aa85-7a70dfe299db.jpg",
@@ -171,6 +306,15 @@ window.Empire.UI = (() => {
   const DEFAULT_ALLIANCE_ICON_KEY = "crown_skull";
   const ALLIANCE_MAX_MEMBERS = 4;
   const LOCAL_ALLIANCE_REQUEST_PLAYER_ID = "guest-player";
+  const LOCAL_SCENARIO_DISTRICT_INCOME_RULES = Object.freeze({
+    commercial: Object.freeze({ clean: 3, dirty: 1 }),
+    industrial: Object.freeze({ clean: 3, dirty: 1 }),
+    park: Object.freeze({ clean: 2, dirty: 1 }),
+    residential: Object.freeze({ clean: 2, dirty: 0.5 }),
+    downtown: Object.freeze({ clean: 5, dirty: 2 })
+  });
+  const BLACKOUT_PLAYER_FALLBACK_DISTRICT_IDS = Object.freeze([84, 95, 92, 120, 126]);
+  const BLACKOUT_SCENARIO_INCOME_STORAGE_KEY = "blackoutDistrictIncomeLastAppliedAt";
   const ALLIANCE_READY_WINDOW_MS = 6 * 60 * 60 * 1000;
   const DEFAULT_ALLIANCE_DESCRIPTION = "Aliance která všechny zabije";
   const PLAYER_SCENARIO_STORAGE_KEY = "empire_active_player_scenario";
@@ -363,6 +507,95 @@ window.Empire.UI = (() => {
     arrests: Object.freeze({ label: "Zatýkací vlna", icon: "👥" }),
     total: Object.freeze({ label: "Celková razie", icon: "⚠️" })
   });
+  const POLICE_RAID_SPECIALTY_RANDOM_WEIGHTS = Object.freeze([
+    Object.freeze({ key: "total", weight: 55 }),
+    Object.freeze({ key: "financial", weight: 11.25 }),
+    Object.freeze({ key: "drug", weight: 11.25 }),
+    Object.freeze({ key: "weapons", weight: 11.25 }),
+    Object.freeze({ key: "arrests", weight: 11.25 })
+  ]);
+  const POLICE_RAID_SPECIALTY_LOSS_MULTIPLIERS = Object.freeze({
+    total: Object.freeze({
+      clean: 1,
+      dirty: 1,
+      income: 1,
+      influence: 1,
+      arrests: 1,
+      drugs: 1,
+      attackWeapons: 1,
+      defenseWeapons: 1,
+      materials: 1,
+      labProduction: 1,
+      armoryProduction: 1,
+      factoryProduction: 1,
+      attackPower: 1,
+      defensePower: 1
+    }),
+    financial: Object.freeze({
+      clean: 1.35,
+      dirty: 1.35,
+      income: 1.2,
+      influence: 1.15,
+      arrests: 0.7,
+      drugs: 0.55,
+      attackWeapons: 0.6,
+      defenseWeapons: 0.6,
+      materials: 0.65,
+      labProduction: 0.65,
+      armoryProduction: 0.6,
+      factoryProduction: 0.7,
+      attackPower: 0.7,
+      defensePower: 0.7
+    }),
+    drug: Object.freeze({
+      clean: 0.75,
+      dirty: 1.05,
+      income: 1.1,
+      influence: 0.9,
+      arrests: 0.9,
+      drugs: 1.55,
+      attackWeapons: 0.7,
+      defenseWeapons: 0.7,
+      materials: 0.75,
+      labProduction: 1.45,
+      armoryProduction: 0.7,
+      factoryProduction: 0.75,
+      attackPower: 0.8,
+      defensePower: 0.8
+    }),
+    weapons: Object.freeze({
+      clean: 0.8,
+      dirty: 0.95,
+      income: 1.05,
+      influence: 0.95,
+      arrests: 0.85,
+      drugs: 0.7,
+      attackWeapons: 1.45,
+      defenseWeapons: 1.45,
+      materials: 1.35,
+      labProduction: 0.75,
+      armoryProduction: 1.45,
+      factoryProduction: 1.35,
+      attackPower: 1.25,
+      defensePower: 1.25
+    }),
+    arrests: Object.freeze({
+      clean: 0.7,
+      dirty: 0.8,
+      income: 1,
+      influence: 1.05,
+      arrests: 1.55,
+      drugs: 0.6,
+      attackWeapons: 0.7,
+      defenseWeapons: 0.7,
+      materials: 0.7,
+      labProduction: 0.7,
+      armoryProduction: 0.7,
+      factoryProduction: 0.7,
+      attackPower: 0.9,
+      defensePower: 0.95
+    })
+  });
   const POLICE_RAID_PRODUCTION_PENALTY_STORAGE_KEY = "empire_police_raid_prod_penalty_until_v1";
   const POLICE_RAID_INCOME_PENALTY_STORAGE_KEY = "empire_police_raid_income_penalty_map_v1";
   const POLICE_RAID_COMBAT_PENALTY_STORAGE_KEY = "empire_police_raid_combat_penalty_v1";
@@ -401,6 +634,223 @@ window.Empire.UI = (() => {
       text: "Vlítli tam naplno. Sebrali cash, lidi i výbavu. District je vyčištěnej do mrtva a nikdo už tam nic neuhájí."
     })
   });
+  const POLICE_ACTION_TIER_QUOTES = Object.freeze({
+    1: Object.freeze([
+      "Klídek, jen rutina ale ty mi tu nějak smrdíš.",
+      "Dneska nic nehledám. Zatím. Ale pamatuju si ksichty.",
+      "Hezký místo. Byla by škoda, kdybych se sem musel vrátit s partou.",
+      "Ukaž, co tu schováváš nebo si to najdu sám příště.",
+      "Neboj, dneska jen koukám. Zítra už možná beru.",
+      "Máš štěstí, že mám dneska dobrou náladu.",
+      "Zatím to nechám být ale něco mi říká, že se ještě uvidíme.",
+      "Nedělej blbosti a možná tě nechám žít v klidu.",
+      "Jen si tu dělám obrázek. A věř mi, že se rychle skládá.",
+      "Dneska odcházím. Příště už nemusím."
+    ]),
+    2: Object.freeze([
+      "Někdo začal mluvit a tvoje jméno padlo víc než jednou.",
+      "Už to není jen rutina. Něco tu nesedí a ty víš co.",
+      "Řekni mi to rovnou ušetříš si problémy. Možná.",
+      "Začínáš mě fakt zajímat. A to nechceš.",
+      "Vidím, jak se tu hýbou věci. A někdo za tím stojí.",
+      "Ještě nejdu po tobě naplno ale blíž už být nemůžu.",
+      "Stačí jedna chyba. A já tu nebudu sám.",
+      "Máš kolem sebe dost bordelu. Dřív nebo později se v tom utopíš.",
+      "Já už vím dost. Teď čekám, kolik toho najdu.",
+      "Zatím tě jen sleduju ale věř mi, že to rychle skončí."
+    ]),
+    3: Object.freeze([
+      "Už to tu máme pod kontrolou. Ty tu jen čekáš, až tě sundáme.",
+      "Lidi mizí, obchody zavírají a ty jsi uprostřed toho bordelu.",
+      "Každej kout tady znám. Nemáš se kam schovat.",
+      "Tvoje malý impérium se začíná rozpadat. Slyšíš to praskání?",
+      "Zatím jen tlačím. A ty už sotva dýcháš.",
+      "Každej tvůj krok sledujem. Jedna chyba a končíš.",
+      "Ulice už nejsou tvoje. Jen jsi poslední, kdo to ještě nepochopil.",
+      "Tvoje lidi začínají mluvit. A věř mi, že rádi.",
+      "Není to otázka jestli ale kdy tě rozkopeme na kusy.",
+      "Tohle místo už patří nám. Ty jsi tu jen dočasnej problém."
+    ]),
+    4: Object.freeze([
+      "Na zem! Teď hned, nebo tě tam dostanu já!",
+      "Konec hry. Všechno jde ven lidi, prachy, zbraně.",
+      "Dveře jsou v hajzlu a ty jdeš s nima.",
+      "Ruce kde je vidím! Jedna blbost a končíš!",
+      "Tohle jsme ti říkali. Teď už jen sklízíš, cos zasel.",
+      "Bal to. Tady už nic nepatří tobě.",
+      "Každej kout projdeme. Každou krysu vytáhnem.",
+      "Už nejsi boss. Teď jsi jen další případ.",
+      "Naložit všechno! Nic tu nezůstane!",
+      "Měl jsi šanci to držet v klidu. Teď už je pozdě."
+    ]),
+    5: Object.freeze([
+      "Na zem, kurva! Hned, nebo tě složím!",
+      "Tohle už neřešíme v klidu. Tohle se řeší silou!",
+      "Všechno bereme! Co se nevejde, rozbijem!",
+      "Hýbneš se blbě a jdeš k zemi, jasný?!",
+      "Tvoje hra skončila. Teď už jen počítáš ztráty!",
+      "Nikdo neuteče! Zavřít to tady celý!",
+      "Vytáhněte je ven! Každýho jednoho!",
+      "Tady už se neptáme. Tady se bere!",
+      "Podívej se kolem tohle je konec tvýho malýho království!",
+      "Měl jsi odejít včas. Teď už tě jen roznesem na kusy!"
+    ]),
+    6: Object.freeze([
+      "Hotovo. Tady už nic není.",
+      "Vyčištěno do posledního šroubu. Můžeš začít znova jestli na to máš.",
+      "Tohle místo skončilo. A ty s ním.",
+      "Žádný lidi, žádný prachy, žádná moc. Jen prázdno.",
+      "Tvoje impérium? Teď je to jen hromada sraček.",
+      "Zbylo ti hovno. A to je ještě víc, než sis zasloužil.",
+      "Ticho. Přesně takhle to tu má vypadat.",
+      "Konec hry. Resetni se a zkus to znova líp.",
+      "Tohle město si tě vyplivlo. A ani si toho nevšimlo.",
+      "Zapomeň na to, co tu bylo. Už to neexistuje."
+    ])
+  });
+  const POLICE_ACTION_SPECIALTY_QUOTES = Object.freeze({
+    financial: Object.freeze([
+      "Kde máš prachy? Protože já je teď beru.",
+      "Účty zamražený. Cash zabavenej. Gratuluju.",
+      "Tvoje peníze právě změnily majitele.",
+      "Hraješ si na krále? Bez peněz jsi jen další nula.",
+      "Všechno spočítaný, všechno zabavený. Nic ti nezbyde.",
+      "Každej špinavej cent jde pryč. Do posledního.",
+      "Můžeš si to vydělat znova. My ti to zase vezmem.",
+      "Vidím, že jsi vydělával dobře. Škoda, že to nebylo tvoje.",
+      "Tvoje impérium stojí na prachách. A ty právě zmizely.",
+      "Hotovost, účty, zásoby všechno jde s náma."
+    ]),
+    drug: Object.freeze([
+      "Cítím to už od dveří. A teď to všechno mizí.",
+      "Vařil jsi velký věci. Teď to skončilo.",
+      "Všechno bereme. Co nevezmem, zničíme.",
+      "Tvoje výroba? Už jen odpad.",
+      "Každej gram jde pryč. Do posledního.",
+      "Tenhle bordel tu končí. Hned.",
+      "Dneska nic neprodáš. Nemáš co.",
+      "Zkoušel jsi jet ve velkým. Teď jdeš dolů.",
+      "Tvoje laby už nejedou. Už nikdy.",
+      "Tohle město ti tenhle byznys nenechá."
+    ]),
+    weapons: Object.freeze([
+      "Kolik toho tu máš? Nevadí, všechno jde pryč.",
+      "Bez zbraní nejsi nic. A přesně tam tě vracíme.",
+      "Všechno zabavit. Nechci tu vidět ani nábojnici.",
+      "Tvoje armáda právě přišla o zuby.",
+      "Konec hraní na vojáky. Tohle není tvoje válka.",
+      "Tyhle hračky ti nepatří. Už vůbec ne.",
+      "Seberte to. Každou zbraň, každej kus.",
+      "Teď jsi neozbrojenej. A dost zranitelnej.",
+      "Zbraně pryč. Teď jsi jen cíl.",
+      "Zkus to teď bez nich. Hodně štěstí."
+    ]),
+    arrests: Object.freeze([
+      "Berem všechny. Jednoho po druhým.",
+      "Tvoje lidi? Už nejsou tvoji.",
+      "Do aut s nima. Všichni.",
+      "Kdo tu zůstane, ten má sakra štěstí.",
+      "Rozpadne se ti to pod rukama. Sleduj.",
+      "Bez lidí nejsi nic. A přesně to teď jsi.",
+      "Každýho naložit. Nechci tu nikoho vidět.",
+      "Tvůj gang se právě rozpadl.",
+      "Konec party. Jedete s náma.",
+      "Zbyde ti pár krys jestli vůbec."
+    ]),
+    total: Object.freeze([
+      "Probíhá razie. Drž hlavu dole a počítej ztráty.",
+      "Razie je v běhu. Teď už jen sleduješ, co všechno zmizí.",
+      "Policie je uvnitř. Tohle nebude levný.",
+      "Běží celková razie. Všechno je teď pod tlakem.",
+      "Razie právě začala. Nic kolem tebe není v bezpečí."
+    ])
+  });
+  const SPY_SUCCESS_EMPTY_DISTRICT_QUOTES = Object.freeze([
+    "Špehování hotovo. Tvůj špeh je zpátky - prázdno jak v hrobě.",
+    "Zpátky bez škrábnutí. Nikdo tam není, můžeš to sebrat.",
+    "Špeh se vrátil. District úplně v píči prázdnej.",
+    "Hotovo. Nula lidí, nula odporu. Free teritorium.",
+    "Tvůj špeh žije a hlásí - nikdo to nedrží.",
+    "Čistý průchod. District leží ladem, vezmi si ho.",
+    "Špehování OK. Prázdno. Tohle je zadarmo, kurva.",
+    "Zpátky v bezpečí. Nikdo tam není, jen čeká na tebe.",
+    "Potvrzeno - prázdnej district. Stačí přijít a je tvůj.",
+    "Špeh to projel a vrátil se. Nic tam není, žádný sračky."
+  ]);
+  const SPY_SUCCESS_OCCUPIED_DISTRICT_QUOTES = Object.freeze([
+    "Špeh zpátky. Máš je přečtený do poslední sračky.",
+    "Hotovo. Všechno víš - lidi, zbraně, slabiny. Jsou odkrytí.",
+    "Špeh se vrátil. Vidíš jim do všeho. Jsou v píči.",
+    "Plný info. Každej kout, každej detail. Nemají šanci.",
+    "Špehování čistý. Máš kompletní obraz - teď je roztrhej.",
+    "Špeh zpátky. Obrana má díry jak kráva. Využij to.",
+    "Všechno odkrytý. Víš přesně, kde je zlomit.",
+    "Špeh donesl všechno. Jsou nahý jak svině.",
+    "Hotovo. Máš jejich slabiny na talíři.",
+    "Špeh žije a ví všechno. Teď jsi o krok před nima ve všem."
+  ]);
+  const SPY_MEDIUM_FAIL_EMPTY_DISTRICT_QUOTES = Object.freeze([
+    "Špeh zpátky. Vypadá to prázdně ale něco tam smrdí.",
+    "Nula lidí, ale nebylo to čistý. Špeh se stáhnul včas.",
+    "District prázdnej, ale špeh měl namále. Něco tam nesedí.",
+    "Špeh to projel napůl. Prázdno ale divnej pocit z toho místa.",
+    "Nikdo tam není, ale nebylo to safe. Špeh radši zdrhnul.",
+    "Prázdnej district, ale něco se tam hnulo. Špeh se stáhnul.",
+    "Vypadá to čistě, ale špeh si není jistej. Něco tam nesedí.",
+    "Špeh zpátky. Prázdno ale až moc tichý na tohle město.",
+    "Nikdo tam není, ale špeh skoro narazil. Bacha na to.",
+    "District bez lidí, ale nebyl to clean run. Něco tam může být."
+  ]);
+  const SPY_MEDIUM_FAIL_OCCUPIED_DISTRICT_QUOTES = Object.freeze([
+    "Špeh něco vytáhl, ale zdaleka ne všechno. Můžeš je sundat nebo to totálně posrat.",
+    "Nejsou úplně odkrytý. Něco tušíš, ale zbytek je pořádná mlha.",
+    "Špeh je zpátky. Máš půlku pravdy a ta druhá půlka ti může pěkně zlomit vaz.",
+    "Máš jen částečný info. Stačí to na pořádný risk, ale na jistotu to rozhodně není.",
+    "Vidíš jim do karet jen napůl. Ten zbytek tě může pěkně kousnout do zadku."
+  ]);
+  const SPY_MAJOR_FAIL_EMPTY_DISTRICT_QUOTES = Object.freeze([
+    "Prázdno jak svině a stejně jsi o špeha přišel. To je solidní průser.",
+    "Nikdo tam není, ale špeh je v prdeli. Něco tam nehraje.",
+    "Free teritorium? Možná. Špeh už to neřekne.",
+    "Špeh se nevrátil. Prázdno, ale kurevsky divný.",
+    "District prázdnej a špeh v hajzlu. Gratuluju."
+  ]);
+  const SPY_MAJOR_FAIL_OCCUPIED_DISTRICT_QUOTES = Object.freeze([
+    "Špeh v prdeli. Chytli ho. Teď už vědí i o tobě.",
+    "Průser. Špeha mají. A už vědí, kdo jim leze po rajónu.",
+    "Zatkli ho. Nemáš žádný info - a oni mají tebe.",
+    "Špeh v hajzlu. Chytli ho a teď je máš na krku.",
+    "Chytli ho při práci. Teď už jen čekej, až si dojdou pro tebe.",
+    "Špeh padl. A tvoje jméno už mezi nima koluje.",
+    "Zajali ho. Nejenže nic nevíš, oni teď vědí o tobě až moc.",
+    "Totální průser. Špeha mají a celý district je ve střehu.",
+    "Špeh to totálně posral a teď je v jejich rukách. Gratuluju, jsi na řadě ty.",
+    "Nemáš info. Oni mají tvýho člověka. Docela blbá rovnice, co?"
+  ]);
+  const SPY_DETECTION_WARNING_QUOTES = Object.freeze([
+    "Chytili jsme jim špeha. Teď víš, kdo se ti hrabe v rajónu.",
+    "Někdo tě zkoušel projet - nevyšlo mu to. Máš ho.",
+    "Špeh chycený. Teď je na tobě, co s ním uděláš.",
+    "Zachytili jsme krysu. A ví, pro koho makala.",
+    "Někdo si na tebe dovolil. Teď máš jeho člověka v rukách.",
+    "Špeh je u tebe. Oni chtěli info - teď jsi ho dostal ty.",
+    "Zkusili tě projet potichu. Teď držíš jejich špinavou práci.",
+    "Chytil jsi ho při činu. Teď víš, kdo po tobě jde.",
+    "Nepřítel udělal chybu. A ty ji právě držíš v rukách.",
+    "Špeh odhalen a zajat. Teď máš výhodu ty."
+  ]);
+  const SPY_ALLIANCE_DETECTION_WARNING_QUOTES = Object.freeze([
+    "[ALLY] chytil nepřátelskýho špeha. Někdo si na nás dovolil.",
+    "U [ALLY] odhalen špeh. Aliance je ve střehu.",
+    "Zachycena krysa u [ALLY]. Víme, kdo po nás jde.",
+    "[ALLY] má jejich špeha. Někdo nás zkoušel projet potichu.",
+    "Špeh odhalen u [ALLY]. Držte se, někdo nás sleduje.",
+    "[ALLY] zachytil infiltrace. Máme stopu na nepřítele.",
+    "Nepřítel udělal chybu u [ALLY]. Teď máme výhodu.",
+    "U [ALLY] chycen špeh. Aliance má oči otevřený.",
+    "[ALLY] drží jejich člověka. Někdo se hrabe v našem rajónu.",
+    "Špeh skončil u [ALLY]. Teď víme, odkud fouká vítr."
+  ]);
   const OWNER_RAID_STORAGE_KEY = "empire_owner_raid_storage_v1";
   const DISTRICT_RAID_STASH_STORAGE_KEY = "empire_district_raid_stash_v1";
   const OCCUPY_ACTION_DURATION_MS = 20 * 1000;
@@ -678,7 +1128,14 @@ window.Empire.UI = (() => {
     "DeadDrop Warehouse",
     "Lockdown Storage",
     "Backroom Stockpile",
-    "SecureHold Facility"
+    "SecureHold Facility",
+    "SteelNest Depot",
+    "GridSafe Storage",
+    "NightCrate Complex",
+    "CargoLock Hub",
+    "SilentVault Depot",
+    "IronGate Warehouse",
+    "DarkReserve Storage"
   ];
 
   const namedIndustrialFactories = [
@@ -1383,6 +1840,7 @@ window.Empire.UI = (() => {
   let marketBuildingShortcutRefreshHandler = null;
   let allianceRefreshHandler = null;
   let allianceCountdownIntervalId = null;
+  let scenarioIncomeTimer = null;
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
   const LOCAL_GANG_MEMBERS_KEY = "empire_local_gang_members";
@@ -1421,6 +1879,8 @@ window.Empire.UI = (() => {
   let scenarioUniqueOwnerColors = false;
   let scenarioProfileAvatarOverride = null;
   let activePlayerScenarioKey = "";
+  let activeScenarioOwnerName = "";
+  let lastValidBlackoutSources = null;
   let selectedMapBorderMode = MAP_BORDER_MODE_PLAYER;
   let unknownNeutralFillEnabled = false;
   let liveAllianceOwnerNames = new Set();
@@ -1472,8 +1932,10 @@ window.Empire.UI = (() => {
   const MONEY_STAT_COUNT_TICK_MS = 26;
   let lastRenderedCleanMoney = null;
   let lastRenderedDirtyMoney = null;
+  let lastRenderedStorageTotal = null;
   let lastRenderedInfluenceValue = null;
   let lastRenderedTopbarMode = "influence";
+  let storageStatPulseTimer = null;
   const districtSpyIntelCache = new Map();
   const EMPTY_OWNER_NAMES = new Set();
   const WANTED_HEAT_MAX = 1000;
@@ -1500,16 +1962,40 @@ window.Empire.UI = (() => {
     initMobileMarketBuildingShortcutsPlacement();
     initMobilePrimaryActionCardsPlacement();
     initMobileModalTopbarResourceVisibility();
+    initMobileTapFocusCleanup();
     initGlobalModalScrollLock();
     initDoubleTapZoomLock();
     initMapModeControls();
     startPoliceRaidProtectionTicker();
+    startScenarioIncomeTicker();
     if (!window.Empire.token) {
       enforceLocalGuestStorageDefaults();
       syncGuestEconomyFromMarket();
     }
     syncMapVisionContext();
     refreshGangColorDisplays();
+  }
+
+  function initMobileTapFocusCleanup() {
+    const media = window.matchMedia("(max-width: 720px)");
+    document.addEventListener("click", (event) => {
+      if (!media.matches) return;
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const interactive = target.closest(
+        "button, .btn, .nav-btn, .events-hero, .market-building-shortcut, .scenario-preview__btn, .ticker__clear-btn"
+      );
+      if (!(interactive instanceof HTMLElement)) return;
+      window.setTimeout(() => {
+        if (interactive instanceof HTMLButtonElement) {
+          interactive.blur();
+          return;
+        }
+        if (typeof interactive.blur === "function") {
+          interactive.blur();
+        }
+      }, 0);
+    }, true);
   }
 
   function initGlobalModalScrollLock() {
@@ -1729,6 +2215,273 @@ window.Empire.UI = (() => {
     roundPhaseTimer = setInterval(() => {
       renderRoundStatusState();
     }, 1000);
+  }
+
+  function stopScenarioIncomeTicker() {
+    if (!scenarioIncomeTimer) return;
+    clearInterval(scenarioIncomeTimer);
+    scenarioIncomeTimer = null;
+  }
+
+  function isDistrictOwnedByScenarioPlayer(district, ownerName) {
+    if (isDistrictOwnedByPlayer(district)) return true;
+    const ownerKey = normalizeOwnerName(ownerName);
+    if (!ownerKey) return false;
+    return normalizeOwnerName(district?.owner) === ownerKey;
+  }
+
+  function computeDistrictMinuteIncomeFromOwnedDistricts(districts) {
+    let clean = 0;
+    let dirty = 0;
+    (Array.isArray(districts) ? districts : []).forEach((district) => {
+      if (Boolean(district?.isDestroyed)) return;
+      const typeKey = String(district?.type || "").trim().toLowerCase();
+      const config = LOCAL_SCENARIO_DISTRICT_INCOME_RULES[typeKey];
+      if (!config) return;
+      clean += Number(config.clean || 0);
+      dirty += Number(config.dirty || 0);
+    });
+    return { clean, dirty };
+  }
+
+  function computeOwnedDistrictMinuteIncome(districts, ownerName) {
+    if (!ownerName && !Array.isArray(districts)) return { clean: 0, dirty: 0 };
+
+    let clean = 0;
+    let dirty = 0;
+    (Array.isArray(districts) ? districts : []).forEach((district) => {
+      if (!isDistrictOwnedByScenarioPlayer(district, ownerName)) return;
+      if (Boolean(district?.isDestroyed)) return;
+      const typeKey = String(district?.type || "").trim().toLowerCase();
+      const config = LOCAL_SCENARIO_DISTRICT_INCOME_RULES[typeKey];
+      if (!config) return;
+      clean += config.clean;
+      dirty += config.dirty;
+    });
+    return { clean, dirty };
+  }
+
+  const BLACKOUT_BUILDING_MINUTE_INCOME_RULES = Object.freeze({
+    "Autosalon": Object.freeze({ clean: 5, dirty: 1 }),
+    "Fitness club": Object.freeze({ clean: 6, dirty: 0.5 }),
+    "Herna": Object.freeze({ clean: 6, dirty: 1.2 }),
+    "Kancelářský blok": Object.freeze({ clean: 6, dirty: 1 }),
+    "Kasino": Object.freeze({ clean: 8, dirty: 2.2 }),
+    "Lékárna": Object.freeze({ clean: 3, dirty: 0.4 }),
+    "Obchodní centrum": Object.freeze({ clean: 8, dirty: 1 }),
+    "Restaurace": Object.freeze({ clean: 5, dirty: 0.5 }),
+    "Směnárna": Object.freeze({ clean: 5.5, dirty: 1.3 }),
+    "Datové centrum": Object.freeze({ clean: 5, dirty: 0.4 }),
+    "Energetická stanice": Object.freeze({ clean: 4, dirty: 0.3 }),
+    "Sklad": Object.freeze({ clean: 2, dirty: 0.2 }),
+    "Továrna": Object.freeze({ clean: 1, dirty: 0.2 }),
+    "Zbrojovka": Object.freeze({ clean: 1.2, dirty: 0.5 }),
+    "Brainwash centrum": Object.freeze({ clean: 8, dirty: 1.5 }),
+    "Bytový blok": Object.freeze({ clean: 1.5, dirty: 0.5 }),
+    Garage: Object.freeze({ clean: 3, dirty: 0.5 }),
+    Klinika: Object.freeze({ clean: 2.5, dirty: 0.3 }),
+    "Rekrutační centrum": Object.freeze({ clean: 2, dirty: 0.3 }),
+    "Škola": Object.freeze({ clean: 4.4, dirty: 1 }),
+    "Drug lab": Object.freeze({ clean: 1.5, dirty: 2 }),
+    "Pašovací tunel": Object.freeze({ clean: 0.2, dirty: 3 }),
+    "Pouliční dealeři": Object.freeze({ clean: 0.1, dirty: 4.5 }),
+    "Strip club": Object.freeze({ clean: 8, dirty: 2 }),
+    "Večerka": Object.freeze({ clean: 3.5, dirty: 1.3 }),
+    "Burza": Object.freeze({ clean: 18, dirty: 1 }),
+    "Centrální banka": Object.freeze({ clean: 26, dirty: 1 }),
+    "Letiště": Object.freeze({ clean: 19, dirty: 1 }),
+    "Lobby klub": Object.freeze({ clean: 3, dirty: 22 }),
+    "Magistrát": Object.freeze({ clean: 25, dirty: 6 }),
+    "Parlament": Object.freeze({ clean: 22, dirty: 3 }),
+    "Přístav": Object.freeze({ clean: 26, dirty: 8.5 }),
+    "Soud": Object.freeze({ clean: 20, dirty: 10 }),
+    "VIP salonek": Object.freeze({ clean: 8, dirty: 22 }),
+    "Taxi služba": Object.freeze({ clean: 5.5, dirty: 1.5 })
+  });
+
+  function computeOwnedBuildingMinuteIncome(districts, ownerName) {
+    if (!ownerName && !Array.isArray(districts)) return { clean: 0, dirty: 0, byBuilding: {} };
+
+    let clean = 0;
+    let dirty = 0;
+    const byBuilding = {};
+    (Array.isArray(districts) ? districts : []).forEach((district) => {
+      if (!isDistrictOwnedByScenarioPlayer(district, ownerName)) return;
+      if (Boolean(district?.isDestroyed)) return;
+      (Array.isArray(district?.buildings) ? district.buildings : []).forEach((building) => {
+        const rule = BLACKOUT_BUILDING_MINUTE_INCOME_RULES[String(building || "").trim()];
+        if (!rule) return;
+        clean += Number(rule.clean || 0);
+        dirty += Number(rule.dirty || 0);
+        byBuilding[building] = byBuilding[building] || { clean: 0, dirty: 0, count: 0 };
+        byBuilding[building].clean += Number(rule.clean || 0);
+        byBuilding[building].dirty += Number(rule.dirty || 0);
+        byBuilding[building].count += 1;
+      });
+    });
+    return { clean, dirty, byBuilding };
+  }
+
+  function computeBuildingMinuteIncomeFromOwnedDistricts(districts) {
+    let clean = 0;
+    let dirty = 0;
+    const byBuilding = {};
+    (Array.isArray(districts) ? districts : []).forEach((district) => {
+      if (Boolean(district?.isDestroyed)) return;
+      (Array.isArray(district?.buildings) ? district.buildings : []).forEach((building) => {
+        const rule = BLACKOUT_BUILDING_MINUTE_INCOME_RULES[String(building || "").trim()];
+        if (!rule) return;
+        clean += Number(rule.clean || 0);
+        dirty += Number(rule.dirty || 0);
+        byBuilding[building] = byBuilding[building] || { clean: 0, dirty: 0, count: 0 };
+        byBuilding[building].clean += Number(rule.clean || 0);
+        byBuilding[building].dirty += Number(rule.dirty || 0);
+        byBuilding[building].count += 1;
+      });
+    });
+    return { clean, dirty, byBuilding };
+  }
+
+  function buildBlackoutPlayerSourcesSnapshot(districts, ownerName) {
+    const districtSource = getBlackoutIncomeDistricts(districts);
+    const districtIncome = districtSource.length
+      ? computeDistrictMinuteIncomeFromOwnedDistricts(districtSource)
+      : computeOwnedDistrictMinuteIncome(districts, ownerName);
+    const buildingIncome = districtSource.length
+      ? computeBuildingMinuteIncomeFromOwnedDistricts(districtSource)
+      : computeOwnedBuildingMinuteIncome(districts, ownerName);
+    return {
+      districtIncomePerMinute: districtIncome,
+      buildingIncomePerMinute: {
+        clean: buildingIncome.clean,
+        dirty: buildingIncome.dirty,
+        byBuilding: buildingIncome.byBuilding
+      },
+      totalPerMinute: {
+        clean: districtIncome.clean + buildingIncome.clean,
+        dirty: districtIncome.dirty + buildingIncome.dirty
+      }
+    };
+  }
+
+  function hasMeaningfulBlackoutSources(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return false;
+    const district = snapshot.districtIncomePerMinute || {};
+    const building = snapshot.buildingIncomePerMinute || {};
+    return Number(district.clean || 0) > 0
+      || Number(district.dirty || 0) > 0
+      || Number(building.clean || 0) > 0
+      || Number(building.dirty || 0) > 0;
+  }
+
+  function syncBlackoutScenarioDistrictIncome(now = Date.now()) {
+    if (window.Empire.token || activePlayerScenarioKey !== "alliance-ten-blackout") return;
+    const marketState = getLocalMarketState();
+    if (!marketState || typeof marketState !== "object") return;
+
+    const scenarioIncomeState = marketState.scenarioIncome && typeof marketState.scenarioIncome === "object"
+      ? marketState.scenarioIncome
+      : {};
+    let lastAppliedAt = Number(scenarioIncomeState[BLACKOUT_SCENARIO_INCOME_STORAGE_KEY] || now);
+    let cleanRemainder = Number(scenarioIncomeState.cleanRemainder || 0);
+    let dirtyRemainder = Number(scenarioIncomeState.dirtyRemainder || 0);
+    let buildingCleanRemainder = Number(scenarioIncomeState.buildingCleanRemainder || 0);
+    let buildingDirtyRemainder = Number(scenarioIncomeState.buildingDirtyRemainder || 0);
+    if (!Number.isFinite(lastAppliedAt) || lastAppliedAt > now) {
+      lastAppliedAt = now;
+    }
+    if (!Number.isFinite(cleanRemainder) || cleanRemainder < 0) {
+      cleanRemainder = 0;
+    }
+    if (!Number.isFinite(dirtyRemainder) || dirtyRemainder < 0) {
+      dirtyRemainder = 0;
+    }
+    if (!Number.isFinite(buildingCleanRemainder) || buildingCleanRemainder < 0) {
+      buildingCleanRemainder = 0;
+    }
+    if (!Number.isFinite(buildingDirtyRemainder) || buildingDirtyRemainder < 0) {
+      buildingDirtyRemainder = 0;
+    }
+
+    const elapsedMs = Math.max(0, now - lastAppliedAt);
+    if (elapsedMs <= 0) {
+      if (scenarioIncomeState[BLACKOUT_SCENARIO_INCOME_STORAGE_KEY] == null) {
+        marketState.scenarioIncome = {
+          ...scenarioIncomeState,
+          [BLACKOUT_SCENARIO_INCOME_STORAGE_KEY]: now
+        };
+        saveLocalMarketState(marketState);
+      }
+      syncGuestEconomyFromMarket();
+      return;
+    }
+
+    const liveBlackoutSources = buildBlackoutPlayerSourcesSnapshot(window.Empire.districts, resolveActiveScenarioOwnerName());
+    if (hasMeaningfulBlackoutSources(liveBlackoutSources)) {
+      lastValidBlackoutSources = liveBlackoutSources;
+    }
+    const activeBlackoutSources = hasMeaningfulBlackoutSources(liveBlackoutSources)
+      ? liveBlackoutSources
+      : lastValidBlackoutSources || liveBlackoutSources;
+    const incomePerMinute = activeBlackoutSources.districtIncomePerMinute || { clean: 0, dirty: 0 };
+    const buildingIncomePerMinute = activeBlackoutSources.buildingIncomePerMinute || { clean: 0, dirty: 0, byBuilding: {} };
+    const elapsedMinutes = elapsedMs / 60000;
+    if (incomePerMinute.clean > 0) {
+      const cleanRaw = incomePerMinute.clean * elapsedMinutes + cleanRemainder;
+      const cleanWhole = Math.floor(cleanRaw);
+      cleanRemainder = Math.max(0, cleanRaw - cleanWhole);
+      if (cleanWhole > 0) {
+        addLocalMoney(marketState.balances, cleanWhole, "clean");
+      }
+    }
+    if (incomePerMinute.dirty > 0) {
+      const dirtyRaw = incomePerMinute.dirty * elapsedMinutes + dirtyRemainder;
+      const dirtyWhole = Math.floor(dirtyRaw);
+      dirtyRemainder = Math.max(0, dirtyRaw - dirtyWhole);
+      if (dirtyWhole > 0) {
+        addLocalMoney(marketState.balances, dirtyWhole, "dirty");
+      }
+    }
+    if (buildingIncomePerMinute.clean > 0) {
+      const cleanRaw = buildingIncomePerMinute.clean * elapsedMinutes + buildingCleanRemainder;
+      const cleanWhole = Math.floor(cleanRaw);
+      buildingCleanRemainder = Math.max(0, cleanRaw - cleanWhole);
+      if (cleanWhole > 0) {
+        addLocalMoney(marketState.balances, cleanWhole, "clean");
+      }
+    }
+    if (buildingIncomePerMinute.dirty > 0) {
+      const dirtyRaw = buildingIncomePerMinute.dirty * elapsedMinutes + buildingDirtyRemainder;
+      const dirtyWhole = Math.floor(dirtyRaw);
+      buildingDirtyRemainder = Math.max(0, dirtyRaw - dirtyWhole);
+      if (dirtyWhole > 0) {
+        addLocalMoney(marketState.balances, dirtyWhole, "dirty");
+      }
+    }
+
+    marketState.scenarioIncome = {
+      ...scenarioIncomeState,
+      [BLACKOUT_SCENARIO_INCOME_STORAGE_KEY]: now,
+      cleanRemainder,
+      dirtyRemainder,
+      buildingCleanRemainder,
+      buildingDirtyRemainder,
+      buildingIncome: {
+        cleanPerMinute: buildingIncomePerMinute.clean,
+        dirtyPerMinute: buildingIncomePerMinute.dirty,
+        byBuilding: buildingIncomePerMinute.byBuilding
+      }
+    };
+    saveLocalMarketState(marketState);
+    syncGuestEconomyFromMarket();
+  }
+
+  function startScenarioIncomeTicker() {
+    stopScenarioIncomeTicker();
+    syncBlackoutScenarioDistrictIncome();
+    scenarioIncomeTimer = setInterval(() => {
+      syncBlackoutScenarioDistrictIncome();
+    }, 10000);
   }
 
   function stopPoliceRaidProtectionTicker() {
@@ -2051,8 +2804,10 @@ window.Empire.UI = (() => {
       "raid-confirm-modal",
       "occupy-confirm-modal",
       "spy-result-modal",
+      "spy-warning-modal",
       "raid-result-modal",
       "police-action-result-modal",
+      "boost-modal",
       "attack-modal",
       "attack-confirm-modal",
       "attack-result-modal"
@@ -2071,7 +2826,6 @@ window.Empire.UI = (() => {
       const keepStatsVisible = openModals.some((modal) => (
         modal.id === "building-detail-modal"
         || modal.id === "market-modal"
-        || modal.id === "boost-modal"
         || modal.id === "alliance-modal"
       ));
       const shouldHideStats = openModals.length > 0 && !keepStatsVisible;
@@ -2108,20 +2862,53 @@ window.Empire.UI = (() => {
     } catch {}
   }
 
+  function normalizeSpyIntelKnownFields(rawEntry) {
+    const rawKnownFields = rawEntry?.knownFields && typeof rawEntry.knownFields === "object"
+      ? rawEntry.knownFields
+      : null;
+    return {
+      weapons: rawKnownFields
+        ? rawKnownFields.weapons !== false
+        : rawEntry?.weapons !== null && rawEntry?.weapons !== undefined && rawEntry?.weapons !== "",
+      powerRangeLabel: rawKnownFields
+        ? rawKnownFields.powerRangeLabel !== false
+        : Boolean(String(rawEntry?.powerRangeLabel || "").trim()),
+      districtType: rawKnownFields
+        ? rawKnownFields.districtType !== false
+        : Boolean(String(rawEntry?.districtType || "").trim()),
+      atmosphere: rawKnownFields
+        ? rawKnownFields.atmosphere !== false
+        : Boolean(String(rawEntry?.atmosphere || "").trim()),
+      buildings: rawKnownFields
+        ? rawKnownFields.buildings !== false
+        : Array.isArray(rawEntry?.buildings)
+    };
+  }
+
   function normalizeDistrictSpyIntelEntry(districtId, rawEntry) {
     const id = Number(districtId);
     if (!Number.isFinite(id)) return null;
     if (!rawEntry || typeof rawEntry !== "object") return null;
 
-    const weapons = Math.max(0, Math.floor(Number(rawEntry.weapons) || 0));
-    const powerRangeLabel = String(rawEntry.powerRangeLabel || "").trim() || "Neznámá";
-    const buildings = Array.isArray(rawEntry.buildings)
+    const knownFields = normalizeSpyIntelKnownFields(rawEntry);
+    const rawWeapons = Number(rawEntry.weapons);
+    const weapons = knownFields.weapons && Number.isFinite(rawWeapons)
+      ? Math.max(0, Math.floor(rawWeapons))
+      : null;
+    const powerRangeLabel = knownFields.powerRangeLabel
+      ? (String(rawEntry.powerRangeLabel || "").trim() || "Neznámá")
+      : null;
+    const buildings = knownFields.buildings && Array.isArray(rawEntry.buildings)
       ? rawEntry.buildings
         .map((item) => String(item || "").trim())
         .filter(Boolean)
       : [];
-    const districtType = String(rawEntry.districtType || "").trim() || "Neznámý";
-    const atmosphere = String(rawEntry.atmosphere || "").trim() || "Neznámá";
+    const districtType = knownFields.districtType
+      ? (String(rawEntry.districtType || "").trim() || "Neznámý")
+      : null;
+    const atmosphere = knownFields.atmosphere
+      ? (String(rawEntry.atmosphere || "").trim() || "Neznámá")
+      : null;
     const createdAt = Number(rawEntry.createdAt);
 
     return {
@@ -2131,6 +2918,7 @@ window.Empire.UI = (() => {
       buildings,
       districtType,
       atmosphere,
+      knownFields,
       createdAt: Number.isFinite(createdAt) ? Math.floor(createdAt) : Date.now()
     };
   }
@@ -2156,6 +2944,7 @@ window.Empire.UI = (() => {
         buildings: Array.isArray(entry.buildings) ? [...entry.buildings] : [],
         districtType: entry.districtType,
         atmosphere: entry.atmosphere,
+        knownFields: { ...(entry.knownFields || {}) },
         createdAt: entry.createdAt
       };
     });
@@ -2446,6 +3235,7 @@ window.Empire.UI = (() => {
     initRaidConfirmModal();
     initOccupyConfirmModal();
     initSpyResultModal();
+    initSpyDetectionAlertModal();
     initGangHeatModal();
     initEventFeedControls();
     initPlayerScenarioButtons();
@@ -2613,23 +3403,20 @@ window.Empire.UI = (() => {
     const pharmacyBoostDefinitions = [
       {
         key: "recon",
-        label: "Recon Boost",
-        cost: 2,
-        className: "btn btn--primary",
-        description: "+50 % spy speed, +30 % info quality, 2h"
-      },
-      {
-        key: "action",
-        label: "Action Boost",
-        cost: 3,
-        className: "btn btn--primary",
-        description: "+25 % attack speed, +25 % steal speed, 2h"
+        label: "Ghost Serum boost",
+        resourceKey: "ghostSerum",
+        resourceLabel: "Ghost Serum",
+        cost: 1,
+        className: "btn boost-modal__boost-btn boost-modal__boost-btn--ghost",
+        description: "+50 % spy speed, +30 % info quality, +25 % attack speed, +25 % steal speed, 2h"
       },
       {
         key: "neuro",
-        label: "Neuro Boost",
-        cost: 4,
-        className: "btn btn--warn",
+        label: "Overdrive X boost",
+        resourceKey: "overdriveX",
+        resourceLabel: "Overdrive X",
+        cost: 1,
+        className: "btn boost-modal__boost-btn boost-modal__boost-btn--overdrive",
         description: "+20 % aktivní akce, 2h, +3 heat"
       }
     ];
@@ -2639,36 +3426,49 @@ window.Empire.UI = (() => {
         key: "assault",
         label: "Assault Protocol",
         cost: 2,
-        className: "btn btn--primary",
+        className: "btn boost-modal__factory-btn boost-modal__factory-btn--assault",
         description: "+30 % attack síla, 2h, +3 heat"
       },
       {
         key: "rapid",
         label: "Rapid Strike",
         cost: 3,
-        className: "btn btn--warn",
+        className: "btn boost-modal__factory-btn boost-modal__factory-btn--rapid",
         description: "+40 % rychlost útoku, +25 % rychlost vykrádání, 1.5h, +4 heat"
       },
       {
         key: "breach",
         label: "Breach Mode",
         cost: 4,
-        className: "btn btn--danger",
+        className: "btn boost-modal__factory-btn boost-modal__factory-btn--breach",
         description: "+20 % šance zničit budovu, +15 % ignorování obrany, 2h, +5 heat"
       }
     ];
 
-    const renderPharmacyStatus = (snapshot, stimPack) => {
+    const renderPharmacyStatus = (snapshot, ghostSerum, overdriveX) => {
       const effective = snapshot?.effective || {};
-      const labels = { recon: "Recon", action: "Action", neuro: "Neuro" };
-      const effectParts = Array.isArray(snapshot?.activeEffects)
-        ? snapshot.activeEffects
-          .slice(0, 4)
-          .map((entry) => `${labels[entry.type] || entry.type}: ${formatDurationLabel(entry.remainingMs)}`)
-        : [];
+      const longestByType = new Map();
+      if (Array.isArray(snapshot?.activeEffects)) {
+        snapshot.activeEffects.forEach((entry) => {
+          const rawType = String(entry?.type || "").trim().toLowerCase();
+          const normalizedType = rawType === "neuro" ? "overdrive" : "ghost";
+          const remainingMs = Math.max(0, Number(entry?.remainingMs || 0));
+          const current = Number(longestByType.get(normalizedType) || 0);
+          if (remainingMs > current) {
+            longestByType.set(normalizedType, remainingMs);
+          }
+        });
+      }
+      const effectParts = [];
+      if (longestByType.has("ghost")) {
+        effectParts.push(`Ghost Serum boost: ${formatDurationLabel(longestByType.get("ghost"))}`);
+      }
+      if (longestByType.has("overdrive")) {
+        effectParts.push(`Overdrive X boost: ${formatDurationLabel(longestByType.get("overdrive"))}`);
+      }
       const effectsLabel = effectParts.length ? effectParts.join(", ") : "žádné";
       return (
-        `Slim Pack: ${stimPack} ks • Aktivní boosty: ${effectsLabel}. `
+        `Ghost Serum: ${ghostSerum} ks • Overdrive X: ${overdriveX} ks • Aktivní boosty: ${effectsLabel}. `
         + `Spy +${Math.max(0, Math.round(Number(effective.spySpeedPct || 0)))}%, `
         + `Info +${Math.max(0, Math.round(Number(effective.infoQualityPct || 0)))}%, `
         + `Attack +${Math.max(0, Math.round(Number(effective.attackSpeedPct || 0)))}%, `
@@ -2706,11 +3506,15 @@ window.Empire.UI = (() => {
         return;
       }
 
-      const stimPack = Math.max(0, Math.floor(Number(pharmacySnapshot?.supplies?.stimPack || 0)));
+      const ghostSerum = Math.max(0, Math.floor(Number(pharmacySnapshot?.drugInventory?.ghostSerum || 0)));
+      const overdriveX = Math.max(0, Math.floor(Number(pharmacySnapshot?.drugInventory?.overdriveX || 0)));
       const combatModule = Math.max(0, Math.floor(Number(factorySnapshot?.supplies?.combatModule || 0)));
       const pharmacyButtons = pharmacyBoostDefinitions
         .map((entry) => {
-          const canAfford = stimPack >= entry.cost;
+          const availableAmount = Math.max(0, Math.floor(Number(
+            entry.resourceKey === "overdriveX" ? overdriveX : ghostSerum
+          )));
+          const canAfford = availableAmount >= entry.cost;
           return `
             <button
               class="${entry.className}"
@@ -2720,7 +3524,7 @@ window.Empire.UI = (() => {
               title="${entry.description}"
               ${canAfford ? "" : "disabled"}
             >
-              ${entry.label} (${entry.cost})
+              ${entry.label}
             </button>
           `;
         })
@@ -2737,7 +3541,7 @@ window.Empire.UI = (() => {
               title="${entry.description}"
               ${canAfford ? "" : "disabled"}
             >
-              ${entry.label} (${entry.cost})
+              ${entry.label}
             </button>
           `;
         })
@@ -2747,8 +3551,8 @@ window.Empire.UI = (() => {
         ? `
           <section class="boost-modal__building">
             <div class="boost-modal__head">
-              <div class="boost-modal__name">Lékárna</div>
-              <div class="boost-modal__value">Vyrobeno Slim Pack: <strong>${stimPack} ks</strong></div>
+              <div class="boost-modal__name">Drug lab</div>
+              <div class="boost-modal__value">Boost drogy: <strong>Ghost Serum ${ghostSerum} ks • Overdrive X ${overdriveX} ks</strong></div>
             </div>
             <div class="boost-modal__actions">
               ${pharmacyButtons}
@@ -2774,7 +3578,7 @@ window.Empire.UI = (() => {
 
       if (status) {
         const lines = [];
-        if (pharmacySnapshot) lines.push(renderPharmacyStatus(pharmacySnapshot, stimPack));
+        if (pharmacySnapshot) lines.push(renderPharmacyStatus(pharmacySnapshot, ghostSerum, overdriveX));
         if (factorySnapshot) lines.push(renderFactoryStatus(factorySnapshot, combatModule));
         status.textContent = lines.join(" | ");
       }
@@ -3276,12 +4080,45 @@ window.Empire.UI = (() => {
     const drugInventory = economy.drugInventory || player.drugInventory || null;
     const activeDrugs = economy.activeDrugs || player.activeDrugs || null;
     const drugEntries = resolveStorageDrugEntries(totalDrugs, drugInventory, activeDrugs);
+    const attackTotal = getAttackWeaponTotal(attackCounts);
+    const defenseTotal = getDefenseWeaponTotal(defenseCounts);
+    const pharmacyTotal = pharmacyEntries.reduce((sum, entry) => sum + Math.max(0, Math.floor(Number(entry.value || 0))), 0);
+    const factoryTotal = factoryEntries.reduce((sum, entry) => sum + Math.max(0, Math.floor(Number(entry.value || 0))), 0);
+    const drugTotal = drugEntries.reduce((sum, entry) => sum + Math.max(0, Math.floor(Number(entry.value || 0))), 0);
+    const storageTotal = attackTotal + defenseTotal + pharmacyTotal + factoryTotal + drugTotal;
 
     renderStorageList("storage-modal-attack-list", attackEntries, "ks");
     renderStorageList("storage-modal-defense-list", defenseEntries, "ks");
     renderStorageList("storage-modal-pharmacy-list", pharmacyEntries, "ks");
     renderStorageList("storage-modal-factory-list", factoryEntries, "ks");
     renderStorageList("storage-modal-drugs-list", drugEntries, "bal.", { allowDrugUse: true });
+    pulseStorageStat(storageTotal);
+  }
+
+  function pulseStorageStat(nextTotal) {
+    const wrap = document.getElementById("stat-storage-wrap");
+    const safeTotal = Math.max(0, Math.floor(Number(nextTotal || 0)));
+    if (!wrap) {
+      lastRenderedStorageTotal = safeTotal;
+      return;
+    }
+    if (lastRenderedStorageTotal == null) {
+      lastRenderedStorageTotal = safeTotal;
+      return;
+    }
+    const delta = safeTotal - lastRenderedStorageTotal;
+    lastRenderedStorageTotal = safeTotal;
+    if (!delta) return;
+    wrap.classList.remove("is-storage-up", "is-storage-down");
+    void wrap.offsetWidth;
+    wrap.classList.add(delta > 0 ? "is-storage-up" : "is-storage-down");
+    if (storageStatPulseTimer) {
+      window.clearTimeout(storageStatPulseTimer);
+    }
+    storageStatPulseTimer = window.setTimeout(() => {
+      wrap.classList.remove("is-storage-up", "is-storage-down");
+      storageStatPulseTimer = null;
+    }, 1100);
   }
 
   function findInventoryValueByName(source, name) {
@@ -3759,21 +4596,27 @@ window.Empire.UI = (() => {
       })
       .filter(Boolean);
     const members = Math.max(0, Math.floor(Number(availability?.totalUsedMembers || 0)));
-    const attackPowerRaw = attackWeaponStats.reduce((sum, item) => {
-      const count = Math.max(0, Math.floor(Number(availability?.selection?.[item.name] || 0)));
-      return sum + (count * Number(item.power || 0));
-    }, 0);
+    const powerCalc = calculateAttackPowerFromSelection(availability?.selection);
+    const attackPowerRaw = powerCalc.rawPower;
+    const defenseSpecial = resolveDistrictDefenseSpecialModifiers(district?.id);
     const combatPenalty = getPoliceRaidCombatPenalty();
-    const attackPower = Math.max(0, Math.floor(attackPowerRaw * (1 - Math.max(0, Number(combatPenalty.attackPct || 0)) / 100)));
+    const attackPenaltyPct = Math.max(
+      0,
+      Number(combatPenalty.attackPct || 0) + Number(defenseSpecial.attackerAttackPenaltyPct || 0)
+    );
+    const attackPower = Math.max(0, Math.floor(attackPowerRaw * (1 - attackPenaltyPct / 100)));
+    const durationMs = resolveAttackDurationMsForDistrict(district);
     return {
       nickname: nick,
       faction: formatFactionLabel(factionRaw),
       alliance,
       weapons: selectedWeapons.length ? selectedWeapons.join(", ") : "Žádná zbraň",
       attackPower,
+      specialModifiers: powerCalc.special,
+      defenseSpecialModifiers: defenseSpecial,
       members,
-      durationMs: ATTACK_ACTION_DURATION_MS,
-      durationLabel: formatAttackDurationLabel(ATTACK_ACTION_DURATION_MS),
+      durationMs,
+      durationLabel: formatAttackDurationLabel(durationMs),
       summary: `Spustil jsi útok na hráče ${nick}.`
     };
   }
@@ -3788,21 +4631,27 @@ window.Empire.UI = (() => {
     return items.length > 0 ? items.join(", ") : "Žádná zbraň";
   }
 
-  function getAttackDefensePowerEstimate(district) {
+  function getAttackDefensePowerEstimate(district, selection = null) {
     const snapshot = window.Empire.UI?.getDistrictDefenseSnapshot?.(district?.id) || null;
+    const special = getAttackSpecialModifiers(selection);
+    const defenseIgnoreMultiplier = Math.max(0, 1 - Math.max(0, Number(special.grenadeDefenseIgnorePct || 0)) / 100);
     const knownPower = [
       Number(snapshot?.self?.power || 0),
       Number(snapshot?.ally?.power || 0)
     ].reduce((max, value) => Math.max(max, Number.isFinite(value) ? value : 0), 0);
     const combatPenalty = getPoliceRaidCombatPenalty();
     if (knownPower > 0) {
-      const reduced = knownPower * (1 - Math.max(0, Number(combatPenalty.defensePct || 0)) / 100);
+      const reduced = knownPower
+        * (1 - Math.max(0, Number(combatPenalty.defensePct || 0)) / 100)
+        * defenseIgnoreMultiplier;
       return Math.max(0, Math.floor(reduced));
     }
     const buildings = Array.isArray(district?.buildings) ? district.buildings : [];
     const influence = Math.max(0, Math.floor(Number(district?.influence || district?.influence_level || 0)));
     const fallback = Math.max(26, Math.floor(influence * 1.5 + buildings.length * 26 + (district?.owner ? 48 : 12)));
-    const reducedFallback = fallback * (1 - Math.max(0, Number(combatPenalty.defensePct || 0)) / 100);
+    const reducedFallback = fallback
+      * (1 - Math.max(0, Number(combatPenalty.defensePct || 0)) / 100)
+      * defenseIgnoreMultiplier;
     return Math.max(26, Math.floor(reducedFallback));
   }
 
@@ -3851,11 +4700,18 @@ window.Empire.UI = (() => {
       ...selectionSummary
     });
     const attackPower = Math.max(0, Math.floor(Number(attackResult?.attackPower ?? base.attackPower ?? 0)));
-    const defensePower = Math.max(0, Math.floor(Number(attackResult?.defensePower ?? getAttackDefensePowerEstimate(district))));
+    const defensePower = Math.max(0, Math.floor(Number(
+      attackResult?.defensePower ?? getAttackDefensePowerEstimate(district, selectionSummary?.selection)
+    )));
     const outcomeMeta = resolveAttackOutcomeMeta(attackResult?.outcomeKey || "");
     const districtDestroyed = Boolean(attackResult?.destroyed || outcomeMeta.key === "catastrophe");
     const attackerLossPct = Math.max(0, Math.floor(Number(attackResult?.attackerLossPct || 0)));
-    const defenderLossPct = Math.max(0, Math.floor(Number(attackResult?.defenderLossPct || 0)));
+    const defenseSpecial = resolveDistrictDefenseSpecialModifiers(district?.id);
+    const defenderLossBasePct = Math.max(0, Math.floor(Number(attackResult?.defenderLossPct || 0)));
+    const defenderLossPct = Math.max(
+      0,
+      Math.floor(defenderLossBasePct * (1 - Math.max(0, Number(defenseSpecial.defenderMemberLossReductionPct || 0)) / 100))
+    );
     const districtLossPct = Math.max(0, Math.floor(Number(attackResult?.districtLossPct || 0)));
     const selectedWeaponLosses = {};
     attackWeaponStats.forEach((item) => {
@@ -3898,6 +4754,7 @@ window.Empire.UI = (() => {
       outcomeKey: outcomeMeta.key,
       attackPower,
       defensePower,
+      winChancePct: Math.round(calculateAttackWinChancePct(attackPower, defensePower)),
       attackerLossPct,
       defenderLossPct,
       districtLossPct,
@@ -3909,7 +4766,8 @@ window.Empire.UI = (() => {
       attackerLossesRowValue: availableRows.attackerLosses,
       defenderLossesRowValue: availableRows.defenderLosses,
       districtStateValue: districtDestroyed ? "Zničený" : (outcomeMeta.key === "total_success" ? "Obsazený" : "Stojí"),
-      durationValue: base.durationLabel
+      durationValue: base.durationLabel,
+      activatedSpecialEffects: resolveActivatedAttackSpecialEffects(selectionSummary?.selection, district)
     };
   }
 
@@ -3930,26 +4788,41 @@ window.Empire.UI = (() => {
         }
       }
       openAttackResultModal(safeDetails);
-    }, ATTACK_ACTION_DURATION_MS);
+    }, Math.max(1000, Math.floor(Number(safeDetails.durationMs || ATTACK_ACTION_DURATION_MS))));
   }
 
-  function resolveAttackOutcomeFromPower(attackPower, defensePower) {
+  function calculateAttackWinChancePct(attackPower, defensePower) {
     const attack = Math.max(0, Math.floor(Number(attackPower) || 0));
     const defense = Math.max(0, Math.floor(Number(defensePower) || 0));
-    const catastrophe = Math.random() < 0.08;
+    const total = attack + defense;
+    if (total <= 0) return 0;
+    return (attack / total) * 100;
+  }
+
+  function resolveAttackOutcomeFromPower(attackPower, defensePower, options = {}) {
+    const attack = Math.max(0, Math.floor(Number(attackPower) || 0));
+    const defense = Math.max(0, Math.floor(Number(defensePower) || 0));
+    const bonusCatastropheChancePct = Math.max(0, Number(options?.bonusCatastropheChancePct || 0));
+    const catastrophe = Math.random() < ((8 + bonusCatastropheChancePct) / 100);
+    const winChancePct = calculateAttackWinChancePct(attack, defense);
     if (catastrophe) {
       return {
         outcomeKey: "catastrophe",
+        winChancePct,
         attackerLossPct: 100,
         defenderLossPct: 100,
         districtLossPct: 100,
         destroyed: true
       };
     }
-    if (attack > defense) {
-      if (Math.random() < 0.7) {
+    if ((Math.random() * 100) < winChancePct) {
+      const total = Math.max(1, attack + defense);
+      const marginPct = ((attack - defense) / total) * 100;
+      const totalSuccessChancePct = Math.max(35, Math.min(85, 55 + marginPct));
+      if ((Math.random() * 100) < totalSuccessChancePct) {
         return {
           outcomeKey: "total_success",
+          winChancePct,
           attackerLossPct: 0,
           defenderLossPct: 100,
           districtLossPct: 100,
@@ -3958,6 +4831,7 @@ window.Empire.UI = (() => {
       }
       return {
         outcomeKey: "pyrrhic_victory",
+        winChancePct,
         attackerLossPct: 50,
         defenderLossPct: 100,
         districtLossPct: 25,
@@ -3966,6 +4840,7 @@ window.Empire.UI = (() => {
     }
     return {
       outcomeKey: "failure",
+      winChancePct,
       attackerLossPct: 100,
       defenderLossPct: 20,
       districtLossPct: 20,
@@ -4032,7 +4907,14 @@ window.Empire.UI = (() => {
     }
     if (badge) badge.textContent = details.outcomeBadge || "Výsledek útoku";
     if (title) title.textContent = details.title || "Výsledek útoku";
-    if (summary) summary.textContent = details.summary || "";
+    if (summary) {
+      const specialLines = Array.isArray(details?.activatedSpecialEffects)
+        ? details.activatedSpecialEffects.filter(Boolean)
+        : [];
+      summary.textContent = specialLines.length
+        ? `${details.summary || ""} Aktivované efekty: ${specialLines.join(" • ")}`
+        : (details.summary || "");
+    }
     if (targetLabel) targetLabel.textContent = "Cíl";
     if (attackLabel) attackLabel.textContent = "Útočná síla";
     if (defenseLabel) defenseLabel.textContent = "Obranná síla";
@@ -4064,6 +4946,7 @@ window.Empire.UI = (() => {
             <div class="attack-modal__weapon-body">
               <span class="attack-modal__weapon-name">${item.name}</span>
               <span class="attack-modal__weapon-meta">Síla ${item.power} • Min. ${item.requiredMembers} členů • ${stock} ks skladem</span>
+              ${resolveAttackWeaponSpecialText(item.name) ? `<span class="attack-modal__weapon-meta attack-modal__weapon-meta--special">${resolveAttackWeaponSpecialText(item.name)}</span>` : ""}
             </div>
             <div class="attack-modal__weapon-stepper">
               <button
@@ -4154,6 +5037,7 @@ window.Empire.UI = (() => {
             <div class="attack-modal__weapon-body">
               <span class="attack-modal__weapon-name">${item.name}</span>
               <span class="attack-modal__weapon-meta">Síla ${item.power} • Min. ${item.requiredMembers} členů • ${stock} ks skladem</span>
+              ${resolveDefenseWeaponSpecialText(item.name) ? `<span class="attack-modal__weapon-meta attack-modal__weapon-meta--special">${resolveDefenseWeaponSpecialText(item.name)}</span>` : ""}
             </div>
             <div class="attack-modal__weapon-stepper">
               <button
@@ -4240,6 +5124,10 @@ window.Empire.UI = (() => {
     const spyIntel = getDistrictSpyIntel(district?.id);
     const usedMembers = Math.max(0, Math.floor(Number(selectionSummary?.totalUsedMembers || 0)));
     const attackPower = Math.max(0, Math.floor(Number(baseDetails.attackPower || 0)));
+    const defensePowerEstimate = Math.max(0, Math.floor(Number(
+      attackConfirmModalState.defensePowerEstimate || getAttackDefensePowerEstimate(district, selectionSummary?.selection)
+    )));
+    const winChancePct = Math.round(calculateAttackWinChancePct(attackPower, defensePowerEstimate));
 
     districtEl.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
     if (spyIntel && String(spyIntel.powerRangeLabel || "").trim()) {
@@ -4253,7 +5141,7 @@ window.Empire.UI = (() => {
     weaponsEl.textContent = formatAttackSelectionSummary(selectionSummary);
     membersEl.textContent = String(usedMembers);
     powerEl.textContent = String(attackPower);
-    noteEl.textContent = `Po potvrzení se útok spustí na ${formatAttackDurationLabel(ATTACK_ACTION_DURATION_MS)}. Výsledek se ukáže až po doběhnutí plamenů.`;
+    noteEl.textContent = `Po potvrzení se útok spustí na ${baseDetails.durationLabel || formatAttackDurationLabel(ATTACK_ACTION_DURATION_MS)}. Odhad šance na výhru: ${winChancePct} %. Výsledek se ukáže až po doběhnutí plamenů.`;
 
     confirmBtn.disabled = !district || usedMembers <= 0 || attackPower <= 0;
   }
@@ -4293,14 +5181,17 @@ window.Empire.UI = (() => {
       ...selectionSummary
     });
     const defensePowerEstimate = Math.max(0, Math.floor(Number(
-      attackConfirmModalState.defensePowerEstimate || getAttackDefensePowerEstimate(district)
+      attackConfirmModalState.defensePowerEstimate || getAttackDefensePowerEstimate(district, selectionSummary?.selection)
     )));
+    const attackSpecial = getAttackSpecialModifiers(selectionSummary?.selection);
     const demoMode = scenarioVisionEnabled && !window.Empire.token;
 
     closeAllPopupWindows();
     setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
 
-    const outcomeRoll = resolveAttackOutcomeFromPower(baseDetails.attackPower, defensePowerEstimate);
+    const outcomeRoll = resolveAttackOutcomeFromPower(baseDetails.attackPower, defensePowerEstimate, {
+      bonusCatastropheChancePct: attackSpecial.bazookaCatastropheChancePct
+    });
     const details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
       ...outcomeRoll,
       attackPower: baseDetails.attackPower,
@@ -4310,7 +5201,7 @@ window.Empire.UI = (() => {
     pushEvent(`${details.title}: ${details.summary}`);
     window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
       attackerDistrictId: district.id,
-      durationMs: ATTACK_ACTION_DURATION_MS,
+      durationMs: Math.max(1000, Math.floor(Number(baseDetails.durationMs || ATTACK_ACTION_DURATION_MS))),
       source: demoMode ? "scenario-attack" : "player-attack"
     });
     recordVerifiedIntelEvent({
@@ -4517,7 +5408,7 @@ window.Empire.UI = (() => {
           ...availability,
           ...selectionSummary
         });
-        const defensePowerEstimate = getAttackDefensePowerEstimate(district);
+        const defensePowerEstimate = getAttackDefensePowerEstimate(district, selectionSummary?.selection);
 
         if (demoMode) {
           openAttackConfirmModal({
@@ -4668,8 +5559,9 @@ window.Empire.UI = (() => {
     const content = document.getElementById("police-action-result-modal-content");
     const title = document.getElementById("police-action-result-modal-title");
     const badge = document.getElementById("police-action-result-modal-badge");
+    const summary = document.getElementById("police-action-result-modal-summary");
     const details = document.getElementById("police-action-result-modal-details");
-    if (!root || !content || !title || !badge || !details) return;
+    if (!root || !content || !title || !badge || !summary || !details) return;
 
     const tone = String(payload.tone || "").trim();
     content.classList.remove("is-tier-1", "is-tier-2", "is-tier-3", "is-tier-4", "is-tier-5", "is-tier-6");
@@ -4677,6 +5569,9 @@ window.Empire.UI = (() => {
 
     title.textContent = String(payload.title || "Policejní akce").trim() || "Policejní akce";
     badge.textContent = String(payload.badge || "").trim() || "Policejní zásah";
+    const summaryText = String(payload.summary || "").trim();
+    summary.textContent = summaryText;
+    summary.hidden = !summaryText;
     const rows = Array.isArray(payload.rows) ? payload.rows : [];
     details.innerHTML = rows.map((row) => `
       <div class="modal__row">
@@ -4686,6 +5581,32 @@ window.Empire.UI = (() => {
     `).join("");
     root.style.zIndex = "9999";
     root.classList.remove("hidden");
+  }
+
+  function openDistrictPoliceRaidWarningModal(district = null, policeAction = {}) {
+    const districtName = String(district?.name || "").trim() || `District #${district?.id ?? "-"}`;
+    const ownerNick = String(
+      district?.ownerNick
+      || district?.owner_username
+      || district?.ownerUsername
+      || district?.owner
+      || "Neznámý"
+    ).trim() || "Neznámý";
+    const raidSpecialty = resolveStoredPoliceRaidSpecialty(policeAction)
+      || resolvePoliceRaidSpecialtyFromOperationType(policeAction?.operationType, policeAction)
+      || POLICE_RAID_SPECIALTIES.total;
+    const raidTypeLabel = String(raidSpecialty?.label || "Celková razie").trim() || "Celková razie";
+
+    openPoliceActionResultModal({
+      tone: "is-tier-4",
+      title: "Policejní razie v districtu",
+      badge: raidTypeLabel,
+      summary: `V districtu ${districtName} probíhá policejní razie hráče ${ownerNick}.`,
+      rows: [
+        { label: "Hráč", value: ownerNick },
+        { label: "Typ razie", value: raidTypeLabel }
+      ]
+    });
   }
 
   function initPoliceActionResultModal() {
@@ -4711,6 +5632,7 @@ window.Empire.UI = (() => {
       const wantedHeat = resolveWantedLevel(cachedProfile || window.Empire.player || {});
       const wantedTier = resolveWantedStars(wantedHeat);
       const tierEntry = POLICE_ACTION_TIER_MESSAGES[wantedTier] || POLICE_ACTION_TIER_MESSAGES[1];
+      const policeQuote = resolvePoliceActionTierQuote(wantedTier);
       const districtId = Number(detail.districtId);
       const district = Number.isFinite(districtId)
         ? (Array.isArray(window.Empire.districts) ? window.Empire.districts.find((item) => Number(item?.id) === districtId) : null)
@@ -4732,16 +5654,19 @@ window.Empire.UI = (() => {
         }
       }
       const specialty =
-        resolvePoliceRaidSpecialtyFromOperationType(detail.operationType, detail)
+        resolveStoredPoliceRaidSpecialty(detail)
+        || resolvePoliceRaidSpecialtyFromOperationType(detail.operationType, detail)
         || resolvePoliceRaidSpecialty(wantedTier, detail);
+      const specialtyQuote = resolvePoliceActionSpecialtyQuote(specialty.key);
 
       openPoliceActionResultModal({
         title: "Policejní akce",
         badge: `Stupeň ${wantedTier}/6 • ${specialty.label}`,
         tone: tierEntry.tone,
-        summary: tierEntry.text,
+        summary: specialtyQuote || policeQuote || tierEntry.text,
         rows: [
           { label: "Hláška", value: tierEntry.title },
+          { label: "Policejní hláška", value: specialtyQuote || policeQuote || tierEntry.text },
           { label: "District", value: districtName },
           { label: "Typ razie", value: `${specialty.icon} ${specialty.label}` }
         ]
@@ -4756,6 +5681,20 @@ window.Empire.UI = (() => {
     return `${districtId}:${startedAt}:${source}`;
   }
 
+  function resolvePoliceActionTierQuote(tier) {
+    const safeTier = Math.max(1, Math.floor(Number(tier) || 1));
+    const quotes = Array.isArray(POLICE_ACTION_TIER_QUOTES[safeTier]) ? POLICE_ACTION_TIER_QUOTES[safeTier] : [];
+    if (!quotes.length) return "";
+    return String(quotes[Math.floor(Math.random() * quotes.length)] || "").trim();
+  }
+
+  function resolvePoliceActionSpecialtyQuote(specialtyKey) {
+    const safeKey = String(specialtyKey || "").trim().toLowerCase();
+    const quotes = Array.isArray(POLICE_ACTION_SPECIALTY_QUOTES[safeKey]) ? POLICE_ACTION_SPECIALTY_QUOTES[safeKey] : [];
+    if (!quotes.length) return "";
+    return String(quotes[Math.floor(Math.random() * quotes.length)] || "").trim();
+  }
+
   function getPoliceRaidImpactMap() {
     if (!window.Empire._localPoliceRaidImpacts || !(window.Empire._localPoliceRaidImpacts instanceof Map)) {
       window.Empire._localPoliceRaidImpacts = new Map();
@@ -4768,13 +5707,18 @@ window.Empire.UI = (() => {
     if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
     appliedPoliceRaidImpactKeys.add(impactKey);
 
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty = resolvePoliceRaidImpactSpecialty(detail, 1);
     const economy = ensureEconomyCache();
     const money = resolveMoneyBreakdown(economy || {});
-    const cleanPct = POLICE_RAID_TIER1.cleanConfiscationPct;
-    const dirtyPctRoll = Math.floor(
+    const cleanPct = scalePoliceRaidLossPct(POLICE_RAID_TIER1.cleanConfiscationPct, raidSpecialty.key, "clean");
+    const dirtyPctRoll = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER1.dirtyConfiscationPctMin
       + Math.random() * (POLICE_RAID_TIER1.dirtyConfiscationPctMax - POLICE_RAID_TIER1.dirtyConfiscationPctMin + 1)
-    );
+    ), raidSpecialty.key, "dirty");
+    const influenceLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER1.influencePenaltyPct, raidSpecialty.key, "influence");
+    const arrestsPct = scalePoliceRaidLossPct(POLICE_RAID_TIER1.arrestsPct, raidSpecialty.key, "arrests");
+    const incomePenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER1.incomePenaltyPct, raidSpecialty.key, "income");
     const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanPct / 100));
     const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyPctRoll / 100));
 
@@ -4785,48 +5729,44 @@ window.Empire.UI = (() => {
     economy.balance = money.cleanMoney + money.dirtyMoney;
 
     const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
-    const influenceLoss = Math.max(0, Math.floor(currentInfluence * POLICE_RAID_TIER1.influencePenaltyPct / 100));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
     const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
     economy.influence = nextInfluence;
     updateEconomy(economy);
 
-    const currentProfile = cachedProfile || window.Empire.player || {};
-    const raidSpecialty =
-      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
-      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 1);
     updateProfile({
       ...currentProfile,
       influence: nextInfluence
     });
 
     const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
-    const arrested = Math.max(0, Math.floor(population * POLICE_RAID_TIER1.arrestsPct / 100));
+    const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
     if (arrested > 0) consumeGangMembers(arrested);
 
     const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
-    setPoliceRaidIncomePenaltyForOwnedDistricts(POLICE_RAID_TIER1.incomePenaltyPct, expiresAt);
+    setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
     const impactRecord = {
       key: impactKey,
       districtId: Number(district?.id),
       startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
       expiresAt,
       tier: 1,
-      incomePenaltyPct: POLICE_RAID_TIER1.incomePenaltyPct,
+      incomePenaltyPct,
       cleanLoss,
       cleanLossPct: cleanPct,
       dirtyLoss,
       dirtyLossPct: dirtyPctRoll,
       arrested,
-      arrestsPct: POLICE_RAID_TIER1.arrestsPct,
+      arrestsPct,
       influenceLoss,
-      influenceLossPct: POLICE_RAID_TIER1.influencePenaltyPct,
+      influenceLossPct,
       raidSpecialtyKey: raidSpecialty.key,
       raidSpecialtyLabel: raidSpecialty.label,
       spyBlocked: true
     };
     getPoliceRaidImpactMap().set(impactKey, impactRecord);
     pushEvent(
-      `Razia (${district?.name || `#${district?.id}`}) - Tier 1: income -${POLICE_RAID_TIER1.incomePenaltyPct}%, `
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 1: income -${incomePenaltyPct}%, `
       + `zabaveno $${cleanLoss} clean a $${dirtyLoss} dirty, zatčeno ${arrested} lidí, vliv -${influenceLoss}.`
     );
     return impactRecord;
@@ -5022,151 +5962,22 @@ window.Empire.UI = (() => {
     if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
     appliedPoliceRaidImpactKeys.add(impactKey);
 
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty = resolvePoliceRaidImpactSpecialty(detail, 2);
     const economy = ensureEconomyCache();
     const money = resolveMoneyBreakdown(economy || {});
-    const cleanLossPct = Math.floor(
+    const cleanLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER2.cleanConfiscationPctMin
       + Math.random() * (POLICE_RAID_TIER2.cleanConfiscationPctMax - POLICE_RAID_TIER2.cleanConfiscationPctMin + 1)
-    );
-    const dirtyLossPct = Math.floor(
+    ), raidSpecialty.key, "clean");
+    const dirtyLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER2.dirtyConfiscationPctMin
       + Math.random() * (POLICE_RAID_TIER2.dirtyConfiscationPctMax - POLICE_RAID_TIER2.dirtyConfiscationPctMin + 1)
-    );
-    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
-    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
-    money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
-    money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
-
-    const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
-      ? { ...economy.drugInventory }
-      : {};
-    let totalDrugLoss = 0;
-    storageDrugTypes.forEach((drug) => {
-      const current = Math.max(0, Math.floor(Number(drugInventory[drug.key] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER2.drugLossPct / 100));
-      if (loss > 0) {
-        drugInventory[drug.key] = Math.max(0, current - loss);
-        totalDrugLoss += loss;
-      } else {
-        drugInventory[drug.key] = current;
-      }
-    });
-    const totalDrugs = storageDrugTypes.reduce((sum, drug) => sum + Number(drugInventory[drug.key] || 0), 0);
-
-    const currentWeapons = resolveWeaponCounts();
-    const nextWeapons = { ...currentWeapons };
-    let attackWeaponLoss = 0;
-    attackWeaponStats.forEach((item) => {
-      const current = Math.max(0, Math.floor(Number(nextWeapons[item.name] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER2.attackWeaponLossPct / 100));
-      if (loss > 0) {
-        nextWeapons[item.name] = Math.max(0, current - loss);
-        attackWeaponLoss += loss;
-      } else {
-        nextWeapons[item.name] = current;
-      }
-    });
-    if (attackWeaponLoss > 0) {
-      persistWeaponCounts(nextWeapons);
-    }
-
-    const influenceLossPct = Math.floor(
-      POLICE_RAID_TIER2.influencePenaltyPctMin
-      + Math.random() * (POLICE_RAID_TIER2.influencePenaltyPctMax - POLICE_RAID_TIER2.influencePenaltyPctMin + 1)
-    );
-    const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
-    const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
-    const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
-
-    economy.cleanMoney = money.cleanMoney;
-    economy.dirtyMoney = money.dirtyMoney;
-    economy.balance = money.cleanMoney + money.dirtyMoney;
-    economy.drugInventory = drugInventory;
-    economy.drugs = totalDrugs;
-    economy.influence = nextInfluence;
-    economy.weapons = getAttackWeaponTotal(nextWeapons);
-    economy.weaponsDetail = { ...nextWeapons };
-    updateEconomy(economy);
-
-    const currentProfile = cachedProfile || window.Empire.player || {};
-    const raidSpecialty =
-      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
-      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 2);
-    updateProfile({
-      ...currentProfile,
-      influence: nextInfluence
-    });
-
-    const arrestsPct = Math.floor(
-      POLICE_RAID_TIER2.arrestsPctMin
-      + Math.random() * (POLICE_RAID_TIER2.arrestsPctMax - POLICE_RAID_TIER2.arrestsPctMin + 1)
-    );
-    const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
-    const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
-    if (arrested > 0) consumeGangMembers(arrested);
-
-    const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
-    setPoliceRaidIncomePenaltyForOwnedDistricts(POLICE_RAID_TIER2.incomePenaltyPct, expiresAt);
-    setPoliceRaidProductionPenalty("lab", POLICE_RAID_TIER2.productionPenaltyPct, expiresAt);
-
-    const impactRecord = {
-      key: impactKey,
-      districtId: Number(district?.id),
-      startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
-      expiresAt,
-      tier: 2,
-      incomePenaltyPct: POLICE_RAID_TIER2.incomePenaltyPct,
-      cleanLoss,
-      cleanLossPct,
-      dirtyLoss,
-      dirtyLossPct,
-      drugLoss: totalDrugLoss,
-      drugLossPct: POLICE_RAID_TIER2.drugLossPct,
-      arrested,
-      arrestsPct,
-      attackWeaponLoss,
-      attackWeaponLossPct: POLICE_RAID_TIER2.attackWeaponLossPct,
-      influenceLoss,
-      influenceLossPct,
-      productionPenaltyPct: POLICE_RAID_TIER2.productionPenaltyPct,
-      raidSpecialtyKey: raidSpecialty.key,
-      raidSpecialtyLabel: raidSpecialty.label,
-      spyBlocked: true,
-      raidBlocked: true
-    };
-    getPoliceRaidImpactMap().set(impactKey, impactRecord);
-    pushEvent(
-      `Razia (${district?.name || `#${district?.id}`}) - Tier 2: income -${POLICE_RAID_TIER2.incomePenaltyPct}%, `
-      + `clean -${cleanLossPct}% ($${cleanLoss}), dirty -${dirtyLossPct}% ($${dirtyLoss}), `
-      + `drogy -${POLICE_RAID_TIER2.drugLossPct}% (${totalDrugLoss}), zatčeno ${arrested} (${arrestsPct}%), `
-      + `út. zbraně -${POLICE_RAID_TIER2.attackWeaponLossPct}% (${attackWeaponLoss}), vliv -${influenceLossPct}% (${influenceLoss}).`
-    );
-    return impactRecord;
-  }
-
-  function applyPoliceRaidTier3Impacts(detail, district) {
-    const impactKey = buildPoliceRaidImpactKey(detail);
-    if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
-    appliedPoliceRaidImpactKeys.add(impactKey);
-
-    const economy = ensureEconomyCache();
-    const money = resolveMoneyBreakdown(economy || {});
-    const cleanLossPct = Math.floor(
-      POLICE_RAID_TIER3.cleanConfiscationPctMin
-      + Math.random() * (POLICE_RAID_TIER3.cleanConfiscationPctMax - POLICE_RAID_TIER3.cleanConfiscationPctMin + 1)
-    );
-    const dirtyLossPct = Math.floor(
-      POLICE_RAID_TIER3.dirtyConfiscationPctMin
-      + Math.random() * (POLICE_RAID_TIER3.dirtyConfiscationPctMax - POLICE_RAID_TIER3.dirtyConfiscationPctMin + 1)
-    );
-    const incomePenaltyPct = Math.floor(
-      POLICE_RAID_TIER3.incomePenaltyPctMin
-      + Math.random() * (POLICE_RAID_TIER3.incomePenaltyPctMax - POLICE_RAID_TIER3.incomePenaltyPctMin + 1)
-    );
-    const drugLossPct = Math.floor(
-      POLICE_RAID_TIER3.drugLossPctMin
-      + Math.random() * (POLICE_RAID_TIER3.drugLossPctMax - POLICE_RAID_TIER3.drugLossPctMin + 1)
-    );
+    ), raidSpecialty.key, "dirty");
+    const drugLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER2.drugLossPct, raidSpecialty.key, "drugs");
+    const attackWeaponLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER2.attackWeaponLossPct, raidSpecialty.key, "attackWeapons");
+    const incomePenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER2.incomePenaltyPct, raidSpecialty.key, "income");
+    const productionPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER2.productionPenaltyPct, raidSpecialty.key, "labProduction");
     const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
     const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
     money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
@@ -5188,14 +5999,147 @@ window.Empire.UI = (() => {
     });
     const totalDrugs = storageDrugTypes.reduce((sum, drug) => sum + Number(drugInventory[drug.key] || 0), 0);
 
-    const attackLossPct = Math.floor(
+    const currentWeapons = resolveWeaponCounts();
+    const nextWeapons = { ...currentWeapons };
+    let attackWeaponLoss = 0;
+    attackWeaponStats.forEach((item) => {
+      const current = Math.max(0, Math.floor(Number(nextWeapons[item.name] || 0)));
+      const loss = Math.max(0, Math.floor(current * attackWeaponLossPct / 100));
+      if (loss > 0) {
+        nextWeapons[item.name] = Math.max(0, current - loss);
+        attackWeaponLoss += loss;
+      } else {
+        nextWeapons[item.name] = current;
+      }
+    });
+    if (attackWeaponLoss > 0) {
+      persistWeaponCounts(nextWeapons);
+    }
+
+    const influenceLossPct = scalePoliceRaidLossPct(Math.floor(
+      POLICE_RAID_TIER2.influencePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER2.influencePenaltyPctMax - POLICE_RAID_TIER2.influencePenaltyPctMin + 1)
+    ), raidSpecialty.key, "influence");
+    const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
+    const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
+
+    economy.cleanMoney = money.cleanMoney;
+    economy.dirtyMoney = money.dirtyMoney;
+    economy.balance = money.cleanMoney + money.dirtyMoney;
+    economy.drugInventory = drugInventory;
+    economy.drugs = totalDrugs;
+    economy.influence = nextInfluence;
+    economy.weapons = getAttackWeaponTotal(nextWeapons);
+    economy.weaponsDetail = { ...nextWeapons };
+    updateEconomy(economy);
+
+    updateProfile({
+      ...currentProfile,
+      influence: nextInfluence
+    });
+
+    const arrestsPct = scalePoliceRaidLossPct(Math.floor(
+      POLICE_RAID_TIER2.arrestsPctMin
+      + Math.random() * (POLICE_RAID_TIER2.arrestsPctMax - POLICE_RAID_TIER2.arrestsPctMin + 1)
+    ), raidSpecialty.key, "arrests");
+    const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
+    const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
+    if (arrested > 0) consumeGangMembers(arrested);
+
+    const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
+    setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("lab", productionPenaltyPct, expiresAt);
+
+    const impactRecord = {
+      key: impactKey,
+      districtId: Number(district?.id),
+      startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
+      expiresAt,
+      tier: 2,
+      incomePenaltyPct,
+      cleanLoss,
+      cleanLossPct,
+      dirtyLoss,
+      dirtyLossPct,
+      drugLoss: totalDrugLoss,
+      drugLossPct,
+      arrested,
+      arrestsPct,
+      attackWeaponLoss,
+      attackWeaponLossPct,
+      influenceLoss,
+      influenceLossPct,
+      productionPenaltyPct,
+      raidSpecialtyKey: raidSpecialty.key,
+      raidSpecialtyLabel: raidSpecialty.label,
+      spyBlocked: true,
+      raidBlocked: true
+    };
+    getPoliceRaidImpactMap().set(impactKey, impactRecord);
+    pushEvent(
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 2: income -${incomePenaltyPct}%, `
+      + `clean -${cleanLossPct}% ($${cleanLoss}), dirty -${dirtyLossPct}% ($${dirtyLoss}), `
+      + `drogy -${drugLossPct}% (${totalDrugLoss}), zatčeno ${arrested} (${arrestsPct}%), `
+      + `út. zbraně -${attackWeaponLossPct}% (${attackWeaponLoss}), vliv -${influenceLossPct}% (${influenceLoss}).`
+    );
+    return impactRecord;
+  }
+
+  function applyPoliceRaidTier3Impacts(detail, district) {
+    const impactKey = buildPoliceRaidImpactKey(detail);
+    if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
+    appliedPoliceRaidImpactKeys.add(impactKey);
+
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty = resolvePoliceRaidImpactSpecialty(detail, 3);
+    const economy = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economy || {});
+    const cleanLossPct = scalePoliceRaidLossPct(Math.floor(
+      POLICE_RAID_TIER3.cleanConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER3.cleanConfiscationPctMax - POLICE_RAID_TIER3.cleanConfiscationPctMin + 1)
+    ), raidSpecialty.key, "clean");
+    const dirtyLossPct = scalePoliceRaidLossPct(Math.floor(
+      POLICE_RAID_TIER3.dirtyConfiscationPctMin
+      + Math.random() * (POLICE_RAID_TIER3.dirtyConfiscationPctMax - POLICE_RAID_TIER3.dirtyConfiscationPctMin + 1)
+    ), raidSpecialty.key, "dirty");
+    const incomePenaltyPct = scalePoliceRaidLossPct(Math.floor(
+      POLICE_RAID_TIER3.incomePenaltyPctMin
+      + Math.random() * (POLICE_RAID_TIER3.incomePenaltyPctMax - POLICE_RAID_TIER3.incomePenaltyPctMin + 1)
+    ), raidSpecialty.key, "income");
+    const drugLossPct = scalePoliceRaidLossPct(Math.floor(
+      POLICE_RAID_TIER3.drugLossPctMin
+      + Math.random() * (POLICE_RAID_TIER3.drugLossPctMax - POLICE_RAID_TIER3.drugLossPctMin + 1)
+    ), raidSpecialty.key, "drugs");
+    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
+    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
+    money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
+    money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
+
+    const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
+      ? { ...economy.drugInventory }
+      : {};
+    let totalDrugLoss = 0;
+    storageDrugTypes.forEach((drug) => {
+      const current = Math.max(0, Math.floor(Number(drugInventory[drug.key] || 0)));
+      const loss = Math.max(0, Math.floor(current * drugLossPct / 100));
+      if (loss > 0) {
+        drugInventory[drug.key] = Math.max(0, current - loss);
+        totalDrugLoss += loss;
+      } else {
+        drugInventory[drug.key] = current;
+      }
+    });
+    const totalDrugs = storageDrugTypes.reduce((sum, drug) => sum + Number(drugInventory[drug.key] || 0), 0);
+
+    const attackLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER3.attackWeaponLossPctMin
       + Math.random() * (POLICE_RAID_TIER3.attackWeaponLossPctMax - POLICE_RAID_TIER3.attackWeaponLossPctMin + 1)
-    );
-    const defenseLossPct = Math.floor(
+    ), raidSpecialty.key, "attackWeapons");
+    const defenseLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER3.defenseWeaponLossPctMin
       + Math.random() * (POLICE_RAID_TIER3.defenseWeaponLossPctMax - POLICE_RAID_TIER3.defenseWeaponLossPctMin + 1)
-    );
+    ), raidSpecialty.key, "defenseWeapons");
     const currentAttackWeapons = resolveWeaponCounts();
     const nextAttackWeapons = { ...currentAttackWeapons };
     let attackWeaponLoss = 0;
@@ -5230,10 +6174,10 @@ window.Empire.UI = (() => {
       persistDefenseCounts(nextDefenseWeapons);
     }
 
-    const influenceLossPct = Math.floor(
+    const influenceLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER3.influencePenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER3.influencePenaltyPctMax - POLICE_RAID_TIER3.influencePenaltyPctMin + 1)
-    );
+    ), raidSpecialty.key, "influence");
     const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
     const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
     const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
@@ -5250,31 +6194,27 @@ window.Empire.UI = (() => {
     economy.defenseDetail = { ...nextDefenseWeapons };
     updateEconomy(economy);
 
-    const currentProfile = cachedProfile || window.Empire.player || {};
-    const raidSpecialty =
-      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
-      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 3);
     updateProfile({
       ...currentProfile,
       influence: nextInfluence
     });
 
-    const arrestsPct = Math.floor(
+    const arrestsPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER3.arrestsPctMin
       + Math.random() * (POLICE_RAID_TIER3.arrestsPctMax - POLICE_RAID_TIER3.arrestsPctMin + 1)
-    );
+    ), raidSpecialty.key, "arrests");
     const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
     const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
     if (arrested > 0) consumeGangMembers(arrested);
 
-    const labProductionPenaltyPct = Math.floor(
+    const labProductionPenaltyPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER3.labProductionPenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER3.labProductionPenaltyPctMax - POLICE_RAID_TIER3.labProductionPenaltyPctMin + 1)
-    );
-    const armoryProductionPenaltyPct = Math.floor(
+    ), raidSpecialty.key, "labProduction");
+    const armoryProductionPenaltyPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER3.armoryProductionPenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER3.armoryProductionPenaltyPctMax - POLICE_RAID_TIER3.armoryProductionPenaltyPctMin + 1)
-    );
+    ), raidSpecialty.key, "armoryProduction");
 
     const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
     setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
@@ -5326,24 +6266,26 @@ window.Empire.UI = (() => {
     if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
     appliedPoliceRaidImpactKeys.add(impactKey);
 
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty = resolvePoliceRaidImpactSpecialty(detail, 4);
     const economy = ensureEconomyCache();
     const money = resolveMoneyBreakdown(economy || {});
-    const cleanLossPct = Math.floor(
+    const cleanLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER4.cleanConfiscationPctMin
       + Math.random() * (POLICE_RAID_TIER4.cleanConfiscationPctMax - POLICE_RAID_TIER4.cleanConfiscationPctMin + 1)
-    );
-    const dirtyLossPct = Math.floor(
+    ), raidSpecialty.key, "clean");
+    const dirtyLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER4.dirtyConfiscationPctMin
       + Math.random() * (POLICE_RAID_TIER4.dirtyConfiscationPctMax - POLICE_RAID_TIER4.dirtyConfiscationPctMin + 1)
-    );
-    const incomePenaltyPct = Math.floor(
+    ), raidSpecialty.key, "dirty");
+    const incomePenaltyPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER4.incomePenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER4.incomePenaltyPctMax - POLICE_RAID_TIER4.incomePenaltyPctMin + 1)
-    );
-    const drugLossPct = Math.floor(
+    ), raidSpecialty.key, "income");
+    const drugLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER4.drugLossPctMin
       + Math.random() * (POLICE_RAID_TIER4.drugLossPctMax - POLICE_RAID_TIER4.drugLossPctMin + 1)
-    );
+    ), raidSpecialty.key, "drugs");
     const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
     const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
     money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
@@ -5370,7 +6312,7 @@ window.Empire.UI = (() => {
     let attackWeaponLoss = 0;
     attackWeaponStats.forEach((item) => {
       const current = Math.max(0, Math.floor(Number(nextAttackWeapons[item.name] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER4.attackWeaponLossPct / 100));
+      const loss = Math.max(0, Math.floor(current * scalePoliceRaidLossPct(POLICE_RAID_TIER4.attackWeaponLossPct, raidSpecialty.key, "attackWeapons") / 100));
       if (loss > 0) {
         nextAttackWeapons[item.name] = Math.max(0, current - loss);
         attackWeaponLoss += loss;
@@ -5387,7 +6329,7 @@ window.Empire.UI = (() => {
     let defenseWeaponLoss = 0;
     defenseWeaponStats.forEach((item) => {
       const current = Math.max(0, Math.floor(Number(nextDefenseWeapons[item.name] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER4.defenseWeaponLossPct / 100));
+      const loss = Math.max(0, Math.floor(current * scalePoliceRaidLossPct(POLICE_RAID_TIER4.defenseWeaponLossPct, raidSpecialty.key, "defenseWeapons") / 100));
       if (loss > 0) {
         nextDefenseWeapons[item.name] = Math.max(0, current - loss);
         defenseWeaponLoss += loss;
@@ -5399,10 +6341,14 @@ window.Empire.UI = (() => {
       persistDefenseCounts(nextDefenseWeapons);
     }
 
-    const influenceLossPct = Math.floor(
+    const attackWeaponLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER4.attackWeaponLossPct, raidSpecialty.key, "attackWeapons");
+    const defenseWeaponLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER4.defenseWeaponLossPct, raidSpecialty.key, "defenseWeapons");
+    const attackPowerPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER4.attackPowerPenaltyPct, raidSpecialty.key, "attackPower");
+    const defensePowerPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER4.defensePowerPenaltyPct, raidSpecialty.key, "defensePower");
+    const influenceLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER4.influencePenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER4.influencePenaltyPctMax - POLICE_RAID_TIER4.influencePenaltyPctMin + 1)
-    );
+    ), raidSpecialty.key, "influence");
     const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
     const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
     const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
@@ -5419,39 +6365,35 @@ window.Empire.UI = (() => {
     economy.defenseDetail = { ...nextDefenseWeapons };
     updateEconomy(economy);
 
-    const currentProfile = cachedProfile || window.Empire.player || {};
-    const raidSpecialty =
-      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
-      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 4);
     updateProfile({
       ...currentProfile,
       influence: nextInfluence
     });
 
-    const arrestsPct = Math.floor(
+    const arrestsPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER4.arrestsPctMin
       + Math.random() * (POLICE_RAID_TIER4.arrestsPctMax - POLICE_RAID_TIER4.arrestsPctMin + 1)
-    );
+    ), raidSpecialty.key, "arrests");
     const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
     const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
     if (arrested > 0) consumeGangMembers(arrested);
 
-    const labProductionPenaltyPct = Math.floor(
+    const labProductionPenaltyPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER4.labProductionPenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER4.labProductionPenaltyPctMax - POLICE_RAID_TIER4.labProductionPenaltyPctMin + 1)
-    );
-    const armoryProductionPenaltyPct = Math.floor(
+    ), raidSpecialty.key, "labProduction");
+    const armoryProductionPenaltyPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER4.armoryProductionPenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER4.armoryProductionPenaltyPctMax - POLICE_RAID_TIER4.armoryProductionPenaltyPctMin + 1)
-    );
+    ), raidSpecialty.key, "armoryProduction");
 
     const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
     setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
     setPoliceRaidProductionPenalty("lab", labProductionPenaltyPct, expiresAt);
     setPoliceRaidProductionPenalty("armory", armoryProductionPenaltyPct, expiresAt);
     setPoliceRaidCombatPenalty(
-      POLICE_RAID_TIER4.attackPowerPenaltyPct,
-      POLICE_RAID_TIER4.defensePowerPenaltyPct,
+      attackPowerPenaltyPct,
+      defensePowerPenaltyPct,
       expiresAt
     );
     setPoliceRaidBuildingActionLock("pharmacy_factory_special", expiresAt);
@@ -5472,11 +6414,11 @@ window.Empire.UI = (() => {
       arrested,
       arrestsPct,
       attackWeaponLoss,
-      attackWeaponLossPct: POLICE_RAID_TIER4.attackWeaponLossPct,
+      attackWeaponLossPct,
       defenseWeaponLoss,
-      defenseWeaponLossPct: POLICE_RAID_TIER4.defenseWeaponLossPct,
-      attackPowerPenaltyPct: POLICE_RAID_TIER4.attackPowerPenaltyPct,
-      defensePowerPenaltyPct: POLICE_RAID_TIER4.defensePowerPenaltyPct,
+      defenseWeaponLossPct,
+      attackPowerPenaltyPct,
+      defensePowerPenaltyPct,
       influenceLoss,
       influenceLossPct,
       labProductionPenaltyPct,
@@ -5494,9 +6436,9 @@ window.Empire.UI = (() => {
       `Razia (${district?.name || `#${district?.id}`}) - Tier 4: income -${incomePenaltyPct}%, `
       + `clean -${cleanLossPct}% ($${cleanLoss}), dirty -${dirtyLossPct}% ($${dirtyLoss}), `
       + `drogy -${drugLossPct}% (${totalDrugLoss}), zatčeno ${arrested} (${arrestsPct}%), `
-      + `út. zbraně -${POLICE_RAID_TIER4.attackWeaponLossPct}% (${attackWeaponLoss}), `
-      + `obr. zbraně -${POLICE_RAID_TIER4.defenseWeaponLossPct}% (${defenseWeaponLoss}), `
-      + `síla útok -${POLICE_RAID_TIER4.attackPowerPenaltyPct}%, síla obrana -${POLICE_RAID_TIER4.defensePowerPenaltyPct}%, `
+      + `út. zbraně -${attackWeaponLossPct}% (${attackWeaponLoss}), `
+      + `obr. zbraně -${defenseWeaponLossPct}% (${defenseWeaponLoss}), `
+      + `síla útok -${attackPowerPenaltyPct}%, síla obrana -${defensePowerPenaltyPct}%, `
       + `vliv -${influenceLossPct}% (${influenceLoss}), lab/drug -${labProductionPenaltyPct}%, zbrojovka -${armoryProductionPenaltyPct}%.`
     );
     return impactRecord;
@@ -5507,30 +6449,33 @@ window.Empire.UI = (() => {
     if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
     appliedPoliceRaidImpactKeys.add(impactKey);
 
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty = resolvePoliceRaidImpactSpecialty(detail, 5);
     const economy = ensureEconomyCache();
     const money = resolveMoneyBreakdown(economy || {});
-    const cleanLossPct = Math.floor(
+    const cleanLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER5.cleanConfiscationPctMin
       + Math.random() * (POLICE_RAID_TIER5.cleanConfiscationPctMax - POLICE_RAID_TIER5.cleanConfiscationPctMin + 1)
-    );
-    const dirtyLossPct = Math.floor(
+    ), raidSpecialty.key, "clean");
+    const dirtyLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER5.dirtyConfiscationPctMin
       + Math.random() * (POLICE_RAID_TIER5.dirtyConfiscationPctMax - POLICE_RAID_TIER5.dirtyConfiscationPctMin + 1)
-    );
-    const incomePenaltyPct = Math.floor(
+    ), raidSpecialty.key, "dirty");
+    const incomePenaltyPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER5.incomePenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER5.incomePenaltyPctMax - POLICE_RAID_TIER5.incomePenaltyPctMin + 1)
-    );
-    const drugLossPct = Math.floor(
+    ), raidSpecialty.key, "income");
+    const drugLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER5.drugLossPctMin
       + Math.random() * (POLICE_RAID_TIER5.drugLossPctMax - POLICE_RAID_TIER5.drugLossPctMin + 1)
-    );
+    ), raidSpecialty.key, "drugs");
     const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
     const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
     money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
     money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
 
-    const materialLossResult = applyPoliceRaidMaterialConfiscation(economy, POLICE_RAID_TIER5.materialLossPct);
+    const materialLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER5.materialLossPct, raidSpecialty.key, "materials");
+    const materialLossResult = applyPoliceRaidMaterialConfiscation(economy, materialLossPct);
 
     const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
       ? { ...economy.drugInventory }
@@ -5553,7 +6498,7 @@ window.Empire.UI = (() => {
     let attackWeaponLoss = 0;
     attackWeaponStats.forEach((item) => {
       const current = Math.max(0, Math.floor(Number(nextAttackWeapons[item.name] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER5.attackWeaponLossPct / 100));
+      const loss = Math.max(0, Math.floor(current * scalePoliceRaidLossPct(POLICE_RAID_TIER5.attackWeaponLossPct, raidSpecialty.key, "attackWeapons") / 100));
       if (loss > 0) {
         nextAttackWeapons[item.name] = Math.max(0, current - loss);
         attackWeaponLoss += loss;
@@ -5568,7 +6513,7 @@ window.Empire.UI = (() => {
     let defenseWeaponLoss = 0;
     defenseWeaponStats.forEach((item) => {
       const current = Math.max(0, Math.floor(Number(nextDefenseWeapons[item.name] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER5.defenseWeaponLossPct / 100));
+      const loss = Math.max(0, Math.floor(current * scalePoliceRaidLossPct(POLICE_RAID_TIER5.defenseWeaponLossPct, raidSpecialty.key, "defenseWeapons") / 100));
       if (loss > 0) {
         nextDefenseWeapons[item.name] = Math.max(0, current - loss);
         defenseWeaponLoss += loss;
@@ -5578,10 +6523,14 @@ window.Empire.UI = (() => {
     });
     if (defenseWeaponLoss > 0) persistDefenseCounts(nextDefenseWeapons);
 
-    const influenceLossPct = Math.floor(
+    const attackWeaponLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER5.attackWeaponLossPct, raidSpecialty.key, "attackWeapons");
+    const defenseWeaponLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER5.defenseWeaponLossPct, raidSpecialty.key, "defenseWeapons");
+    const attackPowerPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER5.attackPowerPenaltyPct, raidSpecialty.key, "attackPower");
+    const defensePowerPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER5.defensePowerPenaltyPct, raidSpecialty.key, "defensePower");
+    const influenceLossPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER5.influencePenaltyPctMin
       + Math.random() * (POLICE_RAID_TIER5.influencePenaltyPctMax - POLICE_RAID_TIER5.influencePenaltyPctMin + 1)
-    );
+    ), raidSpecialty.key, "influence");
     const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
     const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
     const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
@@ -5598,31 +6547,30 @@ window.Empire.UI = (() => {
     economy.defenseDetail = { ...nextDefenseWeapons };
     updateEconomy(economy);
 
-    const currentProfile = cachedProfile || window.Empire.player || {};
-    const raidSpecialty =
-      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
-      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 5);
     updateProfile({
       ...currentProfile,
       influence: nextInfluence
     });
 
-    const arrestsPct = Math.floor(
+    const arrestsPct = scalePoliceRaidLossPct(Math.floor(
       POLICE_RAID_TIER5.arrestsPctMin
       + Math.random() * (POLICE_RAID_TIER5.arrestsPctMax - POLICE_RAID_TIER5.arrestsPctMin + 1)
-    );
+    ), raidSpecialty.key, "arrests");
     const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
     const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
     if (arrested > 0) consumeGangMembers(arrested);
 
     const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
     setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
-    setPoliceRaidProductionPenalty("lab", POLICE_RAID_TIER5.productionFreezePct, expiresAt);
-    setPoliceRaidProductionPenalty("armory", POLICE_RAID_TIER5.productionFreezePct, expiresAt);
-    setPoliceRaidProductionPenalty("factory", POLICE_RAID_TIER5.productionFreezePct, expiresAt);
+    const labProductionPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER5.productionFreezePct, raidSpecialty.key, "labProduction");
+    const armoryProductionPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER5.productionFreezePct, raidSpecialty.key, "armoryProduction");
+    const factoryProductionPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER5.productionFreezePct, raidSpecialty.key, "factoryProduction");
+    setPoliceRaidProductionPenalty("lab", labProductionPenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("armory", armoryProductionPenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("factory", factoryProductionPenaltyPct, expiresAt);
     setPoliceRaidCombatPenalty(
-      POLICE_RAID_TIER5.attackPowerPenaltyPct,
-      POLICE_RAID_TIER5.defensePowerPenaltyPct,
+      attackPowerPenaltyPct,
+      defensePowerPenaltyPct,
       expiresAt
     );
     setPoliceRaidBuildingActionLock("pharmacy_factory_special", expiresAt);
@@ -5640,23 +6588,23 @@ window.Empire.UI = (() => {
       dirtyLoss,
       dirtyLossPct,
       materialLoss: materialLossResult.totalLoss,
-      materialLossPct: materialLossResult.lossPct,
+      materialLossPct: materialLossPct,
       drugLoss: totalDrugLoss,
       drugLossPct,
       arrested,
       arrestsPct,
       attackWeaponLoss,
-      attackWeaponLossPct: POLICE_RAID_TIER5.attackWeaponLossPct,
+      attackWeaponLossPct,
       defenseWeaponLoss,
-      defenseWeaponLossPct: POLICE_RAID_TIER5.defenseWeaponLossPct,
-      attackPowerPenaltyPct: POLICE_RAID_TIER5.attackPowerPenaltyPct,
-      defensePowerPenaltyPct: POLICE_RAID_TIER5.defensePowerPenaltyPct,
+      defenseWeaponLossPct,
+      attackPowerPenaltyPct,
+      defensePowerPenaltyPct,
       influenceLoss,
       influenceLossPct,
-      labProductionPenaltyPct: POLICE_RAID_TIER5.productionFreezePct,
-      armoryProductionPenaltyPct: POLICE_RAID_TIER5.productionFreezePct,
-      factoryProductionPenaltyPct: POLICE_RAID_TIER5.productionFreezePct,
-      productionFrozen: true,
+      labProductionPenaltyPct,
+      armoryProductionPenaltyPct,
+      factoryProductionPenaltyPct,
+      productionFrozen: labProductionPenaltyPct >= 100 && armoryProductionPenaltyPct >= 100 && factoryProductionPenaltyPct >= 100,
       raidSpecialtyKey: raidSpecialty.key,
       raidSpecialtyLabel: raidSpecialty.label,
       spyBlocked: true,
@@ -5670,12 +6618,12 @@ window.Empire.UI = (() => {
     pushEvent(
       `Razia (${district?.name || `#${district?.id}`}) - Tier 5: income -${incomePenaltyPct}%, `
       + `clean -${cleanLossPct}% ($${cleanLoss}), dirty -${dirtyLossPct}% ($${dirtyLoss}), `
-      + `materiály -${POLICE_RAID_TIER5.materialLossPct}% (${materialLossResult.totalLoss}), `
+      + `materiály -${materialLossPct}% (${materialLossResult.totalLoss}), `
       + `drogy -${drugLossPct}% (${totalDrugLoss}), zatčeno ${arrested} (${arrestsPct}%), `
-      + `út. zbraně -${POLICE_RAID_TIER5.attackWeaponLossPct}% (${attackWeaponLoss}), `
-      + `obr. zbraně -${POLICE_RAID_TIER5.defenseWeaponLossPct}% (${defenseWeaponLoss}), `
-      + `síla útok -${POLICE_RAID_TIER5.attackPowerPenaltyPct}%, síla obrana -${POLICE_RAID_TIER5.defensePowerPenaltyPct}%, `
-      + `vliv -${influenceLossPct}% (${influenceLoss}), výroba zmražená na 1h.`
+      + `út. zbraně -${attackWeaponLossPct}% (${attackWeaponLoss}), `
+      + `obr. zbraně -${defenseWeaponLossPct}% (${defenseWeaponLoss}), `
+      + `síla útok -${attackPowerPenaltyPct}%, síla obrana -${defensePowerPenaltyPct}%, `
+      + `vliv -${influenceLossPct}% (${influenceLoss}), lab -${labProductionPenaltyPct}%, zbrojovka -${armoryProductionPenaltyPct}%, továrna -${factoryProductionPenaltyPct}%.`
     );
     return impactRecord;
   }
@@ -5685,14 +6633,27 @@ window.Empire.UI = (() => {
     if (!impactKey || appliedPoliceRaidImpactKeys.has(impactKey)) return null;
     appliedPoliceRaidImpactKeys.add(impactKey);
 
+    const currentProfile = cachedProfile || window.Empire.player || {};
+    const raidSpecialty = resolvePoliceRaidImpactSpecialty(detail, 6);
     const economy = ensureEconomyCache();
     const money = resolveMoneyBreakdown(economy || {});
-    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * POLICE_RAID_TIER6.cleanConfiscationPct / 100));
-    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * POLICE_RAID_TIER6.dirtyConfiscationPct / 100));
+    const incomePenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.incomePenaltyPct, raidSpecialty.key, "income");
+    const cleanLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.cleanConfiscationPct, raidSpecialty.key, "clean");
+    const dirtyLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.dirtyConfiscationPct, raidSpecialty.key, "dirty");
+    const drugLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.drugLossPct, raidSpecialty.key, "drugs");
+    const materialLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.materialLossPct, raidSpecialty.key, "materials");
+    const attackWeaponLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.attackWeaponLossPct, raidSpecialty.key, "attackWeapons");
+    const defenseWeaponLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.defenseWeaponLossPct, raidSpecialty.key, "defenseWeapons");
+    const attackPowerPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.attackPowerPenaltyPct, raidSpecialty.key, "attackPower");
+    const defensePowerPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.defensePowerPenaltyPct, raidSpecialty.key, "defensePower");
+    const influenceLossPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.influencePenaltyPct, raidSpecialty.key, "influence");
+    const arrestsPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.arrestsPct, raidSpecialty.key, "arrests");
+    const cleanLoss = Math.max(0, Math.floor(money.cleanMoney * cleanLossPct / 100));
+    const dirtyLoss = Math.max(0, Math.floor(money.dirtyMoney * dirtyLossPct / 100));
     money.cleanMoney = Math.max(0, money.cleanMoney - cleanLoss);
     money.dirtyMoney = Math.max(0, money.dirtyMoney - dirtyLoss);
 
-    const materialLossResult = applyPoliceRaidMaterialConfiscation(economy, POLICE_RAID_TIER6.materialLossPct);
+    const materialLossResult = applyPoliceRaidMaterialConfiscation(economy, materialLossPct);
 
     const drugInventory = economy.drugInventory && typeof economy.drugInventory === "object"
       ? { ...economy.drugInventory }
@@ -5700,7 +6661,7 @@ window.Empire.UI = (() => {
     let totalDrugLoss = 0;
     storageDrugTypes.forEach((drug) => {
       const current = Math.max(0, Math.floor(Number(drugInventory[drug.key] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER6.drugLossPct / 100));
+      const loss = Math.max(0, Math.floor(current * drugLossPct / 100));
       if (loss > 0) {
         drugInventory[drug.key] = Math.max(0, current - loss);
         totalDrugLoss += loss;
@@ -5715,7 +6676,7 @@ window.Empire.UI = (() => {
     let attackWeaponLoss = 0;
     attackWeaponStats.forEach((item) => {
       const current = Math.max(0, Math.floor(Number(nextAttackWeapons[item.name] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER6.attackWeaponLossPct / 100));
+      const loss = Math.max(0, Math.floor(current * attackWeaponLossPct / 100));
       if (loss > 0) {
         nextAttackWeapons[item.name] = Math.max(0, current - loss);
         attackWeaponLoss += loss;
@@ -5730,7 +6691,7 @@ window.Empire.UI = (() => {
     let defenseWeaponLoss = 0;
     defenseWeaponStats.forEach((item) => {
       const current = Math.max(0, Math.floor(Number(nextDefenseWeapons[item.name] || 0)));
-      const loss = Math.max(0, Math.floor(current * POLICE_RAID_TIER6.defenseWeaponLossPct / 100));
+      const loss = Math.max(0, Math.floor(current * defenseWeaponLossPct / 100));
       if (loss > 0) {
         nextDefenseWeapons[item.name] = Math.max(0, current - loss);
         defenseWeaponLoss += loss;
@@ -5741,7 +6702,7 @@ window.Empire.UI = (() => {
     if (defenseWeaponLoss > 0) persistDefenseCounts(nextDefenseWeapons);
 
     const currentInfluence = Math.max(0, Math.floor(Number(economy.influence || 0)));
-    const influenceLoss = Math.max(0, Math.floor(currentInfluence * POLICE_RAID_TIER6.influencePenaltyPct / 100));
+    const influenceLoss = Math.max(0, Math.floor(currentInfluence * influenceLossPct / 100));
     const nextInfluence = Math.max(0, currentInfluence - influenceLoss);
 
     economy.cleanMoney = money.cleanMoney;
@@ -5756,30 +6717,29 @@ window.Empire.UI = (() => {
     economy.defenseDetail = { ...nextDefenseWeapons };
     updateEconomy(economy);
 
-    const currentProfile = cachedProfile || window.Empire.player || {};
-    const raidSpecialty =
-      resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
-      || resolvePoliceRaidSpecialtyFromProfile(currentProfile, 6);
     updateProfile({
       ...currentProfile,
       influence: nextInfluence
     });
 
     const population = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(currentProfile)) || 0));
-    const arrested = Math.max(0, Math.floor(population * POLICE_RAID_TIER6.arrestsPct / 100));
+    const arrested = Math.max(0, Math.floor(population * arrestsPct / 100));
     if (arrested > 0) consumeGangMembers(arrested);
 
     const expiresAt = Math.max(0, Math.floor(Number(detail?.startedAt || 0) + Number(detail?.durationMs || GANG_HEAT_POLICE_DURATION_MS)));
-    setPoliceRaidIncomePenaltyForOwnedDistricts(POLICE_RAID_TIER6.incomePenaltyPct, expiresAt);
-    setPoliceRaidProductionPenalty("lab", POLICE_RAID_TIER6.productionFreezePct, expiresAt);
-    setPoliceRaidProductionPenalty("armory", POLICE_RAID_TIER6.productionFreezePct, expiresAt);
-    setPoliceRaidProductionPenalty("factory", POLICE_RAID_TIER6.productionFreezePct, expiresAt);
+    const labProductionPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.productionFreezePct, raidSpecialty.key, "labProduction");
+    const armoryProductionPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.productionFreezePct, raidSpecialty.key, "armoryProduction");
+    const factoryProductionPenaltyPct = scalePoliceRaidLossPct(POLICE_RAID_TIER6.productionFreezePct, raidSpecialty.key, "factoryProduction");
+    setPoliceRaidIncomePenaltyForOwnedDistricts(incomePenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("lab", labProductionPenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("armory", armoryProductionPenaltyPct, expiresAt);
+    setPoliceRaidProductionPenalty("factory", factoryProductionPenaltyPct, expiresAt);
     setPoliceRaidBuildingActionLock("pharmacy_factory_special", expiresAt);
     setPoliceRaidBuildingActionLock("all_special_buildings", expiresAt);
     setPoliceRaidBuildingActionLock("all_actions_blocked", expiresAt);
     setPoliceRaidCombatPenalty(
-      POLICE_RAID_TIER6.attackPowerPenaltyPct,
-      POLICE_RAID_TIER6.defensePowerPenaltyPct,
+      attackPowerPenaltyPct,
+      defensePowerPenaltyPct,
       expiresAt
     );
 
@@ -5789,29 +6749,29 @@ window.Empire.UI = (() => {
       startedAt: Math.max(0, Math.floor(Number(detail?.startedAt) || Date.now())),
       expiresAt,
       tier: 6,
-      incomePenaltyPct: POLICE_RAID_TIER6.incomePenaltyPct,
+      incomePenaltyPct,
       cleanLoss,
-      cleanLossPct: POLICE_RAID_TIER6.cleanConfiscationPct,
+      cleanLossPct,
       dirtyLoss,
-      dirtyLossPct: POLICE_RAID_TIER6.dirtyConfiscationPct,
+      dirtyLossPct,
       materialLoss: materialLossResult.totalLoss,
-      materialLossPct: materialLossResult.lossPct,
+      materialLossPct,
       drugLoss: totalDrugLoss,
-      drugLossPct: POLICE_RAID_TIER6.drugLossPct,
+      drugLossPct,
       arrested,
-      arrestsPct: POLICE_RAID_TIER6.arrestsPct,
+      arrestsPct,
       attackWeaponLoss,
-      attackWeaponLossPct: POLICE_RAID_TIER6.attackWeaponLossPct,
+      attackWeaponLossPct,
       defenseWeaponLoss,
-      defenseWeaponLossPct: POLICE_RAID_TIER6.defenseWeaponLossPct,
-      attackPowerPenaltyPct: POLICE_RAID_TIER6.attackPowerPenaltyPct,
-      defensePowerPenaltyPct: POLICE_RAID_TIER6.defensePowerPenaltyPct,
+      defenseWeaponLossPct,
+      attackPowerPenaltyPct,
+      defensePowerPenaltyPct,
       influenceLoss,
-      influenceLossPct: POLICE_RAID_TIER6.influencePenaltyPct,
-      labProductionPenaltyPct: POLICE_RAID_TIER6.productionFreezePct,
-      armoryProductionPenaltyPct: POLICE_RAID_TIER6.productionFreezePct,
-      factoryProductionPenaltyPct: POLICE_RAID_TIER6.productionFreezePct,
-      productionFrozen: true,
+      influenceLossPct,
+      labProductionPenaltyPct,
+      armoryProductionPenaltyPct,
+      factoryProductionPenaltyPct,
+      productionFrozen: labProductionPenaltyPct >= 100 && armoryProductionPenaltyPct >= 100 && factoryProductionPenaltyPct >= 100,
       raidSpecialtyKey: raidSpecialty.key,
       raidSpecialtyLabel: raidSpecialty.label,
       spyBlocked: true,
@@ -5824,12 +6784,12 @@ window.Empire.UI = (() => {
     };
     getPoliceRaidImpactMap().set(impactKey, impactRecord);
     pushEvent(
-      `Razia (${district?.name || `#${district?.id}`}) - Tier 6: income zastaveno, clean -${POLICE_RAID_TIER6.cleanConfiscationPct}%, `
-      + `dirty -${POLICE_RAID_TIER6.dirtyConfiscationPct}%, materiály -${POLICE_RAID_TIER6.materialLossPct}%, `
-      + `drogy -${POLICE_RAID_TIER6.drugLossPct}%, zatčeno ${arrested} (${POLICE_RAID_TIER6.arrestsPct}%), `
-      + `út. zbraně -${POLICE_RAID_TIER6.attackWeaponLossPct}%, obr. zbraně -${POLICE_RAID_TIER6.defenseWeaponLossPct}%, `
-      + `síla útok -${POLICE_RAID_TIER6.attackPowerPenaltyPct}%, síla obrana -${POLICE_RAID_TIER6.defensePowerPenaltyPct}%, `
-      + `vliv -${POLICE_RAID_TIER6.influencePenaltyPct}%, všechno ztichlo a je zamčeno.`
+      `Razia (${district?.name || `#${district?.id}`}) - Tier 6: income -${incomePenaltyPct}%, clean -${cleanLossPct}%, `
+      + `dirty -${dirtyLossPct}%, materiály -${materialLossPct}%, `
+      + `drogy -${drugLossPct}%, zatčeno ${arrested} (${arrestsPct}%), `
+      + `út. zbraně -${attackWeaponLossPct}%, obr. zbraně -${defenseWeaponLossPct}%, `
+      + `síla útok -${attackPowerPenaltyPct}%, síla obrana -${defensePowerPenaltyPct}%, `
+      + `vliv -${influenceLossPct}%, lab -${labProductionPenaltyPct}%, zbrojovka -${armoryProductionPenaltyPct}%, továrna -${factoryProductionPenaltyPct}%.`
     );
     return impactRecord;
   }
@@ -5873,7 +6833,14 @@ window.Empire.UI = (() => {
   }
 
   function resolveRaidOutcomeKey(district) {
-    const chances = resolveRaidOutcomeChances(district);
+    const chances = { ...resolveRaidOutcomeChances(district) };
+    const defenseSpecial = resolveDistrictDefenseSpecialModifiers(district?.id);
+    if (defenseSpecial.raidAlarmBoostActive) {
+      const cleanPenalty = Math.min(chances.clean_success - 5, 25);
+      chances.clean_success = Math.max(5, chances.clean_success - cleanPenalty);
+      chances.dirty_fail += 5;
+      chances.disaster += cleanPenalty - 5;
+    }
     const roll = Math.random() * 100;
     if (roll < chances.clean_success) return "clean_success";
     if (roll < chances.clean_success + chances.dirty_fail) return "dirty_fail";
@@ -6211,13 +7178,45 @@ window.Empire.UI = (() => {
       };
     }
     const isUnowned = isDistrictUnownedForSpyOutcome(district);
-    const chances = isUnowned
+    const baseChances = isUnowned
       ? { success: 70, mediumFail: 20, majorFail: 10 }
       : { success: 52, mediumFail: 28, majorFail: 20 };
+    const spyDefensePenalty = resolveSpyDefensePenalty(district?.id);
+    const successPenalty = Math.max(0, Math.min(baseChances.success - 5, Number(spyDefensePenalty.successPenalty || 0)));
+    const majorShift = Math.max(0, Math.min(successPenalty, Number(spyDefensePenalty.majorShift || 0)));
+    const mediumShift = Math.max(0, successPenalty - majorShift);
+    const chances = {
+      success: Math.max(5, baseChances.success - successPenalty),
+      mediumFail: baseChances.mediumFail + mediumShift,
+      majorFail: baseChances.majorFail + majorShift
+    };
     const roll = Math.random() * 100;
     if (roll < chances.success) return { key: "success", chances };
     if (roll < chances.success + chances.mediumFail) return { key: "medium_fail", chances };
     return { key: "major_fail", chances };
+  }
+
+  function resolveSpyDefensePenalty(districtId) {
+    const modifiers = resolveDistrictDefenseSpecialModifiers(districtId);
+    const counts = {
+      securityCameraCount: modifiers.cameraCount,
+      alarmSystemCount: modifiers.alarmCount
+    };
+    let successPenalty = 0;
+    let majorShift = 0;
+    if (counts.securityCameraCount >= 5) {
+      successPenalty += 8;
+      majorShift += 3;
+    }
+    if (counts.alarmSystemCount >= 5) {
+      successPenalty += 8;
+      majorShift += 3;
+    }
+    return {
+      ...counts,
+      successPenalty,
+      majorShift
+    };
   }
 
   function estimateSpyDefenseIntel(district) {
@@ -6272,18 +7271,51 @@ window.Empire.UI = (() => {
     };
   }
 
+  function buildPartialSpyIntelPayload(district) {
+    const fullIntel = buildSpyIntelPayload(district);
+    const revealableFields = ["weapons", "powerRangeLabel", "districtType", "atmosphere", "buildings"];
+    const shuffledFields = [...revealableFields].sort(() => Math.random() - 0.5);
+    const revealedFields = new Set(shuffledFields.slice(0, 2));
+    return {
+      weapons: revealedFields.has("weapons") ? fullIntel.weapons : null,
+      powerRangeLabel: revealedFields.has("powerRangeLabel") ? fullIntel.powerRangeLabel : null,
+      districtType: revealedFields.has("districtType") ? fullIntel.districtType : null,
+      atmosphere: revealedFields.has("atmosphere") ? fullIntel.atmosphere : null,
+      buildings: revealedFields.has("buildings") ? [...fullIntel.buildings] : [],
+      knownFields: {
+        weapons: revealedFields.has("weapons"),
+        powerRangeLabel: revealedFields.has("powerRangeLabel"),
+        districtType: revealedFields.has("districtType"),
+        atmosphere: revealedFields.has("atmosphere"),
+        buildings: revealedFields.has("buildings")
+      },
+      createdAt: Date.now()
+    };
+  }
+
   function buildSpySuccessDetailsMarkup(intel) {
-    const buildingLabel = Array.isArray(intel?.buildings) && intel.buildings.length
-      ? intel.buildings.join(", ")
-      : "Bez významných budov";
-    const weapons = Math.max(0, Math.floor(Number(intel?.weapons) || 0));
-    const powerRangeLabel = String(intel?.powerRangeLabel || "").trim() || "Neznámá";
-    const districtType = String(intel?.districtType || "").trim() || "Neznámý";
-    const atmosphere = String(intel?.atmosphere || "").trim() || "Neznámá";
+    const knownFields = normalizeSpyIntelKnownFields(intel || {});
+    const buildingLabel = knownFields.buildings
+      ? ((Array.isArray(intel?.buildings) && intel.buildings.length)
+        ? intel.buildings.join(", ")
+        : "Bez významných budov")
+      : "Nezjištěno";
+    const weapons = knownFields.weapons
+      ? `${Math.max(0, Math.floor(Number(intel?.weapons) || 0))} ks`
+      : "Nezjištěno";
+    const powerRangeLabel = knownFields.powerRangeLabel
+      ? (String(intel?.powerRangeLabel || "").trim() || "Neznámá")
+      : "Nezjištěno";
+    const districtType = knownFields.districtType
+      ? (String(intel?.districtType || "").trim() || "Neznámý")
+      : "Nezjištěno";
+    const atmosphere = knownFields.atmosphere
+      ? (String(intel?.atmosphere || "").trim() || "Neznámá")
+      : "Nezjištěno";
     return `
       <div class="modal__row">
         <span>Odhad obrany (zbraně)</span>
-        <strong>${weapons} ks</strong>
+        <strong>${weapons}</strong>
       </div>
       <div class="modal__row">
         <span>Odhad síly obrany (±20 %)</span>
@@ -6304,9 +7336,61 @@ window.Empire.UI = (() => {
     `;
   }
 
+  function resolveSpySuccessSummary(district) {
+    if (isDistrictUnownedForSpyOutcome(district)) {
+      const quotes = SPY_SUCCESS_EMPTY_DISTRICT_QUOTES;
+      if (quotes.length) {
+        return String(quotes[Math.floor(Math.random() * quotes.length)] || "").trim();
+      }
+    }
+    if (district?.owner) {
+      const quotes = SPY_SUCCESS_OCCUPIED_DISTRICT_QUOTES;
+      if (quotes.length) {
+        return String(quotes[Math.floor(Math.random() * quotes.length)] || "").trim();
+      }
+    }
+    const districtName = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    return `Špehování distriktu ${districtName} dopadlo úspěšně.`;
+  }
+
+  function resolveSpyMediumFailSummary(district) {
+    if (isDistrictUnownedForSpyOutcome(district)) {
+      const quotes = SPY_MEDIUM_FAIL_EMPTY_DISTRICT_QUOTES;
+      if (quotes.length) {
+        return String(quotes[Math.floor(Math.random() * quotes.length)] || "").trim();
+      }
+    }
+    if (district?.owner) {
+      const quotes = SPY_MEDIUM_FAIL_OCCUPIED_DISTRICT_QUOTES;
+      if (quotes.length) {
+        return String(quotes[Math.floor(Math.random() * quotes.length)] || "").trim();
+      }
+    }
+    const districtName = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    return `Akce v ${districtName} nedopadla dobře, ale tvůj špeh se vrátil.`;
+  }
+
+  function resolveSpyMajorFailSummary(district) {
+    if (isDistrictUnownedForSpyOutcome(district)) {
+      const quotes = SPY_MAJOR_FAIL_EMPTY_DISTRICT_QUOTES;
+      if (quotes.length) {
+        return String(quotes[Math.floor(Math.random() * quotes.length)] || "").trim();
+      }
+    }
+    if (district?.owner) {
+      const quotes = SPY_MAJOR_FAIL_OCCUPIED_DISTRICT_QUOTES;
+      if (quotes.length) {
+        return String(quotes[Math.floor(Math.random() * quotes.length)] || "").trim();
+      }
+    }
+    const districtName = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    return `Špeh byl v districtu ${districtName} zajat. Ve zdroji je zamčen na 60 sekund.`;
+  }
+
   function isResultModalVisible() {
     const roots = [
       document.getElementById("spy-result-modal"),
+      document.getElementById("spy-warning-modal"),
       document.getElementById("raid-result-modal"),
       document.getElementById("attack-result-modal")
     ];
@@ -6329,11 +7413,25 @@ window.Empire.UI = (() => {
       openRaidResultModal(next.payload);
       return;
     }
+    if (next.kind === "spy_alert") {
+      openSpyDetectionAlertModal(next.payload);
+      return;
+    }
     openSpyResultModal(next.payload);
   }
 
   function closeSpyResultModal() {
     const root = document.getElementById("spy-result-modal");
+    if (root) root.classList.add("hidden");
+    if (suppressResultModalQueueAdvance) return;
+    if (!pendingResultModalQueue.length) return;
+    setTimeout(() => {
+      renderNextPendingResultModal();
+    }, 80);
+  }
+
+  function closeSpyDetectionAlertModal() {
+    const root = document.getElementById("spy-warning-modal");
     if (root) root.classList.add("hidden");
     if (suppressResultModalQueueAdvance) return;
     if (!pendingResultModalQueue.length) return;
@@ -6356,22 +7454,23 @@ window.Empire.UI = (() => {
     if (outcomeKey === "success") {
       content.classList.add("is-success");
       title.textContent = "Špehování: Úspěch";
-      summary.textContent = `Špehování distriktu ${districtName} dopadlo úspěšně.`;
+      summary.textContent = resolveSpySuccessSummary(district);
       details.innerHTML = buildSpySuccessDetailsMarkup(spyIntel);
     } else if (outcomeKey === "medium_fail") {
       content.classList.add("is-medium-fail");
       title.textContent = "Špehování: Částečný neúspěch";
-      summary.textContent = `Akce v ${districtName} nedopadla dobře, ale tvůj špeh se vrátil.`;
+      summary.textContent = resolveSpyMediumFailSummary(district);
       details.innerHTML = `
         <div class="modal__row">
           <span>Stav špeha</span>
           <strong>Vrátil se</strong>
         </div>
+        ${spyIntel ? buildSpySuccessDetailsMarkup(spyIntel) : ""}
       `;
     } else {
       content.classList.add("is-major-fail");
       title.textContent = "Špehování: Velký neúspěch";
-      summary.textContent = `Špeh byl v districtu ${districtName} zajat. Ve zdroji je zamčen na 60 sekund.`;
+      summary.textContent = resolveSpyMajorFailSummary(district);
       details.innerHTML = `
         <div class="modal__row">
           <span>Stav špeha</span>
@@ -6391,6 +7490,69 @@ window.Empire.UI = (() => {
     renderSpyResultModal(payload);
   }
 
+  function renderSpyDetectionAlertModal({
+    district,
+    summary,
+    badgeLabel = "Vlastní district pod tlakem",
+    alertKind = "player",
+    attackerNick = "Neznámý hráč",
+    attackerGang = "Neznámý gang",
+    attackerAlliance = "Bez aliance",
+    detectedAt = Date.now()
+  }) {
+    const root = document.getElementById("spy-warning-modal");
+    const content = document.getElementById("spy-warning-modal-content");
+    const title = document.getElementById("spy-warning-modal-title");
+    const badge = document.getElementById("spy-warning-modal-badge");
+    const summaryEl = document.getElementById("spy-warning-modal-summary");
+    const details = document.getElementById("spy-warning-modal-details");
+    if (!root || !content || !title || !badge || !summaryEl || !details) return;
+
+    const districtName = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    const detectedAtLabel = formatSpyDetectionAlertTime(detectedAt);
+    content.classList.remove("is-success", "is-medium-fail", "is-major-fail", "is-player-alert", "is-alliance-alert");
+    content.classList.add(alertKind === "alliance" ? "is-alliance-alert" : "is-player-alert");
+    title.textContent = "Upozornění: Neúspěšné špehování";
+    badge.textContent = badgeLabel;
+    summaryEl.textContent = String(summary || "").trim() || `Někdo se pokusil neúspěšně špehovat district ${districtName}. Špeha vyslal: ${attackerNick}.`;
+    details.innerHTML = `
+      <div class="modal__row">
+        <span>Cíl</span>
+        <strong>${districtName}</strong>
+      </div>
+      <div class="modal__row">
+        <span>Odeslal špeha</span>
+        <strong class="spy-warning-modal__identity spy-warning-modal__identity--nick">${attackerNick}</strong>
+      </div>
+      <div class="modal__row">
+        <span>Gang útočníka</span>
+        <strong class="spy-warning-modal__identity spy-warning-modal__identity--gang">${attackerGang}</strong>
+      </div>
+      <div class="modal__row">
+        <span>Aliance útočníka</span>
+        <strong class="spy-warning-modal__identity spy-warning-modal__identity--alliance">${attackerAlliance}</strong>
+      </div>
+      <div class="modal__row">
+        <span>Čas zachycení</span>
+        <strong>${detectedAtLabel}</strong>
+      </div>
+      <div class="modal__row">
+        <span>Stav districtu</span>
+        <strong>Špeh byl odhalen</strong>
+      </div>
+    `;
+
+    root.classList.remove("hidden");
+  }
+
+  function openSpyDetectionAlertModal(payload) {
+    if (isResultModalVisible()) {
+      pendingResultModalQueue.push({ kind: "spy_alert", payload });
+      return;
+    }
+    renderSpyDetectionAlertModal(payload);
+  }
+
   function initSpyResultModal() {
     const root = document.getElementById("spy-result-modal");
     const backdrop = document.getElementById("spy-result-modal-backdrop");
@@ -6404,6 +7566,62 @@ window.Empire.UI = (() => {
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
         closeSpyResultModal();
       }
+    });
+  }
+
+  function initSpyDetectionAlertModal() {
+    const root = document.getElementById("spy-warning-modal");
+    const backdrop = document.getElementById("spy-warning-modal-backdrop");
+    const closeBtn = document.getElementById("spy-warning-modal-close");
+    const okBtn = document.getElementById("spy-warning-modal-ok");
+    if (!root) return;
+    if (backdrop) backdrop.addEventListener("click", closeSpyDetectionAlertModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeSpyDetectionAlertModal);
+    if (okBtn) okBtn.addEventListener("click", closeSpyDetectionAlertModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeSpyDetectionAlertModal();
+      }
+    });
+  }
+
+  function notifyDistrictOwnerAboutSpyFailure(district) {
+    if (!district || !district.owner || !isDistrictDefendableByPlayer(district)) return;
+    const districtName = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    const isAllianceDistrict = isDistrictOwnedByAlliance(district);
+    const detectedAt = Date.now();
+    const attackerNick = resolveCurrentPlayerNick();
+    const attackerGang = resolveCurrentPlayerGangName();
+    const attackerAlliance = resolveCurrentPlayerAllianceName();
+    const allianceName = String(
+      district?.ownerAllianceName
+      || district?.owner_alliance_name
+      || resolvePlayerAllianceVisualMeta()?.name
+      || "Aliance"
+    ).trim() || "Aliance";
+    const quotes = isAllianceDistrict
+      ? SPY_ALLIANCE_DETECTION_WARNING_QUOTES
+      : SPY_DETECTION_WARNING_QUOTES;
+    const summary = quotes.length
+      ? String(quotes[Math.floor(Math.random() * quotes.length)] || "")
+        .replaceAll("[ALLY]", allianceName)
+        .concat(` Špeha vyslal: ${attackerNick} • gang ${attackerGang} • aliance ${attackerAlliance}.`)
+        .trim()
+      : `Někdo se pokusil neúspěšně špehovat district ${districtName}. Špeha vyslal: ${attackerNick} • gang ${attackerGang} • aliance ${attackerAlliance}.`;
+    pushEvent(
+      isAllianceDistrict
+        ? `Varování: ${allianceName} zachytila cizího špeha od ${attackerNick} (${attackerGang} / ${attackerAlliance}).`
+        : `Varování: ${districtName} zachytil špeha od ${attackerNick} (${attackerGang} / ${attackerAlliance}).`
+    );
+    openSpyDetectionAlertModal({
+      district,
+      summary,
+      badgeLabel: isAllianceDistrict ? `Aliance v ohrožení • ${allianceName}` : "Vlastní district pod tlakem",
+      alertKind: isAllianceDistrict ? "alliance" : "player",
+      attackerNick,
+      attackerGang,
+      attackerAlliance,
+      detectedAt
     });
   }
 
@@ -6424,11 +7642,19 @@ window.Empire.UI = (() => {
       enqueueSpyRecovery(1, SPY_RECOVERY_COOLDOWN_MS);
       pushEvent(`Špehování distriktu ${district.name || `#${district.id}`} bylo úspěšné.`);
     } else if (outcomeKey === "medium_fail") {
+      discoveredIntel = setDistrictSpyIntel(
+        district.id,
+        buildPartialSpyIntelPayload(district),
+        { persist: !demoMode }
+      );
       setSpyCount(getSpyCount() + 1, { persist: true, animate: isSpyCountShownInTopbar });
       pushEvent("Špehování nedopadlo dobře, ale špeh se vrátil.");
     } else {
       enqueueSpyRecovery(1, 60 * 1000);
       pushEvent("Špehování selhalo. Špeh byl zajat a je zamčen na 60s.");
+      if (!isDistrictUnownedForSpyOutcome(district)) {
+        notifyDistrictOwnerAboutSpyFailure(district);
+      }
     }
 
     openSpyResultModal({ outcomeKey, district, chances: rolled.chances, spyIntel: discoveredIntel });
@@ -6891,6 +8117,7 @@ window.Empire.UI = (() => {
   function getPlayerOwnerNameSet() {
     const player = window.Empire.player || {};
     const names = [
+      activeScenarioOwnerName,
       player.gangName,
       player.gang_name,
       player.gang,
@@ -6907,6 +8134,10 @@ window.Empire.UI = (() => {
       .map((value) => normalizeOwnerName(value))
       .filter(Boolean);
     return new Set(names);
+  }
+
+  function resolveActiveScenarioOwnerName() {
+    return String(activeScenarioOwnerName || resolveScenarioOwnerName() || "").trim();
   }
 
   function isDistrictDestroyed(district) {
@@ -7353,6 +8584,20 @@ window.Empire.UI = (() => {
     return { cleanMoney, dirtyMoney, totalMoney };
   }
 
+  function applyMoneyToProfileSnapshot(profile, moneySource) {
+    const baseProfile = profile && typeof profile === "object" ? profile : {};
+    const money = resolveMoneyBreakdown(moneySource);
+    return {
+      ...baseProfile,
+      cleanMoney: money.cleanMoney,
+      dirtyMoney: money.dirtyMoney,
+      money: money.totalMoney,
+      balance: money.totalMoney,
+      cash: money.cleanMoney,
+      dirtyCash: money.dirtyMoney
+    };
+  }
+
   function normalizeHexColor(value) {
     const raw = String(value || "").trim().toLowerCase();
     if (!raw) return null;
@@ -7374,6 +8619,23 @@ window.Empire.UI = (() => {
     return `${minutes}m`;
   }
 
+  function pickRandomPoliceRaidSpecialtyKey() {
+    const weighted = POLICE_RAID_SPECIALTY_RANDOM_WEIGHTS
+      .map((entry) => ({
+        key: String(entry?.key || "").trim().toLowerCase(),
+        weight: Math.max(0, Number(entry?.weight || 0))
+      }))
+      .filter((entry) => entry.key && entry.weight > 0);
+    const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+    if (totalWeight <= 0) return "total";
+    let roll = Math.random() * totalWeight;
+    for (const entry of weighted) {
+      roll -= entry.weight;
+      if (roll <= 0) return entry.key;
+    }
+    return weighted[weighted.length - 1]?.key || "total";
+  }
+
   function resolvePoliceRaidSpecialtyKey(tier, detail = {}) {
     const explicitType = String(
       detail?.operationType
@@ -7381,10 +8643,6 @@ window.Empire.UI = (() => {
       || detail?.type
       || detail?.raidSpecialtyKey
       || detail?.raidSpecialty
-      || detail?.playStyle
-      || detail?.play_style
-      || detail?.strategy
-      || detail?.style
       || ""
     ).trim().toLowerCase();
     if (explicitType.includes("stealth") || explicitType.includes("shadow") || explicitType.includes("covert")) return "financial";
@@ -7396,12 +8654,7 @@ window.Empire.UI = (() => {
     if (explicitType.includes("drug")) return "drug";
     if (explicitType.includes("warehouse") || explicitType.includes("building") || explicitType.includes("weapon")) return "weapons";
     if (explicitType.includes("apartment") || explicitType.includes("district_lock") || explicitType.includes("arrest")) return "arrests";
-    const safeTier = Math.max(1, Math.floor(Number(tier) || 1));
-    if (safeTier <= 1) return "financial";
-    if (safeTier === 2) return "drug";
-    if (safeTier === 3) return "weapons";
-    if (safeTier === 4) return "arrests";
-    return "total";
+    return pickRandomPoliceRaidSpecialtyKey();
   }
 
   function resolvePoliceRaidSpecialty(tier, detail = {}) {
@@ -7412,36 +8665,26 @@ window.Empire.UI = (() => {
     };
   }
 
-  function resolvePoliceRaidSpecialtyFromProfile(profile, tier = null) {
-    const source = profile && typeof profile === "object" ? profile : {};
-    const playstyle = String(
-      source.playStyle
-      || source.play_style
-      || source.strategy
-      || source.style
-      || source.raidPlaystyle
-      || source.raid_playstyle
+  function resolveStoredPoliceRaidSpecialty(detail = {}) {
+    const explicitKey = String(
+      detail?.raidSpecialtyKey
+      || detail?.raid_specialty_key
+      || detail?.raidSpecialty
       || ""
-    ).trim();
-    if (playstyle) {
-      const specialty = resolvePoliceRaidSpecialtyKey(tier ?? 1, { playStyle: playstyle });
-      return POLICE_RAID_SPECIALTIES[specialty] || POLICE_RAID_SPECIALTIES.total;
-    }
-    return resolvePoliceRaidSpecialty(tier ?? 1, source);
+    ).trim().toLowerCase();
+    if (!explicitKey) return null;
+    const meta = POLICE_RAID_SPECIALTIES[explicitKey];
+    if (!meta) return null;
+    return { key: explicitKey, ...meta };
   }
 
   function resolvePoliceRaidSpecialtyFromOperationType(operationType, detail = {}) {
-    if (detail?.raidSpecialtyKey) {
-      return POLICE_RAID_SPECIALTIES[String(detail.raidSpecialtyKey).trim().toLowerCase()] || null;
-    }
+    const stored = resolveStoredPoliceRaidSpecialty(detail);
+    if (stored) return stored;
     const normalized = String(
       operationType
       || detail?.operationType
       || detail?.type
-      || detail?.playStyle
-      || detail?.play_style
-      || detail?.strategy
-      || detail?.style
       || ""
     ).trim().toLowerCase();
     if (!normalized) return null;
@@ -7454,6 +8697,25 @@ window.Empire.UI = (() => {
     if (normalized.includes("coordinated")) return POLICE_RAID_SPECIALTIES.total;
     if (normalized.includes("warning") || normalized.includes("control")) return POLICE_RAID_SPECIALTIES.financial;
     return null;
+  }
+
+  function resolvePoliceRaidImpactSpecialty(detail = {}, tier = 1) {
+    return resolveStoredPoliceRaidSpecialty(detail)
+      || resolvePoliceRaidSpecialtyFromOperationType(detail?.operationType, detail)
+      || resolvePoliceRaidSpecialty(tier, detail);
+  }
+
+  function resolvePoliceRaidLossMultiplier(specialtyKey, lossKey) {
+    const specialty = POLICE_RAID_SPECIALTY_LOSS_MULTIPLIERS[String(specialtyKey || "").trim().toLowerCase()]
+      || POLICE_RAID_SPECIALTY_LOSS_MULTIPLIERS.total;
+    const multiplier = Number(specialty?.[lossKey]);
+    return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+  }
+
+  function scalePoliceRaidLossPct(value, specialtyKey, lossKey, maxPct = 100) {
+    const safeValue = Math.max(0, Number(value) || 0);
+    const nextValue = Math.round(safeValue * resolvePoliceRaidLossMultiplier(specialtyKey, lossKey));
+    return Math.max(0, Math.min(maxPct, nextValue));
   }
 
   function resolveStoredGangColor() {
@@ -7553,6 +8815,7 @@ window.Empire.UI = (() => {
       return;
     }
     activePlayerScenarioKey = String(scenarioKey || "");
+    activeScenarioOwnerName = "";
     const normalizedScenarioKey = activePlayerScenarioKey === "alliance-ten-blackout"
         ? "alliance-ten"
         : activePlayerScenarioKey;
@@ -7561,6 +8824,7 @@ window.Empire.UI = (() => {
       : "";
 
     const ownerName = resolveScenarioOwnerName();
+    activeScenarioOwnerName = ownerName;
     const allyName = `${ownerName} - spojenec`;
     scenarioUniqueOwnerColors = false;
     scenarioProfileAvatarOverride = normalizedScenarioKey === "onboarding-20-edge" ? ONBOARDING_PROFILE_AVATAR : null;
@@ -7584,6 +8848,8 @@ window.Empire.UI = (() => {
     const baseProfile = {
       ...(window.Empire.player || {}),
       ...(cachedProfile || {}),
+      username: ownerName,
+      name: ownerName,
       gangName: cachedProfile?.gangName || ownerName,
       structure: cachedProfile?.structure || localStorage.getItem("empire_structure") || "-",
       alliance: "Žádná",
@@ -7662,9 +8928,19 @@ window.Empire.UI = (() => {
         activePlayerScenarioKey === "alliance-ten-blackout" ? "blackout" : "night"
       );
       {
+        const blackoutPlayerDistrictIds = new Set([84, 95, 92, 120, 126]);
         setScenarioAllianceOwners([blackoutAllyName]);
         nextDistricts = nextDistricts.map((district) => {
           const districtId = Number(district?.id);
+          if (blackoutPlayerDistrictIds.has(districtId)) {
+            return {
+              ...district,
+              owner: ownerName,
+              ownerNick: ownerName,
+              ownerAllianceName: blackoutAllianceName,
+              ...buildDemoDistrictOwnerMeta(ownerName, district)
+            };
+          }
           if (districtId === 143 || districtId === 121) {
             return {
               ...district,
@@ -7902,6 +9178,23 @@ window.Empire.UI = (() => {
     if (!window.Empire.token && activePlayerScenarioKey === "alliance-ten-blackout") {
       const allianceState = buildAllianceTenBlackoutLocalAllianceState(ownerName, "Knedlík");
       saveLocalAllianceState(allianceState);
+      const marketState = getLocalMarketState();
+      marketState.scenarioIncome = {
+        ...(marketState.scenarioIncome && typeof marketState.scenarioIncome === "object" ? marketState.scenarioIncome : {}),
+        [BLACKOUT_SCENARIO_INCOME_STORAGE_KEY]: Date.now(),
+        dirtyRemainder: 0
+      };
+      saveLocalMarketState(marketState);
+      const blackoutSources = buildBlackoutPlayerSourcesSnapshot(nextDistricts, ownerName);
+      if (hasMeaningfulBlackoutSources(blackoutSources)) {
+        lastValidBlackoutSources = blackoutSources;
+      }
+      baseProfile.sources = blackoutSources;
+      baseProfile.source = blackoutSources;
+      Object.assign(baseProfile, applyMoneyToProfileSnapshot(baseProfile, marketState.balances || {}));
+      baseProfile.sources = blackoutSources;
+      baseProfile.source = blackoutSources;
+      syncGuestEconomyFromMarket();
       syncGuestAllianceLabel(allianceState.alliances[0]?.name || "Žádná");
     }
     updateProfile(baseProfile);
@@ -8794,6 +10087,52 @@ window.Empire.UI = (() => {
     return String(resolveScenarioOwnerName() || "Ty");
   }
 
+  function resolveCurrentPlayerNick() {
+    return String(
+      cachedProfile?.username
+      || cachedProfile?.name
+      || window.Empire.player?.username
+      || window.Empire.player?.name
+      || localStorage.getItem("empire_guest_username")
+      || "Neznámý hráč"
+    ).trim() || "Neznámý hráč";
+  }
+
+  function resolveCurrentPlayerGangName() {
+    return String(
+      cachedProfile?.gangName
+      || cachedProfile?.gang_name
+      || window.Empire.player?.gangName
+      || window.Empire.player?.gang_name
+      || localStorage.getItem("empire_gang_name")
+      || resolveScenarioOwnerName()
+      || "Neznámý gang"
+    ).trim() || "Neznámý gang";
+  }
+
+  function resolveCurrentPlayerAllianceName() {
+    return String(
+      resolvePlayerAllianceVisualMeta()?.name
+      || cachedProfile?.alliance
+      || window.Empire.player?.alliance
+      || "Bez aliance"
+    ).trim() || "Bez aliance";
+  }
+
+  function formatSpyDetectionAlertTime(timestamp) {
+    const safeTimestamp = Math.max(0, Math.floor(Number(timestamp) || Date.now()));
+    try {
+      return new Intl.DateTimeFormat("cs-SK", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }).format(new Date(safeTimestamp));
+    } catch {
+      const date = new Date(safeTimestamp);
+      return date.toLocaleTimeString();
+    }
+  }
+
   function resolveCurrentPlayerOwnerKey() {
     const normalized = normalizeOwnerName(resolveCurrentPlayerOwnerLabel());
     return normalized || "player";
@@ -9461,6 +10800,11 @@ window.Empire.UI = (() => {
       addArmories: 6,
       addFactories: 6
     });
+    rebalanceIndustrialUtilityCounts(nextDistricts, {
+      targetStorage: 21,
+      reduceDataCenters: 5,
+      reducePowerStations: 10
+    });
     rebalanceDowntownCivicInfrastructure(nextDistricts);
     assignDowntownExchangeNames(nextDistricts);
     assignDowntownCentralBankNames(nextDistricts);
@@ -9847,6 +11191,45 @@ window.Empire.UI = (() => {
     selected.forEach((slot) => {
       slot.district.buildings[slot.index] = slot.next;
     });
+  }
+
+  function rebalanceIndustrialUtilityCounts(
+    districts,
+    { targetStorage = 21, reduceDataCenters = 5, reducePowerStations = 10 } = {}
+  ) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    const desiredStorage = Math.max(0, Math.floor(Number(targetStorage) || 0));
+    const dataReduction = Math.max(0, Math.floor(Number(reduceDataCenters) || 0));
+    const powerReduction = Math.max(0, Math.floor(Number(reducePowerStations) || 0));
+    if (!desiredStorage && !dataReduction && !powerReduction) return;
+
+    const industrialDistricts = districts
+      .filter((district) => district.type === "industrial" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+
+    const collectSlots = (buildingName) => industrialDistricts.flatMap((district) =>
+      district.buildings
+        .map((building, index) => (building === buildingName ? { district, index, key: `${district.id}:${index}` } : null))
+        .filter(Boolean)
+    );
+
+    let storageSlots = collectSlots("Sklad");
+    let storageNeeded = Math.max(0, desiredStorage - storageSlots.length);
+    if (!storageNeeded) return;
+
+    const applyReplacement = (buildingName, maxReduction) => {
+      if (!storageNeeded || !maxReduction) return;
+      const slots = collectSlots(buildingName);
+      const replacements = Math.min(storageNeeded, maxReduction, slots.length);
+      for (let i = 0; i < replacements; i += 1) {
+        const slot = slots[i];
+        slot.district.buildings[slot.index] = "Sklad";
+      }
+      storageNeeded -= replacements;
+    };
+
+    applyReplacement("Datové centrum", dataReduction);
+    applyReplacement("Energetická stanice", powerReduction);
   }
 
   function rebalanceResidentialTaxi(
@@ -10291,6 +11674,29 @@ window.Empire.UI = (() => {
     return districts.filter((district) => isDistrictOwnedByPlayer(district));
   }
 
+  function getBlackoutIncomeDistricts(districtsInput = window.Empire.districts) {
+    const districts = Array.isArray(districtsInput) ? districtsInput : [];
+    const ownedDistricts = districts.filter((district) => isDistrictOwnedByPlayer(district));
+    const byId = new Map();
+    ownedDistricts.forEach((district) => {
+      byId.set(Number(district?.id), district);
+    });
+    if (!ownedDistricts.length && activePlayerScenarioKey === "alliance-ten-blackout") {
+      districts.forEach((district) => {
+        const districtId = Number(district?.id);
+        if (!BLACKOUT_PLAYER_FALLBACK_DISTRICT_IDS.includes(districtId)) return;
+        byId.set(districtId, district);
+      });
+    } else if (activePlayerScenarioKey === "alliance-ten-blackout") {
+      districts.forEach((district) => {
+        const districtId = Number(district?.id);
+        if (!BLACKOUT_PLAYER_FALLBACK_DISTRICT_IDS.includes(districtId)) return;
+        byId.set(districtId, district);
+      });
+    }
+    return Array.from(byId.values()).filter((district) => !Boolean(district?.isDestroyed));
+  }
+
   function spendDirtyCash(amount) {
     const required = Number.isFinite(Number(amount)) ? Math.max(0, Math.floor(Number(amount))) : 0;
     if (required <= 0) return { ok: true, spent: 0 };
@@ -10653,7 +12059,9 @@ window.Empire.UI = (() => {
     const impact = impactKey ? getPoliceRaidImpactMap().get(impactKey) : null;
     const tier = Math.max(1, Math.floor(Number(impact?.tier || wantedTier)));
     const specialty =
-      resolvePoliceRaidSpecialtyFromOperationType(raidContext?.action?.operationType, impact)
+      resolveStoredPoliceRaidSpecialty(raidContext?.action || {})
+      || resolveStoredPoliceRaidSpecialty(impact || {})
+      || resolvePoliceRaidSpecialtyFromOperationType(raidContext?.action?.operationType, impact)
       || resolvePoliceRaidSpecialty(tier, impact || {});
     const incomePenaltyPct = Math.max(0, Math.floor(Number(impact?.incomePenaltyPct || raidContext.incomePenaltyPct || POLICE_RAID_TIER1.incomePenaltyPct)));
     const summary = tier === 1
@@ -12508,7 +13916,12 @@ window.Empire.UI = (() => {
     const mapAllianceSymbolsInput = document.getElementById("settings-map-alliance-symbols");
     const mapVisibilitySelect = document.getElementById("settings-map-visibility");
     if (!root) return;
+    const mobileMedia = window.matchMedia("(max-width: 720px)");
     let settingsSnapshot = null;
+
+    const syncMobileSettingsBackdropState = (open) => {
+      document.body.classList.toggle("mobile-settings-modal-open", Boolean(open) && mobileMedia.matches);
+    };
 
     const applySettingsToForm = () => {
       const settings = getSettingsState();
@@ -12522,14 +13935,14 @@ window.Empire.UI = (() => {
     };
 
     const captureFormSettings = () => ({
-      sound: Boolean(soundInput?.checked),
-      music: Boolean(musicInput?.checked),
+      sound: soundInput ? Boolean(soundInput.checked) : Boolean(getSettingsState().sound),
+      music: musicInput ? Boolean(musicInput.checked) : Boolean(getSettingsState().music),
       notifications: Boolean(getSettingsState().notifications),
-      effectsQuality: effectsQualitySelect?.value || DEFAULT_SETTINGS.effectsQuality,
-      language: languageSelect?.value || DEFAULT_SETTINGS.language,
+      effectsQuality: effectsQualitySelect?.value || getSettingsState().effectsQuality || DEFAULT_SETTINGS.effectsQuality,
+      language: languageSelect?.value || getSettingsState().language || DEFAULT_SETTINGS.language,
       mapDistrictBorders: Boolean(mapDistrictBordersInput?.checked),
-      mapAllianceSymbols: Boolean(mapAllianceSymbolsInput?.checked),
-      mapVisibilityMode: normalizeMapVisibilityMode(mapVisibilitySelect?.value)
+      mapAllianceSymbols: true,
+      mapVisibilityMode: "all"
     });
 
     const writeFormSettings = () => {
@@ -12552,6 +13965,7 @@ window.Empire.UI = (() => {
       }
       settingsSnapshot = null;
       root.classList.add("hidden");
+      syncMobileSettingsBackdropState(false);
     };
 
     const saveSettings = () => {
@@ -12562,6 +13976,7 @@ window.Empire.UI = (() => {
       syncMapVisionContext();
       settingsSnapshot = settings;
       root.classList.add("hidden");
+      syncMobileSettingsBackdropState(false);
       pushEvent("Nastavení bylo uloženo.");
     };
 
@@ -12583,6 +13998,7 @@ window.Empire.UI = (() => {
     root.addEventListener("settings:open", () => {
       settingsSnapshot = getSettingsState();
       applySettingsToForm();
+      syncMobileSettingsBackdropState(true);
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
@@ -13758,6 +15174,19 @@ window.Empire.UI = (() => {
     if (window.Empire.token) return;
     const state = getLocalMarketState();
     const money = resolveMoneyBreakdown(state.balances || {});
+    const currentProfile = cachedProfile || window.Empire.player || null;
+    if (currentProfile && typeof currentProfile === "object") {
+      const nextProfile = applyMoneyToProfileSnapshot(currentProfile, money);
+      if (activePlayerScenarioKey === "alliance-ten-blackout") {
+        nextProfile.sources = buildBlackoutPlayerSourcesSnapshot(window.Empire.districts, resolveActiveScenarioOwnerName());
+        nextProfile.source = nextProfile.sources;
+      }
+      cachedProfile = nextProfile;
+      window.Empire.player = {
+        ...(window.Empire.player || {}),
+        ...nextProfile
+      };
+    }
     const drugInventory = storageDrugTypes.reduce((acc, item) => {
       acc[item.key] = Number(state.balances[item.key] || 0);
       return acc;
@@ -13774,6 +15203,9 @@ window.Empire.UI = (() => {
       materials: Number(state.balances.materials || 0),
       dataShards: Number(state.balances.dataShards || 0)
     });
+    if (currentProfile && typeof currentProfile === "object") {
+      updateProfile(window.Empire.player);
+    }
   }
 
   function initWeaponsPopover() {
@@ -13887,6 +15319,47 @@ window.Empire.UI = (() => {
     const districtCount = Number.isFinite(Number(profile.districts)) ? Math.max(0, Math.floor(Number(profile.districts))) : 0;
     setText("profile-modal-alliance", allianceLabel ? `${allianceLabel} (${districtCount})` : "Žádná");
     setText("profile-modal-districts", profile.districts || 0);
+    const blackoutSourceRow = document.getElementById("profile-modal-blackout-source-row");
+    const blackoutSourceValue = document.getElementById("profile-modal-blackout-source");
+    try {
+      const rawBlackoutSources = activePlayerScenarioKey === "alliance-ten-blackout"
+        ? buildBlackoutPlayerSourcesSnapshot(window.Empire.districts, resolveActiveScenarioOwnerName())
+        : null;
+      const liveBlackoutSources = hasMeaningfulBlackoutSources(rawBlackoutSources)
+        ? rawBlackoutSources
+        : lastValidBlackoutSources || rawBlackoutSources;
+      if (hasMeaningfulBlackoutSources(rawBlackoutSources)) {
+        lastValidBlackoutSources = rawBlackoutSources;
+      }
+      const blackoutSources = liveBlackoutSources || (profile.sources && typeof profile.sources === "object" ? profile.sources : null);
+      const districtMinuteIncome = blackoutSources?.districtIncomePerMinute || {};
+      const buildingMinuteIncome = blackoutSources?.buildingIncomePerMinute || {};
+      const showBlackoutSource =
+        activePlayerScenarioKey === "alliance-ten-blackout"
+        && blackoutSources
+        && typeof blackoutSources === "object";
+      if (blackoutSourceRow) {
+        blackoutSourceRow.classList.toggle("hidden", !showBlackoutSource);
+      }
+      if (blackoutSourceValue && showBlackoutSource) {
+        const districtCleanPerHour = Number(districtMinuteIncome.clean || 0) * 60;
+        const districtDirtyPerHour = Number(districtMinuteIncome.dirty || 0) * 60;
+        const buildingCleanPerHour = Number(buildingMinuteIncome.clean || 0) * 60;
+        const buildingDirtyPerHour = Number(buildingMinuteIncome.dirty || 0) * 60;
+        blackoutSourceValue.textContent =
+          `Districts C${formatDecimalValue(districtCleanPerHour, 2)}/D${formatDecimalValue(districtDirtyPerHour, 2)} / hod`
+          + ` • Buildings C${formatDecimalValue(buildingCleanPerHour, 2)}/D${formatDecimalValue(buildingDirtyPerHour, 2)} / hod`;
+      }
+      if (liveBlackoutSources && profile && typeof profile === "object") {
+        profile.sources = liveBlackoutSources;
+        profile.source = liveBlackoutSources;
+      }
+    } catch (error) {
+      console.error("Profile blackout source render failed", error);
+      if (blackoutSourceRow) {
+        blackoutSourceRow.classList.add("hidden");
+      }
+    }
     const profileHasMoneyData =
       profile.cleanMoney !== undefined ||
       profile.clean_money !== undefined ||
@@ -13903,6 +15376,14 @@ window.Empire.UI = (() => {
   function showProfileModal() {
     const root = document.getElementById("profile-modal");
     if (!root) return;
+    const liveProfile = window.Empire.player || cachedProfile;
+    if (liveProfile && typeof liveProfile === "object") {
+      try {
+        hydrateProfileModal(liveProfile);
+      } catch (error) {
+        console.error("Profile modal hydrate failed", error);
+      }
+    }
     root.classList.remove("hidden");
   }
 
@@ -13916,12 +15397,27 @@ window.Empire.UI = (() => {
   function getSettingsState() {
     try {
       const parsed = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "null");
-      return {
+      const settings = {
         ...DEFAULT_SETTINGS,
         ...(parsed && typeof parsed === "object" ? parsed : {})
       };
+      const forced = {
+        ...settings,
+        mapVisibilityMode: "all",
+        mapAllianceSymbols: true
+      };
+      if (forced.mapVisibilityMode !== settings.mapVisibilityMode || forced.mapAllianceSymbols !== settings.mapAllianceSymbols) {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(forced));
+      }
+      return forced;
     } catch {
-      return { ...DEFAULT_SETTINGS };
+      const forced = {
+        ...DEFAULT_SETTINGS,
+        mapVisibilityMode: "all",
+        mapAllianceSymbols: true
+      };
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(forced));
+      return forced;
     }
   }
 
@@ -14447,6 +15943,7 @@ window.Empire.UI = (() => {
     addCraftedDefense,
     getDistrictDefenseSnapshot,
     getDistrictSpyIntel,
-    resolveAllianceIconKeyByName
+    resolveAllianceIconKeyByName,
+    openDistrictPoliceRaidWarningModal
   };
 })();

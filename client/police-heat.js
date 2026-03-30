@@ -105,6 +105,22 @@
         coordinated_operation: { minTier: 6, weight: 10, category: "coordinated", durationMs: 55 * 60 * 1000, severity: "critical" }
       };
 
+      const POLICE_RAID_SPECIALTY_TYPES = Object.freeze({
+        financial: Object.freeze({ key: "financial", label: "Finanční zásah", icon: "💰" }),
+        drug: Object.freeze({ key: "drug", label: "Drogová razie", icon: "🧪" }),
+        weapons: Object.freeze({ key: "weapons", label: "Zbrojní zásah", icon: "🛡️" }),
+        arrests: Object.freeze({ key: "arrests", label: "Zatýkací vlna", icon: "👥" }),
+        total: Object.freeze({ key: "total", label: "Celková razie", icon: "⚠️" })
+      });
+
+      const POLICE_RAID_SPECIALTY_RANDOM_WEIGHTS = Object.freeze([
+        Object.freeze({ key: "total", weight: 55 }),
+        Object.freeze({ key: "financial", weight: 11.25 }),
+        Object.freeze({ key: "drug", weight: 11.25 }),
+        Object.freeze({ key: "weapons", weight: 11.25 }),
+        Object.freeze({ key: "arrests", weight: 11.25 })
+      ]);
+
       const POLICE_MESSAGE_TEMPLATES = {
         warning_notice: [
           "Policie zaznamenala zvýšenou nelegální aktivitu ve tvých oblastech.",
@@ -381,151 +397,13 @@
         return safeBuildings.filter((building) => String(building?.ownerId || "").trim() === String(safePlayer.id || "").trim());
       }
 
-      function scorePlaystyleFromBuildingsAndEconomy(player, districts, buildings) {
-        const safePlayer = player && typeof player === "object" ? player : {};
-        const ownedBuildings = getPlayerOwnedBuildings(safePlayer, buildings);
-        const ownedDistricts = Array.isArray(districts) ? districts.filter((district) => String(district?.ownerId || "").trim() === String(safePlayer.id || "").trim()) : [];
-        const normalizedNames = ownedBuildings.map((building) => normalizePoliceText(building?.type || ""));
-        const totalDrugs = getTotalDrugs(safePlayer);
-        const cleanCash = Math.max(0, Number(safePlayer.cash || 0));
-        const dirtyCash = Math.max(0, Number(safePlayer.dirtyCash || 0));
-        const attackWeapons = Math.max(0, Number(safePlayer.weapons || 0));
-        const defenseWeapons = Math.max(0, Number(safePlayer.defense || 0));
-        const materials = Math.max(0, Number(safePlayer.materials || 0));
-        const gangMembers = Math.max(0, Number(safePlayer.gangMembers || 0));
-        const districtCount = ownedDistricts.length;
-
-        const matches = {
-          financial: [
-            "bank",
-            "exchange",
-            "casino",
-            "market",
-            "office",
-            "vip",
-            "lobby",
-            "centr",
-            "smen",
-            "obchod",
-            "restaur",
-            "shop"
-          ],
-          drug: [
-            "drug",
-            "dealer",
-            "lab",
-            "tunnel",
-            "pharmacy",
-            "klinika",
-            "chem",
-            "smoke",
-            "narc"
-          ],
-          weapons: [
-            "zbroj",
-            "tovarn",
-            "warehouse",
-            "sklad",
-            "armory",
-            "factory",
-            "garage",
-            "security",
-            "camera",
-            "combat"
-          ],
-          arrests: [
-            "apartment",
-            "blok",
-            "recruit",
-            "brainwash",
-            "school",
-            "clinic",
-            "residential",
-            "housing",
-            "popul",
-            "resid"
-          ]
-        };
-
-        const scores = {
-          financial: 0,
-          drug: 0,
-          weapons: 0,
-          arrests: 0,
-          total: 0
-        };
-
-        normalizedNames.forEach((name) => {
-          if (!name) return;
-          if (matches.financial.some((needle) => name.includes(needle))) scores.financial += 3;
-          if (matches.drug.some((needle) => name.includes(needle))) scores.drug += 3;
-          if (matches.weapons.some((needle) => name.includes(needle))) scores.weapons += 3;
-          if (matches.arrests.some((needle) => name.includes(needle))) scores.arrests += 3;
-        });
-
-        scores.financial += Math.min(12, Math.floor((cleanCash + dirtyCash) / 250000));
-        scores.financial += Math.min(8, Math.floor(dirtyCash / 120000));
-        scores.drug += Math.min(16, Math.floor(totalDrugs / 8));
-        scores.weapons += Math.min(16, Math.floor((attackWeapons + defenseWeapons + materials) / 10));
-        scores.arrests += Math.min(16, Math.floor(gangMembers / 120));
-        scores.arrests += Math.min(6, districtCount);
-
-        const ranked = Object.entries(scores)
-          .sort((a, b) => b[1] - a[1]);
-        const [topKey, topScore] = ranked[0] || ["total", 0];
-        const secondScore = Number(ranked[1]?.[1] || 0);
-        if (topScore <= 0) return { key: "total", label: "Celková razie", icon: "⚠️", scores };
-        if (topScore - secondScore <= 1 && topScore < 8) {
-          return { key: "total", label: "Celková razie", icon: "⚠️", scores };
-        }
-        if (topKey === "financial") return { key: "financial", label: "Finanční zásah", icon: "💰", scores };
-        if (topKey === "drug") return { key: "drug", label: "Drogová razie", icon: "🧪", scores };
-        if (topKey === "weapons") return { key: "weapons", label: "Zbrojní zásah", icon: "🛡️", scores };
-        if (topKey === "arrests") return { key: "arrests", label: "Zatýkací vlna", icon: "👥", scores };
-        return { key: "total", label: "Celková razie", icon: "⚠️", scores };
+      function resolvePoliceRaidSpecialtyMeta(key) {
+        return POLICE_RAID_SPECIALTY_TYPES[String(key || "").trim().toLowerCase()] || POLICE_RAID_SPECIALTY_TYPES.total;
       }
 
-      function resolvePoliceRaidSpecialtyFromPlaystyleValue(playstyleValue) {
-        const normalized = String(playstyleValue || "").trim().toLowerCase();
-        if (!normalized) return { key: "total", label: "Celková razie", icon: "⚠️" };
-        if (
-          normalized.includes("stealth")
-          || normalized.includes("shadow")
-          || normalized.includes("covert")
-          || normalized.includes("money")
-          || normalized.includes("cash")
-          || normalized.includes("finance")
-          || normalized.includes("economic")
-          || normalized.includes("bank")
-        ) return { key: "financial", label: "Finanční zásah", icon: "💰" };
-        if (normalized.includes("drug") || normalized.includes("narc") || normalized.includes("chem") || normalized.includes("dealer") || normalized.includes("lab")) {
-          return { key: "drug", label: "Drogová razie", icon: "🧪" };
-        }
-        if (normalized.includes("weapon") || normalized.includes("armory") || normalized.includes("gun") || normalized.includes("combat") || normalized.includes("military")) {
-          return { key: "weapons", label: "Zbrojní zásah", icon: "🛡️" };
-        }
-        if (normalized.includes("police") || normalized.includes("law") || normalized.includes("order") || normalized.includes("arrest") || normalized.includes("control") || normalized.includes("security")) {
-          return { key: "arrests", label: "Zatýkací vlna", icon: "👥" };
-        }
-        if (normalized.includes("total") || normalized.includes("all") || normalized.includes("coordinated") || normalized.includes("hard")) {
-          return { key: "total", label: "Celková razie", icon: "⚠️" };
-        }
-        return { key: "total", label: "Celková razie", icon: "⚠️" };
-      }
-
-      function resolvePoliceRaidSpecialtyFromPlayer(player, districts, buildings) {
-        const safePlayer = player && typeof player === "object" ? player : {};
-        const playstyle = safePlayer.playStyle
-          || safePlayer.play_style
-          || safePlayer.strategy
-          || safePlayer.style
-          || safePlayer.raidPlaystyle
-          || safePlayer.raid_playstyle
-          || "";
-        if (String(playstyle || "").trim()) {
-          return resolvePoliceRaidSpecialtyFromPlaystyleValue(playstyle);
-        }
-        return scorePlaystyleFromBuildingsAndEconomy(safePlayer, districts, buildings);
+      function resolveRandomPoliceRaidSpecialty() {
+        const picked = weightedPick(POLICE_RAID_SPECIALTY_RANDOM_WEIGHTS, (entry) => entry.weight);
+        return resolvePoliceRaidSpecialtyMeta(picked?.key || "total");
       }
 
       function getEffectiveHeatValue(player) {
@@ -1006,8 +884,8 @@
         return { district, building };
       }
 
-      function choosePoliceOperationType(player, target, districts, buildings) {
-        const specialty = resolvePoliceRaidSpecialtyFromPlayer(player, districts, buildings);
+      function choosePoliceOperationType(player, target, raidSpecialty) {
+        const specialty = resolvePoliceRaidSpecialtyMeta(raidSpecialty?.key);
         const targetBuildingType = normalizePoliceText(target?.building?.type || "");
         const candidateSets = {
           financial: [
@@ -1160,7 +1038,8 @@
         const targetTier = getHeatTier(getEffectiveHeatValue(actualPlayer) || getHeatValueForCandidate(actualPlayer) || actualPlayer.totalHeat || 0);
 
         const shouldForce = force || Boolean(extremeCandidate);
-        let operationType = choosePoliceOperationType(actualPlayer, target, districts, buildings);
+        const raidSpecialty = resolveRandomPoliceRaidSpecialty();
+        let operationType = choosePoliceOperationType(actualPlayer, target, raidSpecialty);
         const currentRaidCount = countPoliceRaidsForPhaseSession(phaseContext.phaseSessionKey);
         const raidLimit = getPoliceRaidLimitForPhase(phaseContext.phaseKey);
         if (!shouldForce && isPoliceRaidOperationType(operationType) && currentRaidCount >= raidLimit) {
@@ -1175,7 +1054,6 @@
         }
 
         const opConfig = OPERATION_TYPE_CONFIG[operationType];
-        const raidSpecialty = resolvePoliceRaidSpecialtyFromPlayer(actualPlayer, districts, buildings);
         const operation = {
           id: `op-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
           playerId: actualPlayer.id,
@@ -1189,8 +1067,7 @@
           phaseSessionKey: phaseContext.phaseSessionKey,
           raidSpecialtyKey: raidSpecialty.key,
           raidSpecialtyLabel: raidSpecialty.label,
-          raidSpecialtyIcon: raidSpecialty.icon,
-          playStyle: actualPlayer.playStyle || actualPlayer.play_style || actualPlayer.strategy || actualPlayer.style || ""
+          raidSpecialtyIcon: raidSpecialty.icon
         };
         executePoliceOperation(actualPlayer, operation, districts, buildings);
         if (isPoliceRaidOperationType(operationType)) {
