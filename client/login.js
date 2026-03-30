@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindTabs();
   bindForms();
   bindGuest();
+  initMobileLoginFit();
 });
 
 function bindTabs() {
@@ -27,6 +28,7 @@ function bindTabs() {
       );
       document.getElementById("login-form").classList.toggle("hidden", tab !== "login");
       document.getElementById("register-form").classList.toggle("hidden", tab !== "register");
+      state.requestMobileLoginFit?.();
     });
   });
 }
@@ -124,6 +126,7 @@ function showError(message) {
   if (!error) return;
   error.textContent = message;
   error.classList.remove("hidden");
+  state.requestMobileLoginFit?.();
 }
 
 function hideError() {
@@ -131,4 +134,67 @@ function hideError() {
   if (!error) return;
   error.textContent = "";
   error.classList.add("hidden");
+  state.requestMobileLoginFit?.();
+}
+
+function initMobileLoginFit() {
+  const body = document.body;
+  const shell = document.querySelector(".auth-shell");
+  const footer = document.querySelector(".auth-footer");
+  const media = window.matchMedia("(max-width: 900px)");
+  if (!body || !shell || !footer) return;
+
+  let frame = 0;
+  const fitClasses = ["login-mobile-fit-compact", "login-mobile-fit-tight", "login-mobile-fit-ultra"];
+
+  const getOuterHeight = (element) => {
+    const rect = element.getBoundingClientRect();
+    const styles = window.getComputedStyle(element);
+    const marginTop = parseFloat(styles.marginTop || "0") || 0;
+    const marginBottom = parseFloat(styles.marginBottom || "0") || 0;
+    return rect.height + marginTop + marginBottom;
+  };
+
+  const measure = () => {
+    frame = 0;
+    fitClasses.forEach((className) => body.classList.remove(className));
+    if (!media.matches) return;
+
+    const availableHeight = Math.max(
+      0,
+      Math.floor(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0)
+    );
+    if (!availableHeight) return;
+
+    const fitsViewport = () => getOuterHeight(shell) + getOuterHeight(footer) <= availableHeight - 4;
+    if (fitsViewport()) return;
+
+    body.classList.add("login-mobile-fit-compact");
+    if (fitsViewport()) return;
+
+    body.classList.add("login-mobile-fit-tight");
+    if (fitsViewport()) return;
+
+    body.classList.add("login-mobile-fit-ultra");
+  };
+
+  const requestMeasure = () => {
+    if (frame) return;
+    frame = window.requestAnimationFrame(measure);
+  };
+
+  state.requestMobileLoginFit = requestMeasure;
+
+  requestMeasure();
+  window.addEventListener("resize", requestMeasure);
+  window.addEventListener("orientationchange", requestMeasure);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", requestMeasure);
+    window.visualViewport.addEventListener("scroll", requestMeasure);
+  }
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", requestMeasure);
+  } else if (typeof media.addListener === "function") {
+    media.addListener(requestMeasure);
+  }
 }
