@@ -5801,9 +5801,11 @@ window.Empire.UI = (() => {
     const root = document.getElementById("attack-result-modal");
     const backdrop = document.getElementById("attack-result-modal-backdrop");
     const closeBtn = document.getElementById("attack-result-modal-close");
+    const okBtn = document.getElementById("attack-result-modal-ok");
     if (!root) return;
     if (backdrop) backdrop.addEventListener("click", closeAttackResultModal);
     if (closeBtn) closeBtn.addEventListener("click", closeAttackResultModal);
+    if (okBtn) okBtn.addEventListener("click", closeAttackResultModal);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
         closeAttackResultModal();

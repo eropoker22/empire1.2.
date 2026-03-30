@@ -11543,6 +11543,66 @@ window.Empire.Map = (() => {
     ctx.restore();
   }
 
+  function drawAttackFlameSprite(ctx, x, y, size, alpha, phase, pulse) {
+    const safeSize = Math.max(10, Number(size || 0));
+    const safeAlpha = Math.max(0.12, Math.min(1, Number(alpha || 0)));
+    const wobble = Math.sin(Date.now() / 140 + Number(phase || 0)) * safeSize * 0.05;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1 + pulse * 0.04, 1 + pulse * 0.08);
+    ctx.globalAlpha = safeAlpha;
+
+    const outerGradient = ctx.createLinearGradient(0, safeSize * 0.62, 0, -safeSize * 0.88);
+    outerGradient.addColorStop(0, "rgba(120, 16, 0, 0.96)");
+    outerGradient.addColorStop(0.36, "rgba(255, 94, 0, 0.94)");
+    outerGradient.addColorStop(0.72, "rgba(255, 174, 36, 0.9)");
+    outerGradient.addColorStop(1, "rgba(255, 241, 153, 0.84)");
+
+    ctx.beginPath();
+    ctx.moveTo(0, -safeSize * 0.92 + wobble);
+    ctx.bezierCurveTo(
+      safeSize * 0.52, -safeSize * 0.48,
+      safeSize * 0.62, safeSize * 0.04,
+      0, safeSize * 0.7
+    );
+    ctx.bezierCurveTo(
+      -safeSize * 0.62, safeSize * 0.04,
+      -safeSize * 0.52, -safeSize * 0.48,
+      0, -safeSize * 0.92 + wobble
+    );
+    ctx.closePath();
+    ctx.fillStyle = outerGradient;
+    ctx.shadowBlur = safeSize * 0.5;
+    ctx.shadowColor = "rgba(255, 98, 0, 0.72)";
+    ctx.fill();
+
+    const innerGradient = ctx.createLinearGradient(0, safeSize * 0.48, 0, -safeSize * 0.56);
+    innerGradient.addColorStop(0, "rgba(255, 164, 40, 0.92)");
+    innerGradient.addColorStop(0.46, "rgba(255, 219, 115, 0.9)");
+    innerGradient.addColorStop(1, "rgba(255, 248, 214, 0.82)");
+
+    ctx.beginPath();
+    ctx.moveTo(0, -safeSize * 0.56 + wobble * 0.6);
+    ctx.bezierCurveTo(
+      safeSize * 0.28, -safeSize * 0.22,
+      safeSize * 0.26, safeSize * 0.1,
+      0, safeSize * 0.42
+    );
+    ctx.bezierCurveTo(
+      -safeSize * 0.26, safeSize * 0.1,
+      -safeSize * 0.28, -safeSize * 0.22,
+      0, -safeSize * 0.56 + wobble * 0.6
+    );
+    ctx.closePath();
+    ctx.fillStyle = innerGradient;
+    ctx.shadowBlur = safeSize * 0.24;
+    ctx.shadowColor = "rgba(255, 214, 120, 0.7)";
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   function drawDestroyedDistrictSmoke(ctx, district, now, safeSeed, cx, cy, bounds) {
     if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
 
@@ -11738,6 +11798,16 @@ window.Empire.Map = (() => {
         Math.round(baseRadius * safeScale * (0.62 + pulse * 0.24 + Math.sin(now / 145 + phase) * 0.12))
       );
       ctx.globalAlpha = Math.max(0.2, alpha * (0.6 + safeScale * 0.18));
+      drawAttackFlameSprite(
+        ctx,
+        Number(anchor.x || cx) + wobbleX,
+        Number(anchor.y || cy) + wobbleY,
+        flameSize * 0.72,
+        Math.max(0.24, alpha * (0.72 + safeScale * 0.14)),
+        phase,
+        pulse
+      );
+      ctx.globalAlpha = Math.max(0.18, alpha * (0.34 + safeScale * 0.08));
       ctx.font = `${flameSize}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
