@@ -13563,8 +13563,8 @@ body::before {
 
   body.mobile-police-modal-open #police-action-result-modal .modal__backdrop {
     inset: 0;
-    background: rgba(66, 71, 82, 0.96);
-    backdrop-filter: none;
+    background: rgba(7, 8, 15, 0.75);
+    backdrop-filter: blur(6px);
   }
 
   body.mobile-police-modal-open #police-action-result-modal .modal__content {
@@ -14958,7 +14958,22 @@ body.mobile-storage-modal-open {
   }
 
   .mobile-bottom-actions {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .settings-modal__row--toggle {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .settings-modal__row--toggle .settings-modal__label {
+    flex: 0 1 auto;
+    padding-right: 0;
+  }
+
+  .settings-modal__row--toggle .toggle {
+    width: 88px;
+    margin-left: 0;
   }
 
   .structure-grid {
