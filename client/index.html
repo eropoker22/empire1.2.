@@ -323,7 +323,7 @@
             <button class="btn btn--primary" id="alliance-btn">Aliance</button>
             <div class="alliance-chat">
               <div class="alliance-chat__title">Chat aliance</div>
-              <div class="alliance-chat__log" id="alliance-chat-log">
+              <div class="alliance-chat__log" id="alliance-chat-log" data-alliance-chat-log>
                 <div class="alliance-chat__item">[09:12] Raven: Potřebujeme posily na sever.</div>
                 <div class="alliance-chat__item">[09:14] Lira: Posílám tým, 5 minut.</div>
               </div>
@@ -1006,6 +1006,7 @@
           <button class="modal__close" id="alliance-management-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body alliance-management-modal__body">
+          <div id="alliance-management-panel"></div>
           <div class="alliance-control alliance-control--create">
             <div class="alliance-control__head">
               <div class="alliance-control__title">Pozvat hráče</div>
@@ -1016,7 +1017,6 @@
               <button class="btn btn--primary" id="alliance-management-invite-btn">Poslat pozvánku</button>
             </div>
           </div>
-          <div id="alliance-management-panel"></div>
         </div>
       </div>
     </div>

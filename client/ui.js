@@ -9370,7 +9370,7 @@ window.Empire.UI = (() => {
           return district;
         });
         setScenarioEnemyOwners([enemyOneName, enemyTwoName, blackoutSecondEnemyName, blackoutThirdEnemyName, blackoutFourthEnemyName, blackoutFifthEnemyName]);
-        baseProfile.alliance = `${blackoutAllianceName} (Leader • 2/4)`;
+        baseProfile.alliance = `${blackoutAllianceName} (2/4)`;
         baseProfile.districts = countOwnedDistrictsForOwner(nextDistricts, ownerName);
       }
       if (activePlayerScenarioKey === "alliance-ten-blackout") {
@@ -12683,6 +12683,7 @@ window.Empire.UI = (() => {
     const iconPicker = document.getElementById("alliance-icon-picker");
     const chatInput = document.getElementById("alliance-chat-input");
     const chatSend = document.getElementById("alliance-chat-send");
+    const activePanel = document.getElementById("alliance-active-panel");
     if (!root || !openBtn || !createToggleBtn || !leaveModal || !leaveConfirmBtn || !createModal || !managementModal || !managementInviteName || !managementInviteBtn || !createBtn || !leaveBtn || !createName || !createDescription || !iconPicker || !chatInput || !chatSend) return;
 
     let selectedAllianceIconKey = DEFAULT_ALLIANCE_ICON_KEY;
@@ -12758,18 +12759,25 @@ window.Empire.UI = (() => {
       const scrollState = captureAllianceScrollState();
       if (!window.Empire.token) {
         const localState = getLocalAllianceState();
-        renderAllianceState(localState.activeAlliance, localState.alliances, localState.incomingInvites || []);
-        renderAllianceManagementState(localState.activeAlliance);
-        renderAllianceChat(localState.chat);
-        setLiveAllianceOwnersFromAlliance(localState.activeAlliance || null);
-        syncBlackoutScenarioAllianceDistrictState(localState.activeAlliance || null);
+        const activeAllianceId = String(localState.activeAllianceId || "").trim();
+        if (activePlayerScenarioKey !== "alliance-ten-blackout" && activeAllianceId.startsWith("scenario-")) {
+          localState.activeAllianceId = null;
+          saveLocalAllianceState(localState);
+        }
+        const resolvedLocalState = withActiveAlliance(localState);
+        renderAllianceState(resolvedLocalState.activeAlliance, resolvedLocalState.alliances, resolvedLocalState.incomingInvites || []);
+        renderAllianceManagementState(resolvedLocalState.activeAlliance);
+        renderAllianceChat(resolvedLocalState.chat);
+        setLiveAllianceOwnersFromAlliance(resolvedLocalState.activeAlliance || null);
+        syncBlackoutScenarioAllianceDistrictState(resolvedLocalState.activeAlliance || null);
+        syncGuestAllianceLabel(resolvedLocalState.activeAlliance?.name || "Žádná");
         restoreAllianceScrollState(scrollState);
-        (localState.notifications || []).forEach((notification) => {
+        (resolvedLocalState.notifications || []).forEach((notification) => {
           pushEvent(`Aliance: ${notification.message}`);
         });
-        if ((localState.notifications || []).length) {
-          localState.notifications = [];
-          saveLocalAllianceState(localState);
+        if ((resolvedLocalState.notifications || []).length) {
+          resolvedLocalState.notifications = [];
+          saveLocalAllianceState(resolvedLocalState);
         }
         return;
       }
@@ -12787,6 +12795,28 @@ window.Empire.UI = (() => {
       });
     };
     allianceRefreshHandler = refreshAlliance;
+
+    const sendAllianceChatMessage = async (input) => {
+      const targetInput = input instanceof HTMLInputElement ? input : null;
+      const text = String(targetInput?.value || "").trim();
+      if (!text) return;
+      if (window.Empire.token) {
+        pushEvent("Alliance chat backend zatím není napojený.");
+        return;
+      }
+      const state = getLocalAllianceState();
+      appendLocalAllianceChat(state, {
+        author: "Ty",
+        text
+      });
+      saveLocalAllianceState(state);
+      document.querySelectorAll("[data-alliance-chat-input]").forEach((field) => {
+        if (field instanceof HTMLInputElement) {
+          field.value = "";
+        }
+      });
+      renderAllianceChat(state.chat);
+    };
 
     openBtn.addEventListener("click", async () => {
       setMobileTopbarCoveredByPrimaryModal(false);
@@ -12945,22 +12975,35 @@ window.Empire.UI = (() => {
         }
       }
     });
+    chatInput.setAttribute("data-alliance-chat-input", "");
+    chatSend.setAttribute("data-alliance-chat-send", "");
     chatSend.addEventListener("click", async () => {
-      const text = String(chatInput.value || "").trim();
-      if (!text) return;
-      if (window.Empire.token) {
-        pushEvent("Alliance chat backend zatím není napojený.");
-        return;
-      }
-      const state = getLocalAllianceState();
-      appendLocalAllianceChat(state, {
-        author: "Ty",
-        text
-      });
-      saveLocalAllianceState(state);
-      chatInput.value = "";
-      renderAllianceChat(state.chat);
+      await sendAllianceChatMessage(chatInput);
     });
+    chatInput.addEventListener("keydown", async (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      await sendAllianceChatMessage(chatInput);
+    });
+    if (activePanel) {
+      activePanel.addEventListener("click", async (event) => {
+        const trigger = event.target instanceof HTMLElement
+          ? event.target.closest("[data-alliance-chat-send]")
+          : null;
+        if (!(trigger instanceof HTMLElement)) return;
+        const input = activePanel.querySelector("[data-alliance-chat-input]");
+        if (input instanceof HTMLInputElement) {
+          await sendAllianceChatMessage(input);
+        }
+      });
+      activePanel.addEventListener("keydown", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement) || !target.hasAttribute("data-alliance-chat-input")) return;
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        await sendAllianceChatMessage(target);
+      });
+    }
     renderAllianceIconPicker();
     setCreateAllianceModalVisible(false);
     setAllianceManagementModalVisible(false);
@@ -13251,9 +13294,6 @@ window.Empire.UI = (() => {
       const readyTimerClass = currentPlayerReady.isReadyWindowActive
         ? "alliance-ready-panel__timer alliance-ready-panel__timer--ok"
         : "alliance-ready-panel__timer alliance-ready-panel__timer--bad";
-      const roleBadge = activeAlliance.current_player_role === "leader"
-        ? `<span class="alliance-ready-state alliance-ready-state--leader">Leader</span>`
-        : `<span class="alliance-ready-state alliance-ready-state--leader">Člen</span>`;
       activePanel.innerHTML = `
         <div class="alliance-active-card">
           <div class="alliance-active-card__top">
@@ -13264,7 +13304,6 @@ window.Empire.UI = (() => {
                 <strong>${escapeAllianceMarkup(DEFAULT_ALLIANCE_DESCRIPTION)}</strong>
               </div>
               <div class="alliance-active-card__badges">
-                ${roleBadge}
                 <span class="${readyStateClass}">${currentPlayerReady.isReadyWindowActive ? "READY aktivní" : "READY vypršelo"}</span>
               </div>
             </div>
@@ -13275,22 +13314,36 @@ window.Empire.UI = (() => {
               </div>
             </div>
           </div>
-          <div class="alliance-active-card__grid">
-            <div class="alliance-active-card__stat">
-              <span>Členové</span>
-              <strong>${activeAlliance.member_count || 0}/${ALLIANCE_MAX_MEMBERS}</strong>
+          <div class="alliance-active-card__overview">
+            <div class="alliance-active-card__stats-column">
+              <div class="alliance-active-card__stat">
+                <span>Členové</span>
+                <strong>${activeAlliance.member_count || 0}/${ALLIANCE_MAX_MEMBERS}</strong>
+              </div>
+              <div class="alliance-active-card__stat">
+                <span>Income</span>
+                <strong>+${activeAlliance.bonus_income_pct || 0}%</strong>
+              </div>
+              <div class="alliance-active-card__stat">
+                <span>Influence</span>
+                <strong>+${activeAlliance.bonus_influence_pct || 0}%</strong>
+              </div>
+              <div class="alliance-active-card__stat">
+                <span>Heat control</span>
+                <strong>${activeAlliance.heat_control_text || "-8% heat"}</strong>
+              </div>
             </div>
-            <div class="alliance-active-card__stat">
-              <span>Income</span>
-              <strong>+${activeAlliance.bonus_income_pct || 0}%</strong>
+            <div class="alliance-active-card__chat-pane">
+              <div class="alliance-chat alliance-chat--modal">
+                <div class="alliance-chat__title">Chat aliance</div>
+                <div class="alliance-chat__log" data-alliance-chat-log></div>
+              </div>
             </div>
-            <div class="alliance-active-card__stat">
-              <span>Influence</span>
-              <strong>+${activeAlliance.bonus_influence_pct || 0}%</strong>
-            </div>
-            <div class="alliance-active-card__stat alliance-active-card__stat--wide">
-              <span>Heat control</span>
-              <strong>${activeAlliance.heat_control_text || "-8% heat"}</strong>
+          </div>
+          <div class="alliance-active-card__chat-compose">
+            <div class="alliance-chat__input alliance-chat__input--modal">
+              <input type="text" placeholder="Napiš zprávu do aliance..." data-alliance-chat-input />
+              <button class="btn btn--ghost" type="button" data-alliance-chat-send>Odeslat</button>
             </div>
           </div>
           <div class="alliance-members">
@@ -13728,15 +13781,18 @@ window.Empire.UI = (() => {
   }
 
   function renderAllianceChat(messages) {
-    const log = document.getElementById("alliance-chat-log");
-    if (!log) return;
+    const logs = Array.from(document.querySelectorAll("[data-alliance-chat-log]"));
+    if (!logs.length) return;
     const safeMessages = Array.isArray(messages) && messages.length ? messages : [
       { time: "09:12", author: "Raven", text: "Potřebujeme posily na sever." },
       { time: "09:14", author: "Lira", text: "Posílám tým, 5 minut." }
     ];
-    log.innerHTML = safeMessages
+    const markup = safeMessages
       .map((message) => `<div class="alliance-chat__item">[${message.time}] ${message.author}: ${message.text}</div>`)
       .join("");
+    logs.forEach((log) => {
+      log.innerHTML = markup;
+    });
   }
 
   function buildAllianceTenBlackoutLocalAllianceState(ownerName, allyName) {
