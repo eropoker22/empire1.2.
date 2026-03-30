@@ -4625,7 +4625,7 @@ window.Empire.UI = (() => {
       title,
       buildingVisible: isActiveHere,
       buildingLabel: "Past",
-      buildingMeta: moveLocked ? `aktivní • ${countdownLabel}` : "aktivní"
+      buildingMeta: "Aktivní"
     };
   }
 
@@ -4827,7 +4827,7 @@ window.Empire.UI = (() => {
   }
 
   function getAttackWeaponMaxCount(item, summary, availability) {
-    const stock = Math.max(0, Math.floor(Number(summary?.remainingWeaponCounts?.[item.name] ?? availability?.weaponCounts?.[item.name] ?? 0)));
+    const stock = Math.max(0, Math.floor(Number(summary?.weaponCounts?.[item.name] ?? availability?.weaponCounts?.[item.name] ?? 0)));
     const current = Math.max(0, Math.floor(Number(summary?.selection?.[item.name] || 0)));
     const otherUsedMembers = Math.max(0, Number(summary?.totalUsedMembers || 0) - current * Number(item.requiredMembers || 0));
     const remainingForThisWeapon = Math.max(0, Number(summary?.actualMembers || 0) - otherUsedMembers);
@@ -5308,7 +5308,7 @@ window.Empire.UI = (() => {
   }
 
   function getDefenseWeaponMaxCount(item, summary, availability) {
-    const stock = Math.max(0, Math.floor(Number(summary?.remainingWeaponCounts?.[item.name] ?? availability?.weaponCounts?.[item.name] ?? 0)));
+    const stock = Math.max(0, Math.floor(Number(summary?.weaponCounts?.[item.name] ?? availability?.weaponCounts?.[item.name] ?? 0)));
     const current = Math.max(0, Math.floor(Number(summary?.selection?.[item.name] || 0)));
     const otherUsedMembers = Math.max(0, Number(summary?.totalUsedMembers || 0) - current * Number(item.requiredMembers || 0));
     const remainingForThisWeapon = Math.max(0, Number(summary?.actualMembers || 0) - otherUsedMembers);
@@ -16305,16 +16305,21 @@ window.Empire.UI = (() => {
     const fromProfile = cachedProfile?.weaponsDetail;
     const fromEconomy = cachedEconomy?.weaponsDetail;
     const fromStorage = readLocalWeaponCounts();
-    const raw = fromProfile || fromEconomy || fromStorage || {};
+    const sources = [fromProfile, fromEconomy, fromStorage].filter((source) => source && typeof source === "object");
     const normalized = {};
 
-    Object.entries(raw).forEach(([name, value]) => {
-      const mappedName = normalizeAttackWeaponLabel(name);
-      if (!mappedName) return;
-      const parsed = Number(value || 0);
-      const safe = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
-      if (!safe) return;
-      normalized[mappedName] = Math.max(0, Math.floor(Number(normalized[mappedName] || 0) + safe));
+    sources.forEach((source) => {
+      Object.entries(source).forEach(([name, value]) => {
+        const mappedName = normalizeAttackWeaponLabel(name);
+        if (!mappedName) return;
+        const parsed = Number(value || 0);
+        const safe = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+        if (!safe) return;
+        normalized[mappedName] = Math.max(
+          Math.max(0, Math.floor(Number(normalized[mappedName] || 0))),
+          safe
+        );
+      });
     });
 
     attackWeaponStats.forEach((item) => {
@@ -16423,16 +16428,21 @@ window.Empire.UI = (() => {
     const fromProfile = cachedProfile?.defenseDetail;
     const fromEconomy = cachedEconomy?.defenseDetail;
     const fromStorage = readLocalDefenseCounts();
-    const raw = fromProfile || fromEconomy || fromStorage || {};
+    const sources = [fromProfile, fromEconomy, fromStorage].filter((source) => source && typeof source === "object");
     const normalized = {};
 
-    Object.entries(raw).forEach(([name, value]) => {
-      const safeName = String(name || "").trim();
-      if (!safeName) return;
-      const parsed = Number(value || 0);
-      const safe = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
-      if (!safe) return;
-      normalized[safeName] = Math.max(0, Math.floor(Number(normalized[safeName] || 0) + safe));
+    sources.forEach((source) => {
+      Object.entries(source).forEach(([name, value]) => {
+        const safeName = String(name || "").trim();
+        if (!safeName) return;
+        const parsed = Number(value || 0);
+        const safe = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+        if (!safe) return;
+        normalized[safeName] = Math.max(
+          Math.max(0, Math.floor(Number(normalized[safeName] || 0))),
+          safe
+        );
+      });
     });
 
     defenseWeaponStats.forEach((item) => {

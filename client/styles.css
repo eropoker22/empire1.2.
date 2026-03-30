@@ -2089,12 +2089,8 @@ body::before {
 .auth-footer__link svg {
   width: 18px;
   height: 18px;
+  display: block;
   fill: currentColor;
-}
-
-.auth-footer__link--instagram svg {
-  width: 16px;
-  height: 16px;
 }
 
 .auth-footer__link:hover {
@@ -4019,6 +4015,13 @@ body::before {
   justify-content: space-between;
   align-items: stretch;
   gap: 12px;
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-top: 10px;
+  background:
+    linear-gradient(180deg, rgba(7, 10, 16, 0), rgba(7, 10, 16, 0.96) 24%, rgba(7, 10, 16, 0.99));
 }
 
 #alliance-management-footer-btn {
@@ -5801,6 +5804,24 @@ body::before {
   box-shadow:
     0 16px 34px rgba(34, 211, 238, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+#district-modal .district-modal__actions--enemy .district-action-btn--spy,
+#district-modal .district-modal__actions--enemy .district-action-btn--raid {
+  grid-column: auto;
+}
+
+#district-modal .district-modal__actions--enemy .district-action-btn--spy {
+  order: 1;
+}
+
+#district-modal .district-modal__actions--enemy .district-action-btn--raid {
+  order: 2;
+}
+
+#district-modal .district-modal__actions--enemy .district-action-btn--attack {
+  order: 3;
+  grid-column: 1 / -1;
 }
 
 #district-modal .district-action-btn--attack {
@@ -12478,7 +12499,7 @@ body::before {
 }
 
 .alliance-modal__content {
-  width: min(680px, 86vw);
+  width: min(640px, 84vw);
   border: 1px solid rgba(103, 113, 130, 0.34);
   background:
     linear-gradient(145deg, rgba(64, 72, 84, 0.18), transparent 18%),
@@ -12489,25 +12510,27 @@ body::before {
     0 34px 80px rgba(0, 0, 0, 0.58),
     0 0 0 1px rgba(255, 255, 255, 0.03),
     0 0 28px rgba(34, 211, 238, 0.08);
-  max-height: calc(100dvh - 118px - env(safe-area-inset-bottom));
+  max-height: calc(100dvh - 138px - env(safe-area-inset-bottom));
   overflow: hidden;
 }
 
 @media (min-width: 721px) {
   #alliance-modal {
     place-items: start center;
-    padding-top: calc(var(--desktop-topbar-offset, 68px) + 18px);
+    padding-top: calc(var(--desktop-topbar-offset, 68px) + 12px);
     padding-bottom: 20px;
   }
 
   #alliance-modal .alliance-modal__content {
-    max-height: calc(100dvh - var(--desktop-topbar-offset, 68px) - 42px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - var(--desktop-topbar-offset, 68px) - 52px - env(safe-area-inset-bottom));
   }
 }
 
 .alliance-modal__body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -14483,6 +14506,21 @@ body.mobile-storage-modal-open {
   #district-modal .district-modal__actions--occupy-raid #raid-btn {
     order: 2;
     grid-column: 2;
+  }
+
+  #district-modal .district-modal__actions--enemy #spy-btn {
+    order: 1;
+    grid-column: 1;
+  }
+
+  #district-modal .district-modal__actions--enemy #raid-btn {
+    order: 2;
+    grid-column: 2;
+  }
+
+  #district-modal .district-modal__actions--enemy #attack-btn {
+    order: 3;
+    grid-column: 1 / -1;
   }
 
   #district-modal #defense-btn {

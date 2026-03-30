@@ -78,7 +78,7 @@ window.Empire.Map = (() => {
   const DOWNTOWN_WARP_RADIUS_Y_RATIO = 0.38;
   const MAP_MODE_STORAGE_KEY = "empire_map_mode_v1";
   const MAP_MODE_IMAGE_BY_KEY = Object.freeze({
-    day: "../img/mapaden.png",
+    day: "../img/mapaden2.png",
     night: "../img/mapanoc.png",
     blackout: "../img/blackout.png"
   });
@@ -10408,6 +10408,9 @@ window.Empire.Map = (() => {
       if (destroyed) {
         drawDestroyedDistrictEffect(ctx, district, now);
       }
+      if (!destroyed) {
+        drawDistrictTrapToxicMist(ctx, district, now);
+      }
 
       if (attackMarker) {
         drawDistrictAttackEffect(ctx, district, attackMarker, now);
@@ -11749,6 +11752,74 @@ window.Empire.Map = (() => {
     drawDestroyedDistrictSmoke(ctx, district, now, safeSeed, cx, cy, bounds);
   }
 
+  function drawDistrictTrapToxicMist(ctx, district, now = Date.now()) {
+    if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
+    const trapState = window.Empire.UI?.getDistrictTrapControlState?.(district);
+    if (!trapState?.isActiveHere) return;
+
+    const [cx, cy] = polygonCentroid(district.polygon);
+    const bounds = polygonBounds(district.polygon);
+    const safeSeed = hashOwner(`trap:${normalizeDistrictId(district?.id) || district?.name || "district"}`);
+    const particleCount = Math.max(8, Math.min(16, Math.round(Math.max(bounds.width || 18, bounds.height || 18) / 9)));
+    const baseRadius = Math.max(1.5, Math.min(3.4, Math.min(bounds.width || 18, bounds.height || 18) * 0.034));
+
+    if (!drawDistrictPolygonPath(ctx, district.polygon)) return;
+
+    ctx.save();
+    drawDistrictPolygonPath(ctx, district.polygon);
+    ctx.clip();
+    ctx.globalCompositeOperation = "screen";
+
+    for (let i = 0; i < particleCount; i += 1) {
+      const phase = i * 0.73 + safeSeed * 0.00011;
+      const progress = ((now / (5200 + (i % 5) * 340)) + i * 0.097 + safeSeed * 0.0000017) % 1;
+      const rise = 1 - progress;
+      const lateralBase = Math.sin(phase * 1.8) * (bounds.width || 20) * 0.18;
+      const sway = Math.sin(now / (900 + (i % 4) * 120) + phase) * (2.4 + (i % 3) * 0.9);
+      const drift = Math.cos(now / (1300 + (i % 6) * 110) + phase * 1.7) * (1.2 + (i % 2) * 0.7);
+      const x = cx + lateralBase + sway + drift;
+      const y = cy + (bounds.height || 20) * (0.28 - rise * 0.6) + Math.sin(phase) * 4;
+      const radius = baseRadius * (0.82 + (i % 4) * 0.22);
+      const alpha = 0.1 + ((Math.sin(now / 760 + phase) + 1) * 0.5) * 0.1;
+      const gradient = ctx.createRadialGradient(x, y, radius * 0.16, x, y, radius * 2.2);
+      gradient.addColorStop(0, `rgba(182, 255, 102, ${Math.min(0.2, alpha + 0.03).toFixed(3)})`);
+      gradient.addColorStop(0.38, `rgba(56, 255, 178, ${Math.min(0.18, alpha + 0.01).toFixed(3)})`);
+      gradient.addColorStop(0.72, `rgba(34, 211, 238, ${Math.min(0.14, alpha * 0.78).toFixed(3)})`);
+      gradient.addColorStop(1, "rgba(22, 163, 74, 0)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (i % 3 === 0) {
+        ctx.fillStyle = `rgba(110, 255, 234, ${Math.min(0.16, alpha * 0.9).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(phase) * 1.6, y - radius * 0.3, radius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    const borderPulse = 0.5 + 0.5 * Math.sin(now / 820 + safeSeed * 0.00017);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.shadowBlur = 14 + borderPulse * 9;
+    ctx.shadowColor = `rgba(56, 255, 178, ${(0.18 + borderPulse * 0.1).toFixed(3)})`;
+    if (drawDistrictPolygonPath(ctx, district.polygon)) {
+      ctx.strokeStyle = `rgba(56, 255, 178, ${(0.18 + borderPulse * 0.08).toFixed(3)})`;
+      ctx.lineWidth = 1.2 + borderPulse * 0.9;
+      ctx.setLineDash([5, 7]);
+      ctx.lineDashOffset = -((now / 55 + safeSeed) % 120);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(34, 211, 238, ${(0.1 + borderPulse * 0.06).toFixed(3)})`;
+      ctx.lineWidth = 0.8 + borderPulse * 0.45;
+      ctx.setLineDash([2, 10]);
+      ctx.lineDashOffset = (now / 48 + safeSeed) % 120;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.restore();
+  }
+
   function drawDistrictAttackEffect(ctx, district, marker, now = Date.now()) {
     if (!district || !Array.isArray(district.polygon) || district.polygon.length < 3) return;
     const markerSource = String(marker?.source || "").trim().toLowerCase();
@@ -11786,6 +11857,21 @@ window.Empire.Map = (() => {
     ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
     ctx.fill();
 
+    const coreFlameSize = Math.max(18, Math.round(baseRadius * (1.02 + pulse * 0.22)));
+    const coreWobbleX = Math.sin(now / 175 + safeSeed * 0.0011) * 1.8;
+    const coreWobbleY = Math.cos(now / 145 + safeSeed * 0.0014) * 1.1
+      - Math.abs(Math.sin(now / 220 + safeSeed * 0.0008)) * 1.6;
+    ctx.globalAlpha = Math.max(0.46, alpha * 0.92);
+    drawAttackFlameSprite(
+      ctx,
+      cx + coreWobbleX,
+      cy + coreWobbleY,
+      coreFlameSize,
+      Math.max(0.42, alpha * 0.9),
+      safeSeed * 0.00021,
+      pulse
+    );
+
     flameAnchors.forEach((anchor) => {
       const safeScale = Math.max(0.5, Math.min(1.7, Number(anchor?.scale || 1)));
       const phase = Number(anchor?.phase || 0);
@@ -11797,17 +11883,17 @@ window.Empire.Map = (() => {
         12,
         Math.round(baseRadius * safeScale * (0.62 + pulse * 0.24 + Math.sin(now / 145 + phase) * 0.12))
       );
-      ctx.globalAlpha = Math.max(0.2, alpha * (0.6 + safeScale * 0.18));
+      ctx.globalAlpha = Math.max(0.28, alpha * (0.66 + safeScale * 0.18));
       drawAttackFlameSprite(
         ctx,
         Number(anchor.x || cx) + wobbleX,
         Number(anchor.y || cy) + wobbleY,
-        flameSize * 0.72,
-        Math.max(0.24, alpha * (0.72 + safeScale * 0.14)),
+        flameSize * 0.82,
+        Math.max(0.3, alpha * (0.78 + safeScale * 0.16)),
         phase,
         pulse
       );
-      ctx.globalAlpha = Math.max(0.18, alpha * (0.34 + safeScale * 0.08));
+      ctx.globalAlpha = Math.max(0.2, alpha * (0.36 + safeScale * 0.08));
       ctx.font = `${flameSize}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -15247,6 +15333,7 @@ window.Empire.Map = (() => {
     const evaluateAction = window.Empire.UI?.evaluateDistrictActionAvailability;
     const ownerValue = String(district?.owner || "").trim().toLowerCase();
     const isUnowned = !ownerValue || ownerValue === "neobsazeno" || ownerValue === "nikdo";
+    const isEnemyDistrict = !defendableByPlayer && !isUnowned;
     const hasSpyIntel = Boolean(window.Empire.UI?.getDistrictSpyIntel?.(district?.id));
     const attackActionMode = isUnowned && hasSpyIntel ? "occupy" : "attack";
     const attackState = typeof evaluateAction === "function"
@@ -15277,6 +15364,7 @@ window.Empire.Map = (() => {
     actionWrap.classList.toggle("district-modal__actions--occupy-raid", showOccupyRaidPair);
     actionWrap.classList.toggle("district-modal__actions--spy-raid", showSpyRaidPair);
     actionWrap.classList.toggle("district-modal__actions--defense-trap", !destroyed && defendableByPlayer && trapControlState.visible);
+    actionWrap.classList.toggle("district-modal__actions--enemy", !destroyed && isEnemyDistrict && showAttack && showSpy);
     attackBtn.dataset.actionMode = attackActionMode;
     attackBtn.textContent = attackActionMode === "occupy" ? "Obsadit" : "Zaútočit";
     raidBtn.textContent = raidLockRemainingMs > 0
