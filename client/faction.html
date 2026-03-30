@@ -22,10 +22,10 @@
     <meta name="twitter:image:alt" content="EmpireStreets - Gangy. Distrikty. Kontrola." />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body class="auth-body auth-body--matrix">
+  <body class="auth-body auth-body--matrix auth-body--faction">
     <canvas id="matrix-canvas" class="matrix-canvas" aria-hidden="true"></canvas>
     <main class="auth-shell">
-      <div class="auth-card auth-card--wide">
+      <div class="auth-card auth-card--wide auth-card--faction">
         <div class="brand">
           <div class="brand__logo brand__logo--img" aria-label="EmpireStreets logo"></div>
           <div>
@@ -34,18 +34,44 @@
           </div>
         </div>
 
-        <h1>Vyber frakci</h1>
-        <p class="muted">Nastavíš identitu gangu pro toto kolo a barvu na mapě.</p>
+        <div class="faction-hero">
+          <h1 class="faction-hero__title">Vyber frakci</h1>
+          <p class="muted faction-hero__copy">Nastavíš identitu gangu pro toto kolo a barvu na mapě.</p>
+        </div>
 
         <div class="structure-grid" id="structure-grid">
-          <button class="structure-card" data-structure="mafián" aria-label="Mafián"></button>
-          <button class="structure-card" data-structure="kartel" aria-label="Kartel"></button>
-          <button class="structure-card" data-structure="pouliční gang" aria-label="Pouliční gang"></button>
-          <button class="structure-card" data-structure="tajná organizace" aria-label="Tajná organizace"></button>
-          <button class="structure-card" data-structure="hackeři" aria-label="Hackeři"></button>
-          <button class="structure-card" data-structure="motorkářský gang" aria-label="Motorkářský gang"></button>
-          <button class="structure-card" data-structure="soukromá armáda" aria-label="Soukromá armáda"></button>
-          <button class="structure-card" data-structure="korporace" aria-label="Korporace"></button>
+          <button class="structure-card" data-structure="mafián" aria-label="Mafián">
+            <span class="structure-card__title">Mafián</span>
+            <span class="structure-card__meta">Cashflow • kontrola podniků</span>
+          </button>
+          <button class="structure-card" data-structure="kartel" aria-label="Kartel">
+            <span class="structure-card__title">Kartel</span>
+            <span class="structure-card__meta">Tunely • černý trh</span>
+          </button>
+          <button class="structure-card" data-structure="pouliční gang" aria-label="Pouliční gang">
+            <span class="structure-card__title">Pouliční gang</span>
+            <span class="structure-card__meta">Tlak ulic • rychlé obsazení</span>
+          </button>
+          <button class="structure-card" data-structure="tajná organizace" aria-label="Tajná organizace">
+            <span class="structure-card__title">Tajná organizace</span>
+            <span class="structure-card__meta">Stín • tichá infiltrace</span>
+          </button>
+          <button class="structure-card" data-structure="hackeři" aria-label="Hackeři">
+            <span class="structure-card__title">Hackeři</span>
+            <span class="structure-card__meta">Síť • vypnutí systémů</span>
+          </button>
+          <button class="structure-card" data-structure="motorkářský gang" aria-label="Motorkářský gang">
+            <span class="structure-card__title">Motorkářský gang</span>
+            <span class="structure-card__meta">Rychlost • nájezdy</span>
+          </button>
+          <button class="structure-card" data-structure="soukromá armáda" aria-label="Soukromá armáda">
+            <span class="structure-card__title">Soukromá armáda</span>
+            <span class="structure-card__meta">Disciplína • pevná obrana</span>
+          </button>
+          <button class="structure-card" data-structure="korporace" aria-label="Korporace">
+            <span class="structure-card__title">Korporace</span>
+            <span class="structure-card__meta">Kapitál • převzetí vlivu</span>
+          </button>
         </div>
 
         <div class="card faction-detail" id="faction-detail">
@@ -80,11 +106,11 @@
         </div>
 
         <div class="faction-links">
+          <a class="faction-link faction-link--secondary" href="login.html">Zpět na přihlášení</a>
           <a class="faction-link faction-link--disabled" id="go-game" href="index.html">Pokračovat do hry</a>
-          <a class="faction-link" href="login.html">Zpět na přihlášení</a>
         </div>
 
-        <p id="structure-note" class="muted">Vyber frakci, barvu a avatara pro pokračování.</p>
+        <p id="structure-note" class="muted faction-note">Vyber frakci, barvu a avatara pro pokračování.</p>
       </div>
     </main>
 

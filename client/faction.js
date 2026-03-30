@@ -67,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const grid = document.getElementById("structure-grid");
   const note = document.getElementById("structure-note");
   const detail = document.getElementById("faction-detail");
+  const factionShell = document.querySelector(".auth-card--faction");
   const title = document.getElementById("faction-title");
   const desc = document.getElementById("faction-desc");
   const bonus = document.getElementById("faction-bonus");
@@ -669,6 +670,25 @@ document.addEventListener("DOMContentLoaded", () => {
     grid.querySelectorAll(".structure-card").forEach((btn) => {
       btn.classList.toggle("structure-card--active", btn.dataset.structure === choice);
     });
+    const activeButton = grid.querySelector(`.structure-card[data-structure="${choice}"]`);
+    if (activeButton) {
+      const activeButtonStyles = window.getComputedStyle(activeButton);
+      const accent = activeButtonStyles.getPropertyValue("--structure-accent").trim();
+      const accentSoft = activeButtonStyles.getPropertyValue("--structure-accent-soft").trim();
+      const accentAlt = activeButtonStyles.getPropertyValue("--structure-accent-alt").trim();
+      if (accent) {
+        if (detail) detail.style.setProperty("--faction-accent", accent);
+        if (factionShell) factionShell.style.setProperty("--faction-accent", accent);
+      }
+      if (accentSoft) {
+        if (detail) detail.style.setProperty("--faction-accent-soft", accentSoft);
+        if (factionShell) factionShell.style.setProperty("--faction-accent-soft", accentSoft);
+      }
+      if (accentAlt) {
+        if (detail) detail.style.setProperty("--faction-accent-alt", accentAlt);
+        if (factionShell) factionShell.style.setProperty("--faction-accent-alt", accentAlt);
+      }
+    }
     selectedStructure = choice;
     localStorage.setItem("empire_structure", choice);
 
