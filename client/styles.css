@@ -7023,6 +7023,12 @@ body::before {
   justify-content: flex-end;
 }
 
+#spy-result-modal .spy-result-modal__actions,
+#raid-result-modal .spy-result-modal__actions,
+#attack-result-modal .attack-result-modal__actions {
+  justify-content: center;
+}
+
 #spy-warning-modal .spy-warning-modal__identity {
   display: inline-flex;
   align-items: center;
@@ -7153,6 +7159,10 @@ body::before {
 
 .attack-result-modal__body {
   gap: 10px;
+}
+
+.attack-result-modal__actions {
+  justify-content: center;
 }
 
 .attack-result-modal__summary {
