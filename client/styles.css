@@ -6453,9 +6453,135 @@ body::before {
   justify-content: flex-end;
 }
 
+#spy-confirm-modal .spy-confirm-modal__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+#spy-confirm-modal .modal__cancel-btn,
+#spy-confirm-modal .modal__confirm-btn {
+  min-width: 0;
+  width: 100%;
+}
+
+#spy-confirm-modal-confirm {
+  border-color: rgba(251, 191, 36, 0.42);
+  background:
+    linear-gradient(135deg, rgba(120, 53, 15, 0.96), rgba(161, 98, 7, 0.9));
+  color: #fff8e1;
+  box-shadow:
+    0 18px 36px rgba(180, 83, 9, 0.24),
+    0 0 18px rgba(251, 191, 36, 0.14),
+    inset 0 1px 0 rgba(254, 243, 199, 0.14);
+}
+
+#spy-confirm-modal-confirm:hover {
+  border-color: rgba(252, 211, 77, 0.66);
+  color: #ffffff;
+  box-shadow:
+    0 22px 42px rgba(180, 83, 9, 0.3),
+    0 0 22px rgba(251, 191, 36, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.05);
+}
+
+#spy-confirm-modal-confirm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(253, 224, 71, 0.14), transparent 36%, transparent 72%, rgba(251, 191, 36, 0.12));
+  pointer-events: none;
+}
+
 #spy-confirm-modal-confirm:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+#raid-confirm-modal .spy-confirm-modal__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+#raid-confirm-modal .modal__cancel-btn,
+#raid-confirm-modal .modal__confirm-btn {
+  min-width: 0;
+  width: 100%;
+}
+
+#raid-confirm-modal-confirm {
+  border-color: rgba(34, 211, 238, 0.4);
+  background:
+    linear-gradient(135deg, rgba(8, 47, 73, 0.96), rgba(15, 118, 110, 0.9));
+  color: #ecfeff;
+  box-shadow:
+    0 18px 36px rgba(8, 145, 178, 0.24),
+    0 0 18px rgba(34, 211, 238, 0.14),
+    inset 0 1px 0 rgba(207, 250, 254, 0.14);
+}
+
+#raid-confirm-modal-confirm:hover {
+  border-color: rgba(103, 232, 249, 0.64);
+  color: #ffffff;
+  box-shadow:
+    0 22px 42px rgba(8, 145, 178, 0.3),
+    0 0 22px rgba(34, 211, 238, 0.2),
+    inset 0 0 14px rgba(255, 255, 255, 0.05);
+}
+
+#raid-confirm-modal-confirm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(125, 211, 252, 0.14), transparent 36%, transparent 72%, rgba(45, 212, 191, 0.12));
+  pointer-events: none;
+}
+
+#occupy-confirm-modal .spy-confirm-modal__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+#occupy-confirm-modal .modal__cancel-btn,
+#occupy-confirm-modal .modal__confirm-btn {
+  min-width: 0;
+  width: 100%;
+}
+
+#occupy-confirm-modal-confirm {
+  border-color: rgba(248, 113, 113, 0.42);
+  background:
+    linear-gradient(135deg, rgba(127, 29, 29, 0.96), rgba(24, 24, 27, 0.94));
+  color: #fff1f2;
+  box-shadow:
+    0 18px 36px rgba(127, 29, 29, 0.3),
+    0 0 18px rgba(248, 113, 113, 0.14),
+    inset 0 1px 0 rgba(254, 202, 202, 0.12);
+}
+
+#occupy-confirm-modal-confirm:hover {
+  border-color: rgba(252, 165, 165, 0.62);
+  color: #ffffff;
+  box-shadow:
+    0 22px 42px rgba(127, 29, 29, 0.36),
+    0 0 22px rgba(248, 113, 113, 0.2),
+    inset 0 0 14px rgba(255, 255, 255, 0.05);
+}
+
+#occupy-confirm-modal-confirm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(254, 202, 202, 0.08), transparent 38%, transparent 72%, rgba(248, 113, 113, 0.12));
+  pointer-events: none;
 }
 
 .attack-confirm-modal__content {
@@ -6473,6 +6599,51 @@ body::before {
 
 .attack-confirm-modal__actions {
   justify-content: flex-end;
+}
+
+#attack-modal-start,
+#attack-confirm-modal-confirm {
+  border-color: rgba(248, 113, 113, 0.42);
+  background:
+    linear-gradient(135deg, rgba(127, 29, 29, 0.96), rgba(24, 24, 27, 0.94));
+  color: #fff1f2;
+  box-shadow:
+    0 18px 36px rgba(127, 29, 29, 0.3),
+    0 0 20px rgba(248, 113, 113, 0.16),
+    inset 0 1px 0 rgba(254, 202, 202, 0.12);
+}
+
+#attack-modal-start::before,
+#attack-confirm-modal-confirm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(254, 202, 202, 0.08), transparent 38%, transparent 72%, rgba(248, 113, 113, 0.12));
+  pointer-events: none;
+}
+
+#attack-modal-start:hover,
+#attack-confirm-modal-confirm:hover {
+  border-color: rgba(252, 165, 165, 0.62);
+  color: #ffffff;
+  box-shadow:
+    0 22px 42px rgba(127, 29, 29, 0.36),
+    0 0 24px rgba(248, 113, 113, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.05);
+}
+
+#attack-confirm-modal .attack-confirm-modal__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: stretch;
+}
+
+#attack-confirm-modal .modal__cancel-btn,
+#attack-confirm-modal .modal__confirm-btn {
+  min-width: 0;
+  width: 100%;
 }
 
 .attack-confirm-modal__intel-chip {
@@ -6758,6 +6929,31 @@ body::before {
   gap: 0;
 }
 
+#police-action-result-modal-ok {
+  border-color: rgba(248, 113, 113, 0.42);
+  background:
+    linear-gradient(135deg, rgba(127, 29, 29, 0.96), rgba(24, 24, 27, 0.94));
+  color: #fff1f2;
+  box-shadow:
+    0 18px 36px rgba(127, 29, 29, 0.3),
+    0 0 20px rgba(248, 113, 113, 0.16),
+    inset 0 1px 0 rgba(254, 202, 202, 0.12);
+}
+
+#police-action-result-modal-ok::after {
+  background:
+    linear-gradient(180deg, rgba(254, 202, 202, 0.14), rgba(255, 255, 255, 0));
+}
+
+#police-action-result-modal-ok:hover {
+  border-color: rgba(252, 165, 165, 0.62);
+  color: #ffffff;
+  box-shadow:
+    0 22px 42px rgba(127, 29, 29, 0.36),
+    0 0 24px rgba(248, 113, 113, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.05);
+}
+
 .police-action-result-modal__content.is-tier-1 .police-action-result-modal__badge {
   border-color: rgba(148, 163, 184, 0.4);
   color: #e2e8f0;
@@ -6851,6 +7047,19 @@ body::before {
   .police-action-result-modal__badge {
     padding: 5px 9px;
     font-size: 8px;
+  }
+
+  #police-action-result-modal-ok {
+    min-width: 0;
+    width: 86px;
+    min-height: 32px;
+    padding: 6px 10px;
+    border-radius: 11px;
+    font-size: 11px;
+  }
+
+  #police-action-result-modal .modal__actions {
+    justify-content: center;
   }
 
   #spy-confirm-modal .modal__body,
@@ -13937,6 +14146,16 @@ body.mobile-storage-modal-open {
     grid-column: 1 / -1;
     justify-self: stretch;
     width: 100%;
+  }
+
+  #district-modal .district-modal__actions--occupy-raid #attack-btn {
+    order: 1;
+    grid-column: 1;
+  }
+
+  #district-modal .district-modal__actions--occupy-raid #raid-btn {
+    order: 2;
+    grid-column: 2;
   }
 
   #district-modal #defense-btn {

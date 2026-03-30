@@ -14061,7 +14061,7 @@ window.Empire.Map = (() => {
         li.innerHTML = `
           <div class="armory-info-block__head">
             <span class="armory-info-block__badge">${title}</span>
-            <span class="armory-info-block__hint">${rows.length} systémů</span>
+            <span class="armory-info-block__hint"></span>
           </div>
           <div class="armory-info-block__grid">
             ${rows.map(([name, meta, effect]) => `
@@ -14081,7 +14081,7 @@ window.Empire.Map = (() => {
         li.innerHTML = `
           <div class="armory-info-block__head">
             <span class="armory-info-block__badge">Boosty</span>
-            <span class="armory-info-block__hint">Combat Module</span>
+            <span class="armory-info-block__hint"></span>
           </div>
           <div class="armory-info-block__grid armory-info-block__grid--boosts">
             <article class="armory-info-chip armory-info-chip--boost">
@@ -14122,7 +14122,7 @@ window.Empire.Map = (() => {
         li.innerHTML = `
           <div class="lab-info-block__head">
             <span class="lab-info-block__badge">${title}</span>
-            <span class="lab-info-block__hint">${rows.length} linek</span>
+            <span class="lab-info-block__hint"></span>
           </div>
           <div class="lab-info-block__grid ${tone === "boost" ? "lab-info-block__grid--boosts" : ""}">
             ${rows.map(([name, meta, effect]) => `
@@ -14150,7 +14150,7 @@ window.Empire.Map = (() => {
         ["Ghost Serum boost", "1× Ghost Serum", "Stealth / recon boost přes panel Boost"],
         ["Overdrive X boost", "1× Overdrive X", "Akční výkonový boost přes panel Boost"]
       ];
-      const createSection = (title, tone, rows, hint) => {
+      const createSection = (title, tone, rows, hint = "") => {
         const li = document.createElement("li");
         li.className = `lab-info-block lab-info-block--${tone}`;
         li.innerHTML = `
@@ -14170,8 +14170,8 @@ window.Empire.Map = (() => {
         `;
         return li;
       };
-      list.appendChild(createSection("Výroba surovin", "product", supplyRows, "3 sloty"));
-      list.appendChild(createSection("Boost utility", "boost", utilityRows, "Boost panel"));
+      list.appendChild(createSection("Výroba surovin", "product", supplyRows));
+      list.appendChild(createSection("Boost utility", "boost", utilityRows));
       return;
     }
     if (mechanicsType === "factory") {
@@ -14185,7 +14185,7 @@ window.Empire.Map = (() => {
         ["Rapid Strike", "3 CM", "+attack/raid speed, větší průraz"],
         ["Breach Mode", "4 CM", "+destroy chance a breach pressure"]
       ];
-      const createSection = (title, tone, rows, hint) => {
+      const createSection = (title, tone, rows, hint = "") => {
         const li = document.createElement("li");
         li.className = `lab-info-block lab-info-block--${tone}`;
         li.innerHTML = `
@@ -14205,8 +14205,8 @@ window.Empire.Map = (() => {
         `;
         return li;
       };
-      list.appendChild(createSection("Produkce", "product", materialRows, "Factory line"));
-      list.appendChild(createSection("Combat boosty", "boost", boostRows, "Combat Module"));
+      list.appendChild(createSection("Produkce", "product", materialRows));
+      list.appendChild(createSection("Combat boosty", "boost", boostRows));
       return;
     }
     const actions = resolveBuildingInfoActions(details);
