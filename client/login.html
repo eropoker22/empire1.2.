@@ -73,6 +73,8 @@
               <button type="submit" class="btn btn--primary">Registrovat</button>
             </form>
 
+            <p id="auth-error" class="auth-error hidden"></p>
+
             <div class="auth-form auth-form--guest">
               <label for="guest-username">Nick hosta</label>
               <input type="text" id="guest-username" placeholder="streetguest" maxlength="24" autocomplete="nickname" />
@@ -80,8 +82,6 @@
               <input type="text" id="guest-gang" placeholder="Ghost Crew" maxlength="32" autocomplete="organization" />
               <button type="button" class="btn btn--ghost" id="guest-btn">Pokračovat jako host</button>
             </div>
-
-            <p id="auth-error" class="auth-error hidden"></p>
           </div>
         </main>
 
