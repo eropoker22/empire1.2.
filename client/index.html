@@ -522,6 +522,33 @@
       </div>
     </div>
 
+    <div id="trap-confirm-modal" class="modal hidden">
+      <div id="trap-confirm-modal-backdrop" class="modal__backdrop"></div>
+      <div class="modal__content spy-confirm-modal__content">
+        <div class="modal__header">
+          <h3>Potvrdit past</h3>
+          <button class="modal__close" id="trap-confirm-modal-close" type="button" aria-label="Zavřít">✕</button>
+        </div>
+        <div class="modal__body spy-confirm-modal__body">
+          <div class="modal__row">
+            <span>Cíl</span>
+            <strong id="trap-confirm-modal-district">-</strong>
+          </div>
+          <div class="modal__row">
+            <span>Cooldown přesunu</span>
+            <strong id="trap-confirm-modal-cooldown">20s</strong>
+          </div>
+          <p class="muted spy-confirm-modal__note" id="trap-confirm-modal-note">
+            Opravdu chceš vložit past do tohoto districtu?
+          </p>
+          <div class="modal__actions spy-confirm-modal__actions">
+            <button class="btn btn--ghost modal__cancel-btn" id="trap-confirm-modal-cancel" type="button">Odmítnout</button>
+            <button class="btn btn--primary modal__confirm-btn" id="trap-confirm-modal-confirm" type="button">Potvrdit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="spy-result-modal" class="modal hidden">
       <div id="spy-result-modal-backdrop" class="modal__backdrop"></div>
       <div class="modal__content spy-result-modal__content" id="spy-result-modal-content">

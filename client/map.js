@@ -15194,7 +15194,7 @@ window.Empire.Map = (() => {
     const raidLockRemainingMs = window.Empire.UI?.getDistrictRaidLockRemainingMs?.(district?.id) || 0;
 
     const showAttack = !destroyed && !defendableByPlayer && attackState.allowed;
-    const showRaid = !destroyed && !defendableByPlayer;
+    const showRaid = !destroyed && !defendableByPlayer && raidState.allowed;
     const showSpy = !destroyed && !defendableByPlayer && spyState.allowed && !hasSpyIntel;
     const showOccupyRaidPair = showAttack && showRaid && attackActionMode === "occupy";
     const showSpyRaidPair = !showAttack && showRaid && showSpy;
@@ -15213,22 +15213,29 @@ window.Empire.Map = (() => {
       ? `Vykrást • ${formatDistrictRaidLockLabel(raidLockRemainingMs)}`
       : "Vykrást";
     defenseBtn.textContent = "Obrana";
-    trapBtn.textContent = trapControlState.label || "Past";
+    const trapLabel = trapControlState.label || "Past";
+    const trapSubtitle = String(trapControlState.subtitle || "").trim();
+    trapBtn.innerHTML = trapSubtitle
+      ? `<span class="district-action-btn__label">${trapLabel}</span><span class="district-action-btn__sub">${trapSubtitle}</span>`
+      : `<span class="district-action-btn__label">${trapLabel}</span>`;
     attackBtn.disabled = false;
-    raidBtn.disabled = showRaid ? !raidState.allowed : false;
+    raidBtn.disabled = false;
     spyBtn.disabled = false;
     defenseBtn.disabled = false;
-    trapBtn.disabled = false;
+    trapBtn.disabled = Boolean(trapControlState.buttonDisabled);
     attackBtn.setAttribute("aria-disabled", "false");
-    raidBtn.setAttribute("aria-disabled", showRaid && !raidState.allowed ? "true" : "false");
+    raidBtn.setAttribute("aria-disabled", "false");
     spyBtn.setAttribute("aria-disabled", "false");
     defenseBtn.setAttribute("aria-disabled", "false");
-    trapBtn.setAttribute("aria-disabled", "false");
+    trapBtn.setAttribute("aria-disabled", trapControlState.buttonDisabled ? "true" : "false");
     attackBtn.title = "";
-    raidBtn.title = showRaid && !raidState.allowed ? String(raidState.reason || "") : "";
+    raidBtn.title = "";
     spyBtn.title = "";
     defenseBtn.title = "Nastav obranu districtu.";
     trapBtn.title = trapControlState.title || "";
+    trapBtn.classList.toggle("district-action-btn--cooldown", Boolean(trapControlState.moveLocked));
+    trapBtn.classList.toggle("district-action-btn--active", Boolean(trapControlState.isActiveHere));
+    trapBtn.setAttribute("aria-label", trapSubtitle ? `${trapLabel} ${trapSubtitle}` : trapLabel);
   }
 
   function hideModal() {
@@ -15264,13 +15271,17 @@ window.Empire.Map = (() => {
     const buildings = district
       ? (Array.isArray(district.buildings) ? district.buildings : [])
       : (Array.isArray(spyIntel?.buildings) ? spyIntel.buildings : []);
+    const trapControlState = district ? (window.Empire.UI?.getDistrictTrapControlState?.(district) || null) : null;
+    const visibleBuildings = district && trapControlState?.buildingVisible
+      ? [...buildings, "__district_trap__"]
+      : buildings;
     if (!district && knownFields.buildings === false) {
       root.classList.remove("hidden");
       title.textContent = "Budovy v distriktu";
       list.innerHTML = '<div class="district-buildings__empty">Budovy se nepodařilo zjistit.</div>';
       return;
     }
-    if (!buildings.length) {
+    if (!visibleBuildings.length) {
       root.classList.add("hidden");
       list.innerHTML = "";
       return;
@@ -15280,9 +15291,15 @@ window.Empire.Map = (() => {
     title.textContent = district?.buildingSetTitle
       ? `Budovy v distriktu • ${district.buildingSetTitle} (${district.buildingTier || "set"})`
       : "Budovy v distriktu";
-    list.innerHTML = buildings
+    list.innerHTML = visibleBuildings
       .map(
         (building, index) => `
+          ${building === "__district_trap__"
+            ? `<div class="district-buildings__item district-buildings__item--trap">
+                <span class="district-buildings__name">${trapControlState?.buildingLabel || "Past"}</span>
+                <span class="district-buildings__lock district-buildings__lock--trap">${trapControlState?.buildingMeta || "aktivní"}</span>
+              </div>`
+            : `
           <button
             class="district-buildings__item district-buildings__item--interactive${lockMeta.locked ? " district-buildings__item--locked" : ""}"
             type="button"
@@ -15292,7 +15309,7 @@ window.Empire.Map = (() => {
             <span class="district-buildings__name">${building}</span>
             ${lockMeta.locked && lockMeta.label ? `<span class="district-buildings__lock">${lockMeta.label}</span>` : ""}
           </button>
-        `
+        `}`
       )
       .join("");
     if (!district) {
@@ -15302,7 +15319,8 @@ window.Empire.Map = (() => {
     list.querySelectorAll("[data-building-index]:not([data-building-locked])").forEach((button) => {
       button.addEventListener("click", () => {
         const index = Number(button.getAttribute("data-building-index"));
-        const buildingName = buildings[index];
+        const buildingName = visibleBuildings[index];
+        if (buildingName === "__district_trap__") return;
         if (!buildingName) return;
         const detailInput = resolveBuildingDetailInput(district, index, buildingName);
         openBuildingDetailModal(detailInput, district);

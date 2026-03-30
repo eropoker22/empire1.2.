@@ -392,6 +392,7 @@ window.Empire.UI = (() => {
   const DISTRICT_TRAP_STORAGE_KEY = "empire_district_trap_state_v1";
   const ATTACK_TARGET_LOCK_STORAGE_KEY = "empire_attack_target_lock_state_v1";
   const TRAP_ATTACK_TARGET_LOCK_MS = 5 * 60 * 60 * 1000;
+  const TRAP_MOVE_COOLDOWN_MS = 20 * 1000;
   const RAID_COOLDOWN_STORAGE_KEY = "empire_raid_cooldown_until_v1";
   const RAID_BASE_COOLDOWN_MS = 30 * 1000;
   const RAID_ACTION_DURATION_MS = 20 * 1000;
@@ -770,34 +771,7 @@ window.Empire.UI = (() => {
   });
   const POLICE_DISTRICT_CLICK_WARNING_QUOTES = Object.freeze([
     "Tady teď ne. Policie to tu právě rozjebává.",
-    "Zapomeň na to. District je plnej policajtů.",
-    "Blbej timing. Probíhá razie drž se dál.",
-    "Tady se teď nehraje. Policie má kontrolu.",
-    "Nejde to. Razie v plným proudu.",
-    "Zkus to jindy. Teď to tu čistí policie.",
-    "District zamčenej. Policie to tam právě bere všechno.",
-    "Teď bys tam chcípnul. Policie je všude.",
-    "Žádná akce. Policie to tu drží pevně.",
-    "Špatnej moment. Razie jede naplno."
-  ]);
-  const POLICE_DISTRICT_CLICK_WARNING_PLAYER_QUOTES = Object.freeze([
-    "Tvoje území teď drží policie. Nech to být.",
-    "Do vlastního districtu teď nelezeš. Policie ho právě čistí.",
-    "Tady máš smůlu. Policie rozebírá tvůj district zevnitř.",
-    "Tohle je tvůj district, ale teď patří policii.",
-    "Policie ti právě rozkopává vlastní rajón. Žádná akce."
-  ]);
-  const POLICE_DISTRICT_CLICK_WARNING_ALLIANCE_QUOTES = Object.freeze([
-    "Tohle je náš district. Policie ho právě drtí teď ne.",
-    "[nick] má razii. Drž se zpátky, tady teď nic neuděláš.",
-    "Aliance pod tlakem. Policie to u [nick] čistí.",
-    "Tady teď ne. Policie rozebírá district našeho člověka.",
-    "[nick] má průser. Policie mu to tam právě bere všechno.",
-    "District aliance je v razii. Počkej, až to skončí.",
-    "Teď tam nevlez. Policie má [nick] pod kontrolou.",
-    "Aliance hoří. Policie je u [nick] všude.",
-    "Tady nepomůžeš. Policie to u [nick] právě zavírá.",
-    "Blbej timing. Náš district je zrovna v razii."
+    "Zapomeň na to. District je plnej policajtů."
   ]);
   const SPY_SUCCESS_EMPTY_DISTRICT_QUOTES = Object.freeze([
     "Špehování hotovo. Tvůj špeh je zpátky - prázdno jak v hrobě.",
@@ -1941,6 +1915,7 @@ window.Empire.UI = (() => {
   let spyConfirmModalState = { districtId: null };
   let raidConfirmModalState = { districtId: null };
   let occupyConfirmModalState = { districtId: null };
+  let trapConfirmModalState = { districtId: null };
   const GANG_HEAT_LEVELS = Object.freeze([
     { stars: 1, label: "Stupeň 1", title: "Základní dohled", description: "Jsi skoro pod radarem. Jen lehké sledování a občasná pozornost." },
     { stars: 2, label: "Stupeň 2", title: "Podezřelý", description: "Policie tě začíná vnímat. Přibývají kontroly a drobný tlak." },
@@ -2863,12 +2838,14 @@ window.Empire.UI = (() => {
         document.body.classList.remove("mobile-hide-topbar");
         document.body.classList.remove("mobile-hide-topbar-stats");
         document.body.classList.remove("mobile-police-modal-open");
+        document.body.classList.remove("mobile-boost-modal-open");
         return;
       }
 
       const openModals = modalNodes.filter((modal) => !modal.classList.contains("hidden"));
       const shouldHideTopbar = openModals.some((modal) => topbarHiddenModalIds.has(modal.id));
       const policeModalOpen = openModals.some((modal) => modal.id === "police-action-result-modal");
+      const boostModalOpen = openModals.some((modal) => modal.id === "boost-modal");
       const keepStatsVisible = openModals.some((modal) => (
         modal.id === "building-detail-modal"
         || modal.id === "market-modal"
@@ -2878,6 +2855,7 @@ window.Empire.UI = (() => {
       document.body.classList.toggle("mobile-hide-topbar", shouldHideTopbar);
       document.body.classList.toggle("mobile-hide-topbar-stats", shouldHideStats);
       document.body.classList.toggle("mobile-police-modal-open", policeModalOpen);
+      document.body.classList.toggle("mobile-boost-modal-open", boostModalOpen);
     };
 
     const observer = new MutationObserver((mutations) => {
@@ -3281,6 +3259,7 @@ window.Empire.UI = (() => {
     initSpyConfirmModal();
     initRaidConfirmModal();
     initOccupyConfirmModal();
+    initTrapConfirmModal();
     initSpyResultModal();
     initSpyDetectionAlertModal();
     initGangHeatModal();
@@ -3367,20 +3346,14 @@ window.Empire.UI = (() => {
           pushEvent("Do zničeného districtu nelze nastražit past.");
           return;
         }
-        const result = setCurrentPlayerTrapDistrict(district);
-        if (!result?.ok) {
-          pushEvent("Past se nepodařilo nastražit.");
+        const trapState = getDistrictTrapControlState(district);
+        if (trapState?.isActiveHere || trapState?.moveLocked) {
+          if (trapState?.moveLocked) {
+            pushEvent(`Past nelze přesunout ještě ${formatTrapMoveCooldownLabel(trapState.moveCooldownRemainingMs)}.`);
+          }
           return;
         }
-        const districtLabel = district?.name || `Distrikt #${district?.id ?? "-"}`;
-        pushEvent(
-          result.moved
-            ? `Past přesunuta do districtu ${districtLabel}. Aktivní může být vždy jen 1 past.`
-            : result.isActiveHere
-              ? `Past už je nastražená v districtu ${districtLabel}.`
-              : `Past nastražena do districtu ${districtLabel}.`
-        );
-        window.Empire.Map?.refreshSelectedDistrictModal?.();
+        openTrapConfirmModal(district);
       });
     }
 
@@ -4500,7 +4473,8 @@ window.Empire.UI = (() => {
           targetOwnerKey: normalizeOwnerName(entry?.targetOwnerKey),
           targetOwnerLabel: String(entry?.targetOwnerLabel || "").trim(),
           districtName: String(entry?.districtName || "").trim(),
-          placedAt: Math.max(0, Math.floor(Number(entry?.placedAt || 0)))
+          placedAt: Math.max(0, Math.floor(Number(entry?.placedAt || 0))),
+          moveLockedUntil: Math.max(0, Math.floor(Number(entry?.moveLockedUntil || 0)))
         };
         return acc;
       }, {});
@@ -4521,7 +4495,8 @@ window.Empire.UI = (() => {
             targetOwnerKey: normalizeOwnerName(entry?.targetOwnerKey),
             targetOwnerLabel: String(entry?.targetOwnerLabel || "").trim(),
             districtName: String(entry?.districtName || "").trim(),
-            placedAt: Math.max(0, Math.floor(Number(entry?.placedAt || 0)))
+            placedAt: Math.max(0, Math.floor(Number(entry?.placedAt || 0))),
+            moveLockedUntil: Math.max(0, Math.floor(Number(entry?.moveLockedUntil || 0)))
           };
           return acc;
         }, {});
@@ -4548,6 +4523,18 @@ window.Empire.UI = (() => {
     return null;
   }
 
+  function getTrapMoveCooldownRemainingMs(entry) {
+    return Math.max(0, Number(entry?.moveLockedUntil || 0) - Date.now());
+  }
+
+  function formatTrapMoveCooldownLabel(ms) {
+    const safe = Math.max(0, Math.ceil(Number(ms) || 0));
+    const totalSeconds = Math.max(0, Math.ceil(safe / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
   function setCurrentPlayerTrapDistrict(district) {
     const safeDistrictId = Number(district?.id);
     if (!Number.isFinite(safeDistrictId)) {
@@ -4556,19 +4543,29 @@ window.Empire.UI = (() => {
     const ownerKey = resolveCurrentPlayerOwnerKey();
     const state = readDistrictTrapState();
     const previous = state[ownerKey] || null;
+    const moveCooldownRemainingMs = getTrapMoveCooldownRemainingMs(previous);
+    if (previous && Number(previous.districtId) !== safeDistrictId && moveCooldownRemainingMs > 0) {
+      return {
+        ok: false,
+        reason: "move_locked",
+        moveCooldownRemainingMs
+      };
+    }
     state[ownerKey] = {
       districtId: Math.max(0, Math.floor(safeDistrictId)),
       targetOwnerKey: normalizeOwnerName(district?.owner),
       targetOwnerLabel: String(district?.ownerNick || district?.owner || "").trim(),
       districtName: String(district?.name || `Distrikt #${safeDistrictId}`).trim(),
-      placedAt: Date.now()
+      placedAt: Date.now(),
+      moveLockedUntil: Date.now() + TRAP_MOVE_COOLDOWN_MS
     };
     saveDistrictTrapState(state);
     return {
       ok: true,
       moved: Boolean(previous && Number(previous.districtId) !== safeDistrictId),
       previousDistrictId: previous?.districtId ?? null,
-      isActiveHere: Number(previous?.districtId) === safeDistrictId
+      isActiveHere: Number(previous?.districtId) === safeDistrictId,
+      moveLockedUntil: Number(state[ownerKey]?.moveLockedUntil || 0)
     };
   }
 
@@ -4586,21 +4583,49 @@ window.Empire.UI = (() => {
 
   function getDistrictTrapControlState(district) {
     if (!district || !isDistrictDefendableByPlayer(district) || isDistrictDestroyed(district)) {
-      return { visible: false, label: "Past", title: "", isActiveHere: false, hasTrapElsewhere: false };
+      return {
+        visible: false,
+        label: "Past",
+        title: "",
+        isActiveHere: false,
+        hasTrapElsewhere: false,
+        moveLocked: false,
+        moveCooldownRemainingMs: 0,
+        countdownLabel: "",
+        buildingVisible: false,
+        buttonDisabled: true
+      };
     }
     const currentPlacement = getCurrentPlayerTrapPlacement();
     const isActiveHere = Number(currentPlacement?.districtId) === Number(district?.id);
     const hasTrapElsewhere = Boolean(currentPlacement && !isActiveHere);
+    const moveCooldownRemainingMs = getTrapMoveCooldownRemainingMs(currentPlacement);
+    const moveLocked = moveCooldownRemainingMs > 0;
+    const countdownLabel = moveLocked ? formatTrapMoveCooldownLabel(moveCooldownRemainingMs) : "";
+    const sourceDistrictLabel = currentPlacement?.districtName || `distriktu #${currentPlacement?.districtId ?? "-"}`;
+    const title = isActiveHere
+      ? (moveLocked
+          ? `Past je aktivní v tomto districtu. Přesun bude možný za ${countdownLabel}.`
+          : "V tomto districtu je nastražená tvoje past.")
+      : hasTrapElsewhere
+        ? (moveLocked
+            ? `Past je dočasně zamčená v ${sourceDistrictLabel}. Přesun bude možný za ${countdownLabel}.`
+            : `Máš jen 1 past. Kliknutím ji přesuneš z ${sourceDistrictLabel}.`)
+        : "Nastraž 1 past do svého nebo aliančního districtu.";
     return {
       visible: true,
       isActiveHere,
       hasTrapElsewhere,
+      moveLocked,
+      moveCooldownRemainingMs,
+      countdownLabel,
+      buttonDisabled: isActiveHere || moveLocked,
       label: isActiveHere ? "Past aktivní" : (hasTrapElsewhere ? "Přesunout past" : "Past"),
-      title: isActiveHere
-        ? "V tomto districtu je nastražená tvoje past."
-        : hasTrapElsewhere
-          ? `Máš jen 1 past. Kliknutím ji přesuneš z ${currentPlacement?.districtName || `distriktu #${currentPlacement?.districtId ?? "-"}`}.`
-          : "Nastraž 1 past do svého nebo aliančního districtu."
+      subtitle: moveLocked ? countdownLabel : "",
+      title,
+      buildingVisible: isActiveHere,
+      buildingLabel: "Past",
+      buildingMeta: moveLocked ? `aktivní • ${countdownLabel}` : "aktivní"
     };
   }
 
@@ -5908,15 +5933,13 @@ window.Empire.UI = (() => {
       || "total"
     ).trim().toLowerCase();
     const raidTypeLabel = String(raidSpecialty?.label || "Celková razie").trim() || "Celková razie";
-    const quotePool = isDistrictOwnedByPlayer(district)
-      ? POLICE_DISTRICT_CLICK_WARNING_PLAYER_QUOTES
-      : isDistrictOwnedByAlliance(district)
-        ? POLICE_DISTRICT_CLICK_WARNING_ALLIANCE_QUOTES
-        : POLICE_DISTRICT_CLICK_WARNING_QUOTES;
-    const warningSummary = quotePool.length
-      ? String(quotePool[Math.floor(Math.random() * quotePool.length)] || "").trim()
-      : `V districtu ${districtName} probíhá policejní razie hráče ${ownerNick}.`;
-    const resolvedWarningSummary = warningSummary.replaceAll("[nick]", ownerNick);
+    const normalizedOwnerNick = normalizeOwnerName(ownerNick);
+    const warningSummary = normalizedOwnerNick === normalizeOwnerName("Sněhulák")
+      ? "Tady teď ne. Policie to tu právě rozjebává."
+      : normalizedOwnerNick === normalizeOwnerName("Zabijak")
+        ? "Zapomeň na to. District je plnej policajtů."
+        : "Tady teď ne. Policie to tu právě rozjebává.";
+    const resolvedWarningSummary = warningSummary;
     const specialtyTone = ({
       financial: "is-specialty-financial",
       drug: "is-specialty-drug",
@@ -7585,7 +7608,10 @@ window.Empire.UI = (() => {
     const buildings = Array.isArray(district?.buildings)
       ? district.buildings
         .map((building) => String(building || "").trim())
-        .filter(Boolean)
+        .filter((building) => {
+          const normalized = String(building || "").trim().toLowerCase();
+          return normalized && normalized !== "past";
+        })
       : [];
     const districtType = formatDistrictType(String(district?.type || ""));
     const atmosphere = resolveDistrictAtmosphereForSpy(district);
@@ -8443,6 +8469,117 @@ window.Empire.UI = (() => {
     });
   }
 
+  function closeTrapConfirmModal() {
+    const root = document.getElementById("trap-confirm-modal");
+    if (root) root.classList.add("hidden");
+    trapConfirmModalState = { districtId: null };
+  }
+
+  function renderTrapConfirmModal() {
+    const root = document.getElementById("trap-confirm-modal");
+    const districtEl = document.getElementById("trap-confirm-modal-district");
+    const cooldownEl = document.getElementById("trap-confirm-modal-cooldown");
+    const noteEl = document.getElementById("trap-confirm-modal-note");
+    const confirmBtn = document.getElementById("trap-confirm-modal-confirm");
+    if (!root || root.classList.contains("hidden")) return;
+    if (!districtEl || !cooldownEl || !noteEl || !confirmBtn) return;
+
+    const district = resolveDistrictById(trapConfirmModalState.districtId);
+    const trapState = getDistrictTrapControlState(district);
+    const currentPlacement = getCurrentPlayerTrapPlacement();
+    districtEl.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    cooldownEl.textContent = `${Math.floor(TRAP_MOVE_COOLDOWN_MS / 1000)}s`;
+
+    let canConfirm = true;
+    let noteText = "Opravdu chceš vložit past do tohoto districtu? Po nastražení ji nebude možné 20s přesunout.";
+    if (!district) {
+      canConfirm = false;
+      noteText = "Nejprve vyber distrikt.";
+    } else if (!isDistrictDefendableByPlayer(district)) {
+      canConfirm = false;
+      noteText = "Past lze nastražit jen do vlastního nebo aliančního districtu.";
+    } else if (isDistrictDestroyed(district)) {
+      canConfirm = false;
+      noteText = "Do zničeného districtu nelze nastražit past.";
+    } else if (trapState?.isActiveHere) {
+      canConfirm = false;
+      noteText = trapState.moveLocked
+        ? `Past už v tomto districtu běží. Přesun bude možný za ${trapState.countdownLabel}.`
+        : "Past už je v tomto districtu aktivní.";
+    } else if (trapState?.moveLocked) {
+      canConfirm = false;
+      noteText = `Past je zamčená v ${currentPlacement?.districtName || `distriktu #${currentPlacement?.districtId ?? "-"}`}. Přesun bude možný za ${trapState.countdownLabel}.`;
+    } else if (trapState?.hasTrapElsewhere) {
+      noteText = `Přesuneš svou jedinou past z ${currentPlacement?.districtName || `distriktu #${currentPlacement?.districtId ?? "-"}`} do tohoto districtu. Po potvrzení poběží nový cooldown 20s.`;
+    }
+
+    noteEl.textContent = noteText;
+    confirmBtn.disabled = !canConfirm;
+  }
+
+  function openTrapConfirmModal(district) {
+    const root = document.getElementById("trap-confirm-modal");
+    if (!root) return;
+    trapConfirmModalState = { districtId: district?.id ?? null };
+    root.classList.remove("hidden");
+    renderTrapConfirmModal();
+  }
+
+  function placeTrapFromModal() {
+    const district = resolveDistrictById(trapConfirmModalState.districtId);
+    if (!district) {
+      renderTrapConfirmModal();
+      return;
+    }
+    if (!isDistrictDefendableByPlayer(district)) {
+      pushEvent("Past lze nastražit jen do vlastního nebo aliančního districtu.");
+      renderTrapConfirmModal();
+      return;
+    }
+    if (isDistrictDestroyed(district)) {
+      pushEvent("Do zničeného districtu nelze nastražit past.");
+      renderTrapConfirmModal();
+      return;
+    }
+    const result = setCurrentPlayerTrapDistrict(district);
+    if (!result?.ok) {
+      if (result?.reason === "move_locked") {
+        pushEvent(`Past nelze přesunout ještě ${formatTrapMoveCooldownLabel(result.moveCooldownRemainingMs)}.`);
+      } else {
+        pushEvent("Past se nepodařilo nastražit.");
+      }
+      renderTrapConfirmModal();
+      return;
+    }
+    const districtLabel = district?.name || `Distrikt #${district?.id ?? "-"}`;
+    pushEvent(
+      result.moved
+        ? `Past přesunuta do districtu ${districtLabel}. Přesun bude znovu možný za 20s.`
+        : `Past nastražena do districtu ${districtLabel}. Přesun bude znovu možný za 20s.`
+    );
+    closeTrapConfirmModal();
+    window.Empire.Map?.refreshSelectedDistrictModal?.();
+  }
+
+  function initTrapConfirmModal() {
+    const root = document.getElementById("trap-confirm-modal");
+    const backdrop = document.getElementById("trap-confirm-modal-backdrop");
+    const closeBtn = document.getElementById("trap-confirm-modal-close");
+    const cancelBtn = document.getElementById("trap-confirm-modal-cancel");
+    const confirmBtn = document.getElementById("trap-confirm-modal-confirm");
+    if (!root) return;
+
+    if (backdrop) backdrop.addEventListener("click", closeTrapConfirmModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeTrapConfirmModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeTrapConfirmModal);
+    if (confirmBtn) confirmBtn.addEventListener("click", placeTrapFromModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !root.classList.contains("hidden")) {
+        closeTrapConfirmModal();
+      }
+    });
+  }
+
   function normalizeOwnerName(value) {
     return String(value || "").trim().toLowerCase();
   }
@@ -8559,6 +8696,84 @@ window.Empire.UI = (() => {
     return false;
   }
 
+  function evaluateRaidAdjacencyAvailability(district) {
+    const safeDistrict = district || window.Empire.selectedDistrict;
+    if (!safeDistrict?.id) {
+      return { allowed: false, reason: "Nejprve vyber distrikt." };
+    }
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    if (!districts.length) {
+      return { allowed: false, reason: "Nepodařilo se načíst mapu distriktů." };
+    }
+
+    const targetDistrict = resolveDistrictById(safeDistrict.id, districts);
+    if (!targetDistrict) {
+      return { allowed: false, reason: "Vybraný distrikt se nepodařilo dohledat." };
+    }
+
+    const adjacency = buildDistrictAdjacency(districts);
+    const targetNeighbors = adjacency.get(targetDistrict.id);
+    if (!targetNeighbors || !targetNeighbors.size) {
+      return { allowed: false, reason: "Vykrást můžeš jen sousední distrikt." };
+    }
+
+    const playerOwnerNames = new Set(getPlayerOwnerNameSet());
+    const allianceOwnerNames = new Set(
+      Array.from(getActiveAllianceOwnerNames()).filter((ownerName) => ownerName && !playerOwnerNames.has(ownerName))
+    );
+    const districtsById = new Map(districts.map((entry) => [entry.id, entry]));
+
+    for (const neighborId of targetNeighbors) {
+      const neighbor = districtsById.get(neighborId);
+      const owner = normalizeOwnerName(neighbor?.owner);
+      if (owner && playerOwnerNames.has(owner)) {
+        return { allowed: true, reason: "", mode: "player" };
+      }
+    }
+
+    if (!allianceOwnerNames.size) {
+      return {
+        allowed: false,
+        reason: "Vykrást můžeš jen distrikt, který sousedí s tvým distriktem nebo s kvalifikovaným aliančním distriktem."
+      };
+    }
+
+    const alliedAdjacencyCounts = new Map();
+    districts.forEach((entry) => {
+      const owner = normalizeOwnerName(entry?.owner);
+      if (!owner || !allianceOwnerNames.has(owner) || isDistrictDestroyed(entry)) return;
+      const neighbors = adjacency.get(entry.id);
+      if (!neighbors || !neighbors.size) return;
+      for (const neighborId of neighbors) {
+        const neighbor = districtsById.get(neighborId);
+        const neighborOwner = normalizeOwnerName(neighbor?.owner);
+        if (neighborOwner && playerOwnerNames.has(neighborOwner)) {
+          alliedAdjacencyCounts.set(owner, (alliedAdjacencyCounts.get(owner) || 0) + 1);
+          break;
+        }
+      }
+    });
+
+    const qualifiedAllianceOwners = new Set(
+      Array.from(alliedAdjacencyCounts.entries())
+        .filter(([, count]) => Number(count) >= 2)
+        .map(([owner]) => owner)
+    );
+
+    for (const neighborId of targetNeighbors) {
+      const neighbor = districtsById.get(neighborId);
+      const owner = normalizeOwnerName(neighbor?.owner);
+      if (owner && qualifiedAllianceOwners.has(owner)) {
+        return { allowed: true, reason: "", mode: "alliance" };
+      }
+    }
+
+    return {
+      allowed: false,
+      reason: "Vykrást můžeš jen distrikt, který sousedí s tvým distriktem nebo s distriktem spojence, který má aspoň 2 sousední distrikty s tvým územím."
+    };
+  }
+
   function evaluateDistrictActionAvailability(district, action) {
     if (!district) {
       return { allowed: false, reason: "Nejprve vyber distrikt." };
@@ -8652,11 +8867,12 @@ window.Empire.UI = (() => {
             reason: `Distrikt je po krádeži zamčený ještě ${formatAttackDurationLabel(districtRaidLockMs)}.`
           };
         }
+        return evaluateRaidAdjacencyAvailability(district);
       }
       const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: true });
       return adjacent
         ? { allowed: true, reason: "" }
-        : { allowed: false, reason: "Špehovat a vykrást můžeš jen distrikt, který sousedí s tvým nebo aliančním distriktem." };
+        : { allowed: false, reason: "Špehovat můžeš jen distrikt, který sousedí s tvým nebo aliančním distriktem." };
     }
 
     return { allowed: false, reason: "Akci nelze provést." };

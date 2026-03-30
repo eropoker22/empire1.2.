@@ -5546,10 +5546,30 @@ body::before {
   }
 
   #district-modal .modal__body {
-    display: block;
+    display: flex;
+    flex-direction: column;
     gap: 6px;
-    overflow: visible;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 8px;
+  }
+
+  #district-modal .modal__row {
+    order: 1;
+  }
+
+  #district-modal #modal-buildings {
+    order: 2;
+  }
+
+  #district-modal .modal__actions {
+    order: 3;
+  }
+
+  #district-modal #modal-gossip {
+    order: 4;
   }
 
   #district-modal .modal__row,
@@ -5572,6 +5592,10 @@ body::before {
   #district-modal .modal__gallery-title {
     font-size: 12px;
     margin-bottom: 6px;
+  }
+
+  #district-modal .district-buildings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   #district-modal .modal__actions {
@@ -5601,12 +5625,12 @@ body::before {
   }
 
   #district-modal .district-gossip {
-    max-height: none;
+    max-height: 118px;
     font-size: 12px;
   }
 
   #district-modal .district-buildings {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -5730,6 +5754,23 @@ body::before {
 #district-modal .district-action-btn--defense,
 #district-modal .district-action-btn--trap {
   grid-column: 1 / -1;
+}
+
+#district-modal .district-action-btn__label,
+#district-modal .district-action-btn__sub {
+  display: block;
+  width: 100%;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+#district-modal .district-action-btn__sub {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(236, 253, 245, 0.86);
 }
 
 #district-modal .district-modal__actions--defense-trap .district-action-btn--defense,
@@ -5879,12 +5920,32 @@ body::before {
 }
 
 #district-modal .district-action-btn--trap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   border-color: rgba(45, 212, 191, 0.34);
   background:
     linear-gradient(180deg, rgba(17, 94, 89, 0.94), rgba(15, 118, 110, 0.74));
   box-shadow:
     0 16px 34px rgba(13, 148, 136, 0.2),
     inset 0 1px 0 rgba(153, 246, 228, 0.18);
+}
+
+#district-modal .district-action-btn--trap.district-action-btn--cooldown,
+#district-modal .district-action-btn--trap.district-action-btn--active {
+  border-color: rgba(20, 83, 45, 0.42);
+  background:
+    linear-gradient(180deg, rgba(6, 24, 22, 0.96), rgba(15, 23, 42, 0.9));
+  color: #d1fae5;
+  box-shadow:
+    inset 0 1px 0 rgba(167, 243, 208, 0.08),
+    0 12px 24px rgba(2, 6, 23, 0.3);
+}
+
+#district-modal .district-action-btn--trap.district-action-btn--cooldown .district-action-btn__sub,
+#district-modal .district-action-btn--trap.district-action-btn--active .district-action-btn__sub {
+  color: rgba(167, 243, 208, 0.88);
 }
 
 .modal__ack-btn {
@@ -6502,6 +6563,7 @@ body::before {
 #raid-confirm-modal,
 #attack-confirm-modal,
 #occupy-confirm-modal,
+#trap-confirm-modal,
 #spy-result-modal,
 #spy-warning-modal,
 #raid-result-modal,
@@ -6517,6 +6579,7 @@ body::before {
 #raid-confirm-modal .modal__backdrop,
 #attack-confirm-modal .modal__backdrop,
 #occupy-confirm-modal .modal__backdrop,
+#trap-confirm-modal .modal__backdrop,
 #spy-result-modal .modal__backdrop,
 #spy-warning-modal .modal__backdrop,
 #raid-result-modal .modal__backdrop,
@@ -6531,6 +6594,7 @@ body::before {
 #raid-confirm-modal .modal__content,
 #attack-confirm-modal .modal__content,
 #occupy-confirm-modal .modal__content,
+#trap-confirm-modal .modal__content,
 #spy-result-modal .modal__content,
 #spy-warning-modal .modal__content,
 #raid-result-modal .modal__content,
@@ -6657,6 +6721,48 @@ body::before {
 #occupy-confirm-modal .modal__confirm-btn {
   min-width: 0;
   width: 100%;
+}
+
+#trap-confirm-modal .spy-confirm-modal__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+#trap-confirm-modal .modal__cancel-btn,
+#trap-confirm-modal .modal__confirm-btn {
+  min-width: 0;
+  width: 100%;
+}
+
+#trap-confirm-modal-confirm {
+  border-color: rgba(45, 212, 191, 0.42);
+  background:
+    linear-gradient(180deg, rgba(17, 94, 89, 0.96), rgba(15, 118, 110, 0.82));
+  color: #f0fdfa;
+  box-shadow:
+    0 18px 36px rgba(15, 118, 110, 0.24),
+    0 0 18px rgba(45, 212, 191, 0.16),
+    inset 0 1px 0 rgba(153, 246, 228, 0.16);
+}
+
+#trap-confirm-modal-confirm:hover {
+  border-color: rgba(94, 234, 212, 0.62);
+  color: #ffffff;
+  box-shadow:
+    0 22px 42px rgba(15, 118, 110, 0.3),
+    0 0 22px rgba(45, 212, 191, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.05);
+}
+
+#trap-confirm-modal-confirm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(167, 243, 208, 0.1), transparent 36%, transparent 72%, rgba(45, 212, 191, 0.12));
+  pointer-events: none;
 }
 
 #occupy-confirm-modal-confirm {
@@ -8023,6 +8129,21 @@ body::before {
   border-radius: 999px;
   border: 1px solid rgba(248, 113, 113, 0.42);
   background: rgba(127, 29, 29, 0.35);
+}
+
+.district-buildings__item--trap {
+  border-color: rgba(45, 212, 191, 0.34);
+  background:
+    linear-gradient(180deg, rgba(6, 78, 59, 0.74), rgba(15, 23, 42, 0.94));
+  box-shadow:
+    inset 0 0 18px rgba(45, 212, 191, 0.08),
+    0 10px 22px rgba(6, 78, 59, 0.22);
+}
+
+.district-buildings__lock--trap {
+  color: #d1fae5;
+  border-color: rgba(45, 212, 191, 0.42);
+  background: rgba(6, 78, 59, 0.4);
 }
 
 .district-buildings__item--locked,
@@ -14180,6 +14301,8 @@ body.mobile-storage-modal-open {
 
   #district-modal .modal__body {
     flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     gap: 6px;
     overflow-y: auto;
@@ -14189,7 +14312,7 @@ body.mobile-storage-modal-open {
   }
 
   #district-modal .modal__actions {
-    order: 2;
+    order: 4;
   }
 
   #district-modal .modal__gallery {
@@ -14289,6 +14412,8 @@ body.mobile-storage-modal-open {
     grid-column: 2;
     justify-self: stretch;
     width: 100%;
+    min-height: 54px;
+    padding: 8px 10px;
   }
 
   #district-modal .modal__actions .btn {
@@ -15106,6 +15231,41 @@ body.mobile-storage-modal-open {
   body.mobile-settings-modal-open .mobile-bottom-actions,
   body.mobile-settings-modal-open #guest-banner {
     visibility: hidden;
+    pointer-events: none;
+  }
+
+  #boost-modal {
+    z-index: 420;
+    place-items: start center;
+    align-items: start;
+    padding-top: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+  }
+
+  body.mobile-hide-topbar #boost-modal {
+    place-items: start center;
+    padding: 0 !important;
+  }
+
+  #boost-modal .modal__backdrop {
+    inset: 0 0 0 0;
+    background: rgb(4, 6, 12) !important;
+    backdrop-filter: none !important;
+  }
+
+  #boost-modal .modal__content {
+    margin-top: 0;
+    align-self: start;
+    justify-self: center;
+  }
+
+  body.mobile-boost-modal-open .topbar,
+  body.mobile-boost-modal-open .main,
+  body.mobile-boost-modal-open .mobile-bottom-actions,
+  body.mobile-boost-modal-open #guest-banner {
+    display: none !important;
     pointer-events: none;
   }
 
