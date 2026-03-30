@@ -14404,7 +14404,6 @@ body::before {
   .auth-body--login .auth-card {
     flex: 1 1 auto;
     min-height: 0;
-    height: 100%;
   }
 
   .auth-tabs {
@@ -14463,10 +14462,6 @@ body::before {
     margin-top: clamp(8px, 1.4dvh, 12px);
     padding-top: clamp(8px, 1.4dvh, 12px);
     border-top-color: rgba(56, 189, 248, 0.3);
-  }
-
-  .auth-body--login .auth-form--guest {
-    margin-top: auto;
   }
 
   .auth-form--guest label {
@@ -17057,9 +17052,5 @@ body.mobile-storage-modal-open {
   body.auth-body--login.login-mobile-fit-ultra .auth-footer__link svg {
     width: 13px;
     height: 13px;
-  }
-
-  body.auth-body--login .auth-card > .auth-form--guest {
-    margin-top: auto;
   }
 }
