@@ -389,6 +389,9 @@ window.Empire.UI = (() => {
   const ATTACK_COOLDOWN_STORAGE_KEY = "empire_attack_cooldown_until_v1";
   const ATTACK_COOLDOWN_MS = 20 * 1000;
   const ATTACK_ACTION_DURATION_MS = 20 * 1000;
+  const DISTRICT_TRAP_STORAGE_KEY = "empire_district_trap_state_v1";
+  const ATTACK_TARGET_LOCK_STORAGE_KEY = "empire_attack_target_lock_state_v1";
+  const TRAP_ATTACK_TARGET_LOCK_MS = 5 * 60 * 60 * 1000;
   const RAID_COOLDOWN_STORAGE_KEY = "empire_raid_cooldown_until_v1";
   const RAID_BASE_COOLDOWN_MS = 30 * 1000;
   const RAID_ACTION_DURATION_MS = 20 * 1000;
@@ -765,6 +768,37 @@ window.Empire.UI = (() => {
       "Razie právě začala. Nic kolem tebe není v bezpečí."
     ])
   });
+  const POLICE_DISTRICT_CLICK_WARNING_QUOTES = Object.freeze([
+    "Tady teď ne. Policie to tu právě rozjebává.",
+    "Zapomeň na to. District je plnej policajtů.",
+    "Blbej timing. Probíhá razie drž se dál.",
+    "Tady se teď nehraje. Policie má kontrolu.",
+    "Nejde to. Razie v plným proudu.",
+    "Zkus to jindy. Teď to tu čistí policie.",
+    "District zamčenej. Policie to tam právě bere všechno.",
+    "Teď bys tam chcípnul. Policie je všude.",
+    "Žádná akce. Policie to tu drží pevně.",
+    "Špatnej moment. Razie jede naplno."
+  ]);
+  const POLICE_DISTRICT_CLICK_WARNING_PLAYER_QUOTES = Object.freeze([
+    "Tvoje území teď drží policie. Nech to být.",
+    "Do vlastního districtu teď nelezeš. Policie ho právě čistí.",
+    "Tady máš smůlu. Policie rozebírá tvůj district zevnitř.",
+    "Tohle je tvůj district, ale teď patří policii.",
+    "Policie ti právě rozkopává vlastní rajón. Žádná akce."
+  ]);
+  const POLICE_DISTRICT_CLICK_WARNING_ALLIANCE_QUOTES = Object.freeze([
+    "Tohle je náš district. Policie ho právě drtí teď ne.",
+    "[nick] má razii. Drž se zpátky, tady teď nic neuděláš.",
+    "Aliance pod tlakem. Policie to u [nick] čistí.",
+    "Tady teď ne. Policie rozebírá district našeho člověka.",
+    "[nick] má průser. Policie mu to tam právě bere všechno.",
+    "District aliance je v razii. Počkej, až to skončí.",
+    "Teď tam nevlez. Policie má [nick] pod kontrolou.",
+    "Aliance hoří. Policie je u [nick] všude.",
+    "Tady nepomůžeš. Policie to u [nick] právě zavírá.",
+    "Blbej timing. Náš district je zrovna v razii."
+  ]);
   const SPY_SUCCESS_EMPTY_DISTRICT_QUOTES = Object.freeze([
     "Špehování hotovo. Tvůj špeh je zpátky - prázdno jak v hrobě.",
     "Zpátky bez škrábnutí. Nikdo tam není, můžeš to sebrat.",
@@ -2565,11 +2599,21 @@ window.Empire.UI = (() => {
     const media = window.matchMedia("(max-width: 720px)");
     const topbar = document.querySelector(".topbar");
     let ticking = false;
+    let condensed = false;
 
     const applyState = () => {
       ticking = false;
-      const shouldCondense = media.matches && window.scrollY > 36;
-      document.body.classList.toggle("is-mobile-topbar-condensed", shouldCondense);
+      if (media.matches) {
+        const scrollY = Math.max(0, window.scrollY || 0);
+        if (!condensed && scrollY > 44) {
+          condensed = true;
+        } else if (condensed && scrollY < 18) {
+          condensed = false;
+        }
+      } else {
+        condensed = false;
+      }
+      document.body.classList.toggle("is-mobile-topbar-condensed", condensed);
       if (topbar && media.matches) {
         document.documentElement.style.setProperty("--mobile-topbar-offset", `${Math.ceil(topbar.offsetHeight)}px`);
       } else {
@@ -2818,11 +2862,13 @@ window.Empire.UI = (() => {
       if (!media.matches) {
         document.body.classList.remove("mobile-hide-topbar");
         document.body.classList.remove("mobile-hide-topbar-stats");
+        document.body.classList.remove("mobile-police-modal-open");
         return;
       }
 
       const openModals = modalNodes.filter((modal) => !modal.classList.contains("hidden"));
       const shouldHideTopbar = openModals.some((modal) => topbarHiddenModalIds.has(modal.id));
+      const policeModalOpen = openModals.some((modal) => modal.id === "police-action-result-modal");
       const keepStatsVisible = openModals.some((modal) => (
         modal.id === "building-detail-modal"
         || modal.id === "market-modal"
@@ -2831,6 +2877,7 @@ window.Empire.UI = (() => {
       const shouldHideStats = openModals.length > 0 && !keepStatsVisible;
       document.body.classList.toggle("mobile-hide-topbar", shouldHideTopbar);
       document.body.classList.toggle("mobile-hide-topbar-stats", shouldHideStats);
+      document.body.classList.toggle("mobile-police-modal-open", policeModalOpen);
     };
 
     const observer = new MutationObserver((mutations) => {
@@ -3304,6 +3351,36 @@ window.Empire.UI = (() => {
           return;
         }
         openDistrictDefenseModal(window.Empire.selectedDistrict);
+      });
+    }
+
+    const trapBtn = document.getElementById("trap-btn");
+    if (trapBtn) {
+      trapBtn.addEventListener("click", () => {
+        const district = window.Empire.selectedDistrict;
+        if (!district) return;
+        if (!isDistrictDefendableByPlayer(district)) {
+          pushEvent("Past lze nastražit jen do vlastního nebo aliančního districtu.");
+          return;
+        }
+        if (isDistrictDestroyed(district)) {
+          pushEvent("Do zničeného districtu nelze nastražit past.");
+          return;
+        }
+        const result = setCurrentPlayerTrapDistrict(district);
+        if (!result?.ok) {
+          pushEvent("Past se nepodařilo nastražit.");
+          return;
+        }
+        const districtLabel = district?.name || `Distrikt #${district?.id ?? "-"}`;
+        pushEvent(
+          result.moved
+            ? `Past přesunuta do districtu ${districtLabel}. Aktivní může být vždy jen 1 past.`
+            : result.isActiveHere
+              ? `Past už je nastražená v districtu ${districtLabel}.`
+              : `Past nastražena do districtu ${districtLabel}.`
+        );
+        window.Empire.Map?.refreshSelectedDistrictModal?.();
       });
     }
 
@@ -4408,6 +4485,197 @@ window.Empire.UI = (() => {
     return Math.max(0, getRaidCooldownUntil() - Date.now());
   }
 
+  function readDistrictTrapState() {
+    try {
+      const raw = localStorage.getItem(DISTRICT_TRAP_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      return Object.entries(parsed).reduce((acc, [ownerKey, entry]) => {
+        const safeOwnerKey = normalizeOwnerName(ownerKey);
+        const safeDistrictId = Number(entry?.districtId);
+        if (!safeOwnerKey || !Number.isFinite(safeDistrictId)) return acc;
+        acc[safeOwnerKey] = {
+          districtId: Math.max(0, Math.floor(safeDistrictId)),
+          targetOwnerKey: normalizeOwnerName(entry?.targetOwnerKey),
+          targetOwnerLabel: String(entry?.targetOwnerLabel || "").trim(),
+          districtName: String(entry?.districtName || "").trim(),
+          placedAt: Math.max(0, Math.floor(Number(entry?.placedAt || 0)))
+        };
+        return acc;
+      }, {});
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveDistrictTrapState(nextState) {
+    const safeState = !nextState || typeof nextState !== "object"
+      ? {}
+      : Object.entries(nextState).reduce((acc, [ownerKey, entry]) => {
+          const safeOwnerKey = normalizeOwnerName(ownerKey);
+          const safeDistrictId = Number(entry?.districtId);
+          if (!safeOwnerKey || !Number.isFinite(safeDistrictId)) return acc;
+          acc[safeOwnerKey] = {
+            districtId: Math.max(0, Math.floor(safeDistrictId)),
+            targetOwnerKey: normalizeOwnerName(entry?.targetOwnerKey),
+            targetOwnerLabel: String(entry?.targetOwnerLabel || "").trim(),
+            districtName: String(entry?.districtName || "").trim(),
+            placedAt: Math.max(0, Math.floor(Number(entry?.placedAt || 0)))
+          };
+          return acc;
+        }, {});
+    localStorage.setItem(DISTRICT_TRAP_STORAGE_KEY, JSON.stringify(safeState));
+    return safeState;
+  }
+
+  function getCurrentPlayerTrapPlacement() {
+    const ownerKey = resolveCurrentPlayerOwnerKey();
+    const state = readDistrictTrapState();
+    const entry = state[ownerKey];
+    return entry ? { ownerKey, ...entry } : null;
+  }
+
+  function getDistrictTrapEntry(districtId) {
+    const safeDistrictId = Number(districtId);
+    if (!Number.isFinite(safeDistrictId)) return null;
+    const state = readDistrictTrapState();
+    for (const [ownerKey, entry] of Object.entries(state)) {
+      if (Number(entry?.districtId) === safeDistrictId) {
+        return { ownerKey, ...entry };
+      }
+    }
+    return null;
+  }
+
+  function setCurrentPlayerTrapDistrict(district) {
+    const safeDistrictId = Number(district?.id);
+    if (!Number.isFinite(safeDistrictId)) {
+      return { ok: false, reason: "invalid_district" };
+    }
+    const ownerKey = resolveCurrentPlayerOwnerKey();
+    const state = readDistrictTrapState();
+    const previous = state[ownerKey] || null;
+    state[ownerKey] = {
+      districtId: Math.max(0, Math.floor(safeDistrictId)),
+      targetOwnerKey: normalizeOwnerName(district?.owner),
+      targetOwnerLabel: String(district?.ownerNick || district?.owner || "").trim(),
+      districtName: String(district?.name || `Distrikt #${safeDistrictId}`).trim(),
+      placedAt: Date.now()
+    };
+    saveDistrictTrapState(state);
+    return {
+      ok: true,
+      moved: Boolean(previous && Number(previous.districtId) !== safeDistrictId),
+      previousDistrictId: previous?.districtId ?? null,
+      isActiveHere: Number(previous?.districtId) === safeDistrictId
+    };
+  }
+
+  function consumeDistrictTrap(districtId) {
+    const safeDistrictId = Number(districtId);
+    if (!Number.isFinite(safeDistrictId)) return null;
+    const state = readDistrictTrapState();
+    const foundEntry = Object.entries(state).find(([, entry]) => Number(entry?.districtId) === safeDistrictId);
+    if (!foundEntry) return null;
+    const [ownerKey, entry] = foundEntry;
+    delete state[ownerKey];
+    saveDistrictTrapState(state);
+    return { ownerKey, ...entry };
+  }
+
+  function getDistrictTrapControlState(district) {
+    if (!district || !isDistrictDefendableByPlayer(district) || isDistrictDestroyed(district)) {
+      return { visible: false, label: "Past", title: "", isActiveHere: false, hasTrapElsewhere: false };
+    }
+    const currentPlacement = getCurrentPlayerTrapPlacement();
+    const isActiveHere = Number(currentPlacement?.districtId) === Number(district?.id);
+    const hasTrapElsewhere = Boolean(currentPlacement && !isActiveHere);
+    return {
+      visible: true,
+      isActiveHere,
+      hasTrapElsewhere,
+      label: isActiveHere ? "Past aktivní" : (hasTrapElsewhere ? "Přesunout past" : "Past"),
+      title: isActiveHere
+        ? "V tomto districtu je nastražená tvoje past."
+        : hasTrapElsewhere
+          ? `Máš jen 1 past. Kliknutím ji přesuneš z ${currentPlacement?.districtName || `distriktu #${currentPlacement?.districtId ?? "-"}`}.`
+          : "Nastraž 1 past do svého nebo aliančního districtu."
+    };
+  }
+
+  function readAttackTargetLockState() {
+    try {
+      const raw = localStorage.getItem(ATTACK_TARGET_LOCK_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      const now = Date.now();
+      return Object.entries(parsed).reduce((acc, [attackerKey, targets]) => {
+        const safeAttackerKey = normalizeOwnerName(attackerKey);
+        if (!safeAttackerKey || !targets || typeof targets !== "object" || Array.isArray(targets)) return acc;
+        const sanitizedTargets = Object.entries(targets).reduce((targetAcc, [targetKey, until]) => {
+          const safeTargetKey = normalizeOwnerName(targetKey);
+          const safeUntil = Number(until);
+          if (!safeTargetKey || !Number.isFinite(safeUntil) || safeUntil <= now) return targetAcc;
+          targetAcc[safeTargetKey] = Math.floor(safeUntil);
+          return targetAcc;
+        }, {});
+        if (Object.keys(sanitizedTargets).length) {
+          acc[safeAttackerKey] = sanitizedTargets;
+        }
+        return acc;
+      }, {});
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveAttackTargetLockState(nextState) {
+    const now = Date.now();
+    const safeState = !nextState || typeof nextState !== "object"
+      ? {}
+      : Object.entries(nextState).reduce((acc, [attackerKey, targets]) => {
+          const safeAttackerKey = normalizeOwnerName(attackerKey);
+          if (!safeAttackerKey || !targets || typeof targets !== "object" || Array.isArray(targets)) return acc;
+          const sanitizedTargets = Object.entries(targets).reduce((targetAcc, [targetKey, until]) => {
+            const safeTargetKey = normalizeOwnerName(targetKey);
+            const safeUntil = Number(until);
+            if (!safeTargetKey || !Number.isFinite(safeUntil) || safeUntil <= now) return targetAcc;
+            targetAcc[safeTargetKey] = Math.floor(safeUntil);
+            return targetAcc;
+          }, {});
+          if (Object.keys(sanitizedTargets).length) {
+            acc[safeAttackerKey] = sanitizedTargets;
+          }
+          return acc;
+        }, {});
+    localStorage.setItem(ATTACK_TARGET_LOCK_STORAGE_KEY, JSON.stringify(safeState));
+    return safeState;
+  }
+
+  function getAttackTargetLockRemainingMs(targetOwnerKey) {
+    const attackerKey = resolveCurrentPlayerOwnerKey();
+    const safeTargetKey = normalizeOwnerName(targetOwnerKey);
+    if (!safeTargetKey) return 0;
+    const state = readAttackTargetLockState();
+    const until = Number(state?.[attackerKey]?.[safeTargetKey] || 0);
+    if (!Number.isFinite(until) || until <= Date.now()) return 0;
+    return Math.max(0, until - Date.now());
+  }
+
+  function setAttackTargetLockUntil(targetOwnerKey, until) {
+    const attackerKey = resolveCurrentPlayerOwnerKey();
+    const safeTargetKey = normalizeOwnerName(targetOwnerKey);
+    const safeUntil = Number(until);
+    if (!safeTargetKey || !Number.isFinite(safeUntil) || safeUntil <= Date.now()) return 0;
+    const state = readAttackTargetLockState();
+    state[attackerKey] = state[attackerKey] && typeof state[attackerKey] === "object" ? state[attackerKey] : {};
+    state[attackerKey][safeTargetKey] = Math.floor(safeUntil);
+    saveAttackTargetLockState(state);
+    return state[attackerKey][safeTargetKey];
+  }
+
   function readDistrictRaidLockState() {
     try {
       const raw = localStorage.getItem(DISTRICT_RAID_LOCK_STORAGE_KEY);
@@ -5185,6 +5453,34 @@ window.Empire.UI = (() => {
     )));
     const attackSpecial = getAttackSpecialModifiers(selectionSummary?.selection);
     const demoMode = scenarioVisionEnabled && !window.Empire.token;
+    const trapEntry = getDistrictTrapEntry(district?.id);
+
+    if (trapEntry) {
+      const consumedTrap = consumeDistrictTrap(district?.id);
+      const lockUntil = setAttackTargetLockUntil(district?.owner, Date.now() + TRAP_ATTACK_TARGET_LOCK_MS);
+      const lockMs = Math.max(0, Number(lockUntil || 0) - Date.now());
+      const targetLabel = String(district?.ownerNick || district?.owner || consumedTrap?.targetOwnerLabel || "Neznámý").trim() || "Neznámý";
+      closeAllPopupWindows();
+      setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
+      pushEvent(`Past v districtu ${district?.name || `#${district?.id ?? "-"}`} zrušila útok. Na hráče ${targetLabel} máš cooldown ${formatDurationLabel(lockMs || TRAP_ATTACK_TARGET_LOCK_MS)}.`);
+      openAttackResultModal({
+        districtId: district?.id ?? null,
+        districtName: district?.name || `Distrikt #${district?.id ?? "-"}`,
+        title: "PAST AKTIVOVÁNA",
+        outcomeBadge: "Útok zrušen",
+        outcomeTone: "critical",
+        outcomeKey: "failure",
+        summary: `V districtu byla nastražená past. Útok se rozpadl dřív, než začal. Na hráče ${targetLabel} nemůžeš znovu zaútočit ${formatDurationLabel(lockMs || TRAP_ATTACK_TARGET_LOCK_MS)}.`,
+        attackPower: baseDetails.attackPower,
+        defensePower: defensePowerEstimate,
+        attackerLossPct: 0,
+        defenderLossPct: 0,
+        districtStateValue: "Past spuštěna",
+        durationValue: formatDurationLabel(lockMs || TRAP_ATTACK_TARGET_LOCK_MS),
+        activatedSpecialEffects: ["Past zrušila útok a spustila 5h cooldown na další útok proti tomuto hráči."]
+      });
+      return;
+    }
 
     closeAllPopupWindows();
     setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
@@ -5564,7 +5860,10 @@ window.Empire.UI = (() => {
     if (!root || !content || !title || !badge || !summary || !details) return;
 
     const tone = String(payload.tone || "").trim();
-    content.classList.remove("is-tier-1", "is-tier-2", "is-tier-3", "is-tier-4", "is-tier-5", "is-tier-6");
+    content.classList.remove(
+      "is-tier-1", "is-tier-2", "is-tier-3", "is-tier-4", "is-tier-5", "is-tier-6",
+      "is-specialty-financial", "is-specialty-drug", "is-specialty-weapons", "is-specialty-arrests", "is-specialty-total"
+    );
     if (tone) content.classList.add(tone);
 
     title.textContent = String(payload.title || "Policejní akce").trim() || "Policejní akce";
@@ -5595,13 +5894,34 @@ window.Empire.UI = (() => {
     const raidSpecialty = resolveStoredPoliceRaidSpecialty(policeAction)
       || resolvePoliceRaidSpecialtyFromOperationType(policeAction?.operationType, policeAction)
       || POLICE_RAID_SPECIALTIES.total;
+    const raidSpecialtyKey = String(
+      policeAction?.raidSpecialtyKey
+      || Object.entries(POLICE_RAID_SPECIALTIES).find(([, meta]) => meta === raidSpecialty)?.[0]
+      || "total"
+    ).trim().toLowerCase();
     const raidTypeLabel = String(raidSpecialty?.label || "Celková razie").trim() || "Celková razie";
+    const quotePool = isDistrictOwnedByPlayer(district)
+      ? POLICE_DISTRICT_CLICK_WARNING_PLAYER_QUOTES
+      : isDistrictOwnedByAlliance(district)
+        ? POLICE_DISTRICT_CLICK_WARNING_ALLIANCE_QUOTES
+        : POLICE_DISTRICT_CLICK_WARNING_QUOTES;
+    const warningSummary = quotePool.length
+      ? String(quotePool[Math.floor(Math.random() * quotePool.length)] || "").trim()
+      : `V districtu ${districtName} probíhá policejní razie hráče ${ownerNick}.`;
+    const resolvedWarningSummary = warningSummary.replaceAll("[nick]", ownerNick);
+    const specialtyTone = ({
+      financial: "is-specialty-financial",
+      drug: "is-specialty-drug",
+      weapons: "is-specialty-weapons",
+      arrests: "is-specialty-arrests",
+      total: "is-specialty-total"
+    })[raidSpecialtyKey] || "is-specialty-total";
 
     openPoliceActionResultModal({
-      tone: "is-tier-4",
+      tone: specialtyTone,
       title: "Policejní razie v districtu",
       badge: raidTypeLabel,
-      summary: `V districtu ${districtName} probíhá policejní razie hráče ${ownerNick}.`,
+      summary: resolvedWarningSummary,
       rows: [
         { label: "Hráč", value: ownerNick },
         { label: "Typ razie", value: raidTypeLabel }
@@ -8136,6 +8456,26 @@ window.Empire.UI = (() => {
     return new Set(names);
   }
 
+  function resolveCurrentPlayerOwnerKey() {
+    const player = window.Empire.player || {};
+    const candidates = [
+      activeScenarioOwnerName,
+      player.username,
+      player.name,
+      player.gangName,
+      player.gang_name,
+      player.gang,
+      cachedProfile?.username,
+      cachedProfile?.name,
+      cachedProfile?.gangName,
+      cachedProfile?.gang_name,
+      cachedProfile?.gang,
+      localStorage.getItem("empire_guest_username"),
+      localStorage.getItem("empire_gang_name")
+    ];
+    return candidates.map((value) => normalizeOwnerName(value)).find(Boolean) || "guest-player";
+  }
+
   function resolveActiveScenarioOwnerName() {
     return String(activeScenarioOwnerName || resolveScenarioOwnerName() || "").trim();
   }
@@ -8248,6 +8588,13 @@ window.Empire.UI = (() => {
       }
       if (isDistrictUnownedForSpyOutcome(district) && getDistrictSpyIntel(district?.id)) {
         return { allowed: false, reason: "Pro prázdný vyspěhovaný distrikt použij akci Obsadit." };
+      }
+      const targetAttackLockMs = getAttackTargetLockRemainingMs(district?.owner);
+      if (targetAttackLockMs > 0) {
+        return {
+          allowed: false,
+          reason: `Na hráče ${String(district?.ownerNick || district?.owner || "Neznámý").trim() || "Neznámý"} nemůžeš po aktivaci pasti útočit ještě ${formatDurationLabel(targetAttackLockMs)}.`
+        };
       }
       const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: false });
       return adjacent
@@ -15943,6 +16290,7 @@ window.Empire.UI = (() => {
     addCraftedDefense,
     getDistrictDefenseSnapshot,
     getDistrictSpyIntel,
+    getDistrictTrapControlState,
     resolveAllianceIconKeyByName,
     openDistrictPoliceRaidWarningModal
   };

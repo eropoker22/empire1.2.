@@ -15169,8 +15169,9 @@ window.Empire.Map = (() => {
     const raidBtn = document.getElementById("raid-btn");
     const spyBtn = document.getElementById("spy-btn");
     const defenseBtn = document.getElementById("defense-btn");
+    const trapBtn = document.getElementById("trap-btn");
     const actionWrap = document.getElementById("district-modal-actions");
-    if (!attackBtn || !raidBtn || !spyBtn || !defenseBtn || !actionWrap) return;
+    if (!attackBtn || !raidBtn || !spyBtn || !defenseBtn || !trapBtn || !actionWrap) return;
 
     const defendableByPlayer = isDistrictDefendable(district);
     const evaluateAction = window.Empire.UI?.evaluateDistrictActionAvailability;
@@ -15187,6 +15188,8 @@ window.Empire.Map = (() => {
     const spyState = typeof evaluateAction === "function"
       ? evaluateAction(district, "spy")
       : { allowed: !defendableByPlayer, reason: "" };
+    const trapControlState = window.Empire.UI?.getDistrictTrapControlState?.(district)
+      || { visible: false, label: "Past", title: "", isActiveHere: false };
     const destroyed = isDistrictDestroyed(district);
     const raidLockRemainingMs = window.Empire.UI?.getDistrictRaidLockRemainingMs?.(district?.id) || 0;
 
@@ -15194,26 +15197,38 @@ window.Empire.Map = (() => {
     const showRaid = !destroyed && !defendableByPlayer;
     const showSpy = !destroyed && !defendableByPlayer && spyState.allowed && !hasSpyIntel;
     const showOccupyRaidPair = showAttack && showRaid && attackActionMode === "occupy";
+    const showSpyRaidPair = !showAttack && showRaid && showSpy;
 
     attackBtn.classList.toggle("hidden", !showAttack);
     raidBtn.classList.toggle("hidden", !showRaid);
     spyBtn.classList.toggle("hidden", !showSpy);
     defenseBtn.classList.toggle("hidden", destroyed || !defendableByPlayer);
+    trapBtn.classList.toggle("hidden", destroyed || !defendableByPlayer || !trapControlState.visible);
     actionWrap.classList.toggle("district-modal__actions--occupy-raid", showOccupyRaidPair);
+    actionWrap.classList.toggle("district-modal__actions--spy-raid", showSpyRaidPair);
+    actionWrap.classList.toggle("district-modal__actions--defense-trap", !destroyed && defendableByPlayer && trapControlState.visible);
     attackBtn.dataset.actionMode = attackActionMode;
     attackBtn.textContent = attackActionMode === "occupy" ? "Obsadit" : "Zaútočit";
     raidBtn.textContent = raidLockRemainingMs > 0
       ? `Vykrást • ${formatDistrictRaidLockLabel(raidLockRemainingMs)}`
       : "Vykrást";
+    defenseBtn.textContent = "Obrana";
+    trapBtn.textContent = trapControlState.label || "Past";
     attackBtn.disabled = false;
     raidBtn.disabled = showRaid ? !raidState.allowed : false;
     spyBtn.disabled = false;
+    defenseBtn.disabled = false;
+    trapBtn.disabled = false;
     attackBtn.setAttribute("aria-disabled", "false");
     raidBtn.setAttribute("aria-disabled", showRaid && !raidState.allowed ? "true" : "false");
     spyBtn.setAttribute("aria-disabled", "false");
+    defenseBtn.setAttribute("aria-disabled", "false");
+    trapBtn.setAttribute("aria-disabled", "false");
     attackBtn.title = "";
     raidBtn.title = showRaid && !raidState.allowed ? String(raidState.reason || "") : "";
     spyBtn.title = "";
+    defenseBtn.title = "Nastav obranu districtu.";
+    trapBtn.title = trapControlState.title || "";
   }
 
   function hideModal() {
