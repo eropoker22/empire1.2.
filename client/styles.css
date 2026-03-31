@@ -16154,9 +16154,22 @@ body.mobile-storage-modal-open {
     letter-spacing: 0.045em;
   }
 
+  .structure-card[data-structure="pouliční gang"] .structure-card__title {
+    font-size: 15px;
+    letter-spacing: 0.03em;
+  }
+
   .structure-card[data-structure="motorkářský gang"] .structure-card__title {
     font-size: 15px;
     letter-spacing: 0.03em;
+  }
+
+  .structure-card[data-structure="kartel"] {
+    order: 3;
+  }
+
+  .structure-card[data-structure="pouliční gang"] {
+    order: 2;
   }
 
   .avatar-marquee {
