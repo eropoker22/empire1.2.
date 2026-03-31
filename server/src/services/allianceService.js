@@ -293,7 +293,7 @@ async function joinAlliance({ playerId, allianceId }) {
     throw error;
   }
   await pool.query(
-    "UPDATE players SET alliance_id = $1 WHERE id = $2",
+    "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2",
     [allianceId, playerId]
   );
 }
@@ -404,7 +404,7 @@ async function respondToAllianceInvite({ ownerPlayerId, requestId, accept }) {
       throw error;
     }
     await pool.query(
-      "UPDATE players SET alliance_id = $1 WHERE id = $2",
+      "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2",
       [request.alliance_id, request.player_id]
     );
     await pool.query(
@@ -569,7 +569,7 @@ async function respondToAllianceMemberInvite({ playerId, inviteId, accept }) {
       throw error;
     }
     await pool.query(
-      "UPDATE players SET alliance_id = $1 WHERE id = $2",
+      "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2",
       [invite.alliance_id, playerId]
     );
     await pool.query(

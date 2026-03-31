@@ -653,23 +653,23 @@
           <button class="modal__close" id="attack-confirm-modal-close" type="button" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body spy-confirm-modal__body attack-confirm-modal__body">
-          <div class="modal__row">
+          <div class="modal__row attack-confirm-modal__stat">
             <span>Cíl</span>
             <strong id="attack-confirm-modal-district">-</strong>
           </div>
-          <div class="modal__row hidden" id="attack-confirm-modal-defense-row">
+          <div class="modal__row attack-confirm-modal__stat hidden" id="attack-confirm-modal-defense-row">
             <span>Zjištěná obrana</span>
             <strong id="attack-confirm-modal-defense">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-confirm-modal__stat">
             <span>Použité zbraně</span>
             <strong id="attack-confirm-modal-weapons">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-confirm-modal__stat">
             <span>Použito členů</span>
             <strong id="attack-confirm-modal-members">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-confirm-modal__stat">
             <span>Výsledná síla útoku</span>
             <strong id="attack-confirm-modal-power">-</strong>
           </div>
@@ -694,31 +694,31 @@
         <div class="modal__body attack-result-modal__body">
           <div class="attack-result-modal__badge" id="attack-result-modal-badge">Výsledek útoku</div>
           <p class="attack-result-modal__summary" id="attack-result-modal-summary"></p>
-          <div class="modal__row">
+          <div class="modal__row attack-result-modal__stat">
             <span id="attack-result-modal-label-target">Cíl</span>
             <strong id="attack-result-modal-nickname">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-result-modal__stat">
             <span id="attack-result-modal-label-attack">Útočná síla</span>
             <strong id="attack-result-modal-faction">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-result-modal__stat">
             <span id="attack-result-modal-label-defense">Obranná síla</span>
             <strong id="attack-result-modal-alliance">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-result-modal__stat">
             <span id="attack-result-modal-label-attack-losses">Ztráty útočníka</span>
             <strong id="attack-result-modal-weapons">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-result-modal__stat">
             <span id="attack-result-modal-label-defense-losses">Ztráty obránce</span>
             <strong id="attack-result-modal-power">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-result-modal__stat">
             <span id="attack-result-modal-label-state">Stav districtu</span>
             <strong id="attack-result-modal-members">-</strong>
           </div>
-          <div class="modal__row">
+          <div class="modal__row attack-result-modal__meta">
             <span id="attack-result-modal-label-duration">Trvání</span>
             <strong id="attack-result-modal-duration">-</strong>
           </div>
@@ -827,6 +827,7 @@
           </div>
 
           <div id="building-detail-panel-stats" class="building-detail-panel">
+            <div class="building-detail-divider" aria-hidden="true"></div>
             <div class="modal__row">
               <span>Název</span>
               <strong id="building-detail-name">-</strong>
@@ -973,10 +974,10 @@
           <div id="alliance-active-panel"></div>
           <div id="alliance-player-invites-panel"></div>
           <div id="alliance-list-panel"></div>
-          <div class="modal__actions alliance-modal__footer-actions">
-            <button class="btn btn--danger hidden" id="alliance-leave-btn">Opustit alianci</button>
-            <button class="btn btn--primary hidden" id="alliance-management-footer-btn">Správa aliance</button>
-          </div>
+        </div>
+        <div class="modal__actions alliance-modal__footer-actions">
+          <button class="btn btn--danger hidden" id="alliance-leave-btn">Opustit alianci</button>
+          <button class="btn btn--primary hidden" id="alliance-management-footer-btn">Správa aliance</button>
         </div>
       </div>
     </div>

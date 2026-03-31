@@ -316,6 +316,7 @@ window.Empire.UI = (() => {
   const BLACKOUT_PLAYER_FALLBACK_DISTRICT_IDS = Object.freeze([84, 95, 92, 120, 126]);
   const BLACKOUT_SCENARIO_INCOME_STORAGE_KEY = "blackoutDistrictIncomeLastAppliedAt";
   const ALLIANCE_READY_WINDOW_MS = 6 * 60 * 60 * 1000;
+  const ALLIANCE_TRAP_GRACE_MS = 20 * 1000;
   const DEFAULT_ALLIANCE_DESCRIPTION = "Aliance která všechny zabije";
   const PLAYER_SCENARIO_STORAGE_KEY = "empire_active_player_scenario";
   const DISTRICT_RAID_LOCK_STORAGE_KEY = "empire_district_raid_lock_until_v1";
@@ -1892,6 +1893,7 @@ window.Empire.UI = (() => {
   let selectedMapBorderMode = MAP_BORDER_MODE_PLAYER;
   let unknownNeutralFillEnabled = false;
   let liveAllianceOwnerNames = new Set();
+  let liveAllianceTrapGraceByOwnerName = new Map();
   let liveAllianceIconByName = new Map();
   let scenarioAllianceOwnerNames = new Set();
   let scenarioAllianceIconByName = new Map();
@@ -2356,11 +2358,15 @@ window.Empire.UI = (() => {
     const districtIncome = districtSource.length
       ? computeDistrictMinuteIncomeFromOwnedDistricts(districtSource)
       : computeOwnedDistrictMinuteIncome(districts, ownerName);
+    const districtInfluencePerMinute = districtSource.reduce((sum, district) => {
+      return sum + (String(district?.type || "").trim().toLowerCase() === "park" ? 10 : 0);
+    }, 0);
     const buildingIncome = districtSource.length
       ? computeBuildingMinuteIncomeFromOwnedDistricts(districtSource)
       : computeOwnedBuildingMinuteIncome(districts, ownerName);
     return {
       districtIncomePerMinute: districtIncome,
+      districtInfluencePerMinute,
       buildingIncomePerMinute: {
         clean: buildingIncome.clean,
         dirty: buildingIncome.dirty,
@@ -2368,7 +2374,8 @@ window.Empire.UI = (() => {
       },
       totalPerMinute: {
         clean: districtIncome.clean + buildingIncome.clean,
-        dirty: districtIncome.dirty + buildingIncome.dirty
+        dirty: districtIncome.dirty + buildingIncome.dirty,
+        influence: districtInfluencePerMinute
       }
     };
   }
@@ -2379,6 +2386,7 @@ window.Empire.UI = (() => {
     const building = snapshot.buildingIncomePerMinute || {};
     return Number(district.clean || 0) > 0
       || Number(district.dirty || 0) > 0
+      || Number(snapshot.districtInfluencePerMinute || 0) > 0
       || Number(building.clean || 0) > 0
       || Number(building.dirty || 0) > 0;
   }
@@ -2433,7 +2441,10 @@ window.Empire.UI = (() => {
       ? liveBlackoutSources
       : lastValidBlackoutSources || liveBlackoutSources;
     const incomePerMinute = activeBlackoutSources.districtIncomePerMinute || { clean: 0, dirty: 0 };
+    const influencePerMinute = Math.max(0, Number(activeBlackoutSources.districtInfluencePerMinute || 0));
     const buildingIncomePerMinute = activeBlackoutSources.buildingIncomePerMinute || { clean: 0, dirty: 0, byBuilding: {} };
+    let influenceRemainder = Math.max(0, Number(scenarioIncomeState.influenceRemainder || 0));
+    let influenceTickRemainderMs = Math.max(0, Number(scenarioIncomeState.influenceTickRemainderMs || 0));
     const elapsedMinutes = elapsedMs / 60000;
     if (incomePerMinute.clean > 0) {
       const cleanRaw = incomePerMinute.clean * elapsedMinutes + cleanRemainder;
@@ -2467,6 +2478,29 @@ window.Empire.UI = (() => {
         addLocalMoney(marketState.balances, dirtyWhole, "dirty");
       }
     }
+    if (influencePerMinute > 0) {
+      const influenceElapsedMs = elapsedMs + influenceTickRemainderMs;
+      const influenceTicks = Math.floor(influenceElapsedMs / 10000);
+      influenceTickRemainderMs = Math.max(0, influenceElapsedMs - influenceTicks * 10000);
+      const influenceRaw = (influenceTicks * (influencePerMinute / 6)) + influenceRemainder;
+      const influenceWhole = Math.floor(influenceRaw);
+      influenceRemainder = Math.max(0, influenceRaw - influenceWhole);
+      if (influenceWhole > 0) {
+        addInfluence(influenceWhole);
+        const currentProfile = cachedProfile || window.Empire.player || null;
+        if (currentProfile && typeof currentProfile === "object") {
+          const nextInfluence = Math.max(0, Math.floor(Number(currentProfile.influence || 0)) + influenceWhole);
+          cachedProfile = { ...currentProfile, influence: nextInfluence };
+          window.Empire.player = {
+            ...(window.Empire.player || {}),
+            influence: nextInfluence
+          };
+        }
+        renderInfluenceSpyTopbarStat({ animate: true });
+      }
+    } else {
+      influenceTickRemainderMs = 0;
+    }
 
     marketState.scenarioIncome = {
       ...scenarioIncomeState,
@@ -2475,6 +2509,8 @@ window.Empire.UI = (() => {
       dirtyRemainder,
       buildingCleanRemainder,
       buildingDirtyRemainder,
+      influenceRemainder,
+      influenceTickRemainderMs,
       buildingIncome: {
         cleanPerMinute: buildingIncomePerMinute.clean,
         dirtyPerMinute: buildingIncomePerMinute.dirty,
@@ -2610,7 +2646,7 @@ window.Empire.UI = (() => {
     applyState();
     window.addEventListener("scroll", requestApply, { passive: true });
     window.addEventListener("resize", requestApply);
-    if (window.visualViewport) {
+    if (window.visualViewport && !media.matches) {
       window.visualViewport.addEventListener("resize", requestApply);
       window.visualViewport.addEventListener("scroll", requestApply);
     }
@@ -2914,6 +2950,37 @@ window.Empire.UI = (() => {
     };
   }
 
+  function hasCompleteSpyIntel(rawEntry) {
+    if (!rawEntry || typeof rawEntry !== "object") return false;
+    const knownFields = normalizeSpyIntelKnownFields(rawEntry);
+    return Object.values(knownFields).every(Boolean);
+  }
+
+  function mergeDistrictSpyIntelEntries(previousEntry, nextEntry) {
+    if (!previousEntry) return nextEntry;
+    if (!nextEntry) return previousEntry;
+    const previousKnownFields = normalizeSpyIntelKnownFields(previousEntry);
+    const nextKnownFields = normalizeSpyIntelKnownFields(nextEntry);
+    const mergedKnownFields = {
+      weapons: previousKnownFields.weapons || nextKnownFields.weapons,
+      powerRangeLabel: previousKnownFields.powerRangeLabel || nextKnownFields.powerRangeLabel,
+      districtType: previousKnownFields.districtType || nextKnownFields.districtType,
+      atmosphere: previousKnownFields.atmosphere || nextKnownFields.atmosphere,
+      buildings: previousKnownFields.buildings || nextKnownFields.buildings
+    };
+    return normalizeDistrictSpyIntelEntry(nextEntry.districtId, {
+      weapons: mergedKnownFields.weapons ? (nextEntry.weapons ?? previousEntry.weapons) : null,
+      powerRangeLabel: mergedKnownFields.powerRangeLabel ? (nextEntry.powerRangeLabel ?? previousEntry.powerRangeLabel) : null,
+      districtType: mergedKnownFields.districtType ? (nextEntry.districtType ?? previousEntry.districtType) : null,
+      atmosphere: mergedKnownFields.atmosphere ? (nextEntry.atmosphere ?? previousEntry.atmosphere) : null,
+      buildings: mergedKnownFields.buildings
+        ? ((Array.isArray(nextEntry.buildings) && nextEntry.buildings.length) ? nextEntry.buildings : previousEntry.buildings)
+        : [],
+      knownFields: mergedKnownFields,
+      createdAt: Math.max(Number(previousEntry.createdAt || 0), Number(nextEntry.createdAt || 0), Date.now())
+    });
+  }
+
   function normalizeDistrictSpyIntelEntry(districtId, rawEntry) {
     const id = Number(districtId);
     if (!Number.isFinite(id)) return null;
@@ -3001,11 +3068,13 @@ window.Empire.UI = (() => {
     const persist = options?.persist !== false;
     const normalized = normalizeDistrictSpyIntelEntry(districtId, intelData);
     if (!normalized) return null;
-    districtSpyIntelCache.set(String(normalized.districtId), normalized);
+    const cacheKey = String(normalized.districtId);
+    const merged = mergeDistrictSpyIntelEntries(districtSpyIntelCache.get(cacheKey) || null, normalized) || normalized;
+    districtSpyIntelCache.set(cacheKey, merged);
     if (persist) {
       writeStoredDistrictSpyIntel();
     }
-    return { ...normalized, buildings: [...normalized.buildings] };
+    return { ...merged, buildings: [...merged.buildings] };
   }
 
   function getDistrictSpyIntel(districtId) {
@@ -4531,6 +4600,13 @@ window.Empire.UI = (() => {
     return Math.max(0, Number(entry?.moveLockedUntil || 0) - Date.now());
   }
 
+  function getAllianceTrapGraceRemainingMs(district) {
+    if (!district || isDistrictOwnedByPlayer(district) || !isDistrictOwnedByAlliance(district)) return 0;
+    const ownerKey = normalizeOwnerName(district?.owner);
+    if (!ownerKey) return 0;
+    return Math.max(0, Number(liveAllianceTrapGraceByOwnerName.get(ownerKey) || 0) - Date.now());
+  }
+
   function formatTrapMoveCooldownLabel(ms) {
     const safe = Math.max(0, Math.ceil(Number(ms) || 0));
     const totalSeconds = Math.max(0, Math.ceil(safe / 1000));
@@ -4604,13 +4680,18 @@ window.Empire.UI = (() => {
     const isActiveHere = Number(currentPlacement?.districtId) === Number(district?.id);
     const hasTrapElsewhere = Boolean(currentPlacement && !isActiveHere);
     const moveCooldownRemainingMs = getTrapMoveCooldownRemainingMs(currentPlacement);
+    const allianceTrapGraceRemainingMs = getAllianceTrapGraceRemainingMs(district);
     const moveLocked = moveCooldownRemainingMs > 0;
     const countdownLabel = moveLocked ? formatTrapMoveCooldownLabel(moveCooldownRemainingMs) : "";
+    const allianceGraceLocked = allianceTrapGraceRemainingMs > 0;
+    const allianceGraceLabel = allianceGraceLocked ? formatTrapMoveCooldownLabel(allianceTrapGraceRemainingMs) : "";
     const sourceDistrictLabel = currentPlacement?.districtName || `distriktu #${currentPlacement?.districtId ?? "-"}`;
     const title = isActiveHere
       ? (moveLocked
           ? `Past je aktivní v tomto districtu. Přesun bude možný za ${countdownLabel}.`
           : "V tomto districtu je nastražená tvoje past.")
+      : allianceGraceLocked
+        ? `Past do nově přidaného aliančního districtu půjde vložit za ${allianceGraceLabel}.`
       : hasTrapElsewhere
         ? (moveLocked
             ? `Past je dočasně zamčená v ${sourceDistrictLabel}. Přesun bude možný za ${countdownLabel}.`
@@ -4623,9 +4704,9 @@ window.Empire.UI = (() => {
       moveLocked,
       moveCooldownRemainingMs,
       countdownLabel,
-      buttonDisabled: isActiveHere || moveLocked,
+      buttonDisabled: isActiveHere || moveLocked || allianceGraceLocked,
       label: isActiveHere ? "Past aktivní" : (hasTrapElsewhere ? "Přesunout past" : "Past"),
-      subtitle: moveLocked ? countdownLabel : "",
+      subtitle: moveLocked ? countdownLabel : (allianceGraceLocked ? allianceGraceLabel : ""),
       title,
       buildingVisible: isActiveHere,
       buildingLabel: "Past",
@@ -5078,11 +5159,23 @@ window.Empire.UI = (() => {
     attackResultTimer = setTimeout(() => {
       attackResultTimer = null;
       applyAttackOutcomeLosses(safeSelectionSummary, safeDetails.outcomeKey);
-      if (String(safeDetails.outcomeKey || "").trim().toLowerCase() === "total_success") {
-        const district = resolveDistrictById(safeDetails.districtId);
-        if (district) {
-          claimDistrictForPlayer(district);
-        }
+      const district = resolveDistrictById(safeDetails.districtId);
+      const outcomeKey = String(safeDetails.outcomeKey || "").trim().toLowerCase();
+      if (district && (outcomeKey === "catastrophe" || safeDetails.districtDestroyed)) {
+        district.owner = null;
+        district.ownerNick = null;
+        district.ownerAllianceName = null;
+        district.ownerAllianceIconKey = null;
+        district.ownerPlayerId = null;
+        district.influence = 0;
+        district.income = 0;
+        district.isDestroyed = true;
+        district.destroyedAt = Date.now();
+        updateDistrict(district);
+        window.Empire.Map?.refreshSelectedDistrictModal?.();
+        window.Empire.Map?.render?.();
+      } else if (district && outcomeKey === "total_success") {
+        claimDistrictForPlayer(district);
       }
       openAttackResultModal(safeDetails);
     }, Math.max(1000, Math.floor(Number(safeDetails.durationMs || ATTACK_ACTION_DURATION_MS))));
@@ -5099,7 +5192,18 @@ window.Empire.UI = (() => {
   function resolveAttackOutcomeFromPower(attackPower, defensePower, options = {}) {
     const attack = Math.max(0, Math.floor(Number(attackPower) || 0));
     const defense = Math.max(0, Math.floor(Number(defensePower) || 0));
+    const districtId = Number(options?.districtId);
     const bonusCatastropheChancePct = Math.max(0, Number(options?.bonusCatastropheChancePct || 0));
+    if (activePlayerScenarioKey === "alliance-ten-blackout" && districtId === 89) {
+      return {
+        outcomeKey: "catastrophe",
+        winChancePct: 100,
+        attackerLossPct: 100,
+        defenderLossPct: 100,
+        districtLossPct: 100,
+        destroyed: true
+      };
+    }
     const catastrophe = Math.random() < ((8 + bonusCatastropheChancePct) / 100);
     const winChancePct = calculateAttackWinChancePct(attack, defense);
     if (catastrophe) {
@@ -5195,6 +5299,8 @@ window.Empire.UI = (() => {
     const defenseLossLabel = document.getElementById("attack-result-modal-label-defense-losses");
     const stateLabel = document.getElementById("attack-result-modal-label-state");
     const durationLabel = document.getElementById("attack-result-modal-label-duration");
+    const defenseRow = alliance?.closest(".modal__row") || null;
+    const showDefensePower = String(details?.outcomeKey || "").trim().toLowerCase() === "total_success";
     if (content) {
       content.classList.remove("is-total-success", "is-pyrrhic-victory", "is-failure", "is-catastrophe");
       const outcomeClass = details?.outcomeKey
@@ -5221,11 +5327,12 @@ window.Empire.UI = (() => {
     if (durationLabel) durationLabel.textContent = "Trvání";
     if (nickname) nickname.textContent = details.districtName || `Distrikt #${details.districtId ?? "-"}`;
     if (faction) faction.textContent = `${details.attackPower ?? 0}`;
-    if (alliance) alliance.textContent = `${details.defensePower ?? 0}`;
+    if (alliance) alliance.textContent = showDefensePower ? `${details.defensePower ?? 0}` : "-";
     if (weapons) weapons.textContent = `${details.attackerLossPct ?? 0}%`;
     if (power) power.textContent = `${details.defenderLossPct ?? 0}%`;
     if (members) members.textContent = details.districtStateValue || "-";
     if (duration) duration.textContent = details.durationValue || details.durationLabel || "-";
+    if (defenseRow) defenseRow.classList.toggle("hidden", !showDefensePower);
     if (!root) return;
   }
 
@@ -5515,7 +5622,8 @@ window.Empire.UI = (() => {
     setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
 
     const outcomeRoll = resolveAttackOutcomeFromPower(baseDetails.attackPower, defensePowerEstimate, {
-      bonusCatastropheChancePct: attackSpecial.bazookaCatastropheChancePct
+      bonusCatastropheChancePct: attackSpecial.bazookaCatastropheChancePct,
+      districtId: district?.id
     });
     const details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
       ...outcomeRoll,
@@ -5942,7 +6050,7 @@ window.Empire.UI = (() => {
     const normalizedOwnerNick = normalizeOwnerName(ownerNick);
     const warningSummary = normalizedOwnerNick === normalizeOwnerName("Sněhulák")
       ? "Tady teď ne. Policie to tu právě rozjebává."
-      : normalizedOwnerNick === normalizeOwnerName("Zabijak")
+      : normalizedOwnerNick === normalizeOwnerName("Poltergeist")
         ? "Zapomeň na to. District je plnej policajtů."
         : "Tady teď ne. Policie to tu právě rozjebává.";
     const resolvedWarningSummary = warningSummary;
@@ -7672,13 +7780,14 @@ window.Empire.UI = (() => {
     const atmosphere = knownFields.atmosphere
       ? (String(intel?.atmosphere || "").trim() || "Neznámá")
       : "Nezjištěno";
+    const atmosphereClass = /^(neznámá|nezjištěno)$/iu.test(atmosphere) ? "modal__nowrap-value" : "";
     return `
       <div class="modal__row">
-        <span>Odhad obrany (zbraně)</span>
+        <span>Odhad zbraní v districtu</span>
         <strong>${weapons}</strong>
       </div>
       <div class="modal__row">
-        <span>Odhad síly obrany (±20 %)</span>
+        <span>Odhad síly obrany</span>
         <strong>${powerRangeLabel}</strong>
       </div>
       <div class="modal__row">
@@ -7687,7 +7796,7 @@ window.Empire.UI = (() => {
       </div>
       <div class="modal__row">
         <span>Atmosféra</span>
-        <strong>${atmosphere}</strong>
+        <strong class="${atmosphereClass}">${atmosphere}</strong>
       </div>
       <div class="modal__row">
         <span>Budovy</span>
@@ -8953,6 +9062,15 @@ window.Empire.UI = (() => {
     return DEMO_OWNER_AVATAR_POOL[index];
   }
 
+  function resolveDemoOwnerColor(ownerName) {
+    const normalized = normalizeOwnerName(ownerName);
+    if (!normalized) return null;
+    if (normalized === normalizeOwnerName("Ledovec")) return "#60a5fa";
+    if (normalized === normalizeOwnerName("Mariah")) return "#f97316";
+    if (normalized === normalizeOwnerName("Sněhulák")) return "#14b8a6";
+    return null;
+  }
+
   function resolveDemoDistrictAtmosphere(district, ownerName) {
     const safeType = String(district?.type || "").trim().toLowerCase();
     const pool = DEMO_DISTRICT_ATMOSPHERES[safeType] || DEMO_DISTRICT_ATMOSPHERES.default;
@@ -8976,7 +9094,8 @@ window.Empire.UI = (() => {
       ownerStructure: faction,
       ownerFaction: faction,
       ownerAvatar: resolveDemoOwnerAvatar(safeOwner),
-      ownerAtmosphere: resolveDemoDistrictAtmosphere(district, safeOwner)
+      ownerAtmosphere: resolveDemoDistrictAtmosphere(district, safeOwner),
+      ownerColor: resolveDemoOwnerColor(safeOwner)
     };
   }
 
@@ -9030,17 +9149,26 @@ window.Empire.UI = (() => {
   function setLiveAllianceOwnersFromAlliance(alliance) {
     const playerNames = getPlayerOwnerNameSet();
     const names = new Set();
+    const trapGraceByOwnerName = new Map();
     const members = Array.isArray(alliance?.members) ? alliance.members : [];
     members.forEach((member) => {
       const candidates = [member?.gang_name, member?.gangName, member?.username];
+      const readyAtMs = new Date(member?.alliance_ready_at || member?.allianceReadyAt || 0).getTime();
+      const trapGraceUntil = Number.isFinite(readyAtMs) && readyAtMs > 0
+        ? readyAtMs + ALLIANCE_TRAP_GRACE_MS
+        : 0;
       candidates.forEach((candidate) => {
         const normalized = normalizeOwnerName(candidate);
         if (!normalized) return;
         if (playerNames.has(normalized)) return;
         names.add(normalized);
+        if (trapGraceUntil > Date.now()) {
+          trapGraceByOwnerName.set(normalized, trapGraceUntil);
+        }
       });
     });
     liveAllianceOwnerNames = names;
+    liveAllianceTrapGraceByOwnerName = trapGraceByOwnerName;
     const iconEntries = [];
     const allianceName = String(alliance?.name || "").trim();
     if (allianceName) {
@@ -9055,6 +9183,7 @@ window.Empire.UI = (() => {
 
   function clearLiveAllianceOwners() {
     liveAllianceOwnerNames = new Set();
+    liveAllianceTrapGraceByOwnerName = new Map();
     liveAllianceIconByName = new Map();
     syncMapVisionContext();
   }
@@ -9471,25 +9600,26 @@ window.Empire.UI = (() => {
       baseProfile.alliance = "Žádná";
       pushEvent("Ukázka: hráč drží pouze jeden distrikt.");
     } else if (normalizedScenarioKey === "alliance-ten") {
-      const enemyOneName = "Stínoví vlci A";
+      const enemyOneName = "Mariah";
       const enemyTwoName = "Stínoví vlci B";
       const enemyOwners = [enemyOneName, enemyTwoName];
-      const ownAllianceName = `${ownerName} + spojenec`;
+      const ownAllianceName = "Zabijáci";
       const blackoutAllyName = "Knedlík";
       const enemyAllianceName = "Stínoví vlci";
-      const blackoutAllianceName = `${ownerName} + ${blackoutAllyName}`;
+      const blackoutAllianceName = "Zabijáci";
       const blackoutEnemyAllianceName = "Ledová aliance";
       const blackoutSecondEnemyName = "Ledovec";
-      const blackoutThirdEnemyName = "Zabijak";
+      const blackoutThirdEnemyName = "Poltergeist";
       const blackoutFourthEnemyName = "Sněhulák";
       const blackoutFifthEnemyName = "Pepek";
       setScenarioAllianceIcons([
         [ownAllianceName, "lightning"],
-        [enemyAllianceName, "eye_triangle"],
+        [enemyAllianceName, "wolf_head"],
         [blackoutAllianceName, "lightning"],
-        [blackoutEnemyAllianceName, "eye_triangle"]
+        [blackoutEnemyAllianceName, "broken_shield"]
       ]);
       setScenarioVisionMode(true);
+      scenarioUniqueOwnerColors = true;
       setScenarioAllianceOwners([allyName]);
       setScenarioEnemyOwners(enemyOwners);
       nextDistricts = assignAllianceTenScenarioOwnership(districts, ownerName, allyName, {
@@ -9505,7 +9635,7 @@ window.Empire.UI = (() => {
       );
       const totalOwned = ownDistrictCount + allyDistrictCount;
       baseProfile.districts = ownDistrictCount;
-      baseProfile.alliance = `${ownerName} + spojenec (2/4 • ${totalOwned} sektorů)`;
+      baseProfile.alliance = `${ownAllianceName} (2/4 • ${totalOwned} sektorů)`;
       roundStatusOverride = buildRoundStatusPresetForMode(
         activePlayerScenarioKey === "alliance-ten-blackout" ? "blackout" : "night"
       );
@@ -11174,7 +11304,8 @@ window.Empire.UI = (() => {
             .join("")}
         </div>
       </div>
-      <div class="buildings-modal__group">
+      <div class="buildings-modal__group-divider" aria-hidden="true"></div>
+      <div class="buildings-modal__group buildings-modal__group--variants">
         <div class="buildings-modal__building-grid">
           ${activeBaseName
             ? scopedEntries
@@ -11193,7 +11324,7 @@ window.Empire.UI = (() => {
                 }
               )
               .join("")
-            : '<div class="buildings-modal__empty">Nejdřív vyber odemčený typ budovy v kroku 1.</div>'}
+            : '<div class="buildings-modal__empty">Nejdřív vyber odemčený typ budovy.</div>'}
         </div>
       </div>
     `
@@ -11423,6 +11554,12 @@ window.Empire.UI = (() => {
     assignParkStreetDealersNames(nextDistricts);
     assignParkStripClubNames(nextDistricts);
     assignParkConvenienceStoreNames(nextDistricts);
+    nextDistricts.forEach((district) => {
+      const allianceName = String(district?.ownerAllianceName || "").trim();
+      district.ownerAllianceIconKey = allianceName
+        ? (resolveAllianceIconKeyByName(allianceName) || district.ownerAllianceIconKey || null)
+        : null;
+    });
 
     return nextDistricts;
   }
@@ -14019,7 +14156,7 @@ window.Empire.UI = (() => {
 
   function buildAllianceTenBlackoutLocalAllianceState(ownerName, allyName) {
     const allianceId = "scenario-blackout-alliance";
-    const allianceName = `${ownerName} + ${allyName}`;
+    const allianceName = "Zabijáci";
     const nowIso = new Date().toISOString();
     return {
       activeAllianceId: allianceId,
@@ -14051,10 +14188,10 @@ window.Empire.UI = (() => {
       ],
       requests: [
         {
-          id: "scenario-blackout-zabijak-request",
+          id: "scenario-blackout-poltergeist-request",
           alliance_id: allianceId,
-          player_id: "scenario-blackout-zabijak",
-          username: "Zabijak",
+          player_id: "scenario-blackout-poltergeist",
+          username: "Poltergeist",
           gang_name: "District 143 + 121"
         }
       ],
@@ -14065,13 +14202,13 @@ window.Empire.UI = (() => {
         {
           id: "scenario-blackout-audit-1",
           alliance_id: allianceId,
-          message: "Zabijak poslal zadost o vstup do aliance.",
+          message: "Poltergeist poslal zadost o vstup do aliance.",
           created_at: nowIso
         }
       ],
       chat: [
         { time: "20:12", author: allyName, text: "Drzim district 102. Blackout jede." },
-        { time: "20:18", author: "System", text: "Zabijak zadal o vstup do aliance." }
+        { time: "20:18", author: "System", text: "Poltergeist zadal o vstup do aliance." }
       ]
     };
   }
@@ -14082,15 +14219,18 @@ window.Empire.UI = (() => {
     if (!districts.length) return;
     const allianceName = String(activeAlliance?.name || "").trim();
     const allianceIconKey = String(activeAlliance?.icon_key || activeAlliance?.iconKey || DEFAULT_ALLIANCE_ICON_KEY).trim() || DEFAULT_ALLIANCE_ICON_KEY;
+    const playerNames = getPlayerOwnerNameSet();
     const memberNames = new Set(
       (Array.isArray(activeAlliance?.members) ? activeAlliance.members : [])
         .map((member) => normalizeOwnerName(member?.username))
         .filter(Boolean)
     );
+    const alliedScenarioOwners = Array.from(memberNames).filter((ownerKey) => ownerKey && !playerNames.has(ownerKey));
+    setScenarioAllianceOwners(alliedScenarioOwners);
     const nextDistricts = districts.map((district) => {
       const ownerKey = normalizeOwnerName(district?.owner);
-      if (ownerKey !== normalizeOwnerName("Zabijak")) return district;
       const isAccepted = memberNames.has(ownerKey) && allianceName;
+      if (!isAccepted && ownerKey !== normalizeOwnerName("Poltergeist")) return district;
       return {
         ...district,
         ownerAllianceName: isAccepted ? allianceName : null,
@@ -14354,7 +14494,7 @@ window.Empire.UI = (() => {
           id: request.player_id,
           username: request.username,
           gang_name: request.gang_name || "Guest Crew",
-          alliance_ready_at: null
+          alliance_ready_at: new Date().toISOString()
         });
       }
       appendLocalAllianceChat(state, {
@@ -14535,6 +14675,11 @@ window.Empire.UI = (() => {
     const normalized = extractAllianceDisplayName(allianceName);
     if (!normalized || normalized === "Žádná") {
       allianceBtn.textContent = "Aliance";
+      return;
+    }
+
+    if (normalized === "Zabijáci") {
+      allianceBtn.textContent = "Zabijáci";
       return;
     }
 
@@ -15813,8 +15958,17 @@ window.Empire.UI = (() => {
     const state = getLocalMarketState();
     const money = resolveMoneyBreakdown(state.balances || {});
     const currentProfile = cachedProfile || window.Empire.player || null;
+    const currentInfluence = Math.max(
+      0,
+      Math.floor(Number(
+        currentProfile?.influence
+        ?? cachedEconomy?.influence
+        ?? 0
+      ) || 0)
+    );
     if (currentProfile && typeof currentProfile === "object") {
       const nextProfile = applyMoneyToProfileSnapshot(currentProfile, money);
+      nextProfile.influence = currentInfluence;
       if (activePlayerScenarioKey === "alliance-ten-blackout") {
         nextProfile.sources = buildBlackoutPlayerSourcesSnapshot(window.Empire.districts, resolveActiveScenarioOwnerName());
         nextProfile.source = nextProfile.sources;
@@ -15833,7 +15987,7 @@ window.Empire.UI = (() => {
       balance: money.totalMoney,
       cleanMoney: money.cleanMoney,
       dirtyMoney: money.dirtyMoney,
-      influence: 20,
+      influence: currentInfluence,
       drugs: Number(state.balances.drugs || 0),
       drugInventory,
       weapons: Number(state.balances.weapons || 0),
@@ -15953,9 +16107,9 @@ window.Empire.UI = (() => {
       wantedLockEl.title = active ? `Aktivní ochrana po razii: ${formatDurationLabel(until - Date.now())}` : "Bez aktivní ochrany po razii";
     }
     setText("profile-modal-raid-protection", formatPoliceRaidProtectionLabel(profile));
-    const allianceLabel = String(profile.gangName || guestGangName || profile.alliance || "Žádná").trim();
+    const allianceLabel = extractAllianceDisplayName(profile.alliance) || "Žádná";
     const districtCount = Number.isFinite(Number(profile.districts)) ? Math.max(0, Math.floor(Number(profile.districts))) : 0;
-    setText("profile-modal-alliance", allianceLabel ? `${allianceLabel} (${districtCount})` : "Žádná");
+    setText("profile-modal-alliance", allianceLabel !== "Žádná" ? `${allianceLabel} • ${districtCount}` : "Žádná");
     setText("profile-modal-districts", profile.districts || 0);
     const blackoutSourceRow = document.getElementById("profile-modal-blackout-source-row");
     const blackoutSourceValue = document.getElementById("profile-modal-blackout-source");
@@ -15982,11 +16136,13 @@ window.Empire.UI = (() => {
       if (blackoutSourceValue && showBlackoutSource) {
         const districtCleanPerHour = Number(districtMinuteIncome.clean || 0) * 60;
         const districtDirtyPerHour = Number(districtMinuteIncome.dirty || 0) * 60;
+        const districtInfluencePerHour = Number(blackoutSources?.districtInfluencePerMinute || 0) * 60;
         const buildingCleanPerHour = Number(buildingMinuteIncome.clean || 0) * 60;
         const buildingDirtyPerHour = Number(buildingMinuteIncome.dirty || 0) * 60;
         blackoutSourceValue.textContent =
           `Districts C${formatDecimalValue(districtCleanPerHour, 2)}/D${formatDecimalValue(districtDirtyPerHour, 2)} / hod`
-          + ` • Buildings C${formatDecimalValue(buildingCleanPerHour, 2)}/D${formatDecimalValue(buildingDirtyPerHour, 2)} / hod`;
+          + ` • Buildings C${formatDecimalValue(buildingCleanPerHour, 2)}/D${formatDecimalValue(buildingDirtyPerHour, 2)} / hod`
+          + ` • Vliv ${formatDecimalValue(districtInfluencePerHour, 2)} / hod`;
       }
       if (liveBlackoutSources && profile && typeof profile === "object") {
         profile.sources = liveBlackoutSources;
@@ -16591,6 +16747,7 @@ window.Empire.UI = (() => {
     addCraftedDefense,
     getDistrictDefenseSnapshot,
     getDistrictSpyIntel,
+    hasCompleteSpyIntel,
     getDistrictTrapControlState,
     resolveAllianceIconKeyByName,
     openDistrictPoliceRaidWarningModal

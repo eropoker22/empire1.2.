@@ -10367,6 +10367,7 @@ window.Empire.Map = (() => {
   function drawDistricts(ctx) {
     const now = Date.now();
     const borderStroke = resolveDistrictBorderStroke();
+    const districtOverlays = [];
     pruneExpiredAttackMarkers(now);
     pruneExpiredPoliceActions(now);
     pruneExpiredSpyActions(now);
@@ -10411,21 +10412,31 @@ window.Empire.Map = (() => {
       if (!destroyed) {
         drawDistrictTrapToxicMist(ctx, district, now);
       }
+      districtOverlays.push({
+        district,
+        attackMarker,
+        policeAction,
+        spyAction,
+        raidAction,
+        isOnboardingFocus: String(district?.id) === String(state.onboardingFocusDistrictId || "")
+      });
+    });
 
-      if (attackMarker) {
-        drawDistrictAttackEffect(ctx, district, attackMarker, now);
+    districtOverlays.forEach((entry) => {
+      if (entry.attackMarker) {
+        drawDistrictAttackEffect(ctx, entry.district, entry.attackMarker, now);
       }
-      if (policeAction) {
-        drawDistrictPoliceActionEffect(ctx, district, policeAction, now);
+      if (entry.policeAction) {
+        drawDistrictPoliceActionEffect(ctx, entry.district, entry.policeAction, now);
       }
-      if (spyAction) {
-        drawDistrictSpyActionEffect(ctx, district, spyAction, now);
+      if (entry.spyAction) {
+        drawDistrictSpyActionEffect(ctx, entry.district, entry.spyAction, now);
       }
-      if (raidAction) {
-        drawDistrictRaidActionEffect(ctx, district, raidAction, now);
+      if (entry.raidAction) {
+        drawDistrictRaidActionEffect(ctx, entry.district, entry.raidAction, now);
       }
-      if (String(district?.id) === String(state.onboardingFocusDistrictId || "")) {
-        drawOnboardingFocusDistrictEffect(ctx, district, now);
+      if (entry.isOnboardingFocus) {
+        drawOnboardingFocusDistrictEffect(ctx, entry.district, now);
       }
     });
   }
@@ -14465,6 +14476,13 @@ window.Empire.Map = (() => {
       activeDistrict = resolveDistrictRecord(primaryContext.districtId) || activeDistrict;
     }
     state.activeBuildingDetail = { context: activeContext, district: activeDistrict };
+    const buildingDividerColor = String(
+      activeDistrict?.ownerColor
+      || district?.ownerColor
+      || districtFill(activeDistrict || district || {})
+      || ""
+    ).trim();
+    root.style.setProperty("--building-divider-color", buildingDividerColor || "var(--building-header-accent)");
 
     if (title) {
       title.textContent = details.baseName;
@@ -14995,7 +15013,7 @@ window.Empire.Map = (() => {
 
     if (isDistrictDestroyed(district)) {
       document.getElementById("modal-name").textContent = district.name || "Distrikt";
-      document.getElementById("modal-name-income").textContent = "0 / nepoužitelný";
+      document.getElementById("modal-name-income").textContent = "V piči, zničen.";
       document.getElementById("modal-owner").textContent = "Nikdo";
       updateDistrictDefenseSummary(null, { spyIntel });
       updateDistrictBuildings(null, { spyIntel });
@@ -15187,6 +15205,10 @@ window.Empire.Map = (() => {
     atmosphereValue.textContent = atmosphereSrc
       ? ""
       : (atmosphereLabel || "Neznámá");
+    atmosphereValue.classList.toggle(
+      "modal__nowrap-value",
+      !atmosphereSrc && /^(neznámá|nezjištěno)$/iu.test(String(atmosphereValue.textContent || "").trim())
+    );
     allianceRow.classList.remove("hidden");
     factionRow.classList.remove("hidden");
     atmosphereRow.classList.toggle("hidden", useSpyOnlyIntel);
@@ -15334,7 +15356,9 @@ window.Empire.Map = (() => {
     const ownerValue = String(district?.owner || "").trim().toLowerCase();
     const isUnowned = !ownerValue || ownerValue === "neobsazeno" || ownerValue === "nikdo";
     const isEnemyDistrict = !defendableByPlayer && !isUnowned;
-    const hasSpyIntel = Boolean(window.Empire.UI?.getDistrictSpyIntel?.(district?.id));
+    const spyIntel = window.Empire.UI?.getDistrictSpyIntel?.(district?.id) || null;
+    const hasSpyIntel = Boolean(spyIntel);
+    const hasCompleteSpyIntel = Boolean(window.Empire.UI?.hasCompleteSpyIntel?.(spyIntel));
     const attackActionMode = isUnowned && hasSpyIntel ? "occupy" : "attack";
     const attackState = typeof evaluateAction === "function"
       ? evaluateAction(district, attackActionMode)
@@ -15348,11 +15372,16 @@ window.Empire.Map = (() => {
     const trapControlState = window.Empire.UI?.getDistrictTrapControlState?.(district)
       || { visible: false, label: "Past", title: "", isActiveHere: false };
     const destroyed = isDistrictDestroyed(district);
+    actionWrap.classList.toggle("hidden", destroyed);
     const raidLockRemainingMs = window.Empire.UI?.getDistrictRaidLockRemainingMs?.(district?.id) || 0;
+    const showTrapControl = !destroyed
+      && defendableByPlayer
+      && trapControlState.visible;
+    const showTrapActionButton = showTrapControl && !trapControlState.isActiveHere;
 
     const showAttack = !destroyed && !defendableByPlayer && attackState.allowed;
     const showRaid = !destroyed && !defendableByPlayer && raidState.allowed;
-    const showSpy = !destroyed && !defendableByPlayer && spyState.allowed && !hasSpyIntel;
+    const showSpy = !destroyed && !defendableByPlayer && spyState.allowed && !hasCompleteSpyIntel;
     const showOccupyRaidPair = showAttack && showRaid && attackActionMode === "occupy";
     const showSpyRaidPair = !showAttack && showRaid && showSpy;
 
@@ -15360,10 +15389,11 @@ window.Empire.Map = (() => {
     raidBtn.classList.toggle("hidden", !showRaid);
     spyBtn.classList.toggle("hidden", !showSpy);
     defenseBtn.classList.toggle("hidden", destroyed || !defendableByPlayer);
-    trapBtn.classList.toggle("hidden", destroyed || !defendableByPlayer || !trapControlState.visible);
+    trapBtn.classList.toggle("hidden", !showTrapActionButton);
     actionWrap.classList.toggle("district-modal__actions--occupy-raid", showOccupyRaidPair);
     actionWrap.classList.toggle("district-modal__actions--spy-raid", showSpyRaidPair);
-    actionWrap.classList.toggle("district-modal__actions--defense-trap", !destroyed && defendableByPlayer && trapControlState.visible);
+    actionWrap.classList.toggle("district-modal__actions--defense-trap", showTrapActionButton);
+    actionWrap.classList.toggle("district-modal__actions--defense-only", !destroyed && defendableByPlayer && !showTrapActionButton);
     actionWrap.classList.toggle("district-modal__actions--enemy", !destroyed && isEnemyDistrict && showAttack && showSpy);
     attackBtn.dataset.actionMode = attackActionMode;
     attackBtn.textContent = attackActionMode === "occupy" ? "Obsadit" : "Zaútočit";
