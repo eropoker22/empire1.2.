@@ -3031,21 +3031,22 @@ body::before {
   --structure-accent: rgba(34, 211, 238, 0.9);
   --structure-accent-soft: rgba(34, 211, 238, 0.2);
   --structure-accent-alt: rgba(244, 114, 182, 0.28);
+  --structure-title-secondary: rgba(255, 255, 255, 0.96);
   position: relative;
   isolation: isolate;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 96px;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-height: 104px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 14px 18px 14px 18px;
   padding: 11px 13px 13px;
   color: #e2e8f0;
   font-weight: 700;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -3106,77 +3107,82 @@ body::before {
 }
 
 .structure-card__title {
-  font-size: 16px;
+  font-size: clamp(18px, 2vw, 22px);
   font-weight: 900;
-  font-family: "IBM Plex Mono", monospace;
-  letter-spacing: 0.045em;
-  line-height: 1.08;
-  margin-top: 5px;
-  color: #f8fafc;
-  text-shadow:
-    0 0 10px color-mix(in srgb, var(--structure-accent) 36%, transparent),
-    0 0 22px color-mix(in srgb, var(--structure-accent) 18%, transparent),
-    0 0 2px rgba(255, 255, 255, 0.42);
-}
-
-.structure-card__meta {
-  font-size: 11px;
-  font-family: "IBM Plex Mono", monospace;
-  line-height: 1.35;
-  margin-top: 0;
-  margin-bottom: 2px;
-  color: rgba(191, 219, 254, 0.74);
-  font-weight: 700;
-  letter-spacing: 0.035em;
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0.07em;
+  line-height: 1.02;
+  margin-top: 2px;
   text-transform: uppercase;
+  color: transparent;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--structure-accent) 82%, white 18%),
+    var(--structure-title-secondary) 48%,
+    color-mix(in srgb, var(--structure-accent-alt) 72%, white 12%)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow:
+    0 0 12px color-mix(in srgb, var(--structure-accent) 28%, transparent),
+    0 0 28px color-mix(in srgb, var(--structure-accent-alt) 18%, transparent),
+    0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .structure-card[data-structure="mafián"] {
   --structure-accent: rgba(248, 113, 113, 0.92);
   --structure-accent-soft: rgba(248, 113, 113, 0.2);
   --structure-accent-alt: rgba(190, 24, 93, 0.22);
+  --structure-title-secondary: rgba(255, 241, 242, 0.96);
 }
 
 .structure-card[data-structure="kartel"] {
   --structure-accent: rgba(250, 204, 21, 0.92);
   --structure-accent-soft: rgba(250, 204, 21, 0.18);
   --structure-accent-alt: rgba(234, 88, 12, 0.22);
+  --structure-title-secondary: rgba(254, 252, 232, 0.96);
 }
 
 .structure-card[data-structure="pouliční gang"] {
   --structure-accent: rgba(56, 189, 248, 0.92);
   --structure-accent-soft: rgba(56, 189, 248, 0.18);
   --structure-accent-alt: rgba(14, 165, 233, 0.22);
+  --structure-title-secondary: rgba(240, 249, 255, 0.96);
 }
 
 .structure-card[data-structure="tajná organizace"] {
   --structure-accent: rgba(192, 132, 252, 0.92);
   --structure-accent-soft: rgba(192, 132, 252, 0.18);
   --structure-accent-alt: rgba(217, 70, 239, 0.24);
+  --structure-title-secondary: rgba(250, 245, 255, 0.96);
 }
 
 .structure-card[data-structure="hackeři"] {
   --structure-accent: rgba(34, 211, 238, 0.94);
   --structure-accent-soft: rgba(34, 211, 238, 0.18);
   --structure-accent-alt: rgba(59, 130, 246, 0.22);
+  --structure-title-secondary: rgba(236, 254, 255, 0.96);
 }
 
 .structure-card[data-structure="motorkářský gang"] {
   --structure-accent: rgba(251, 146, 60, 0.94);
   --structure-accent-soft: rgba(251, 146, 60, 0.18);
   --structure-accent-alt: rgba(239, 68, 68, 0.22);
+  --structure-title-secondary: rgba(255, 247, 237, 0.96);
 }
 
 .structure-card[data-structure="soukromá armáda"] {
   --structure-accent: rgba(148, 163, 184, 0.94);
   --structure-accent-soft: rgba(148, 163, 184, 0.18);
   --structure-accent-alt: rgba(59, 130, 246, 0.18);
+  --structure-title-secondary: rgba(248, 250, 252, 0.96);
 }
 
 .structure-card[data-structure="korporace"] {
   --structure-accent: rgba(45, 212, 191, 0.94);
   --structure-accent-soft: rgba(45, 212, 191, 0.18);
   --structure-accent-alt: rgba(34, 197, 94, 0.18);
+  --structure-title-secondary: rgba(240, 253, 250, 0.96);
 }
 
 .structure-card:hover {
@@ -3194,11 +3200,14 @@ body::before {
 .structure-card--active {
   border-color: color-mix(in srgb, var(--structure-accent) 82%, white 10%);
   box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--structure-accent) 68%, white 10%),
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     inset 0 0 0 1px rgba(255, 255, 255, 0.03),
     0 22px 38px rgba(2, 6, 23, 0.5),
-    0 0 34px color-mix(in srgb, var(--structure-accent) 36%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--structure-accent-soft) 60%, transparent);
+    0 0 22px color-mix(in srgb, var(--structure-accent) 46%, transparent),
+    0 0 42px color-mix(in srgb, var(--structure-accent) 38%, transparent),
+    0 0 64px color-mix(in srgb, var(--structure-accent-alt) 26%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--structure-accent-soft) 74%, transparent);
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 28%),
     radial-gradient(circle at top right, color-mix(in srgb, var(--structure-accent) 40%, transparent), transparent 34%),
@@ -3209,14 +3218,13 @@ body::before {
 
 .structure-card--active .structure-card__title {
   color: #ffffff;
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
   text-shadow:
     0 0 12px color-mix(in srgb, var(--structure-accent) 58%, transparent),
     0 0 26px color-mix(in srgb, var(--structure-accent) 28%, transparent),
     0 0 3px rgba(255, 255, 255, 0.48);
-}
-
-.structure-card--active .structure-card__meta {
-  color: rgba(226, 232, 240, 0.88);
 }
 
 @keyframes structure-card-cyber-pulse {
@@ -3487,6 +3495,26 @@ body::before {
   .structure-grid .structure-card {
     width: 172px;
     flex: 0 0 172px;
+  }
+
+  .structure-card[data-structure="tajná organizace"] .structure-card__title {
+    font-size: 18px;
+    letter-spacing: 0.055em;
+  }
+
+  .structure-card[data-structure="motorkářský gang"] .structure-card__title {
+    font-size: 17px;
+    letter-spacing: 0.045em;
+  }
+
+  .structure-card[data-structure="soukromá armáda"] .structure-card__title {
+    font-size: 17px;
+    letter-spacing: 0.045em;
+  }
+
+  .structure-card[data-structure="korporace"] .structure-card__title {
+    font-size: 17px;
+    letter-spacing: 0.05em;
   }
 
   .gang-color-grid {
