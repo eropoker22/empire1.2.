@@ -99,6 +99,11 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   let marqueeLoopWidth = 0;
   let gangColorSyncRevision = 0;
+  let mobileStructureTapState = {
+    structure: null,
+    at: 0
+  };
+  const MOBILE_STRUCTURE_DOUBLE_TAP_MS = 360;
 
   const factionAvatarPools = {
     "mafián": [
@@ -829,11 +834,23 @@ document.addEventListener("DOMContentLoaded", () => {
   if (grid) {
     grid.querySelectorAll(".structure-card").forEach((card) => {
       const selectCard = () => applyStructureSelection(card.dataset.structure);
-      card.addEventListener("click", selectCard);
-      card.addEventListener("touchend", (event) => {
-        event.preventDefault();
-        selectCard();
-      }, { passive: false });
+      if (isCoarsePointer) {
+        card.addEventListener("touchend", (event) => {
+          event.preventDefault();
+          const now = Date.now();
+          const structure = card.dataset.structure;
+          const isDoubleTap = mobileStructureTapState.structure === structure
+            && (now - mobileStructureTapState.at) <= MOBILE_STRUCTURE_DOUBLE_TAP_MS;
+          if (isDoubleTap) {
+            mobileStructureTapState = { structure: null, at: 0 };
+            selectCard();
+            return;
+          }
+          mobileStructureTapState = { structure, at: now };
+        }, { passive: false });
+      } else {
+        card.addEventListener("click", selectCard);
+      }
     });
   }
 
