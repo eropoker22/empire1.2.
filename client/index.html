@@ -60,17 +60,30 @@
         </div>
       </header>
 
-      <div id="guest-banner" class="guest-banner hidden"></div>
-
       <main class="main">
         <section class="panel panel--left">
           <div id="city-events-card-anchor" class="hidden" aria-hidden="true"></div>
-          <div class="card">
+          <div class="card city-events-card">
+            <button
+              class="city-events-target-btn"
+              id="city-events-target-btn"
+              type="button"
+              aria-label="City Events cíl"
+              title="Bounty."
+              data-tooltip="Bounty."
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="7"></circle>
+                <circle cx="12" cy="12" r="3.2"></circle>
+                <path d="M5.5 5.5L12 12"></path>
+                <path d="M5.5 5.5H9.2"></path>
+                <path d="M5.5 5.5V9.2"></path>
+              </svg>
+            </button>
             <p class="muted">Dočasné úkoly s omezenou platností.</p>
             <button class="btn btn--primary events-hero" id="city-events-open" type="button" aria-label="City Events">
-              Otevřít City Events
+              City Events
             </button>
-            <p class="muted events-hero__note">Vyber si jednu ze tří postav a aktivuj její quest line.</p>
           </div>
 
           <div id="buildings-card-anchor" class="hidden" aria-hidden="true"></div>

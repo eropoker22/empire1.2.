@@ -1,5 +1,5 @@
 const { pool } = require("../config/db");
-const { ATTACK_COOLDOWN_SECONDS, MAX_INFLUENCE } = require("../config/constants");
+const { ATTACK_COOLDOWN_SECONDS, ATTACK_ACTION_DURATION_SECONDS, MAX_INFLUENCE } = require("../config/constants");
 const { ensureMoneySchema, spendPlayerMoney } = require("./moneyService");
 const { HEAT_BALANCE } = require("../config/drugs");
 const { ensureDistrictDestructionSchema } = require("./districtService");
@@ -33,6 +33,20 @@ const DISTRICT_POPULATION_WEIGHTS = Object.freeze({
   industrial: 1900,
   park: 1300
 });
+let attackTargetCooldownSchemaEnsured = false;
+
+async function ensureAttackTargetCooldownSchema(client) {
+  if (attackTargetCooldownSchemaEnsured) return;
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS attack_target_cooldowns (
+      attacker_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      next_attack_at TIMESTAMP NOT NULL,
+      PRIMARY KEY (attacker_player_id, target_player_id)
+    )
+  `);
+  attackTargetCooldownSchemaEnsured = true;
+}
 
 async function attackDistrict({ playerId, districtId }) {
   await ensureMoneySchema();
@@ -42,29 +56,7 @@ async function attackDistrict({ playerId, districtId }) {
 
   try {
     await client.query("BEGIN");
-
-    const cooldown = await client.query(
-      "SELECT next_attack_at FROM cooldowns WHERE player_id = $1",
-      [playerId]
-    );
-
-    if (cooldown.rowCount > 0) {
-      const nextAttack = cooldown.rows[0].next_attack_at;
-      const now = Date.now();
-      let nextAttackMs = nextAttack ? new Date(nextAttack).getTime() : 0;
-      const maxAllowedCooldownMs = now + (ATTACK_COOLDOWN_SECONDS * 1000);
-      if (nextAttackMs > maxAllowedCooldownMs) {
-        await client.query(
-          "UPDATE cooldowns SET next_attack_at = $1 WHERE player_id = $2",
-          [new Date(maxAllowedCooldownMs), playerId]
-        );
-        nextAttackMs = maxAllowedCooldownMs;
-      }
-      if (nextAttackMs > now) {
-        await client.query("ROLLBACK");
-        return { ok: false, error: "cooldown" };
-      }
-    }
+    await ensureAttackTargetCooldownSchema(client);
 
     const districtRes = await client.query(
       `SELECT d.id, d.type, d.influence_level, d.owner_player_id, d.is_destroyed,
@@ -153,6 +145,31 @@ async function attackDistrict({ playerId, districtId }) {
     if (player.alliance_id && district.owner_alliance_id && player.alliance_id === district.owner_alliance_id) {
       await client.query("ROLLBACK");
       return { ok: false, error: "allied_district" };
+    }
+
+    const targetPlayerId = district.owner_player_id || null;
+    if (targetPlayerId) {
+      const cooldown = await client.query(
+        `SELECT next_attack_at
+           FROM attack_target_cooldowns
+          WHERE attacker_player_id = $1
+            AND target_player_id = $2`,
+        [playerId, targetPlayerId]
+      );
+      if (cooldown.rowCount > 0) {
+        const nextAttack = cooldown.rows[0].next_attack_at;
+        const now = Date.now();
+        const nextAttackMs = nextAttack ? new Date(nextAttack).getTime() : 0;
+        if (nextAttackMs > now) {
+          await client.query("ROLLBACK");
+          return {
+            ok: false,
+            error: "cooldown",
+            cooldownMs: Math.max(0, nextAttackMs - now),
+            targetPlayerId
+          };
+        }
+      }
     }
 
     const mapRes = await client.query(
@@ -289,13 +306,18 @@ async function attackDistrict({ playerId, districtId }) {
       [playerId, districtId, district.owner_player_id, outcomeKey === "total_success", attackCost, influenceChange]
     );
 
-    const nextAttackAt = new Date(Date.now() + ATTACK_COOLDOWN_SECONDS * 1000);
-    await client.query(
-      `INSERT INTO cooldowns (player_id, next_attack_at)
-       VALUES ($1, $2)
-       ON CONFLICT (player_id) DO UPDATE SET next_attack_at = EXCLUDED.next_attack_at`,
-      [playerId, nextAttackAt]
-    );
+    if (targetPlayerId) {
+      const nextAttackAt = new Date(
+        Date.now() + ((ATTACK_ACTION_DURATION_SECONDS + ATTACK_COOLDOWN_SECONDS) * 1000)
+      );
+      await client.query(
+        `INSERT INTO attack_target_cooldowns (attacker_player_id, target_player_id, next_attack_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (attacker_player_id, target_player_id)
+         DO UPDATE SET next_attack_at = EXCLUDED.next_attack_at`,
+        [playerId, targetPlayerId, nextAttackAt]
+      );
+    }
 
     await client.query("COMMIT");
 

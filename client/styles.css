@@ -374,6 +374,86 @@ body.onboarding-step-economy .onboarding-overlay__flicker-layer {
   opacity: 0 !important;
 }
 
+body.onboarding-step-city-events #events-modal,
+body.onboarding-step-city-events #events-modal *,
+body.onboarding-step-districts #buildings-modal,
+body.onboarding-step-districts #buildings-modal *,
+body.onboarding-step-production #buildings-modal,
+body.onboarding-step-production #buildings-modal *,
+body.onboarding-step-production #building-detail-modal,
+body.onboarding-step-production #building-detail-modal *,
+body.onboarding-step-attack #city-map,
+body.onboarding-step-attack #district-modal,
+body.onboarding-step-attack #district-modal *,
+body.onboarding-step-attack #attack-modal,
+body.onboarding-step-attack #attack-modal *,
+body.onboarding-step-attack #attack-confirm-modal,
+body.onboarding-step-attack #attack-confirm-modal *,
+body.onboarding-step-attack #attack-result-modal,
+body.onboarding-step-attack #attack-result-modal *,
+body.onboarding-step-market #market-modal,
+body.onboarding-step-market #market-modal *,
+body.onboarding-step-alliance #alliance-modal,
+body.onboarding-step-alliance #alliance-modal *,
+body.onboarding-step-resources #stat-influence-wrap,
+body.onboarding-step-resources #stat-influence-wrap *,
+body.onboarding-step-police #profile-heat-panel,
+body.onboarding-step-police #gang-heat-modal,
+body.onboarding-step-police #gang-heat-modal *,
+body.onboarding-step-traps #city-map,
+body.onboarding-step-traps #district-modal,
+body.onboarding-step-traps #district-modal *,
+body.onboarding-step-traps #trap-confirm-modal,
+body.onboarding-step-time #map-mode-switch,
+body.onboarding-step-time #map-mode-switch *,
+body.onboarding-step-blackout #map-mode-switch,
+body.onboarding-step-blackout #map-mode-switch *,
+body.onboarding-step-traps #trap-confirm-modal * {
+  pointer-events: auto !important;
+}
+
+body.onboarding-step-city-events #events-modal .modal__content,
+body.onboarding-step-districts #buildings-modal .modal__content,
+body.onboarding-step-production #buildings-modal .modal__content,
+body.onboarding-step-production #building-detail-modal .modal__content,
+body.onboarding-step-attack #attack-modal .modal__content,
+body.onboarding-step-attack #attack-confirm-modal .modal__content,
+body.onboarding-step-attack #attack-result-modal .modal__content,
+body.onboarding-step-market #market-modal .modal__content,
+body.onboarding-step-alliance #alliance-modal .modal__content,
+body.onboarding-step-police #gang-heat-modal .modal__content,
+body.onboarding-step-traps #trap-confirm-modal .modal__content {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+body.onboarding-step-bounty #city-events-target-btn {
+  box-shadow:
+    0 0 0 2px rgba(244, 63, 94, 0.88),
+    0 0 24px rgba(244, 63, 94, 0.5),
+    0 0 48px rgba(244, 63, 94, 0.28);
+  animation: onboardingActionBlink 0.95s ease-in-out infinite;
+}
+
+body.onboarding-step-attack #attack-btn,
+body.onboarding-step-traps #trap-btn,
+body.onboarding-step-resources #stat-influence-wrap,
+body.onboarding-step-police #profile-heat-panel,
+body.onboarding-step-time #map-mode-switch,
+body.onboarding-step-blackout #map-mode-switch {
+  box-shadow:
+    0 0 0 2px rgba(103, 232, 249, 0.72),
+    0 0 18px rgba(34, 211, 238, 0.34),
+    0 0 38px rgba(34, 211, 238, 0.18);
+  animation: onboardingActionBlink 0.95s ease-in-out infinite;
+}
+
+body.onboarding-step-time #map-mode-switch,
+body.onboarding-step-blackout #map-mode-switch {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .onboarding-allowed,
 .onboarding-allowed *,
 .onboarding-highlight,
@@ -449,6 +529,168 @@ body.onboarding-step-spy-confirm #spy-confirm-modal-confirm {
     bottom: 228px;
     width: auto;
     min-height: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .onboarding-overlay {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+    align-items: end;
+    gap: 8px;
+    padding: 8px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .onboarding-overlay__panel,
+  .onboarding-overlay__sidecard {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .onboarding-overlay__sidecard {
+    order: 0;
+    min-height: 0;
+    max-height: min(32dvh, 240px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(248, 113, 113, 0.96) rgba(18, 8, 12, 0.82);
+  }
+
+  .onboarding-overlay__panel {
+    padding: 12px 12px 10px;
+    border-radius: 18px 8px 18px 8px;
+    max-height: min(34dvh, 250px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(248, 113, 113, 0.96) rgba(18, 8, 12, 0.82);
+  }
+
+  .onboarding-overlay__meta {
+    margin-bottom: 6px;
+    font-size: 9px;
+  }
+
+  .onboarding-overlay__badge {
+    min-height: 18px;
+    padding: 0 7px;
+    font-size: 9px;
+  }
+
+  .onboarding-overlay__guide {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .onboarding-overlay__portrait-shell {
+    border-radius: 16px 6px 16px 6px;
+  }
+
+  .onboarding-overlay__npc {
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+
+  .onboarding-overlay__text {
+    font-size: 11px;
+    line-height: 1.38;
+  }
+
+  .onboarding-overlay__actions {
+    margin-top: 10px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .onboarding-overlay__actions .btn {
+    min-width: 0;
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .onboarding-overlay__skip,
+  .onboarding-overlay__continue {
+    padding: 9px 10px;
+    font-size: 11px;
+  }
+
+  .onboarding-overlay__sidecard-title {
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+
+  .onboarding-overlay__sidecard-body {
+    font-size: 10px;
+  }
+
+  .onboarding-overlay__panel::-webkit-scrollbar,
+  .onboarding-overlay__sidecard::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .onboarding-overlay__panel::-webkit-scrollbar-track,
+  .onboarding-overlay__sidecard::-webkit-scrollbar-track {
+    background: rgba(18, 8, 12, 0.82);
+    border-radius: 999px;
+  }
+
+  .onboarding-overlay__panel::-webkit-scrollbar-thumb,
+  .onboarding-overlay__sidecard::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(248, 113, 113, 1), rgba(190, 18, 60, 1));
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 0 8px rgba(248, 113, 113, 0.72),
+      0 0 16px rgba(244, 63, 94, 0.34);
+  }
+
+  .onboarding-overlay__panel::-webkit-scrollbar-thumb:hover,
+  .onboarding-overlay__sidecard::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(252, 165, 165, 1), rgba(225, 29, 72, 1));
+  }
+
+  .onboarding-preview {
+    gap: 6px;
+  }
+
+  .onboarding-preview__row {
+    padding: 7px 8px;
+    gap: 6px;
+  }
+
+  .onboarding-preview__row span {
+    font-size: 8px;
+  }
+
+  .onboarding-preview__row strong {
+    font-size: 10px;
+    line-height: 1.3;
+    text-align: left;
+  }
+
+  .round-status-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    padding: 6px 7px;
+  }
+
+  .round-status-card .profile-row {
+    padding: 5px 6px;
+    gap: 5px;
+  }
+
+  .round-status-card .profile-row strong {
+    font-size: 11px;
+  }
+
+  .round-status-card .profile-row span {
+    font-size: 7px;
   }
 }
 
@@ -5270,6 +5512,86 @@ body::before {
   font-size: 15px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
+}
+
+.city-events-card {
+  position: relative;
+}
+
+.city-events-target-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(248, 113, 113, 0.82);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(185, 28, 28, 0.44), rgba(127, 29, 29, 0.38)),
+    linear-gradient(180deg, rgba(26, 8, 12, 0.96), rgba(18, 6, 10, 0.98));
+  color: #fee2e2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 10px rgba(239, 68, 68, 0.45),
+    0 0 22px rgba(220, 38, 38, 0.34),
+    0 8px 16px rgba(2, 6, 23, 0.34);
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.18s ease;
+  z-index: 3;
+}
+
+.city-events-target-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.city-events-target-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(254, 202, 202, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 14px rgba(248, 113, 113, 0.6),
+    0 0 28px rgba(220, 38, 38, 0.42),
+    0 10px 18px rgba(2, 6, 23, 0.4),
+    0 0 18px rgba(239, 68, 68, 0.28);
+}
+
+.city-events-target-btn:focus-visible {
+  outline: 2px solid rgba(254, 202, 202, 0.95);
+  outline-offset: 2px;
+}
+
+.city-events-target-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: -28px;
+  right: -2px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(248, 113, 113, 0.7);
+  background: rgba(28, 8, 12, 0.92);
+  color: #fecaca;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.35);
+  opacity: 0;
+  transform: translateY(3px);
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.city-events-target-btn:hover::after,
+.city-events-target-btn:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .compact-action-card {
@@ -14939,8 +15261,14 @@ body::before {
     min-width: 0;
     justify-content: center;
     flex-wrap: nowrap;
-    gap: 14px;
+    gap: 10px;
     transition: gap 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .brand__logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
   }
 
   .brand__tag {
@@ -14948,7 +15276,7 @@ body::before {
   }
 
   .brand__name {
-    font-size: 14px;
+    font-size: 13px;
     white-space: nowrap;
     transition: font-size 0.42s ease, opacity 0.42s ease, transform 0.42s ease;
   }
@@ -14977,8 +15305,9 @@ body::before {
   }
 
   .nav-btn--profile {
-    font-size: 10px;
-    padding: 8px 10px;
+    min-height: 30px;
+    font-size: 9px;
+    padding: 6px 9px;
   }
 
   .topbar__right {

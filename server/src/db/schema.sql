@@ -152,6 +152,13 @@ CREATE TABLE IF NOT EXISTS cooldowns (
   next_attack_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS attack_target_cooldowns (
+  attacker_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  next_attack_at TIMESTAMP NOT NULL,
+  PRIMARY KEY (attacker_player_id, target_player_id)
+);
+
 -- Round metadata
 CREATE TABLE IF NOT EXISTS rounds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

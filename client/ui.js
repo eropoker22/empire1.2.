@@ -387,8 +387,8 @@ window.Empire.UI = (() => {
   );
 
   const SETTINGS_STORAGE_KEY = "empire_settings";
-  const ATTACK_COOLDOWN_STORAGE_KEY = "empire_attack_cooldown_until_v1";
-  const ATTACK_COOLDOWN_MS = 20 * 1000;
+  const ATTACK_TARGET_COOLDOWN_STORAGE_KEY = "empire_attack_target_cooldown_state_v1";
+  const ATTACK_TARGET_COOLDOWN_MS = 30 * 1000;
   const ATTACK_ACTION_DURATION_MS = 20 * 1000;
   const DISTRICT_TRAP_STORAGE_KEY = "empire_district_trap_state_v1";
   const ATTACK_TARGET_LOCK_STORAGE_KEY = "empire_attack_target_lock_state_v1";
@@ -1850,6 +1850,7 @@ window.Empire.UI = (() => {
   let allianceRefreshHandler = null;
   let allianceCountdownIntervalId = null;
   let scenarioIncomeTimer = null;
+  let onboardingGrowthTimer = null;
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
   const LOCAL_GANG_MEMBERS_KEY = "empire_local_gang_members";
@@ -2232,6 +2233,30 @@ window.Empire.UI = (() => {
     if (!scenarioIncomeTimer) return;
     clearInterval(scenarioIncomeTimer);
     scenarioIncomeTimer = null;
+  }
+
+  function stopOnboardingGrowthTicker() {
+    if (!onboardingGrowthTimer) return;
+    clearInterval(onboardingGrowthTimer);
+    onboardingGrowthTimer = null;
+  }
+
+  function startOnboardingGrowthTicker() {
+    stopOnboardingGrowthTicker();
+    if (activePlayerScenarioKey !== "onboarding-20-edge") return;
+    onboardingGrowthTimer = setInterval(() => {
+      if (activePlayerScenarioKey !== "onboarding-20-edge") {
+        stopOnboardingGrowthTicker();
+        return;
+      }
+      if (window.Empire.token) {
+        stopOnboardingGrowthTicker();
+        return;
+      }
+      addCleanCash(10);
+      addDirtyCash(4);
+      addInfluence(1);
+    }, 12000);
   }
 
   function isDistrictOwnedByScenarioPlayer(district, ownerName) {
@@ -3297,6 +3322,11 @@ window.Empire.UI = (() => {
     const toggle = () => {
       isSpyCountShownInTopbar = !isSpyCountShownInTopbar;
       renderInfluenceSpyTopbarStat({ animate: true });
+      document.dispatchEvent(new CustomEvent("empire:topbar-resource-toggle", {
+        detail: {
+          mode: isSpyCountShownInTopbar ? "spies" : "influence"
+        }
+      }));
     };
 
     wrap.addEventListener("click", toggle);
@@ -3321,6 +3351,17 @@ window.Empire.UI = (() => {
     initStorageModal();
     initMoneyStatSkipControls();
     initInfluenceSpyToggle();
+    const bountyBtn = document.getElementById("city-events-target-btn");
+    if (bountyBtn) {
+      bountyBtn.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("empire:bounty-button-clicked", {
+          detail: {
+            source: "city-events-card"
+          }
+        }));
+        pushEvent("Bounty je zatím připravené tlačítko.");
+      });
+    }
     initWeaponsModal();
     initWeaponsPopover();
     initDistrictDefenseModal();
@@ -4475,27 +4516,76 @@ window.Empire.UI = (() => {
     }
   }
 
-  function getAttackCooldownUntil() {
-    const parsed = Number(localStorage.getItem(ATTACK_COOLDOWN_STORAGE_KEY) || 0);
-    if (!Number.isFinite(parsed)) return 0;
-    const safeValue = Math.max(0, Math.floor(parsed));
-    const now = Date.now();
-    const maxAllowed = now + ATTACK_COOLDOWN_MS;
-    if (safeValue > maxAllowed) {
-      localStorage.setItem(ATTACK_COOLDOWN_STORAGE_KEY, String(maxAllowed));
-      return maxAllowed;
+  function readAttackTargetCooldownState() {
+    try {
+      const raw = localStorage.getItem(ATTACK_TARGET_COOLDOWN_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      const now = Date.now();
+      return Object.entries(parsed).reduce((acc, [attackerKey, targets]) => {
+        const safeAttackerKey = normalizeOwnerName(attackerKey);
+        if (!safeAttackerKey || !targets || typeof targets !== "object" || Array.isArray(targets)) return acc;
+        const sanitizedTargets = Object.entries(targets).reduce((targetAcc, [targetKey, until]) => {
+          const safeTargetKey = normalizeOwnerName(targetKey);
+          const safeUntil = Number(until);
+          if (!safeTargetKey || !Number.isFinite(safeUntil) || safeUntil <= now) return targetAcc;
+          targetAcc[safeTargetKey] = Math.floor(safeUntil);
+          return targetAcc;
+        }, {});
+        if (Object.keys(sanitizedTargets).length) {
+          acc[safeAttackerKey] = sanitizedTargets;
+        }
+        return acc;
+      }, {});
+    } catch (_) {
+      return {};
     }
-    return safeValue;
   }
 
-  function setAttackCooldownUntil(value) {
-    const safeValue = Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
-    localStorage.setItem(ATTACK_COOLDOWN_STORAGE_KEY, String(safeValue));
-    return safeValue;
+  function saveAttackTargetCooldownState(nextState) {
+    const now = Date.now();
+    const safeState = !nextState || typeof nextState !== "object"
+      ? {}
+      : Object.entries(nextState).reduce((acc, [attackerKey, targets]) => {
+          const safeAttackerKey = normalizeOwnerName(attackerKey);
+          if (!safeAttackerKey || !targets || typeof targets !== "object" || Array.isArray(targets)) return acc;
+          const sanitizedTargets = Object.entries(targets).reduce((targetAcc, [targetKey, until]) => {
+            const safeTargetKey = normalizeOwnerName(targetKey);
+            const safeUntil = Number(until);
+            if (!safeTargetKey || !Number.isFinite(safeUntil) || safeUntil <= now) return targetAcc;
+            targetAcc[safeTargetKey] = Math.floor(safeUntil);
+            return targetAcc;
+          }, {});
+          if (Object.keys(sanitizedTargets).length) {
+            acc[safeAttackerKey] = sanitizedTargets;
+          }
+          return acc;
+        }, {});
+    localStorage.setItem(ATTACK_TARGET_COOLDOWN_STORAGE_KEY, JSON.stringify(safeState));
+    return safeState;
   }
 
-  function getAttackCooldownRemainingMs() {
-    return Math.max(0, getAttackCooldownUntil() - Date.now());
+  function getAttackTargetCooldownRemainingMs(targetOwnerKey) {
+    const attackerKey = resolveCurrentPlayerOwnerKey();
+    const safeTargetKey = normalizeOwnerName(targetOwnerKey);
+    if (!safeTargetKey) return 0;
+    const state = readAttackTargetCooldownState();
+    const until = Number(state?.[attackerKey]?.[safeTargetKey] || 0);
+    if (!Number.isFinite(until) || until <= Date.now()) return 0;
+    return Math.max(0, until - Date.now());
+  }
+
+  function setAttackTargetCooldownUntil(targetOwnerKey, until) {
+    const attackerKey = resolveCurrentPlayerOwnerKey();
+    const safeTargetKey = normalizeOwnerName(targetOwnerKey);
+    const safeUntil = Number(until);
+    if (!safeTargetKey || !Number.isFinite(safeUntil) || safeUntil <= Date.now()) return 0;
+    const state = readAttackTargetCooldownState();
+    state[attackerKey] = state[attackerKey] && typeof state[attackerKey] === "object" ? state[attackerKey] : {};
+    state[attackerKey][safeTargetKey] = Math.floor(safeUntil);
+    saveAttackTargetCooldownState(state);
+    return state[attackerKey][safeTargetKey];
   }
 
   function formatAttackCooldownLabel(ms) {
@@ -4624,7 +4714,7 @@ window.Empire.UI = (() => {
     const state = readDistrictTrapState();
     const previous = state[ownerKey] || null;
     const moveCooldownRemainingMs = getTrapMoveCooldownRemainingMs(previous);
-    if (previous && Number(previous.districtId) !== safeDistrictId && moveCooldownRemainingMs > 0) {
+    if (previous && Number(previous.districtId) !== safeDistrictId && moveCooldownRemainingMs > 0 && !isOnboardingDemoScenarioActive()) {
       return {
         ok: false,
         reason: "move_locked",
@@ -4867,18 +4957,19 @@ window.Empire.UI = (() => {
     return formatAttackCooldownLabel(ms);
   }
 
-  function getAttackModalAvailability() {
+  function getAttackModalAvailability(district = null) {
     const counts = resolveWeaponCounts();
     const availableWeapons = getAttackWeaponTotal(counts);
     const actualMembers = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(cachedProfile || window.Empire.player || {})) || 0));
     const weaponAccess = resolveCombatWeaponAccess("attack", actualMembers);
+    const cooldownTargetOwner = normalizeOwnerName(district?.owner);
     return {
       availableWeapons,
       actualMembers,
       weaponCounts: counts,
       weaponAccess,
       unlockedWeapon: weaponAccess.weapon || null,
-      cooldownMs: getAttackCooldownRemainingMs()
+      cooldownMs: getAttackTargetCooldownRemainingMs(cooldownTargetOwner)
     };
   }
 
@@ -5178,6 +5269,13 @@ window.Empire.UI = (() => {
         claimDistrictForPlayer(district);
       }
       openAttackResultModal(safeDetails);
+      document.dispatchEvent(new CustomEvent("empire:attack-resolved", {
+        detail: {
+          districtId: safeDetails.districtId ?? null,
+          outcomeKey,
+          details: safeDetails
+        }
+      }));
     }, Math.max(1000, Math.floor(Number(safeDetails.durationMs || ATTACK_ACTION_DURATION_MS))));
   }
 
@@ -5194,6 +5292,16 @@ window.Empire.UI = (() => {
     const defense = Math.max(0, Math.floor(Number(defensePower) || 0));
     const districtId = Number(options?.districtId);
     const bonusCatastropheChancePct = Math.max(0, Number(options?.bonusCatastropheChancePct || 0));
+    if (isOnboardingDemoScenarioActive()) {
+      return {
+        outcomeKey: "total_success",
+        winChancePct: 100,
+        attackerLossPct: 0,
+        defenderLossPct: 100,
+        districtLossPct: 100,
+        destroyed: false
+      };
+    }
     if (activePlayerScenarioKey === "alliance-ten-blackout" && districtId === 89) {
       return {
         outcomeKey: "catastrophe",
@@ -5480,6 +5588,13 @@ window.Empire.UI = (() => {
     attackResultModalState = nextState;
     renderAttackResultModal(attackResultModalState);
     root.classList.remove("hidden");
+    if (isOnboardingDemoScenarioActive()) {
+      window.setTimeout(() => {
+        if (!root.classList.contains("hidden")) {
+          closeAttackResultModal();
+        }
+      }, 1200);
+    }
   }
 
   function closeAttackResultModal() {
@@ -5519,7 +5634,7 @@ window.Empire.UI = (() => {
     if (!districtEl || !defenseRowEl || !defenseEl || !weaponsEl || !membersEl || !powerEl || !noteEl || !confirmBtn) return;
 
     const district = resolveDistrictById(attackConfirmModalState.districtId);
-    const availability = attackConfirmModalState.availability || getAttackModalAvailability();
+    const availability = attackConfirmModalState.availability || getAttackModalAvailability(district);
     const selectionSummary = attackConfirmModalState.selectionSummary || getAttackSelectionSummary(availability);
     const baseDetails = attackConfirmModalState.baseDetails || getAttackResultDetails(district, {
       ...availability,
@@ -5531,7 +5646,9 @@ window.Empire.UI = (() => {
     const defensePowerEstimate = Math.max(0, Math.floor(Number(
       attackConfirmModalState.defensePowerEstimate || getAttackDefensePowerEstimate(district, selectionSummary?.selection)
     )));
-    const winChancePct = Math.round(calculateAttackWinChancePct(attackPower, defensePowerEstimate));
+    const winChancePct = isOnboardingDemoScenarioActive()
+      ? 100
+      : Math.round(calculateAttackWinChancePct(attackPower, defensePowerEstimate));
 
     districtEl.textContent = district?.name || `Distrikt #${district?.id ?? "-"}`;
     if (spyIntel && String(spyIntel.powerRangeLabel || "").trim()) {
@@ -5578,7 +5695,7 @@ window.Empire.UI = (() => {
       return;
     }
 
-    const availability = attackConfirmModalState.availability || getAttackModalAvailability();
+    const availability = attackConfirmModalState.availability || getAttackModalAvailability(district);
     const selectionSummary = attackConfirmModalState.selectionSummary || getAttackSelectionSummary(availability);
     const baseDetails = attackConfirmModalState.baseDetails || getAttackResultDetails(district, {
       ...availability,
@@ -5597,7 +5714,10 @@ window.Empire.UI = (() => {
       const lockMs = Math.max(0, Number(lockUntil || 0) - Date.now());
       const targetLabel = String(district?.ownerNick || district?.owner || consumedTrap?.targetOwnerLabel || "Neznámý").trim() || "Neznámý";
       closeAllPopupWindows();
-      setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
+      setAttackTargetCooldownUntil(
+        district?.owner,
+        Date.now() + ATTACK_ACTION_DURATION_MS + ATTACK_TARGET_COOLDOWN_MS
+      );
       pushEvent(`Past v districtu ${district?.name || `#${district?.id ?? "-"}`} zrušila útok. Na hráče ${targetLabel} máš cooldown ${formatDurationLabel(lockMs || TRAP_ATTACK_TARGET_LOCK_MS)}.`);
       openAttackResultModal({
         districtId: district?.id ?? null,
@@ -5619,7 +5739,17 @@ window.Empire.UI = (() => {
     }
 
     closeAllPopupWindows();
-    setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
+    setAttackTargetCooldownUntil(
+      district?.owner,
+      Date.now() + ATTACK_ACTION_DURATION_MS + ATTACK_TARGET_COOLDOWN_MS
+    );
+    document.dispatchEvent(new CustomEvent("empire:attack-started", {
+      detail: {
+        districtId: district?.id ?? null,
+        district: district || null,
+        durationMs: Math.max(1000, Math.floor(Number(baseDetails.durationMs || ATTACK_ACTION_DURATION_MS)))
+      }
+    }));
 
     const outcomeRoll = resolveAttackOutcomeFromPower(baseDetails.attackPower, defensePowerEstimate, {
       bonusCatastropheChancePct: attackSpecial.bazookaCatastropheChancePct,
@@ -5680,7 +5810,7 @@ window.Empire.UI = (() => {
       return;
     }
 
-    const availability = getAttackModalAvailability();
+    const availability = getAttackModalAvailability(district);
     const demoMode = scenarioVisionEnabled && !window.Empire.token;
     const selectionSummary = getAttackSelectionSummary(availability);
 
@@ -5789,7 +5919,8 @@ window.Empire.UI = (() => {
         const action = String(button.getAttribute("data-attack-action") || "").trim();
         if (!name) return;
         if (action !== "increase" && action !== "decrease") return;
-        const availability = getAttackModalAvailability();
+        const selectedDistrict = resolveDistrictById(attackModalState.districtId);
+        const availability = getAttackModalAvailability(selectedDistrict);
         const summary = getAttackSelectionSummary(availability);
         const item = attackWeaponStats.find((entry) => entry.name === name);
         if (!item) return;
@@ -5819,10 +5950,10 @@ window.Empire.UI = (() => {
           setAttackModalNote("Nejprve vyber cíl útoku.");
           return;
         }
-        const availability = getAttackModalAvailability();
+        const availability = getAttackModalAvailability(district);
         const demoMode = scenarioVisionEnabled && !window.Empire.token;
-        if (getAttackCooldownRemainingMs() > 0) {
-          setAttackModalNote(`Útok je na cooldownu ještě ${formatAttackCooldownLabel(getAttackCooldownRemainingMs())}.`);
+        if (availability.cooldownMs > 0) {
+          setAttackModalNote(`Útok je na cooldownu ještě ${formatAttackCooldownLabel(availability.cooldownMs)}.`);
           renderAttackModal();
           return;
         }
@@ -5865,7 +5996,9 @@ window.Empire.UI = (() => {
         try {
           const result = await window.Empire.API.attackDistrict(district.id);
           if (result?.error) {
-            const errorMessage = formatAttackError(result.error);
+            const errorMessage = result.error === "cooldown" && Number(result?.cooldownMs || 0) > 0
+              ? `Na stejného hráče můžeš znovu zaútočit za ${formatAttackCooldownLabel(Number(result.cooldownMs || 0))}.`
+              : formatAttackError(result.error);
             setAttackModalNote(errorMessage);
             pushEvent(errorMessage);
             recordVerifiedIntelEvent({
@@ -5876,7 +6009,10 @@ window.Empire.UI = (() => {
             renderAttackModal();
             return;
           }
-          setAttackCooldownUntil(Date.now() + ATTACK_COOLDOWN_MS);
+          setAttackTargetCooldownUntil(
+            district?.owner,
+            Date.now() + ATTACK_ACTION_DURATION_MS + ATTACK_TARGET_COOLDOWN_MS
+          );
           const details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
             ...result,
             attackPower: result?.attackPower ?? baseDetails.attackPower,
@@ -5962,6 +6098,13 @@ window.Empire.UI = (() => {
       </div>
     `).join("");
     root.classList.remove("hidden");
+    if (isOnboardingDemoScenarioActive()) {
+      window.setTimeout(() => {
+        if (!root.classList.contains("hidden")) {
+          closeRaidResultModal();
+        }
+      }, 1200);
+    }
   }
 
   function initRaidResultModal() {
@@ -7298,6 +7441,9 @@ window.Empire.UI = (() => {
   }
 
   function resolveRaidOutcomeKey(district) {
+    if (isOnboardingDemoScenarioActive()) {
+      return "clean_success";
+    }
     const chances = { ...resolveRaidOutcomeChances(district) };
     const defenseSpecial = resolveDistrictDefenseSpecialModifiers(district?.id);
     if (defenseSpecial.raidAlarmBoostActive) {
@@ -7492,6 +7638,17 @@ window.Empire.UI = (() => {
       gangLoss,
       targetAlerted
     }));
+    document.dispatchEvent(new CustomEvent("empire:raid-resolved", {
+      detail: {
+        districtId: district.id,
+        outcomeKey,
+        loot,
+        cooldownMs,
+        gangLoss,
+        targetAlerted,
+        durationMs
+      }
+    }));
   }
 
   function startRaidAction(district) {
@@ -7512,6 +7669,13 @@ window.Empire.UI = (() => {
       durationMs,
       source: "raid-action"
     });
+    document.dispatchEvent(new CustomEvent("empire:raid-started", {
+      detail: {
+        districtId: district.id,
+        district,
+        durationMs
+      }
+    }));
     recordVerifiedIntelEvent({
       type: "raid_started",
       districtId: district.id
@@ -7962,6 +8126,14 @@ window.Empire.UI = (() => {
       return;
     }
     renderSpyResultModal(payload);
+    const root = document.getElementById("spy-result-modal");
+    if (root && isOnboardingDemoScenarioActive()) {
+      window.setTimeout(() => {
+        if (!root.classList.contains("hidden")) {
+          closeSpyResultModal();
+        }
+      }, 1200);
+    }
   }
 
   function renderSpyDetectionAlertModal({
@@ -8132,6 +8304,13 @@ window.Empire.UI = (() => {
     }
 
     openSpyResultModal({ outcomeKey, district, chances: rolled.chances, spyIntel: discoveredIntel });
+    document.dispatchEvent(new CustomEvent("empire:spy-resolved", {
+      detail: {
+        districtId: district.id,
+        outcomeKey,
+        spyIntel: discoveredIntel
+      }
+    }));
   }
 
   function scheduleSpyActionResult(districtId) {
@@ -8480,6 +8659,14 @@ window.Empire.UI = (() => {
       return;
     }
     renderOccupationResultModal(payload);
+    const root = document.getElementById("spy-result-modal");
+    if (root && isOnboardingDemoScenarioActive()) {
+      window.setTimeout(() => {
+        if (!root.classList.contains("hidden")) {
+          closeSpyResultModal();
+        }
+      }, 1200);
+    }
   }
 
   function finalizeOccupationActionResult({ districtId, requiredMembers }) {
@@ -8507,6 +8694,14 @@ window.Empire.UI = (() => {
       requiredMembers: Math.max(0, Math.floor(Number(requiredMembers) || 0)),
       returnedMembers
     });
+    document.dispatchEvent(new CustomEvent("empire:occupy-resolved", {
+      detail: {
+        districtId: district.id,
+        outcomeKey,
+        requiredMembers: Math.max(0, Math.floor(Number(requiredMembers) || 0)),
+        returnedMembers
+      }
+    }));
   }
 
   function scheduleOccupationActionResult(districtId, requiredMembers) {
@@ -8638,6 +8833,12 @@ window.Empire.UI = (() => {
     trapConfirmModalState = { districtId: district?.id ?? null };
     root.classList.remove("hidden");
     renderTrapConfirmModal();
+    document.dispatchEvent(new CustomEvent("empire:trap-modal-opened", {
+      detail: {
+        districtId: district?.id ?? null,
+        district: district || null
+      }
+    }));
   }
 
   function placeTrapFromModal() {
@@ -8672,6 +8873,13 @@ window.Empire.UI = (() => {
         ? `Past přesunuta do districtu ${districtLabel}. Přesun bude znovu možný za 20s.`
         : `Past nastražena do districtu ${districtLabel}. Přesun bude znovu možný za 20s.`
     );
+    document.dispatchEvent(new CustomEvent("empire:trap-placed", {
+      detail: {
+        districtId: district?.id ?? null,
+        district: district || null,
+        moved: Boolean(result.moved)
+      }
+    }));
     closeTrapConfirmModal();
     window.Empire.Map?.refreshSelectedDistrictModal?.();
   }
@@ -9029,8 +9237,8 @@ window.Empire.UI = (() => {
     const loadout = createDemoWeaponLoadout(1);
     return {
       cleanMoney: 1200,
-      dirtyMoney: 800,
-      balance: 2000,
+      dirtyMoney: 2000,
+      balance: 3200,
       drugs: 6,
       materials: 12,
       influence: 8,
@@ -9838,10 +10046,70 @@ window.Empire.UI = (() => {
       baseProfile.alliance = "Žádná";
       baseProfile.username = "Onboarding Runner";
       baseProfile.cleanMoney = 1200;
-      baseProfile.dirtyMoney = 800;
+      baseProfile.dirtyMoney = 2000;
       baseProfile.drugs = 6;
       baseProfile.materials = 12;
       baseProfile.influence = 8;
+      baseProfile.heat = 45;
+      baseProfile.wantedLevel = 45;
+      baseProfile.wanted = 45;
+      baseProfile.policeHeat = 45;
+      baseProfile.police_heat = 45;
+      const localAllianceState = getLocalAllianceState();
+      if (!window.Empire.token) {
+        const onboardingAllianceId = "alliance-onboarding-vortex";
+        let onboardingAlliance = (localAllianceState.alliances || []).find((alliance) => alliance.id === onboardingAllianceId) || null;
+        if (!onboardingAlliance) {
+          onboardingAlliance = createLocalAlliance(localAllianceState, {
+            name: "Vortex Crew",
+            description: "Onboarding aliance pro ukázku READY, členů a odchodu.",
+            iconKey: "lightning"
+          });
+          onboardingAlliance.id = onboardingAllianceId;
+          onboardingAlliance.members = Array.isArray(onboardingAlliance.members) ? onboardingAlliance.members : [];
+          onboardingAlliance.members[0] = {
+            ...(onboardingAlliance.members[0] || {}),
+            id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+            username: "Ty",
+            gang_name: localStorage.getItem("empire_gang_name") || "Guest Crew",
+            alliance_ready_at: null
+          };
+          onboardingAlliance.members.push(
+            {
+              id: "alliance-onboarding-member-1",
+              username: "Rook",
+              gang_name: "Vortex Crew",
+              alliance_ready_at: new Date().toISOString()
+            },
+            {
+              id: "alliance-onboarding-member-2",
+              username: "Nova",
+              gang_name: "Vortex Crew",
+              alliance_ready_at: new Date(Date.now() - 10 * 60 * 1000).toISOString()
+            }
+          );
+          localAllianceState.activeAllianceId = onboardingAllianceId;
+          saveLocalAllianceState(localAllianceState);
+        } else {
+          onboardingAlliance.members = Array.isArray(onboardingAlliance.members) ? onboardingAlliance.members : [];
+          const playerMember = onboardingAlliance.members.find((member) => String(member.id || "") === LOCAL_ALLIANCE_REQUEST_PLAYER_ID);
+          if (playerMember) {
+            playerMember.alliance_ready_at = null;
+            playerMember.username = "Ty";
+            playerMember.gang_name = localStorage.getItem("empire_gang_name") || "Guest Crew";
+          } else {
+            onboardingAlliance.members.unshift({
+              id: LOCAL_ALLIANCE_REQUEST_PLAYER_ID,
+              username: "Ty",
+              gang_name: localStorage.getItem("empire_gang_name") || "Guest Crew",
+              alliance_ready_at: null
+            });
+          }
+          localAllianceState.activeAllianceId = onboardingAllianceId;
+          saveLocalAllianceState(localAllianceState);
+        }
+        baseProfile.alliance = `${onboardingAlliance.name} (${Math.min(4, onboardingAlliance.members.length)}/4)`;
+      }
       pushEvent(
         `Onboarding: ${scenario.playerCount} hráčů, každý drží 1 okrajový distrikt. Tvůj distrikt přímo sousedí s nepřítelem.`
       );
@@ -9886,6 +10154,9 @@ window.Empire.UI = (() => {
       setLocalGangMembersBonus(0);
       setLocalGangMembersSpent(0);
       updateEconomy(createOnboardingDemoEconomy());
+      startOnboardingGrowthTicker();
+    } else {
+      stopOnboardingGrowthTicker();
     }
     if (!window.Empire.token && activePlayerScenarioKey === "alliance-ten-blackout") {
       const allianceState = buildAllianceTenBlackoutLocalAllianceState(ownerName, "Knedlík");
@@ -11054,6 +11325,11 @@ window.Empire.UI = (() => {
       resetToCompactState();
       setMobileTopbarCoveredByPrimaryModal(true);
       modal.classList.remove("hidden");
+      document.dispatchEvent(new CustomEvent("empire:city-events-opened", {
+        detail: {
+          open: true
+        }
+      }));
     };
     const closeModal = () => {
       modal.classList.add("hidden");
@@ -11073,6 +11349,12 @@ window.Empire.UI = (() => {
     agentButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
         renderTasks(btn.dataset.agent);
+        document.dispatchEvent(new CustomEvent("empire:city-events-agent-selected", {
+          detail: {
+            agentKey: btn.dataset.agent || null,
+            agentName: agents[btn.dataset.agent || ""]?.name || null
+          }
+        }));
       });
     });
 
@@ -11170,6 +11452,11 @@ window.Empire.UI = (() => {
       renderBuildings(null);
       setMobileTopbarCoveredByPrimaryModal(true);
       root.classList.remove("hidden");
+      document.dispatchEvent(new CustomEvent("empire:buildings-modal-opened", {
+        detail: {
+          open: true
+        }
+      }));
     });
     typeList.addEventListener("click", (event) => {
       const target = event.target;
@@ -12476,18 +12763,42 @@ window.Empire.UI = (() => {
       .filter((timestamp) => now - Number(timestamp) <= GANG_HEAT_DIRTY_TRIGGER_WINDOW_MS);
     recent.push(now);
     saveDirtyHeatReductionTimestamps(recent);
-    if (recent.length < GANG_HEAT_DIRTY_TRIGGER_COUNT) return false;
+    if (recent.length < GANG_HEAT_DIRTY_TRIGGER_COUNT) {
+      return {
+        triggered: false,
+        count: recent.length,
+        districtId: null
+      };
+    }
     saveDirtyHeatReductionTimestamps([]);
     const ownedDistricts = getOwnedPlayerDistricts();
-    if (!ownedDistricts.length) return false;
-    const target = ownedDistricts[Math.floor(Math.random() * ownedDistricts.length)];
-    if (!target?.id) return false;
+    if (!ownedDistricts.length) {
+      return {
+        triggered: false,
+        count: recent.length,
+        districtId: null
+      };
+    }
+    const target = isOnboardingDemoScenarioActive()
+      ? ownedDistricts[0]
+      : ownedDistricts[Math.floor(Math.random() * ownedDistricts.length)];
+    if (!target?.id) {
+      return {
+        triggered: false,
+        count: recent.length,
+        districtId: null
+      };
+    }
     window.Empire.Map?.markDistrictPoliceAction?.(target.id, {
       durationMs: GANG_HEAT_POLICE_DURATION_MS,
       source: "heat-dirty-reduction"
     });
     pushEvent(`Podezřelé praní heatu přitáhlo policii do distriktu ${target.name || `#${target.id}`}.`);
-    return true;
+    return {
+      triggered: true,
+      count: recent.length,
+      districtId: target.id
+    };
   }
 
   function resolveWantedStars(heatValue) {
@@ -12929,7 +13240,15 @@ window.Empire.UI = (() => {
       const nextHeat = Math.max(0, currentHeat - GANG_HEAT_DIRTY_REDUCTION);
       setPlayerWantedHeat(nextHeat, "Uplacení tlaku špinavými penězi", "fall");
       pushEvent(`Heat snížen o ${GANG_HEAT_DIRTY_REDUCTION} za $${GANG_HEAT_DIRTY_COST} dirty.`);
-      registerDirtyHeatReductionAndMaybeTriggerPolice();
+      const reductionState = registerDirtyHeatReductionAndMaybeTriggerPolice();
+      document.dispatchEvent(new CustomEvent("empire:gang-heat-dirty-reduced", {
+        detail: {
+          count: Math.max(0, Number(reductionState?.count || 0)),
+          required: GANG_HEAT_DIRTY_TRIGGER_COUNT,
+          triggered: Boolean(reductionState?.triggered),
+          districtId: reductionState?.districtId ?? null
+        }
+      }));
       renderGangHeatModal();
       return;
     }
@@ -13182,6 +13501,11 @@ window.Empire.UI = (() => {
       root.classList.remove("hidden");
       setCreateAllianceModalVisible(false);
       setAllianceManagementModalVisible(false);
+      document.dispatchEvent(new CustomEvent("empire:alliance-modal-opened", {
+        detail: {
+          open: true
+        }
+      }));
       resetCreateAllianceForm();
       await refreshAlliance();
       if (allianceCountdownIntervalId) window.clearInterval(allianceCountdownIntervalId);
@@ -13777,6 +14101,11 @@ window.Empire.UI = (() => {
     }
     if (readyBtn) {
       readyBtn.addEventListener("click", async () => {
+        document.dispatchEvent(new CustomEvent("empire:alliance-ready-clicked", {
+          detail: {
+            source: "alliance-panel"
+          }
+        }));
         if (!window.Empire.token) {
           const state = getLocalAllianceState();
           const result = markLocalAllianceReady(state);
@@ -13986,6 +14315,11 @@ window.Empire.UI = (() => {
     bindAllianceMemberAvatarLightbox(panel);
     if (managementReadyBtn) {
       managementReadyBtn.addEventListener("click", async () => {
+        document.dispatchEvent(new CustomEvent("empire:alliance-ready-clicked", {
+          detail: {
+            source: "alliance-management"
+          }
+        }));
         if (!window.Empire.token) {
           const state = getLocalAllianceState();
           const result = markLocalAllianceReady(state);
@@ -14892,6 +15226,11 @@ window.Empire.UI = (() => {
       state.tab = "server";
       setMobileTopbarCoveredByPrimaryModal(false);
       root.classList.remove("hidden");
+      document.dispatchEvent(new CustomEvent("empire:market-modal-opened", {
+        detail: {
+          open: true
+        }
+      }));
       await refreshMarket();
     });
     resourceSelect.addEventListener("change", () => renderMarketState(resourceSelect.value, state.tab));

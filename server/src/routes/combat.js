@@ -14,7 +14,13 @@ router.post("/attack", auth, async (req, res) => {
 
   try {
     const result = await attackDistrict({ playerId: req.user.id, districtId });
-    if (!result.ok) return res.status(400).json({ error: result.error });
+    if (!result.ok) {
+      return res.status(400).json({
+        error: result.error,
+        cooldownMs: Number(result.cooldownMs || 0) > 0 ? Math.floor(Number(result.cooldownMs)) : 0,
+        targetPlayerId: result.targetPlayerId ?? null
+      });
+    }
 
     const districts = await listDistricts();
     broadcastMapUpdate({
