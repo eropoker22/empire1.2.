@@ -143,6 +143,9 @@ window.Empire.UI = (() => {
   }
 
   function resolveAttackDurationMsForDistrict(district) {
+    if (isOnboardingDemoScenarioActive()) {
+      return ONBOARDING_ACTION_DURATION_MS;
+    }
     const defenseSpecial = resolveDistrictDefenseSpecialModifiers(district?.id);
     const durationMultiplier = 1 + Math.max(0, Number(defenseSpecial.attackDurationIncreasePct || 0)) / 100;
     return Math.max(1000, Math.round(ATTACK_ACTION_DURATION_MS * durationMultiplier));
@@ -405,6 +408,13 @@ window.Empire.UI = (() => {
   const GANG_HEAT_DIRTY_TRIGGER_WINDOW_MS = 30 * 60 * 1000;
   const GANG_HEAT_DIRTY_TRIGGER_COUNT = 3;
   const GANG_HEAT_POLICE_DURATION_MS = 60 * 60 * 1000;
+  const ONBOARDING_ACTION_DURATION_MS = 5 * 1000;
+
+  function resolveOnboardingActionDurationMs(baseDurationMs) {
+    return isOnboardingDemoScenarioActive()
+      ? ONBOARDING_ACTION_DURATION_MS
+      : Math.max(1000, Math.floor(Number(baseDurationMs || 0)));
+  }
   const POLICE_RAID_TIER1 = Object.freeze({
     cleanConfiscationPct: 2,
     dirtyConfiscationPctMin: 8,
@@ -1884,7 +1894,9 @@ window.Empire.UI = (() => {
   const MAP_BORDER_MODE_WHITE = "white";
   const MAP_BORDER_MODE_BLACK = "black";
   const ONBOARDING_TUTORIAL_SPY_DISTRICT_ID = 25;
+  const ONBOARDING_TUTORIAL_DRUG_LAB_DISTRICT_ID = 18;
   const ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID = 6;
+  const ONBOARDING_TUTORIAL_RAID_DISTRICT_ID = 38;
   let scenarioVisionEnabled = false;
   let scenarioUniqueOwnerColors = false;
   let scenarioProfileAvatarOverride = null;
@@ -3161,7 +3173,7 @@ window.Empire.UI = (() => {
     return cachedSpyCount;
   }
 
-  function renderInfluenceSpyTopbarStat({ animate = false } = {}) {
+  function renderInfluenceSpyTopbarStat({ animate = false, instant = false } = {}) {
     const wrap = document.getElementById("stat-influence-wrap");
     const label = document.getElementById("stat-influence-label");
     const value = document.getElementById("stat-influence");
@@ -3174,6 +3186,16 @@ window.Empire.UI = (() => {
     value.dataset.influenceValue = String(influenceValue);
     value.dataset.spyValue = String(spyCount);
     label.textContent = topbarMode === "spies" ? "Špeh" : "Vliv";
+    if (instant) {
+      syncMoneyStatToCachedValue(value, topbarMode === "spies" ? spyCount : influenceValue, { prefix: "" });
+      lastRenderedInfluenceValue = influenceValue;
+      lastRenderedTopbarMode = topbarMode;
+      wrap.classList.toggle("is-spies", isSpyCountShownInTopbar);
+      const shownLabel = isSpyCountShownInTopbar ? `${spyCount} špehů` : `${influenceValue} vlivu`;
+      const hiddenLabel = isSpyCountShownInTopbar ? `${influenceValue} vlivu` : `${spyCount} špehů`;
+      wrap.setAttribute("aria-label", `${shownLabel}. Klikni pro přepnutí na ${hiddenLabel}.`);
+      return;
+    }
     if (topbarMode === "spies") {
       stopMoneyStatCounter(value);
       value.textContent = String(spyCount);
@@ -4944,6 +4966,9 @@ window.Empire.UI = (() => {
   }
 
   function resolveRaidDurationWithBoosts() {
+    if (isOnboardingDemoScenarioActive()) {
+      return ONBOARDING_ACTION_DURATION_MS;
+    }
     const pharmacySnapshot = window.Empire.Map?.getPharmacyBoostSnapshot?.();
     const factorySnapshot = window.Empire.Map?.getFactoryBoostSnapshot?.();
     const stealSpeedPct = Math.max(0, Number(pharmacySnapshot?.effective?.stealSpeedPct || 0));
@@ -5387,6 +5412,11 @@ window.Empire.UI = (() => {
     return activePlayerScenarioKey === "onboarding-20-edge" && scenarioVisionEnabled && !window.Empire.token;
   }
 
+  function shouldLockOnboardingResultModal() {
+    const onboardingState = window.Empire.Onboarding?.getState?.();
+    return Boolean(onboardingState?.active) && isOnboardingDemoScenarioActive();
+  }
+
   function renderAttackResultModal(details) {
     const root = document.getElementById("attack-result-modal");
     const content = document.getElementById("attack-result-modal-content");
@@ -5588,13 +5618,6 @@ window.Empire.UI = (() => {
     attackResultModalState = nextState;
     renderAttackResultModal(attackResultModalState);
     root.classList.remove("hidden");
-    if (isOnboardingDemoScenarioActive()) {
-      window.setTimeout(() => {
-        if (!root.classList.contains("hidden")) {
-          closeAttackResultModal();
-        }
-      }, 1200);
-    }
   }
 
   function closeAttackResultModal() {
@@ -6051,10 +6074,14 @@ window.Empire.UI = (() => {
     const closeBtn = document.getElementById("attack-result-modal-close");
     const okBtn = document.getElementById("attack-result-modal-ok");
     if (!root) return;
-    if (backdrop) backdrop.addEventListener("click", closeAttackResultModal);
+    if (backdrop) backdrop.addEventListener("click", () => {
+      if (shouldLockOnboardingResultModal()) return;
+      closeAttackResultModal();
+    });
     if (closeBtn) closeBtn.addEventListener("click", closeAttackResultModal);
     if (okBtn) okBtn.addEventListener("click", closeAttackResultModal);
     document.addEventListener("keydown", (event) => {
+      if (shouldLockOnboardingResultModal()) return;
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
         closeAttackResultModal();
       }
@@ -6098,13 +6125,6 @@ window.Empire.UI = (() => {
       </div>
     `).join("");
     root.classList.remove("hidden");
-    if (isOnboardingDemoScenarioActive()) {
-      window.setTimeout(() => {
-        if (!root.classList.contains("hidden")) {
-          closeRaidResultModal();
-        }
-      }, 1200);
-    }
   }
 
   function initRaidResultModal() {
@@ -6113,10 +6133,14 @@ window.Empire.UI = (() => {
     const closeBtn = document.getElementById("raid-result-modal-close");
     const okBtn = document.getElementById("raid-result-modal-ok");
     if (!root) return;
-    if (backdrop) backdrop.addEventListener("click", closeRaidResultModal);
+    if (backdrop) backdrop.addEventListener("click", () => {
+      if (shouldLockOnboardingResultModal()) return;
+      closeRaidResultModal();
+    });
     if (closeBtn) closeBtn.addEventListener("click", closeRaidResultModal);
     if (okBtn) okBtn.addEventListener("click", closeRaidResultModal);
     document.addEventListener("keydown", (event) => {
+      if (shouldLockOnboardingResultModal()) return;
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
         closeRaidResultModal();
       }
@@ -6223,10 +6247,14 @@ window.Empire.UI = (() => {
     const closeBtn = document.getElementById("police-action-result-modal-close");
     const okBtn = document.getElementById("police-action-result-modal-ok");
     if (!root) return;
-    if (backdrop) backdrop.addEventListener("click", closePoliceActionResultModal);
+    if (backdrop) backdrop.addEventListener("click", () => {
+      if (shouldLockOnboardingResultModal()) return;
+      closePoliceActionResultModal();
+    });
     if (closeBtn) closeBtn.addEventListener("click", closePoliceActionResultModal);
     if (okBtn) okBtn.addEventListener("click", closePoliceActionResultModal);
     document.addEventListener("keydown", (event) => {
+      if (shouldLockOnboardingResultModal()) return;
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
         closePoliceActionResultModal();
       }
@@ -8126,14 +8154,6 @@ window.Empire.UI = (() => {
       return;
     }
     renderSpyResultModal(payload);
-    const root = document.getElementById("spy-result-modal");
-    if (root && isOnboardingDemoScenarioActive()) {
-      window.setTimeout(() => {
-        if (!root.classList.contains("hidden")) {
-          closeSpyResultModal();
-        }
-      }, 1200);
-    }
   }
 
   function renderSpyDetectionAlertModal({
@@ -8205,10 +8225,14 @@ window.Empire.UI = (() => {
     const closeBtn = document.getElementById("spy-result-modal-close");
     const okBtn = document.getElementById("spy-result-modal-ok");
     if (!root) return;
-    if (backdrop) backdrop.addEventListener("click", closeSpyResultModal);
+    if (backdrop) backdrop.addEventListener("click", () => {
+      if (shouldLockOnboardingResultModal()) return;
+      closeSpyResultModal();
+    });
     if (closeBtn) closeBtn.addEventListener("click", closeSpyResultModal);
     if (okBtn) okBtn.addEventListener("click", closeSpyResultModal);
     document.addEventListener("keydown", (event) => {
+      if (shouldLockOnboardingResultModal()) return;
       if (event.key === "Escape" && !root.classList.contains("hidden")) {
         closeSpyResultModal();
       }
@@ -8317,7 +8341,7 @@ window.Empire.UI = (() => {
     const timeoutId = setTimeout(() => {
       spyActionResultTimeouts.delete(timeoutId);
       finalizeSpyActionResult({ districtId });
-    }, SPY_ACTION_DURATION_MS);
+    }, resolveOnboardingActionDurationMs(SPY_ACTION_DURATION_MS));
     spyActionResultTimeouts.add(timeoutId);
   }
 
@@ -8366,7 +8390,8 @@ window.Empire.UI = (() => {
       noteText = "Nemáš žádné dostupné špehy.";
       canConfirm = false;
     } else {
-      noteText = `Akce potrvá ${Math.floor(SPY_ACTION_DURATION_MS / 1000)}s. Po ${Math.floor(SPY_RECOVERY_COOLDOWN_MS / 1000)}s se 1 špeh vrátí zpět.`;
+      const durationMs = resolveOnboardingActionDurationMs(SPY_ACTION_DURATION_MS);
+      noteText = `Akce potrvá ${Math.floor(durationMs / 1000)}s. Po ${Math.floor(SPY_RECOVERY_COOLDOWN_MS / 1000)}s se 1 špeh vrátí zpět.`;
     }
 
     noteEl.textContent = noteText;
@@ -8507,9 +8532,10 @@ window.Empire.UI = (() => {
       return;
     }
 
-    pushEvent(`Špehování distriktu ${district.name || `#${district.id}`} bylo zahájeno na ${Math.floor(SPY_ACTION_DURATION_MS / 1000)}s.`);
+    const durationMs = resolveOnboardingActionDurationMs(SPY_ACTION_DURATION_MS);
+    pushEvent(`Špehování distriktu ${district.name || `#${district.id}`} bylo zahájeno na ${Math.floor(durationMs / 1000)}s.`);
     window.Empire.Map?.markDistrictSpyAction?.(district.id, {
-      durationMs: SPY_ACTION_DURATION_MS,
+      durationMs,
       source: demoMode ? "scenario-spy" : "player-spy"
     });
     recordVerifiedIntelEvent({
@@ -8575,7 +8601,8 @@ window.Empire.UI = (() => {
     requiredEl.textContent = String(requiredMembers);
 
     let canConfirm = true;
-    let noteText = `Akce potrvá ${Math.floor(OCCUPY_ACTION_DURATION_MS / 1000)}s.`;
+    const durationMs = resolveOnboardingActionDurationMs(OCCUPY_ACTION_DURATION_MS);
+    let noteText = `Akce potrvá ${Math.floor(durationMs / 1000)}s.`;
     if (!district) {
       canConfirm = false;
       noteText = "Nejprve vyber distrikt.";
@@ -8659,14 +8686,6 @@ window.Empire.UI = (() => {
       return;
     }
     renderOccupationResultModal(payload);
-    const root = document.getElementById("spy-result-modal");
-    if (root && isOnboardingDemoScenarioActive()) {
-      window.setTimeout(() => {
-        if (!root.classList.contains("hidden")) {
-          closeSpyResultModal();
-        }
-      }, 1200);
-    }
   }
 
   function finalizeOccupationActionResult({ districtId, requiredMembers }) {
@@ -8708,7 +8727,7 @@ window.Empire.UI = (() => {
     const timeoutId = setTimeout(() => {
       occupyActionResultTimeouts.delete(timeoutId);
       finalizeOccupationActionResult({ districtId, requiredMembers });
-    }, OCCUPY_ACTION_DURATION_MS);
+    }, resolveOnboardingActionDurationMs(OCCUPY_ACTION_DURATION_MS));
     occupyActionResultTimeouts.add(timeoutId);
   }
 
@@ -8742,11 +8761,12 @@ window.Empire.UI = (() => {
     }
 
     consumeGangMembers(requiredMembers);
+    const durationMs = resolveOnboardingActionDurationMs(OCCUPY_ACTION_DURATION_MS);
     window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
-      durationMs: OCCUPY_ACTION_DURATION_MS,
+      durationMs,
       source: demoMode ? "scenario-occupy" : "player-occupy"
     });
-    pushEvent(`Obsazení distriktu ${district.name || `#${district.id}`} bylo zahájeno na ${Math.floor(OCCUPY_ACTION_DURATION_MS / 1000)}s.`);
+    pushEvent(`Obsazení distriktu ${district.name || `#${district.id}`} bylo zahájeno na ${Math.floor(durationMs / 1000)}s.`);
     document.dispatchEvent(new CustomEvent("empire:occupy-started", {
       detail: {
         districtId: district.id,
@@ -9183,6 +9203,9 @@ window.Empire.UI = (() => {
         return { allowed: true, reason: "" };
       }
       if (action === "raid") {
+        if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_RAID_DISTRICT_ID) {
+          return { allowed: true, reason: "" };
+        }
         const districtRaidLockMs = getDistrictRaidLockRemainingMs(districtId);
         if (districtRaidLockMs > 0) {
           return {
@@ -9445,6 +9468,30 @@ window.Empire.UI = (() => {
     syncMapVisionContext();
   }
 
+  function syncOnboardingMobileUnknownToggleVisibility() {
+    const neutralToggle = document.getElementById("map-unknown-neutral-fill-toggle");
+    if (!neutralToggle) return;
+    const isMobileViewport = window.matchMedia("(max-width: 900px)").matches;
+    const body = document.body;
+    const hasOnboardingStepClass = Array.from(body.classList).some((className) => className.startsWith("onboarding-step-"));
+    const onboardingActive = Boolean(
+      body.classList.contains("onboarding-active")
+      || body.classList.contains("onboarding-ui-locked")
+      || hasOnboardingStepClass
+      || activePlayerScenarioKey === "onboarding-20-edge"
+    );
+    const shouldHide = isMobileViewport && onboardingActive;
+    neutralToggle.style.display = shouldHide ? "none" : "";
+    neutralToggle.style.visibility = shouldHide ? "hidden" : "";
+    neutralToggle.disabled = shouldHide;
+    neutralToggle.setAttribute("aria-hidden", shouldHide ? "true" : "false");
+    if (shouldHide) {
+      neutralToggle.setAttribute("tabindex", "-1");
+    } else {
+      neutralToggle.removeAttribute("tabindex");
+    }
+  }
+
   function initMapBorderModeControls() {
     const swatches = Array.from(document.querySelectorAll("[data-map-border-color]"));
     swatches.forEach((swatch) => {
@@ -9464,7 +9511,15 @@ window.Empire.UI = (() => {
         syncMapVisionContext();
       });
     }
+    const syncUnknownToggleVisibility = () => syncOnboardingMobileUnknownToggleVisibility();
+    document.addEventListener("empire:scenario-applied", syncUnknownToggleVisibility);
+    document.addEventListener("empire:onboarding:started", syncUnknownToggleVisibility);
+    document.addEventListener("empire:onboarding:finished", syncUnknownToggleVisibility);
+    document.addEventListener("empire:onboarding:reset", syncUnknownToggleVisibility);
+    document.addEventListener("empire:onboarding:step-changed", syncUnknownToggleVisibility);
+    window.addEventListener("resize", syncUnknownToggleVisibility);
     applyMapBorderMode(selectedMapBorderMode, { persist: false });
+    syncUnknownToggleVisibility();
   }
 
   function syncMapVisionContext() {
@@ -9738,6 +9793,7 @@ window.Empire.UI = (() => {
     const normalizedScenarioKey = activePlayerScenarioKey === "alliance-ten-blackout"
         ? "alliance-ten"
         : activePlayerScenarioKey;
+    document.body.classList.toggle("scenario-onboarding-20-edge", normalizedScenarioKey === "onboarding-20-edge");
     const forcedMapMode = activePlayerScenarioKey === "alliance-ten-blackout"
       ? "blackout"
       : "";
@@ -10018,6 +10074,15 @@ window.Empire.UI = (() => {
       const tutorialEnemyOwner = String(scenario.enemyOwners?.[0] || "Vortex Hounds").trim() || "Vortex Hounds";
       nextDistricts = nextDistricts.map((district) => {
         if (Number(district?.id) === ONBOARDING_TUTORIAL_SPY_DISTRICT_ID) {
+          const existingBuildings = Array.isArray(district?.buildings) ? [...district.buildings] : [];
+          const normalizedBuildings = existingBuildings.map((building) => normalizeOwnerName(building));
+          const filteredBuildings = existingBuildings.filter((building) => {
+            const normalized = normalizeOwnerName(building);
+            return normalized !== "pouliční dealeři" && normalized !== "poulicni dealeri";
+          });
+          if (!normalizedBuildings.includes("drug lab") && !normalizedBuildings.includes("druglab")) {
+            filteredBuildings.push("Drug lab");
+          }
           return {
             ...district,
             owner: null,
@@ -10027,10 +10092,36 @@ window.Empire.UI = (() => {
             ownerStructure: null,
             ownerFaction: null,
             ownerAvatar: null,
-            ownerAtmosphere: null
+            ownerAtmosphere: null,
+            buildings: filteredBuildings
+          };
+        }
+        if (Number(district?.id) === ONBOARDING_TUTORIAL_DRUG_LAB_DISTRICT_ID) {
+          const existingBuildings = Array.isArray(district?.buildings) ? [...district.buildings] : [];
+          const normalizedBuildings = existingBuildings.map((building) => normalizeOwnerName(building));
+          const filteredBuildings = existingBuildings.filter((building) => {
+            const normalized = normalizeOwnerName(building);
+            return normalized !== "drug lab" && normalized !== "druglab";
+          });
+          if (!normalizedBuildings.includes("pouliční dealeři") && !normalizedBuildings.includes("poulicni dealeri")) {
+            filteredBuildings.push("Pouliční dealeři");
+          }
+          return {
+            ...district,
+            buildings: filteredBuildings
           };
         }
         if (Number(district?.id) === ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID) {
+          return {
+            ...district,
+            owner: tutorialEnemyOwner,
+            ownerPlayerId: null,
+            ownerNick: tutorialEnemyOwner,
+            ownerAllianceName: null,
+            ...buildDemoDistrictOwnerMeta(tutorialEnemyOwner, district)
+          };
+        }
+        if (Number(district?.id) === ONBOARDING_TUTORIAL_RAID_DISTRICT_ID) {
           return {
             ...district,
             owner: tutorialEnemyOwner,
@@ -10153,7 +10244,7 @@ window.Empire.UI = (() => {
       clearDistrictSpyIntel(ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID);
       setLocalGangMembersBonus(0);
       setLocalGangMembersSpent(0);
-      updateEconomy(createOnboardingDemoEconomy());
+      updateEconomy(createOnboardingDemoEconomy(), { instant: true });
       startOnboardingGrowthTicker();
     } else {
       stopOnboardingGrowthTicker();
@@ -10191,6 +10282,12 @@ window.Empire.UI = (() => {
         districts: nextDistricts
       }
     }));
+    if (normalizedScenarioKey === "onboarding-20-edge") {
+      window.Empire.Onboarding?.start?.({
+        ownerName,
+        districts: nextDistricts
+      });
+    }
   }
 
   function assignAllianceTenScenarioOwnership(districts, ownerName, allyName, options = {}) {
@@ -13273,10 +13370,18 @@ window.Empire.UI = (() => {
     const cleanBtn = document.getElementById("gang-heat-clean-btn");
     const clearLogBtn = document.getElementById("gang-heat-clear-log-btn");
     if (trigger) {
-      trigger.addEventListener("click", () => openGangHeatPanelOrRaidImpactModal());
+      trigger.addEventListener("click", () => {
+        document.dispatchEvent(new CustomEvent("empire:wanted-row-clicked", {
+          detail: { source: "click" }
+        }));
+        openGangHeatPanelOrRaidImpactModal();
+      });
       trigger.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
+        document.dispatchEvent(new CustomEvent("empire:wanted-row-clicked", {
+          detail: { source: event.key === " " ? "space" : "enter" }
+        }));
         openGangHeatPanelOrRaidImpactModal();
       });
     }
@@ -15369,6 +15474,7 @@ window.Empire.UI = (() => {
     const buttons = Array.from(root.querySelectorAll("[data-market-building-base-name]"));
     if (!buttons.length) return;
     const lockFlashTimers = new WeakMap();
+    const onboardingShortcutNames = new Set(["lekarna", "drug lab", "druglab", "tovarna", "zbrojovka"]);
 
     const normalizeBuildingName = (value) => normalizeOwnerName(String(value || "").replace(/\s+/g, " ").trim());
 
@@ -15387,6 +15493,20 @@ window.Empire.UI = (() => {
     const getOwnedDistricts = () => {
       const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
       return districts.filter((district) => isDistrictOwnedByPlayer(district));
+    };
+
+    const resolveOnboardingShortcutFallback = (baseName, options = {}) => {
+      if (!isOnboardingDemoScenarioActive()) return null;
+      const normalizedBaseName = normalizeBuildingName(baseName);
+      if (!onboardingShortcutNames.has(normalizedBaseName)) return null;
+      const ownedDistricts = Array.isArray(options.ownedDistricts) ? options.ownedDistricts : getOwnedDistricts();
+      const district = ownedDistricts[0] || null;
+      if (!district) return null;
+      return {
+        district,
+        buildingIndex: -1,
+        onboardingFallback: true
+      };
     };
 
     const resolveOwnedBuildingInstance = (baseName, options = {}) => {
@@ -15431,20 +15551,25 @@ window.Empire.UI = (() => {
           || "Budova"
         );
         const baseName = String(button.dataset.marketBuildingBaseName || "").trim();
-        const instance = resolveOwnedBuildingInstance(baseName, { ownedDistricts });
+        const instance = resolveOwnedBuildingInstance(baseName, { ownedDistricts })
+          || resolveOnboardingShortcutFallback(baseName, { ownedDistricts });
         const unlocked = Boolean(instance);
-        const buildingIndex = unlocked ? instance.buildingIndex : -1;
+        const buildingIndex = unlocked ? Number(instance.buildingIndex) : -1;
+        const usesOnboardingFallback = Boolean(instance?.onboardingFallback);
 
         button.disabled = false;
         button.setAttribute("aria-disabled", unlocked ? "false" : "true");
         button.classList.toggle("is-unlocked", unlocked);
         button.classList.toggle("is-locked", !unlocked);
         button.dataset.marketBuildingUnlocked = unlocked ? "1" : "0";
-        button.dataset.marketBuildingIndex = unlocked ? String(buildingIndex) : "";
+        button.dataset.marketBuildingIndex = unlocked && buildingIndex >= 0 ? String(buildingIndex) : "";
         button.dataset.marketBuildingDistrictId = unlocked ? String(instance.district?.id ?? "") : "";
+        button.dataset.marketBuildingOnboardingFallback = usesOnboardingFallback ? "1" : "0";
 
         if (unlocked) {
-          button.title = `${label}: Otevřít detail budovy z tvého území`;
+          button.title = usesOnboardingFallback
+            ? `${label}: Otevřít onboarding detail budovy`
+            : `${label}: Otevřít detail budovy z tvého území`;
         } else if (!hasOwnedTerritory) {
           button.title = `${label}: Neovládáš žádný distrikt`;
         } else {
@@ -15480,15 +15605,18 @@ window.Empire.UI = (() => {
 
         const baseName = String(button.dataset.marketBuildingBaseName || "").trim();
         const cachedDistrictId = String(button.dataset.marketBuildingDistrictId || "").trim();
-        const cachedIndexRaw = Number(button.dataset.marketBuildingIndex);
+        const cachedIndexText = String(button.dataset.marketBuildingIndex || "").trim();
+        const cachedIndexRaw = cachedIndexText === "" ? Number.NaN : Number(cachedIndexText);
         const cachedBuildingIndex = Number.isFinite(cachedIndexRaw)
           ? Math.max(0, Math.floor(cachedIndexRaw))
           : -1;
         let district = cachedDistrictId ? resolveDistrictById(cachedDistrictId, window.Empire.districts) : null;
         let buildingIndex = cachedBuildingIndex;
+        const onboardingFallbackActive = button.dataset.marketBuildingOnboardingFallback === "1";
 
         if (!district || buildingIndex < 0) {
-          const instance = resolveOwnedBuildingInstance(baseName);
+          const instance = resolveOwnedBuildingInstance(baseName)
+            || resolveOnboardingShortcutFallback(baseName);
           if (instance?.district) {
             district = instance.district;
           }
@@ -15505,7 +15633,7 @@ window.Empire.UI = (() => {
           baseName: resolvedBaseName,
           variantName: variantRaw && variantRaw !== resolvedBaseName ? variantRaw : null,
           districtId: district?.id ?? null,
-          buildingIndex
+          buildingIndex: buildingIndex >= 0 ? buildingIndex : (onboardingFallbackActive ? null : buildingIndex)
         };
 
         if (window.Empire.Map?.showBuildingDetail) {
@@ -16617,12 +16745,18 @@ window.Empire.UI = (() => {
   function syncMoneyStatToCachedValue(element, value, options = {}) {
     if (!element) return;
     stopMoneyStatCounter(element);
+    const activeTimer = moneyStatAnimationTimers.get(element);
+    if (activeTimer) {
+      clearTimeout(activeTimer);
+      moneyStatAnimationTimers.delete(element);
+    }
+    element.classList.remove("is-money-up", "is-money-down");
     const safeValue = Math.max(0, Math.floor(Number(value) || 0));
     const prefix = String(options?.prefix ?? "$");
     element.textContent = `${prefix}${safeValue}`;
   }
 
-  function updateEconomy(economy) {
+  function updateEconomy(economy, { instant = false } = {}) {
     const safeEconomy = economy && typeof economy === "object" ? { ...economy } : {};
     const rawDrugInventory = safeEconomy.drugInventory && typeof safeEconomy.drugInventory === "object"
       ? safeEconomy.drugInventory
@@ -16654,28 +16788,28 @@ window.Empire.UI = (() => {
     const cleanMoney = document.getElementById("stat-clean-money");
     const dirtyMoney = document.getElementById("stat-dirty-money");
     if (cleanMoney) {
-      if (lastRenderedCleanMoney == null) {
-        cleanMoney.textContent = `$${money.cleanMoney}`;
+      if (instant || lastRenderedCleanMoney == null) {
+        syncMoneyStatToCachedValue(cleanMoney, money.cleanMoney);
       } else {
         animateMoneyStatCounter(cleanMoney, money.cleanMoney);
       }
     }
     if (dirtyMoney) {
-      if (lastRenderedDirtyMoney == null) {
-        dirtyMoney.textContent = `$${money.dirtyMoney}`;
+      if (instant || lastRenderedDirtyMoney == null) {
+        syncMoneyStatToCachedValue(dirtyMoney, money.dirtyMoney);
       } else {
         animateMoneyStatCounter(dirtyMoney, money.dirtyMoney);
       }
     }
-    if (cleanMoney && lastRenderedCleanMoney != null && money.cleanMoney !== lastRenderedCleanMoney) {
+    if (!instant && cleanMoney && lastRenderedCleanMoney != null && money.cleanMoney !== lastRenderedCleanMoney) {
       animateMoneyStatValue(cleanMoney, money.cleanMoney - lastRenderedCleanMoney);
     }
-    if (dirtyMoney && lastRenderedDirtyMoney != null && money.dirtyMoney !== lastRenderedDirtyMoney) {
+    if (!instant && dirtyMoney && lastRenderedDirtyMoney != null && money.dirtyMoney !== lastRenderedDirtyMoney) {
       animateMoneyStatValue(dirtyMoney, money.dirtyMoney - lastRenderedDirtyMoney);
     }
     lastRenderedCleanMoney = money.cleanMoney;
     lastRenderedDirtyMoney = money.dirtyMoney;
-    renderInfluenceSpyTopbarStat();
+    renderInfluenceSpyTopbarStat({ instant });
     const drugs = document.getElementById("stat-drugs");
     const storage = document.getElementById("stat-storage");
     const weapons = document.getElementById("stat-weapons");

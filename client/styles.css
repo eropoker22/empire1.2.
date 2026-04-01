@@ -323,6 +323,25 @@ body.onboarding-ui-locked .onboarding-overlay__sidecard * {
   pointer-events: auto;
 }
 
+body.onboarding-ui-locked #spy-result-modal,
+body.onboarding-ui-locked #spy-result-modal *,
+body.onboarding-ui-locked #attack-result-modal,
+body.onboarding-ui-locked #attack-result-modal *,
+body.onboarding-ui-locked #raid-result-modal,
+body.onboarding-ui-locked #raid-result-modal *,
+body.onboarding-ui-locked #police-action-result-modal,
+body.onboarding-ui-locked #police-action-result-modal * {
+  pointer-events: auto !important;
+}
+
+body.onboarding-ui-locked #spy-result-modal .modal__content,
+body.onboarding-ui-locked #attack-result-modal .modal__content,
+body.onboarding-ui-locked #raid-result-modal .modal__content,
+body.onboarding-ui-locked #police-action-result-modal .modal__content {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
 body.onboarding-step-spy #city-map,
 body.onboarding-step-spy #district-modal,
 body.onboarding-step-spy #district-modal *,
@@ -374,14 +393,44 @@ body.onboarding-step-economy .onboarding-overlay__flicker-layer {
   opacity: 0 !important;
 }
 
+body.onboarding-step-city-events .onboarding-overlay__backdrop,
+body.onboarding-step-city-events .onboarding-overlay__fog-layer,
+body.onboarding-step-city-events .onboarding-overlay__rain-layer,
+body.onboarding-step-city-events .onboarding-overlay__flicker-layer {
+  opacity: 0 !important;
+}
+
+body.onboarding-step-raid .onboarding-overlay__backdrop,
+body.onboarding-step-raid .onboarding-overlay__fog-layer,
+body.onboarding-step-raid .onboarding-overlay__rain-layer,
+body.onboarding-step-raid .onboarding-overlay__flicker-layer {
+  opacity: 0 !important;
+}
+
+body.onboarding-step-8-plus .onboarding-overlay__backdrop,
+body.onboarding-step-8-plus .onboarding-overlay__fog-layer,
+body.onboarding-step-8-plus .onboarding-overlay__rain-layer,
+body.onboarding-step-8-plus .onboarding-overlay__flicker-layer {
+  opacity: 0 !important;
+}
+
 body.onboarding-step-city-events #events-modal,
 body.onboarding-step-city-events #events-modal *,
-body.onboarding-step-districts #buildings-modal,
-body.onboarding-step-districts #buildings-modal *,
+body.onboarding-step-raid #city-map,
+body.onboarding-step-raid #district-modal,
+body.onboarding-step-raid #district-modal *,
+body.onboarding-step-raid #raid-confirm-modal,
+body.onboarding-step-raid #raid-confirm-modal *,
+body.onboarding-step-raid #raid-result-modal,
+body.onboarding-step-raid #raid-result-modal *,
 body.onboarding-step-production #buildings-modal,
 body.onboarding-step-production #buildings-modal *,
 body.onboarding-step-production #building-detail-modal,
 body.onboarding-step-production #building-detail-modal *,
+body.onboarding-step-production #market-building-shortcuts,
+body.onboarding-step-production #market-building-shortcuts *,
+body.onboarding-step-districts #buildings-modal,
+body.onboarding-step-districts #buildings-modal *,
 body.onboarding-step-attack #city-map,
 body.onboarding-step-attack #district-modal,
 body.onboarding-step-attack #district-modal *,
@@ -413,6 +462,9 @@ body.onboarding-step-traps #trap-confirm-modal * {
 }
 
 body.onboarding-step-city-events #events-modal .modal__content,
+body.onboarding-step-raid #district-modal .modal__content,
+body.onboarding-step-raid #raid-confirm-modal .modal__content,
+body.onboarding-step-raid #raid-result-modal .modal__content,
 body.onboarding-step-districts #buildings-modal .modal__content,
 body.onboarding-step-production #buildings-modal .modal__content,
 body.onboarding-step-production #building-detail-modal .modal__content,
@@ -436,11 +488,17 @@ body.onboarding-step-bounty #city-events-target-btn {
 }
 
 body.onboarding-step-attack #attack-btn,
+body.onboarding-step-raid #raid-btn,
+body.onboarding-step-raid #raid-confirm-modal-confirm,
 body.onboarding-step-traps #trap-btn,
 body.onboarding-step-resources #stat-influence-wrap,
 body.onboarding-step-police #profile-heat-panel,
+body.onboarding-step-production #market-building-shortcuts,
+body.onboarding-step-production #market-building-shortcuts .market-building-shortcut,
 body.onboarding-step-time #map-mode-switch,
-body.onboarding-step-blackout #map-mode-switch {
+body.onboarding-step-blackout #map-mode-switch,
+body.onboarding-step-attack #attack-modal [data-attack-weapon="Baseballová pálka"][data-attack-action="increase"],
+body.onboarding-step-attack #attack-modal-start {
   box-shadow:
     0 0 0 2px rgba(103, 232, 249, 0.72),
     0 0 18px rgba(34, 211, 238, 0.34),
@@ -653,6 +711,33 @@ body.onboarding-step-spy-confirm #spy-confirm-modal-confirm {
   .onboarding-overlay__panel::-webkit-scrollbar-thumb:hover,
   .onboarding-overlay__sidecard::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, rgba(252, 165, 165, 1), rgba(225, 29, 72, 1));
+  }
+
+  body.onboarding-step-attack .onboarding-overlay,
+  body.onboarding-step-alliance .onboarding-overlay,
+  body.onboarding-step-traps .onboarding-overlay {
+    align-items: start;
+    padding-top: calc(6px + env(safe-area-inset-top));
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+
+  body.onboarding-step-attack .onboarding-overlay__sidecard,
+  body.onboarding-step-alliance .onboarding-overlay__sidecard,
+  body.onboarding-step-traps .onboarding-overlay__sidecard {
+    display: block;
+    grid-column: 1 / -1;
+    order: 0;
+    max-height: min(18dvh, 130px);
+  }
+
+  body.onboarding-step-attack .onboarding-overlay__panel,
+  body.onboarding-step-alliance .onboarding-overlay__panel,
+  body.onboarding-step-traps .onboarding-overlay__panel {
+    grid-column: 1 / -1;
+    order: 1;
+    justify-self: stretch;
+    max-height: min(22dvh, 170px);
+    min-height: 0;
   }
 
   .onboarding-preview {
@@ -1451,9 +1536,35 @@ body::before {
   box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.85), 0 0 14px rgba(56, 189, 248, 0.28);
 }
 
+.map-mode-switch__btn--blackout {
+  min-width: 62px;
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.38);
+  background: linear-gradient(180deg, rgba(69, 10, 10, 0.82), rgba(28, 7, 7, 0.92));
+  box-shadow: inset 0 0 10px rgba(248, 113, 113, 0.12), 0 0 12px rgba(248, 113, 113, 0.16);
+  text-shadow: 0 0 8px rgba(248, 113, 113, 0.36);
+}
+
+.map-mode-switch__btn--blackout:hover {
+  border-color: rgba(248, 113, 113, 0.92);
+  color: #fff1f2;
+  box-shadow: inset 0 0 12px rgba(248, 113, 113, 0.16), 0 0 16px rgba(248, 113, 113, 0.28);
+}
+
+.map-mode-switch__btn.is-active[data-map-mode="blackout"] {
+  border-color: rgba(248, 113, 113, 0.98);
+  color: #fff1f2;
+  background: linear-gradient(180deg, rgba(120, 20, 20, 0.9), rgba(54, 8, 8, 0.96));
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.85), 0 0 16px rgba(248, 113, 113, 0.42), inset 0 0 12px rgba(255, 255, 255, 0.04);
+}
+
 .map-mode-switch__btn:focus-visible {
   outline: 2px solid rgba(224, 242, 254, 0.9);
   outline-offset: 1px;
+}
+
+.map-mode-switch__label--mobile {
+  display: none;
 }
 
 .map-header h1 {
@@ -3420,11 +3531,23 @@ body::before {
   --structure-title-secondary: rgba(248, 250, 252, 0.96);
 }
 
+.structure-card[data-structure="soukromá armáda"] .structure-card__title {
+  font-size: clamp(16px, 1.82vw, 20px);
+  letter-spacing: 0.052em;
+}
+
 .structure-card[data-structure="korporace"] {
   --structure-accent: rgba(45, 212, 191, 0.94);
   --structure-accent-soft: rgba(45, 212, 191, 0.18);
   --structure-accent-alt: rgba(34, 197, 94, 0.18);
   --structure-title-secondary: rgba(240, 253, 250, 0.96);
+}
+
+@media (min-width: 721px) {
+  .structure-card[data-structure="pouliční gang"] .structure-card__title {
+    font-size: clamp(16px, 1.72vw, 19px);
+    letter-spacing: 0.045em;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -15383,25 +15506,27 @@ body::before {
   }
 
   body.is-mobile-topbar-condensed .topbar {
-    padding: 10px 12px 9px;
+    padding: 6px 10px 6px;
     background: rgba(10, 15, 28, 0.94);
     border-bottom-color: rgba(34, 211, 238, 0.12);
     box-shadow: 0 10px 24px rgba(2, 6, 23, 0.24);
     backdrop-filter: blur(14px);
+    row-gap: 6px;
   }
 
   body.is-mobile-topbar-condensed .brand {
-    gap: 12px;
+    gap: 7px;
   }
 
   body.is-mobile-topbar-condensed .brand__logo {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
   }
 
   body.is-mobile-topbar-condensed .brand__name {
-    font-size: 14px;
+    font-size: 11px;
+    line-height: 1;
   }
 
   body.is-mobile-topbar-condensed .brand__tag {
@@ -15587,6 +15712,30 @@ body::before {
   body.mobile-hide-topbar #attack-result-modal .modal__content {
     height: auto;
     max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
+    overflow: auto;
+  }
+
+  body.onboarding-active .modal,
+  body.onboarding-active #building-detail-modal {
+    place-items: start center;
+    align-items: start;
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-right: 8px;
+    padding-bottom: 8px;
+    padding-left: 8px;
+  }
+
+  body.onboarding-active .modal__backdrop,
+  body.onboarding-active #building-detail-modal .modal__backdrop {
+    inset: 0;
+  }
+
+  body.onboarding-active .modal__content,
+  body.onboarding-active #building-detail-modal .modal__content {
+    margin-top: 0 !important;
+    align-self: start;
+    justify-self: center;
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 8px - env(safe-area-inset-bottom));
     overflow: auto;
   }
 
@@ -16834,10 +16983,23 @@ body.mobile-storage-modal-open {
 
   .map-mode-switch__btn {
     min-height: 24px;
-    padding: 0 8px;
+    padding: 0 7px;
     font-size: 9px;
     letter-spacing: 0.06em;
     border-radius: 6px;
+  }
+
+  .map-mode-switch__btn--blackout {
+    min-width: 26px;
+    padding: 0 8px;
+  }
+
+  .map-mode-switch__label--desktop {
+    display: none;
+  }
+
+  .map-mode-switch__label--mobile {
+    display: inline;
   }
 
   .map-border-switch {
@@ -16857,6 +17019,13 @@ body.mobile-storage-modal-open {
     height: 18px;
     padding: 0 7px;
     font-size: 9px;
+  }
+
+  body.onboarding-active #map-unknown-neutral-fill-toggle,
+  body.onboarding-ui-locked #map-unknown-neutral-fill-toggle,
+  body[class*="onboarding-step-"] #map-unknown-neutral-fill-toggle,
+  body.scenario-onboarding-20-edge #map-unknown-neutral-fill-toggle {
+    display: none !important;
   }
 
   .map-boost-btn {
