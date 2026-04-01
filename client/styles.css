@@ -713,7 +713,7 @@ body.onboarding-step-spy-confirm #spy-confirm-modal-confirm {
     background: linear-gradient(180deg, rgba(252, 165, 165, 1), rgba(225, 29, 72, 1));
   }
 
-  body.onboarding-step-attack .onboarding-overlay,
+  body.onboarding-step-attack-btn-clicked .onboarding-overlay,
   body.onboarding-step-alliance .onboarding-overlay,
   body.onboarding-step-traps .onboarding-overlay {
     align-items: start;
@@ -721,7 +721,7 @@ body.onboarding-step-spy-confirm #spy-confirm-modal-confirm {
     padding-bottom: calc(6px + env(safe-area-inset-bottom));
   }
 
-  body.onboarding-step-attack .onboarding-overlay__sidecard,
+  body.onboarding-step-attack-btn-clicked .onboarding-overlay__sidecard,
   body.onboarding-step-alliance .onboarding-overlay__sidecard,
   body.onboarding-step-traps .onboarding-overlay__sidecard {
     display: block;
@@ -730,7 +730,7 @@ body.onboarding-step-spy-confirm #spy-confirm-modal-confirm {
     max-height: min(18dvh, 130px);
   }
 
-  body.onboarding-step-attack .onboarding-overlay__panel,
+  body.onboarding-step-attack-btn-clicked .onboarding-overlay__panel,
   body.onboarding-step-alliance .onboarding-overlay__panel,
   body.onboarding-step-traps .onboarding-overlay__panel {
     grid-column: 1 / -1;
@@ -2115,6 +2115,11 @@ body::before {
   background: rgba(34, 211, 238, 0.14);
   color: #cffafe;
   box-shadow: 0 0 14px rgba(34, 211, 238, 0.35);
+}
+
+.scenario-preview__btn[data-player-scenario="onboarding-20-edge"] {
+  text-align: center;
+  color: #ef4444;
 }
 
 .auth-body {

@@ -703,11 +703,7 @@ window.Empire.Onboarding = (() => {
         completionCondition(event) {
           return event.type === "empire:market-modal-opened";
         },
-        onComplete() {
-          window.setTimeout(() => {
-            document.getElementById("market-modal")?.classList.add("hidden");
-          }, 500);
-        }
+        onComplete() {}
       },
       {
         id: "alliance",
@@ -741,7 +737,9 @@ window.Empire.Onboarding = (() => {
         completionCondition(event) {
           return event.type === "manual-continue";
         },
-        onComplete() {}
+        onComplete() {
+          document.getElementById("alliance-modal")?.classList.add("hidden");
+        }
       },
       {
         id: "resources",
@@ -793,6 +791,7 @@ window.Empire.Onboarding = (() => {
         },
         onEnter() {
           state.stepRuntime.policeDirtyClicks = 0;
+          state.stepRuntime.policeActionPreviewTimer = null;
           dispatchTopicCard(
             "police",
             "Policie a heat",
@@ -805,15 +804,12 @@ window.Empire.Onboarding = (() => {
             "Klikni na snížení heatu špinavými penězi 3x."
           );
         },
-        completionCondition(event, context) {
-          return event.type === "empire:police-action-started"
-            && String(event.detail?.source || "") === "heat-dirty-reduction"
-            && (!context.playerDistrict?.id || Number(event.detail?.districtId) === Number(context.playerDistrict?.id));
+        completionCondition(event) {
+          return event.type === "police-preview-finished";
         },
         onComplete() {
-          window.setTimeout(() => {
-            document.getElementById("gang-heat-modal")?.classList.add("hidden");
-          }, 350);
+          document.getElementById("police-action-result-modal")?.classList.add("hidden");
+          document.getElementById("gang-heat-modal")?.classList.add("hidden");
         }
       },
       {
@@ -826,7 +822,7 @@ window.Empire.Onboarding = (() => {
         ],
         target(context) {
           return {
-            districtId: context.playerDistrict?.id ?? context.neutralDistrict?.id ?? null,
+            districtId: context.neutralDistrict?.id ?? 25,
             selector: "#city-map",
             focusMode: "full"
           };
@@ -941,7 +937,12 @@ window.Empire.Onboarding = (() => {
         completionCondition(event) {
           return event.type === "manual-continue";
         },
-        onComplete() {}
+        onComplete() {
+          const blackoutScenarioBtn = document.querySelector('[data-player-scenario="alliance-ten-blackout"]');
+          if (blackoutScenarioBtn instanceof HTMLButtonElement) {
+            blackoutScenarioBtn.click();
+          }
+        }
       }
     ];
   }
@@ -1044,6 +1045,22 @@ window.Empire.Onboarding = (() => {
         triggered: Boolean(event.detail?.triggered)
       });
     }
+    if (step.id === "police" && type === "empire:police-action-started") {
+      const source = String(event.detail?.source || "").trim().toLowerCase();
+      if (source !== "heat-dirty-reduction") return;
+      if (state.stepRuntime.policeActionPreviewTimer) return;
+      state.stepRuntime.policeActionPreviewTimer = window.setTimeout(() => {
+        state.stepRuntime.policeActionPreviewTimer = null;
+        document.getElementById("police-action-result-modal")?.classList.add("hidden");
+        document.getElementById("gang-heat-modal")?.classList.add("hidden");
+        if (!state.active || getCurrentStep()?.id !== "police") return;
+        completeStep({
+          type: "police-preview-finished",
+          detail: event.detail || {}
+        });
+      }, 5000);
+      return;
+    }
     if (step.id === "city-events" && type === "empire:city-events-agent-selected") {
       const selectedName = String(event.detail?.agentName || "Vybraná postava").trim() || "Vybraná postava";
       if (state.stepRuntime.cityEventsPreviewTimer) {
@@ -1064,6 +1081,36 @@ window.Empire.Onboarding = (() => {
         document.getElementById("events-modal")?.classList.add("hidden");
         completeStep({
           type: "city-events-preview-finished",
+          detail: event.detail || {}
+        });
+      }, 5000);
+      return;
+    }
+    if (step.id === "districts" && type === "empire:buildings-modal-opened") {
+      if (state.stepRuntime.districtsPreviewTimer) {
+        window.clearTimeout(state.stepRuntime.districtsPreviewTimer);
+      }
+      state.stepRuntime.districtsPreviewTimer = window.setTimeout(() => {
+        state.stepRuntime.districtsPreviewTimer = null;
+        document.getElementById("buildings-modal")?.classList.add("hidden");
+        if (!state.active || getCurrentStep()?.id !== "districts") return;
+        completeStep({
+          type: "districts-preview-finished",
+          detail: event.detail || {}
+        });
+      }, 8000);
+      return;
+    }
+    if (step.id === "market" && type === "empire:market-modal-opened") {
+      if (state.stepRuntime.marketPreviewTimer) {
+        window.clearTimeout(state.stepRuntime.marketPreviewTimer);
+      }
+      state.stepRuntime.marketPreviewTimer = window.setTimeout(() => {
+        state.stepRuntime.marketPreviewTimer = null;
+        document.getElementById("market-modal")?.classList.add("hidden");
+        if (!state.active || getCurrentStep()?.id !== "market") return;
+        completeStep({
+          type: "market-preview-finished",
           detail: event.detail || {}
         });
       }, 5000);
@@ -1145,6 +1192,18 @@ window.Empire.Onboarding = (() => {
       window.clearTimeout(state.stepRuntime.cityEventsPreviewTimer);
       state.stepRuntime.cityEventsPreviewTimer = null;
     }
+    if (state.stepRuntime.districtsPreviewTimer) {
+      window.clearTimeout(state.stepRuntime.districtsPreviewTimer);
+      state.stepRuntime.districtsPreviewTimer = null;
+    }
+    if (state.stepRuntime.marketPreviewTimer) {
+      window.clearTimeout(state.stepRuntime.marketPreviewTimer);
+      state.stepRuntime.marketPreviewTimer = null;
+    }
+    if (state.stepRuntime.policeActionPreviewTimer) {
+      window.clearTimeout(state.stepRuntime.policeActionPreviewTimer);
+      state.stepRuntime.policeActionPreviewTimer = null;
+    }
     ui.clearHighlight();
     ui.hideOverlay();
     ui.unlockGameUI();
@@ -1166,6 +1225,18 @@ window.Empire.Onboarding = (() => {
     if (state.stepRuntime.cityEventsPreviewTimer) {
       window.clearTimeout(state.stepRuntime.cityEventsPreviewTimer);
       state.stepRuntime.cityEventsPreviewTimer = null;
+    }
+    if (state.stepRuntime.districtsPreviewTimer) {
+      window.clearTimeout(state.stepRuntime.districtsPreviewTimer);
+      state.stepRuntime.districtsPreviewTimer = null;
+    }
+    if (state.stepRuntime.marketPreviewTimer) {
+      window.clearTimeout(state.stepRuntime.marketPreviewTimer);
+      state.stepRuntime.marketPreviewTimer = null;
+    }
+    if (state.stepRuntime.policeActionPreviewTimer) {
+      window.clearTimeout(state.stepRuntime.policeActionPreviewTimer);
+      state.stepRuntime.policeActionPreviewTimer = null;
     }
     ui.clearHighlight();
     ui.hideOverlay();
@@ -1323,6 +1394,20 @@ if (!window.Empire.OnboardingUI) {
           "Dobře. Teď otevři útok a potvrď ho. V onboardingu to vyjde na 100 %, takže žádné posrání."
         );
       });
+      const districtAttackBtn = document.getElementById("attack-btn");
+      if (districtAttackBtn) {
+        districtAttackBtn.addEventListener("click", () => {
+          const currentStep = window.Empire.Onboarding?.getState?.()?.stepId;
+          if (currentStep !== "attack") return;
+          document.body.classList.add("onboarding-step-attack-btn-clicked");
+        });
+      }
+      const attackModalStartBtn = document.getElementById("attack-modal-start");
+      if (attackModalStartBtn) {
+        attackModalStartBtn.addEventListener("click", () => {
+          document.body.classList.remove("onboarding-step-attack-btn-clicked");
+        });
+      }
       document.addEventListener("empire:spy-modal-opened", (event) => {
         const currentStep = window.Empire.Onboarding?.getState?.()?.stepId;
         if (currentStep !== "spy") return;

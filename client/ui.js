@@ -10065,8 +10065,10 @@ window.Empire.UI = (() => {
         pushEvent("Onboarding scénář 20 hráčů se nepodařilo připravit.");
         return;
       }
+      const onboardingAllianceName = "Vortex Crew";
       setScenarioVisionMode(true);
       scenarioUniqueOwnerColors = true;
+      setScenarioAllianceIcons([[onboardingAllianceName, "lightning"]]);
       syncMapVisionContext();
       setScenarioAllianceOwners([]);
       setScenarioEnemyOwners(scenario.enemyOwners);
@@ -10129,6 +10131,13 @@ window.Empire.UI = (() => {
             ownerNick: tutorialEnemyOwner,
             ownerAllianceName: null,
             ...buildDemoDistrictOwnerMeta(tutorialEnemyOwner, district)
+          };
+        }
+        if (Number(district?.id) === 16) {
+          return {
+            ...district,
+            ownerAllianceName: onboardingAllianceName,
+            ownerAllianceIconKey: "lightning"
           };
         }
         return district;
