@@ -5,11 +5,13 @@ window.Empire.Onboarding = (() => {
   const ONBOARDING_NPC_NAME = "Průvodce městem";
   const ONBOARDING_SPY_DISTRICT_ID = 25;
   const ONBOARDING_ATTACK_DISTRICT_ID = 6;
+  const ONBOARDING_RAID_DISTRICT_ID = 38;
   const GAME_EVENT_NAMES = [
     "empire:scenario-applied",
     "empire:district-selected",
     "empire:district-modal-opened",
     "empire:building-detail-opened",
+    "empire:drug-lab-production-started",
     "empire:buildings-modal-opened",
     "empire:attack-confirm-modal-opened",
     "empire:attack-modal-opened",
@@ -34,7 +36,8 @@ window.Empire.Onboarding = (() => {
     "empire:bounty-button-clicked",
     "empire:map-mode-changed",
     "empire:gang-heat-dirty-reduced",
-    "empire:police-action-started"
+    "empire:police-action-started",
+    "empire:wanted-row-clicked"
   ];
   const DISTRICT_TYPE_GUIDE = [
     { key: "commercial", label: "Commercial", summary: "+3 clean +1 dirty cash / min" },
@@ -101,6 +104,11 @@ window.Empire.Onboarding = (() => {
     return !owner || owner === "neobsazeno" || owner === "nikdo";
   }
 
+  function isDistrictDestroyed(district) {
+    if (!district || typeof district !== "object") return false;
+    return Boolean(district.isDestroyed || district.is_destroyed || district.destroyed);
+  }
+
   function resolvePlayerOwnerName(options = {}) {
     const candidateValues = [
       options.ownerName,
@@ -160,6 +168,7 @@ window.Empire.Onboarding = (() => {
     const districtsById = new Map(districts.map((district) => [district.id, district]));
     const scriptedSpyDistrict = districtsById.get(ONBOARDING_SPY_DISTRICT_ID) || null;
     const scriptedAttackDistrict = districtsById.get(ONBOARDING_ATTACK_DISTRICT_ID) || null;
+    const scriptedRaidDistrict = districtsById.get(ONBOARDING_RAID_DISTRICT_ID) || null;
     const neighborDistricts = neighbors
       .map((districtId) => districtsById.get(districtId))
       .filter(Boolean);
@@ -170,9 +179,13 @@ window.Empire.Onboarding = (() => {
       || neighborDistricts.find((district) => isUnownedDistrict(district))
       || districts.find((district) => isUnownedDistrict(district))
       || null;
-    const raidDistrict = districts.find((district) =>
-      isUnownedDistrict(district) && Number(district?.id) !== Number(scriptedSpyDistrict?.id)
-    ) || neutralDistrict || scriptedSpyDistrict || null;
+    const raidDistrict = scriptedRaidDistrict
+      || neighborDistricts.find((district) => {
+      if (!district || Number(district?.id) === Number(scriptedSpyDistrict?.id)) return false;
+      if (isDistrictDestroyed(district)) return false;
+      const owner = normalizeName(district?.owner);
+      return isUnownedDistrict(district) || (owner && owner !== normalizedPlayerOwner);
+    }) || neutralDistrict || scriptedSpyDistrict || null;
     const economyDistrict = playerDistrict || neutralDistrict || enemyDistrict || null;
 
     return {
@@ -198,7 +211,7 @@ window.Empire.Onboarding = (() => {
   }
 
   function resolveProductionLabel(district) {
-    if (!district) return "Neznamy vykon";
+    if (!district) return "Neznámý výkon";
     const income = Math.max(0, Math.floor(Number(district.income || 0)));
     const influence = Math.max(0, Math.floor(Number(district.influence || 0)));
     const buildings = Array.isArray(district.buildings) ? district.buildings.length : 0;
@@ -262,7 +275,7 @@ window.Empire.Onboarding = (() => {
       dialog: [...lines],
       canSkip: true,
       canManualAdvance: Boolean(step.manualAdvance),
-      primaryActionLabel: step.primaryActionLabel || "Pokracovat"
+      primaryActionLabel: step.primaryActionLabel || "Pokračovat"
     });
   }
 
@@ -284,22 +297,22 @@ window.Empire.Onboarding = (() => {
         manualAdvance: true,
         primaryActionLabel: "Pokračovat",
         dialog: [
-          "Vítej ve Vortex City, kde se jede tvrdý bordel.",
-          "Tenhle onboarding tě povede za ruku, ale nečekej žádné mazání medu kolem huby.",
-          "Každý krok musíš odkliknout nebo rozjet akcí."
+          "Vítej ve Vortex City, kde se mele bordel ve velkém.",
+          "Tenhle onboarding tě provede krok za krokem, ale žádné mazlení fakt nečekej.",
+          "Každý krok musíš buď odkliknout, nebo rozjet vlastní akcí."
         ],
         target: null,
         onEnter() {
           dispatchTopicCard(
             "welcome",
             "Vitej v empirovce",
-            "Nejdřív dostaneš rychlý přehled, pak si to všechno osaháš na vlastní kůži.",
+            "Nejdřív schytáš rychlý přehled, pak si tenhle bordel osaháš na vlastní kůži.",
             [
-              "Kroky navazují jeden na druhý.",
-              "Akce v onboardingu mají 100 % úspěch.",
-              "Poctivě si to projdi, ať pak nepláčeš, že nevíš, co a jak."
+              "Kroky na sebe navazují, takže neblbni a jeď popořadě.",
+              "Akce v onboardingu mají 100 % úspěch, takže tady nic neposereš.",
+              "Projdi si to poctivě, ať pak nekňučíš, že nevíš, co a jak."
             ],
-            "Klikni na Pokračovat a jdeme do města."
+            "Klikni na Pokračovat a jdeme rozjebat město."
           );
         },
         completionCondition(event) {
@@ -313,22 +326,22 @@ window.Empire.Onboarding = (() => {
         manualAdvance: true,
         primaryActionLabel: "Pokračovat",
         dialog: [
-          "Vortex je město rozsekané na distrikty a každý z nich má svůj bordel.",
-          "Nejedeš na fair play, jede tlak, kontrola a rychlá rozhodnutí.",
-          "Cíl je jasný: pochopit loop a začít brát území."
+          "Vortex je město rozsekané na distrikty a každý z nich má vlastní průser.",
+          "Na fair play se tu sere. Rozhoduje tlak, kontrola a rychlé ruce.",
+          "Cíl je jednoduchý: pochopit loop a začít zabírat území."
         ],
         target: null,
         onEnter() {
           dispatchTopicCard(
             "vortex",
             "Město Vortex",
-            "Tady se z území tahají prachy, vliv i suroviny. Kdo nesleduje mapu, ten dostane přes držku.",
+            "Z území taháš prachy, vliv i suroviny. Kdo nesleduje mapu, ten dostane po hubě.",
             [
-              "Sleduj vlastní teritorium.",
-              "Hlídej si nepřátele kolem sebe.",
-              "Každá akce má návaznost na další krok."
+              "Hlídej si svoje teritorium.",
+              "Sleduj zmrdy kolem sebe.",
+              "Každá akce vede k další, takže přemýšlej, než něco odpálíš."
             ],
-            "Až budeš ready, pokračuj dál."
+            "Až budeš ready, táhni dál."
           );
         },
         completionCondition(event) {
@@ -341,9 +354,9 @@ window.Empire.Onboarding = (() => {
         name: "Čas města",
         primaryActionLabel: "Přepínám mapu",
         dialog: [
-          "Město běží v reálném čase.",
-          "Den a noc mění produkci, akce i to, co se ve městě děje.",
-          "Nad mapou klikni mezi DEN a NOC a pak pokračuj."
+          "Město běží v reálném čase a na nic nečeká.",
+          "Den, noc a blackout mění produkci, akce i celou atmosféru tohohle bordelu.",
+          "Nad mapou přepínej mezi DEN, NOC a BLACKOUT a pak pokračuj."
         ],
         target() {
           return {
@@ -357,14 +370,14 @@ window.Empire.Onboarding = (() => {
           state.stepRuntime.timeVisitedNight = currentMode === "night";
           dispatchTopicCard(
             "time",
-            "Cas mesta",
-            "Město jede v reálném čase a podle fáze se mění produkce, dostupnost akcí i vibe celé mapy.",
+            "Čas města",
+            "Město běží v reálném čase a podle fáze se mění produkce, dostupnost akcí i vibe celé mapy.",
             [
-              "Den = civilní provoz a víc běžných akcí.",
-              "Noc = větší tlak, jiný timing a ostřejší pohyb.",
-              "Klikni na DEN/NOC nad mapou a vyzkoušej si to."
+              "Den = víc civilního provozu a míň podezřelého smradu.",
+              "Noc = větší tlak, ostřejší timing a víc špinavé práce.",
+              "Klikni na DEN, NOC nebo BLACKOUT nad mapou a osaháš si ten rozdíl."
             ],
-            "Až si mapu přepneš, otevře se blackout krok."
+            "Jakmile si mapu přepneš, otevře se blackout krok."
           );
         },
         completionCondition(event) {
@@ -375,12 +388,11 @@ window.Empire.Onboarding = (() => {
       {
         id: "blackout",
         name: "Blackout",
-        primaryActionLabel: "Pokračovat",
-        manualAdvance: true,
+        primaryActionLabel: "Zapni blackout",
         dialog: [
-          "Noc je ready, teď to shodíme do blackoutu.",
-          "Tady se mění tlak, produkce i akce ve městě.",
-          "Tohle je stav, se kterým budeš počítat."
+          "Noc máš, teď to ručně shoď do blackoutu.",
+          "Tady se láme tlak, produkce i akce v celém městě.",
+          "Klikni nahoře na BLACKOUT a onboarding tě pustí dál."
         ],
         target() {
           return {
@@ -392,18 +404,18 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "blackout",
             "Blackout",
-            "Blackout je noc na steroidech. Větší bordel, jiné tempo a jiné poměry ve městě.",
+            "Blackout je noc na steroidech. Větší chaos, tvrdší tempo a město jde úplně do hajzlu.",
             [
-              "Produkce se překlápí podle blackout pravidel.",
-              "Akce ve městě se posunou do jiného režimu.",
-              "Tady už jede město v tvaru, co bolí."
+              "Produkce se překlopí podle blackout pravidel.",
+              "Akce ve městě jedou v jiném režimu.",
+              "Tady už jede město tak, že to fakt bolí."
             ],
-            "Blackout se teď zapne a pak pokračuj dál."
+            "Klikni na BLACKOUT nad mapou."
           );
-          window.Empire.Map?.setMapMode?.("blackout");
         },
         completionCondition(event) {
-          return event.type === "manual-continue";
+          return event.type === "empire:map-mode-changed"
+            && String(event.detail?.mapMode || "").trim().toLowerCase() === "blackout";
         },
         onComplete() {}
       },
@@ -413,8 +425,8 @@ window.Empire.Onboarding = (() => {
         primaryActionLabel: "Vyber postavu",
         dialog: [
           "Začni u City Events.",
-          "Vyber si postavu podle toho, co zrovna chceš rozbít nebo vydolovat.",
-          "Tady se učíš základní styl města i typy jobů."
+          "Vyber si postavu podle toho, co chceš zrovna rozkopat nebo vytěžit.",
+          "Tady nasaješ základní styl města i typy jobů."
         ],
         target() {
           return {
@@ -423,33 +435,30 @@ window.Empire.Onboarding = (() => {
           };
         },
         onEnter() {
+          state.stepRuntime.cityEventsPreviewTimer = null;
           dispatchTopicCard(
             "city-events",
             "City Events",
-            "Každá postava ti otevře jiný pohled na město a jiný druh úderu.",
+            "Každá postava ti ukáže jiný kus města a jiný styl bordelu.",
             [
-              "Victor: tlak, útoky a agresivní loop.",
-              "Leon: obchod, dealy a tahání zdrojů.",
-              "Nina: info, vliv a tichý pohyb."
+              "Victor: tlak, útoky a agresivní jízda bez slitování.",
+              "Leon: obchod, dealy a tahání zdrojů jako hajzl.",
+              "Nina: info, vliv a tichý pohyb bez zbytečného humbuku."
             ],
-            "Klikni na City Events a pak si vyber jednu postavu."
+            "Klikni na City Events a vyber si jednu postavu."
           );
         },
         completionCondition(event) {
-          return event.type === "empire:city-events-agent-selected";
+          return event.type === "city-events-preview-finished";
         },
-        onComplete() {
-          window.setTimeout(() => {
-            document.getElementById("events-modal")?.classList.add("hidden");
-          }, 350);
-        }
+        onComplete() {}
       },
       {
         id: "spy",
-        name: "Spehovani",
+        name: "Špehování",
         primaryActionLabel: "Čekám na sektor",
         dialog: [
-          "Než něco vezmeš, nejdřív si to očíhni.",
+          "Než něco sebereš, nejdřív si to očum.",
           "Vyber district 25, klikni na Špehovat a potvrď to."
         ],
         target(context) {
@@ -467,13 +476,13 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "spy",
             "Špehování",
-            "Bez informací se nehni ani o krok. Špeh ti řekne, co je v districtu a jak moc je to hlídané.",
+            "Bez informací jsi akorát slepý kokot. Špeh ti ukáže, co v districtu je a jak moc je hlídaný.",
             [
               "Vybereš cíl na mapě.",
               "Spustíš špehování v detailu districtu.",
-              "V onboardingu tohle vyjde na jistotu."
+              "V onboardingu tohle vyjde na jistotu, takže žádný posraný fail."
             ],
-            "Dostaneš i náhled toho, co bys jinak musel vytlouct vlastní hlavou."
+            "Dostaneš i náhled toho, co bys jinak musel vymlátit vlastní hlavou."
           );
         },
         completionCondition(event, context) {
@@ -493,7 +502,7 @@ window.Empire.Onboarding = (() => {
         primaryActionLabel: "Čekám na zabrání",
         dialog: [
           "Teď si vezmi něco, co nikomu nepatří.",
-          "Žádný odpor, jen čistý zisk."
+          "Žádný odpor, jen čistý a drzý zisk."
         ],
         target(context) {
           return {
@@ -510,10 +519,10 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "occupy",
             "Obsazení districtu",
-            "Špehovaný district můžeš pak klidně obsadit, když je volný nebo splní podmínky akce.",
+            "Jakmile máš district proklepnutý, můžeš ho bez keců obsadit, pokud je volný nebo splní podmínky akce.",
             [
-              "Stejné místo nejdřív prozkoumáš a pak převezmeš.",
-              "Akce je v onboardingu nastavená jako stoprocentní.",
+              "Nejdřív si místo proklepneš, pak ho sebereš.",
+              "Akce je v onboardingu stoprocentní, takže tohle nepoděláš.",
               "Po dokončení se district přepíše na tvoje jméno."
             ],
             "Otevři detail districtu a spusť obsazení."
@@ -530,8 +539,9 @@ window.Empire.Onboarding = (() => {
         name: "Vykradení",
         primaryActionLabel: "Čekám na krádež",
         dialog: [
-          "Vykrást district je další tah.",
-          "Není to jen o síle, ale i o načasování a odměně za risk."
+          "Vykrást district je další špinavý tah.",
+          "Není to jen o síle, ale i o načasování a o tom, jestli máš koule risknout průser.",
+          "V tomhle kroku běž rovnou na district 38."
         ],
         target(context) {
           return {
@@ -544,11 +554,11 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "raid",
             "Krádež districtu",
-            "Raid je rychlá akce na zdroje. V onboardingu ti vyjde čistě, aby bylo jasné, jak vypadá výsledek.",
+            "Raid je rychlá prasárna na zdroje. V onboardingu ti vyjde čistě, ať vidíš, jak ten výsledek vypadá.",
             [
               "Spustíš akci z detailu districtu.",
-              "Po doběhnutí se ukáže výsledek a loot.",
-              "Tady chápeš rozdíl mezi průnikem a útokem."
+              "Po doběhnutí dostaneš výsledek a loot.",
+              "Tady pochopíš rozdíl mezi průnikem a plným útokem."
             ],
             `Cílem je ${context.raidDistrict?.name || "vybraný district"}.`
           );
@@ -564,8 +574,8 @@ window.Empire.Onboarding = (() => {
         name: "Distrikty",
         primaryActionLabel: "Otevři budovy",
         dialog: [
-          "Teď si projdi typy districtů.",
-          "Každý typ má jiné budovy a jiné tempo příjmů.",
+          "Teď si projeď typy districtů.",
+          "Každý typ má jiné budovy a jiný výdělek.",
           "Pak otevři tlačítko Budovy."
         ],
         target() {
@@ -578,9 +588,9 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "districts",
             "Typy districtů",
-            "Districty nejsou stejné. Některé tlačí cash, jiné vliv, další materiály nebo obranu.",
+            "Districty nejsou stejné. Některé sypou cash, jiné vliv, další materiály nebo obranu.",
             DISTRICT_TYPE_GUIDE.map((entry) => `${entry.label}: ${entry.summary}`),
-            "Tlačítko Budovy ti ukáže, co je v districtu postavené."
+            "Tlačítko Budovy ti ukáže, co je v districtu naskládané."
           );
         },
         completionCondition(event) {
@@ -591,52 +601,45 @@ window.Empire.Onboarding = (() => {
       {
         id: "production",
         name: "Výroba",
-        primaryActionLabel: "Otevři detail",
+        manualAdvance: true,
+        primaryActionLabel: "Pokračovat",
         dialog: [
-          "Teď výroba materiálů.",
-          "Lékárna, Drug Lab a Zbrojovka jsou tvoje základní produkční uzly.",
-          "Otevři detail budovy a koukni, co přesně dělá."
+          "Teď výroba materiálů a výrobní budovy.",
+          "Na hlavní stránce máš tlačítka jako Lékárna, Drug Lab a Zbrojovka.",
+          "Nemusíš na nic klikat, jen si zapamatuj, že odsud rozjíždíš výrobu všeho svinstva."
         ],
-        target(context) {
+        target() {
           return {
-            districtId: context.productionDistrict?.id ?? context.playerDistrict?.id ?? null,
-            selector: "#buildings-modal",
-            fallbackSelector: "#buildings-open"
+            selector: "#market-shortcut-drug-lab",
+            fallbackSelector: "#market-shortcut-drug-lab"
           };
         },
         onEnter() {
           dispatchTopicCard(
             "production",
-            "Výroba a budovy",
-            "Budovy generují materiály, drogy i zbraně. Tady vzniká ekonomická páteř gangu.",
+            "Výrobní tlačítka",
+            "Výroba jede přes tlačítka budov na hlavní stránce. Každá budova řeší jiný typ produkce a jinou spotřebu.",
             [
-              "Lékárna zvedá užitkovou produkci a podporu.",
-              "Drug Lab vyrábí drogy.",
-              "Zbrojovka tlačí materiály a výbavu."
+              "Lékárna řeší legální výrobu.",
+              "Drug Lab řeší drogy a špinavý cash.",
+              "Zbrojovka chrlí zbraně pro další bordel."
             ],
-            "Klikni na detail jedné z budov v seznamu."
+            "V tomhle kroku jen pokračuj dál."
           );
         },
-        completionCondition(event, context) {
-          if (event.type !== "empire:building-detail-opened") return false;
-          const targetDistrictId = Number(context.productionDistrict?.id || context.playerDistrict?.id || 0);
-          if (!targetDistrictId) return true;
-          return Number(event.detail?.districtId) === targetDistrictId;
+        completionCondition(event) {
+          return event.type === "manual-continue";
         },
-        onComplete() {
-          window.setTimeout(() => {
-            document.getElementById("building-detail-modal")?.classList.add("hidden");
-            document.getElementById("buildings-modal")?.classList.add("hidden");
-          }, 350);
-        }
+        onComplete() {}
       },
       {
         id: "attack",
         name: "Utok",
         primaryActionLabel: "Čekám na útok",
         dialog: [
-          "Teď ukaž, jestli máš koule.",
-          "Tohle není tvoje. Překopej to."
+          "Teď ukaž, jestli máš fakt koule.",
+          "Tohle není tvoje, tak to běž rozkopat.",
+          "V útoku přidej aspoň jednu Baseballovou pálku přes + a pak klikni Spustit ukázkový útok."
         ],
         target(context) {
           return {
@@ -649,11 +652,12 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "attack",
             "Útok na nepřátelský district",
-            "Po špehování a dalších krocích můžeš jít do útoku. V onboardingu se tohle vždycky povede.",
+            "Po špehování a dalších krocích můžeš jít do útoku. V onboardingu se tohle vždycky povede, takže žádné poseroutkovství.",
             [
               "Vyber nepřátelský district na mapě.",
-              "Otevři detail a použij útok.",
-              "Výsledek přijde po doběhnutí animace."
+              "V útoku klikni + u Baseballové pálky.",
+              "Pak spusť ukázkový útok tlačítkem Spustit útok.",
+              "Výsledek přijde po doběhnutí animace a nepřítel dostane přes držku."
             ],
             `Cílem je ${context.enemyDistrict?.name || "nepřátelský district"}.`
           );
@@ -674,8 +678,8 @@ window.Empire.Onboarding = (() => {
         name: "Market",
         primaryActionLabel: "Otevři market",
         dialog: [
-          "Další krok je market.",
-          "Tady řešíš výměny, nabídky a pohyb zdrojů."
+          "Další zastávka je market.",
+          "Tady řešíš výměny, nabídky a pohyb zdrojů jako správný vychcanec."
         ],
         target() {
           return {
@@ -687,11 +691,11 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "market",
             "Market",
-            "Market je místo, kde se přelévají zdroje a hraje se na nabídku proti poptávce.",
+            "Market je místo, kde se přelévají zdroje a hraje se špinavá hra nabídky proti poptávce.",
             [
               "Server market je veřejný.",
-              "Black market je rizikovější, ale ostřejší.",
-              "V onboardingu stačí market otevřít a rozkoukat se."
+              "Black market je rizikovější, ale umí sypat víc.",
+              "V onboardingu stačí market otevřít a rozhlédnout se."
             ],
             "Otevři market a pak pokračuj."
           );
@@ -708,10 +712,12 @@ window.Empire.Onboarding = (() => {
       {
         id: "alliance",
         name: "Aliance",
-        primaryActionLabel: "Otevři alianci",
+        manualAdvance: true,
+        primaryActionLabel: "Pokračovat",
         dialog: [
-          "Aliance drží hráče pohromadě.",
-          "Ukážu ti max členů, READY a proč je odchod tak drahý."
+          "Aliance je parta hráčů, co drží společný tlak ve městě.",
+          "Max kapacita je 4 hráči a READY slouží k tomu, aby se ta banda sladila.",
+          "Když z aliance zdrhneš, sebere ti to slušný kus zdrojů."
         ],
         target() {
           return {
@@ -723,23 +729,19 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "alliance",
             "Aliance",
-            "Aliance mají limit hráčů. READY potvrzuje připravenost a odchod z aliance tě stojí dost materiálu.",
+            "Aliance mají limit hráčů. READY potvrzuje připravenost a odchod z aliance tě bude bolet jak sviňa.",
             [
               "Max členů je 4.",
-              "READY musí kliknout každý aktivní hráč.",
+              "READY musí odkliknout každý aktivní hráč.",
               "Odchod z aliance je ztráta jak prase."
             ],
-            "Otevři alianci a klikni na READY."
+            "V tomhle kroku nemusíš nic mačkat, jen pokračuj dál."
           );
         },
         completionCondition(event) {
-          return event.type === "empire:alliance-ready-clicked";
+          return event.type === "manual-continue";
         },
-        onComplete() {
-          window.setTimeout(() => {
-            document.getElementById("alliance-modal")?.classList.add("hidden");
-          }, 500);
-        }
+        onComplete() {}
       },
       {
         id: "resources",
@@ -747,7 +749,7 @@ window.Empire.Onboarding = (() => {
         primaryActionLabel: "Přepnout na špehy",
         dialog: [
           "Zdroje jsou tvoje palivo.",
-          "Čisté prachy, špinavé prachy, vliv a špehové.",
+          "Čisté prachy, špinavé prachy, vliv a špehové. Bez toho jsi v prdeli.",
           "Teď si ukážeme přepínání na špehy."
         ],
         target() {
@@ -762,8 +764,8 @@ window.Empire.Onboarding = (() => {
             "Zdroje",
             "Čisté peníze jedou na legální provoz, špinavé na prasárny, vliv taháš jako tlak a špehy přepínáš z topbaru.",
             [
-              "Clean cash pro normální výdaje.",
-              "Dirty cash pro risk a úplatky.",
+              "Clean cash na normální výdaje.",
+              "Dirty cash na risk, úplatky a další svinstvo.",
               "Influence můžeš přepnout na zobrazení špehů."
             ],
             "Klikni na stat vlivu a přepni se na špehy."
@@ -780,7 +782,7 @@ window.Empire.Onboarding = (() => {
         primaryActionLabel: "Spustit policii",
         dialog: [
           "Policie reaguje na heat.",
-          "Některé akce ji hodí rovnou na tvůj district.",
+          "Některé akce ji pošlou rovnou na tvůj district.",
           "Teď třikrát klikni na snížení heatu špinavými penězi."
         ],
         target() {
@@ -794,11 +796,11 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "police",
             "Policie a heat",
-            "Špinavé peníze umí srazit heat, ale po třetím kliknutí se policie spustí na tvém districtu.",
+            "Špinavé peníze umí srazit heat, ale po třetím kliknutí si na sebe přitáhneš fízly přímo na district.",
             [
               "Zkontroluj heat panel.",
               "Použij dirty reduction třikrát.",
-              "Policie se pak spustí sama."
+              "Pak se policie spustí sama a začne ten opruz."
             ],
             "Klikni na snížení heatu špinavými penězi 3x."
           );
@@ -819,8 +821,8 @@ window.Empire.Onboarding = (() => {
         name: "Pasti",
         primaryActionLabel: "Polož past",
         dialog: [
-          "Past zastavi nebo rozbije cizi akci.",
-          "Dulezity je, kam ji hodis a kdy ji presunes."
+          "Past zastaví nebo rozjebne cizí akci.",
+          "Důležité je, kam ji hodíš a kdy ji přesuneš."
         ],
         target(context) {
           return {
@@ -833,11 +835,11 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "traps",
             "Pasti",
-            "Past můžeš vložit do vlastního nebo aliančního districtu. Pak hlídá a blokuje cizí pohyb.",
+            "Past můžeš hodit do vlastního nebo aliančního districtu. Pak hlídá a blokuje cizí pohyb jako svině.",
             [
               "Vyber district, který vlastníš.",
               "Otevři detail a použij Past.",
-              "V onboarding scénáři se vložení povede."
+              "V onboarding scénáři se vložení povede, takže to nepoděláš."
             ],
             "Polož past do svého districtu."
           );
@@ -853,7 +855,7 @@ window.Empire.Onboarding = (() => {
         primaryActionLabel: "Klikni Bounty",
         dialog: [
           "A nakonec Bounty tlačítko.",
-          "Zatím je to jen vizuální krok, text a funkci doplníme pak."
+          "Zatím je to jen vizuální placeholder, text i funkci tam nacpeme později."
         ],
         target() {
           return {
@@ -865,13 +867,13 @@ window.Empire.Onboarding = (() => {
           dispatchTopicCard(
             "bounty",
             "Bounty",
-            "Tlačítko je připravené v rohu kartičky City Events. Funkci i text doplníme později.",
+            "Tlačítko je připravené v rohu kartičky City Events. Funkci i text tam dovalíme později.",
             [
-              "Tlačítko už je v UI.",
+              "Tlačítko už sedí v UI.",
               "Je to samostatná akce pro další rozšíření.",
-              "Teď stačí kliknout."
+              "Teď na něj prostě klikni."
             ],
-            "Kliknutím krok dokončíš."
+            "Kliknutím tenhle krok zavřeš."
           );
         },
         completionCondition(event) {
@@ -889,14 +891,14 @@ window.Empire.Onboarding = (() => {
           "Bereš.",
           "Produkuješ.",
           "Útočíš.",
-          "A jedeš pořád dokola, dokud to celé nepatří tobě."
+          "A jedeš to pořád dokola, dokud to všechno není tvoje."
         ],
         target: null,
         onEnter() {
           dispatchTopicCard(
             "core-loop",
             "Core loop",
-            "Celá hra stojí na tom samém: info, tlak, loot, produkce a růst.",
+            "Celá hra stojí na tom samém: info, tlak, loot, produkce a růst. Žádná raketová věda, jen pořádný bordel.",
             [
               "Spy.",
               "Occupy.",
@@ -904,7 +906,7 @@ window.Empire.Onboarding = (() => {
               "Attack.",
               "Repeat."
             ],
-            "Když tomu rozumíš, můžeš jít do hry."
+            "Když tomu rozumíš, můžeš jít dělat bordel do hry."
           );
         },
         completionCondition(event) {
@@ -918,22 +920,22 @@ window.Empire.Onboarding = (() => {
         manualAdvance: true,
         primaryActionLabel: "Vstoupit do města",
         dialog: [
-          "Teď jsi v tom sám.",
-          "Vydělávej, na lidi sereš a drž si hlavu dole.",
-          "A hlavně neumři moc brzo."
+          "Teď už v tom jedeš sám.",
+          "Vydělávej, kašli na slabé kusy a drž si hlavu dole.",
+          "A hlavně nechcípni moc brzo."
         ],
         target: null,
         onEnter() {
           dispatchTopicCard(
             "exit",
             "Hotovo",
-            "Onboarding končí. Vstup do města a hraj dál už bez náhrady.",
+            "Onboarding končí. Vlez do města a hraj dál už bez berliček.",
             [
-              "Naučil ses základní loop.",
-              "Znáš mapu, budovy, zdroje i policejní reakci.",
-              "Další kroky už jsou na tobě."
+              "Znáš základní loop.",
+              "Máš v hlavě mapu, budovy, zdroje i policejní opruz.",
+              "Další kroky už jsou čistě na tobě."
             ],
-            "Pusť se do hry."
+            "Pusť se do hry a nedělej ostudu."
           );
         },
         completionCondition(event) {
@@ -1042,6 +1044,31 @@ window.Empire.Onboarding = (() => {
         triggered: Boolean(event.detail?.triggered)
       });
     }
+    if (step.id === "city-events" && type === "empire:city-events-agent-selected") {
+      const selectedName = String(event.detail?.agentName || "Vybraná postava").trim() || "Vybraná postava";
+      if (state.stepRuntime.cityEventsPreviewTimer) {
+        window.clearTimeout(state.stepRuntime.cityEventsPreviewTimer);
+      }
+      dispatchControllerEvent("empire:onboarding:topic-card", {
+        stepId: "city-events",
+        title: selectedName,
+        intro: `${selectedName} zůstane chvíli otevřená, ať si ji stihneš přečíst.`,
+        points: [
+          "Postava zůstane otevřená 5 sekund.",
+          "Pak se okno zavře a onboarding pojede dál."
+        ],
+        footer: "Jen se podívej, co tahle postava nabízí."
+      });
+      state.stepRuntime.cityEventsPreviewTimer = window.setTimeout(() => {
+        state.stepRuntime.cityEventsPreviewTimer = null;
+        document.getElementById("events-modal")?.classList.add("hidden");
+        completeStep({
+          type: "city-events-preview-finished",
+          detail: event.detail || {}
+        });
+      }, 5000);
+      return;
+    }
     if (step.id === "time" && type === "empire:map-mode-changed") {
       const mapMode = String(event.detail?.mapMode || "").trim().toLowerCase();
       if (mapMode === "day") {
@@ -1062,6 +1089,7 @@ window.Empire.Onboarding = (() => {
         if (eventName === "empire:scenario-applied") {
           state.lastScenario = event.detail || null;
           if (event.detail?.scenarioKey === ONBOARDING_SCENARIO_KEY) {
+            if (state.active) return;
             start({
               ownerName: event.detail?.ownerName,
               districts: event.detail?.districts
@@ -1113,6 +1141,10 @@ window.Empire.Onboarding = (() => {
     const ui = resolveUILayer();
     const skipped = Boolean(options.skipped);
     const completedStepId = getCurrentStep()?.id || null;
+    if (state.stepRuntime.cityEventsPreviewTimer) {
+      window.clearTimeout(state.stepRuntime.cityEventsPreviewTimer);
+      state.stepRuntime.cityEventsPreviewTimer = null;
+    }
     ui.clearHighlight();
     ui.hideOverlay();
     ui.unlockGameUI();
@@ -1131,6 +1163,10 @@ window.Empire.Onboarding = (() => {
 
   function reset(options = {}) {
     const ui = resolveUILayer();
+    if (state.stepRuntime.cityEventsPreviewTimer) {
+      window.clearTimeout(state.stepRuntime.cityEventsPreviewTimer);
+      state.stepRuntime.cityEventsPreviewTimer = null;
+    }
     ui.clearHighlight();
     ui.hideOverlay();
     ui.unlockGameUI();
@@ -1205,7 +1241,7 @@ if (!window.Empire.OnboardingUI) {
           </div>
           <div class="onboarding-overlay__guide">
             <div class="onboarding-overlay__portrait-shell">
-              <img class="onboarding-overlay__portrait" src="../img/onboarding.jpg" alt="Guide portrait" />
+              <img class="onboarding-overlay__portrait" src="../img/onboarding.jpg" alt="Portrét průvodce" />
             </div>
             <div class="onboarding-overlay__guide-copy">
               <div class="onboarding-overlay__npc">Průvodce městem</div>
@@ -1213,12 +1249,12 @@ if (!window.Empire.OnboardingUI) {
             </div>
           </div>
           <div class="onboarding-overlay__actions">
-            <button type="button" class="btn btn--ghost onboarding-overlay__skip" id="onboarding-skip-btn">Preskocit</button>
-            <button type="button" class="btn btn--primary onboarding-overlay__continue" id="onboarding-continue-btn">Pokracovat</button>
+            <button type="button" class="btn btn--ghost onboarding-overlay__skip" id="onboarding-skip-btn">Přeskočit</button>
+            <button type="button" class="btn btn--primary onboarding-overlay__continue" id="onboarding-continue-btn">Pokračovat</button>
           </div>
         </div>
         <div class="onboarding-overlay__sidecard hidden" id="onboarding-sidecard">
-          <div class="onboarding-overlay__sidecard-title" id="onboarding-sidecard-title">Preview</div>
+          <div class="onboarding-overlay__sidecard-title" id="onboarding-sidecard-title">Náhled</div>
           <div class="onboarding-overlay__sidecard-body" id="onboarding-sidecard-body"></div>
         </div>
       `;
@@ -1253,9 +1289,19 @@ if (!window.Empire.OnboardingUI) {
         if (detail.stepId) {
           document.body.classList.add(`onboarding-step-${detail.stepId}`);
         }
+        const stepIndex = Math.max(-1, Math.floor(Number(detail.index)));
+        if (stepIndex >= 7) {
+          document.body.classList.add("onboarding-step-8-plus");
+        } else {
+          document.body.classList.remove("onboarding-step-8-plus");
+        }
         if (state.continueBtn) {
-          state.continueBtn.textContent = detail.primaryActionLabel || "Pokracovat";
+          state.continueBtn.textContent = detail.primaryActionLabel || "Pokračovat";
           state.continueBtn.disabled = !detail.canManualAdvance;
+        }
+        const attackStartBtn = document.getElementById("attack-modal-start");
+        if (attackStartBtn) {
+          attackStartBtn.textContent = detail.stepId === "attack" ? "Spustit ukázkový útok" : "Spustit útok";
         }
         hideSidecard();
         if (detail.stepId !== "time" && detail.stepId !== "blackout") {
@@ -1267,14 +1313,14 @@ if (!window.Empire.OnboardingUI) {
         document.body.classList.remove("onboarding-step-spy-confirm");
         setDialog(
           "Průvodce městem",
-          "Správně. Teď v detailu districtu klikni na Špehovat a akci potvrď."
+          "Dobře. Teď v detailu districtu klikni na Špehovat a tu akci bez keců potvrď."
         );
       });
       document.addEventListener("empire:onboarding:attack-selection-confirmed", () => {
         document.body.classList.add("onboarding-step-attack-selected");
         setDialog(
           "Průvodce městem",
-          "Správně. Teď otevři útok a potvrď ho. V onboarding scénáři vyjde na 100 %."
+          "Dobře. Teď otevři útok a potvrď ho. V onboardingu to vyjde na 100 %, takže žádné posrání."
         );
       });
       document.addEventListener("empire:spy-modal-opened", (event) => {
@@ -1289,7 +1335,7 @@ if (!window.Empire.OnboardingUI) {
         document.body.classList.add("onboarding-step-occupy-selected");
         setDialog(
           "Průvodce městem",
-          "Správně. Teď klikni na Obsadit a potvrzením spusť obsazení districtu 25."
+          "Dobře. Teď klikni na Obsadit a potvrzením seber district 25 pro sebe."
         );
       });
       document.addEventListener("empire:map-mode-changed", (event) => {
@@ -1302,14 +1348,20 @@ if (!window.Empire.OnboardingUI) {
             document.body.classList.remove("onboarding-step-time-night");
             setDialog(
               "Průvodce městem",
-              "Den máš. Teď to přepni na noc, ať vidíš, že se fáze fakt přehazují."
+              "Den máš. Teď to přepni na noc, ať vidíš, že se fáze fakt překlápějí a město mění tvář."
             );
           } else if (mapMode === "night") {
             document.body.classList.add("onboarding-step-time-night");
             document.body.classList.remove("onboarding-step-time-day");
             setDialog(
               "Průvodce městem",
-              "Noc máš. Teď už jen potvrď blackout krok a pojď dál."
+              "Noc máš. Teď už jen odpal blackout krok a jdeme dál."
+            );
+          } else if (mapMode === "blackout") {
+            document.body.classList.remove("onboarding-step-time-day", "onboarding-step-time-night");
+            setDialog(
+              "Průvodce městem",
+              "Blackout je aktivní. Teď si můžeš přepnout den nebo noc a pokračovat dál."
             );
           }
           return;
@@ -1317,7 +1369,7 @@ if (!window.Empire.OnboardingUI) {
         if (currentStep === "blackout" && mapMode === "blackout") {
           setDialog(
             "Průvodce městem",
-            "Blackout je aktivní. Tohle je stav města, který budeš řešit pořád dokola."
+            "Blackout je aktivní. Tohle je ten stav města, co ti bude pravidelně dělat bordel."
           );
         }
       });
@@ -1345,7 +1397,7 @@ if (!window.Empire.OnboardingUI) {
             ` : ""}
           </div>
         `;
-        showSidecard(detail.title || "Preview", bodyMarkup);
+        showSidecard(detail.title || "Náhled", bodyMarkup);
       });
       document.addEventListener("empire:onboarding:police-progress", (event) => {
         const currentStep = window.Empire.Onboarding?.getState?.()?.stepId;
@@ -1355,8 +1407,8 @@ if (!window.Empire.OnboardingUI) {
         setDialog(
           "Průvodce městem",
           remaining > 0
-            ? `Ještě ${remaining} kliknutí na dirty reduction a policie se spustí na tvůj district.`
-            : "Poslední klik už doručí policii přímo na tvůj district."
+            ? `Ještě ${remaining} kliknutí na dirty reduction a fízlové ti spadnou na district.`
+            : "Poslední klik a máš fízly přímo na krku."
         );
         showSidecard("Policie", `
           <div class="onboarding-preview onboarding-preview--stack">
@@ -1375,9 +1427,9 @@ if (!window.Empire.OnboardingUI) {
         const intel = event.detail?.intel || {};
         showSidecard("Zpravodajsky vystup", `
           <div class="onboarding-preview">
-            <div class="onboarding-preview__row"><span>Vlastnik</span><strong>${escapeHtml(intel.owner || "Neznamy")}</strong></div>
-            <div class="onboarding-preview__row"><span>Obrana</span><strong>${escapeHtml(intel.defense || "Neznama")}</strong></div>
-            <div class="onboarding-preview__row"><span>Produkce</span><strong>${escapeHtml(intel.production || "Neznama")}</strong></div>
+            <div class="onboarding-preview__row"><span>Vlastník</span><strong>${escapeHtml(intel.owner || "Neznámý")}</strong></div>
+            <div class="onboarding-preview__row"><span>Obrana</span><strong>${escapeHtml(intel.defense || "Neznámá")}</strong></div>
+            <div class="onboarding-preview__row"><span>Produkce</span><strong>${escapeHtml(intel.production || "Neznámá")}</strong></div>
           </div>
         `);
       });
@@ -1388,11 +1440,11 @@ if (!window.Empire.OnboardingUI) {
           : scriptedOutcome === "light-win"
             ? "Lehka vyhra"
             : "Simulace";
-        showSidecard("Combat Preview", `
+        showSidecard("Náhled útoku", `
           <div class="onboarding-preview">
-            <div class="onboarding-preview__row"><span>Cil</span><strong>Nepratelsky sektor</strong></div>
-            <div class="onboarding-preview__row"><span>Prognoza</span><strong>${escapeHtml(outcomeLabel)}</strong></div>
-            <div class="onboarding-preview__row"><span>Vysledek</span><strong>Obrana se prolomi, tlak zustava na tve strane.</strong></div>
+            <div class="onboarding-preview__row"><span>Cíl</span><strong>Nepřátelský sektor</strong></div>
+            <div class="onboarding-preview__row"><span>Prognóza</span><strong>${escapeHtml(outcomeLabel)}</strong></div>
+            <div class="onboarding-preview__row"><span>Výsledek</span><strong>Obrana se prolomí, tlak zůstává na tvé straně.</strong></div>
           </div>
         `);
       });
@@ -1425,7 +1477,7 @@ if (!window.Empire.OnboardingUI) {
 
     function showSidecard(title, bodyMarkup) {
       ensureRoot();
-      if (state.sidecardTitle) state.sidecardTitle.textContent = String(title || "Preview");
+      if (state.sidecardTitle) state.sidecardTitle.textContent = String(title || "Náhled");
       if (state.sidecardBody) state.sidecardBody.innerHTML = String(bodyMarkup || "");
       if (state.sidecard) state.sidecard.classList.remove("hidden");
     }
