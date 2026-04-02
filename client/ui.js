@@ -2048,6 +2048,7 @@ window.Empire.UI = (() => {
     processSpyRecoveryQueue({ notify: false });
     syncSpyRecoveryTicker();
     bindActions();
+    initMobileViewportLayoutLock();
     initMobileTopbarScrollState();
     initMobileScenarioCardPlacement();
     initMobileLeaderboardCardPlacement();
@@ -2844,6 +2845,47 @@ window.Empire.UI = (() => {
     document.addEventListener("empire:scenario-applied", syncVisibility);
     syncState();
     syncVisibility();
+  }
+
+  function initMobileViewportLayoutLock() {
+    const media = window.matchMedia("(max-width: 720px)");
+    const root = document.documentElement;
+    let lastWidth = window.innerWidth;
+
+    const apply = () => {
+      if (!media.matches) {
+        root.style.removeProperty("--mobile-locked-vh");
+        return;
+      }
+      const vh = Math.max(
+        0,
+        Math.floor(window.innerHeight || window.visualViewport?.height || document.documentElement.clientHeight || 0)
+      );
+      if (vh > 0) {
+        root.style.setProperty("--mobile-locked-vh", `${vh}px`);
+      }
+      lastWidth = window.innerWidth;
+    };
+
+    apply();
+    window.addEventListener("orientationchange", () => {
+      window.setTimeout(apply, 140);
+    });
+    window.addEventListener("resize", () => {
+      if (!media.matches) {
+        apply();
+        return;
+      }
+      const widthDelta = Math.abs(window.innerWidth - lastWidth);
+      if (widthDelta > 40) {
+        apply();
+      }
+    });
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", apply);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(apply);
+    }
   }
 
   function initMobileTopbarScrollState() {
@@ -3656,7 +3698,7 @@ window.Empire.UI = (() => {
         }
         const weaponAccess = resolveCombatWeaponAccess("defense");
         if (!weaponAccess.allowed) {
-          pushEvent("Pro obranu potřebuješ alespoň 50 členů gangu.");
+          pushEvent("Obrana momentálně není dostupná.");
           return;
         }
         openDistrictDefenseModal(window.Empire.selectedDistrict);
@@ -4633,7 +4675,7 @@ window.Empire.UI = (() => {
         const availability = getDefenseModalAvailability();
         const selectionSummary = getDefenseSelectionSummary(availability);
         if (selectionSummary.totalUsedMembers <= 0) {
-          setDefenseModalNote("Pro obranu potřebuješ alespoň 50 členů gangu.");
+          setDefenseModalNote("");
           renderDefenseModal();
           return;
         }
@@ -4723,8 +4765,6 @@ window.Empire.UI = (() => {
     let noteText = defenseModalState.message || "Šipkou doprava přidáváš, šipkou doleva ubíráš. Členové gangu se přepočítají automaticky.";
     if (availability.availableWeapons <= 0) {
       noteText = "Ve skladu nejsou žádné obranné zbraně.";
-    } else if (selectionSummary.totalUsedMembers <= 0) {
-      noteText = "Pro obranu potřebuješ alespoň 50 členů gangu.";
     } else if (selectionSummary.remainingMembers < 0) {
       noteText = "Nemáš dost členů gangu pro tuto kombinaci.";
     }
@@ -6083,8 +6123,6 @@ window.Empire.UI = (() => {
       noteText = `Útok je na cooldownu ještě ${formatAttackCooldownLabel(cooldownMs)}.`;
     } else if (availability.availableWeapons <= 0) {
       noteText = "Ve skladu nejsou žádné zbraně.";
-    } else if (selectionSummary.totalUsedMembers <= 0) {
-      noteText = "Pro útok potřebuješ alespoň 50 členů gangu.";
     } else if (selectionSummary.remainingMembers < 0) {
       noteText = "Nemáš dost členů gangu pro tuto kombinaci.";
     }
@@ -6094,7 +6132,7 @@ window.Empire.UI = (() => {
       && selectionSummary.totalUsedMembers > 0
       && (demoMode || Boolean(window.Empire.token));
     startBtn.disabled = !isReady;
-    startBtn.textContent = demoMode ? "Spustit ukázkový útok" : "Spustit útok";
+    startBtn.textContent = "Spustit útok";
   }
 
   function closeAttackModal() {
@@ -6206,7 +6244,7 @@ window.Empire.UI = (() => {
         }
         const selectionSummary = getAttackSelectionSummary(availability);
         if (selectionSummary.totalUsedMembers <= 0) {
-          setAttackModalNote("Pro útok potřebuješ alespoň 50 členů gangu.");
+          setAttackModalNote("");
           renderAttackModal();
           return;
         }
@@ -9207,7 +9245,7 @@ window.Empire.UI = (() => {
       }
     }));
     closeTrapConfirmModal();
-    window.Empire.Map?.refreshSelectedDistrictModal?.();
+    window.Empire.Map?.closeSelectedDistrictModal?.();
   }
 
   function initTrapConfirmModal() {

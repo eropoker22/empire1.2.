@@ -147,6 +147,7 @@ function initMobileLoginFit() {
 
   let frame = 0;
   const fitClasses = ["login-mobile-fit-compact", "login-mobile-fit-tight", "login-mobile-fit-ultra"];
+  let keyboardEditingLock = false;
 
   const getOuterHeight = (element) => {
     const rect = element.getBoundingClientRect();
@@ -158,6 +159,7 @@ function initMobileLoginFit() {
 
   const measure = () => {
     frame = 0;
+    if (keyboardEditingLock) return;
     fitClasses.forEach((className) => body.classList.remove(className));
     body.style.removeProperty("--login-mobile-fit-scale");
     if (!media.matches) return;
@@ -193,6 +195,33 @@ function initMobileLoginFit() {
   };
 
   state.requestMobileLoginFit = requestMeasure;
+
+  const isEditableField = (element) => {
+    if (!(element instanceof HTMLElement)) return false;
+    return (
+      element instanceof HTMLInputElement
+      || element instanceof HTMLTextAreaElement
+      || element.isContentEditable
+    );
+  };
+
+  document.addEventListener("focusin", (event) => {
+    if (!media.matches) return;
+    if (!isEditableField(event.target)) return;
+    keyboardEditingLock = true;
+    body.classList.add("login-mobile-keyboard-lock");
+  });
+
+  document.addEventListener("focusout", () => {
+    if (!media.matches) return;
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      const stillEditing = isEditableField(active);
+      keyboardEditingLock = stillEditing;
+      body.classList.toggle("login-mobile-keyboard-lock", stillEditing);
+      if (!stillEditing) requestMeasure();
+    }, 40);
+  });
 
   requestMeasure();
   window.addEventListener("resize", requestMeasure);

@@ -18111,7 +18111,9 @@ body::before {
 @media (max-width: 900px) {
   .auth-mobile-fit-frame {
     width: 100%;
+    height: 100svh;
     min-height: 100dvh;
+    min-height: 100svh;
     display: flex;
     align-items: stretch;
     justify-content: stretch;
@@ -18122,7 +18124,9 @@ body::before {
 
   .auth-mobile-fit-stack {
     width: 100%;
+    height: 100svh;
     min-height: 100dvh;
+    min-height: 100svh;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -18136,6 +18140,15 @@ body::before {
   .auth-body--login {
     background-attachment: scroll;
     background-position: center top;
+    overflow: hidden;
+  }
+
+  .auth-body--login.login-mobile-keyboard-lock .auth-mobile-fit-stack {
+    transition: none;
+  }
+
+  .auth-body--login.login-mobile-keyboard-lock {
+    overscroll-behavior: none;
   }
 
   .auth-body--login::before {
@@ -18917,6 +18930,14 @@ body::before {
     overscroll-behavior: contain;
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  #storage-modal .modal__body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 
 html.mobile-storage-modal-open,
@@ -21455,6 +21476,30 @@ body.mobile-storage-modal-open {
   }
 }
 
+@media (max-width: 720px) {
+  body:not(.auth-body--login) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body:not(.auth-body--login) .app {
+    height: var(--mobile-locked-vh, 100svh);
+    min-height: var(--mobile-locked-vh, 100svh);
+    overflow: hidden;
+  }
+
+  body:not(.auth-body--login) .main {
+    height: calc(var(--mobile-locked-vh, 100svh) - var(--mobile-topbar-offset, 176px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+
+  body:not(.auth-body--login) #city-map {
+    height: clamp(240px, calc(var(--mobile-locked-vh, 100svh) * 0.46), 420px);
+  }
+}
+
 @media (min-width: 721px) {
   .topbar__scenarios {
     display: inline-flex !important;
@@ -21464,4 +21509,188 @@ body.mobile-storage-modal-open {
   #scenario-card-anchor {
     display: none !important;
   }
+}
+
+/* Final glass lock for attack + defense setup modals */
+#attack-modal .modal__content.attack-modal__content,
+#district-defense-modal .modal__content.defense-modal__content {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02)) !important,
+    linear-gradient(180deg, rgba(7, 12, 22, 0.26), rgba(7, 12, 22, 0.36)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  backdrop-filter: blur(20px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+  box-shadow:
+    0 24px 54px rgba(2, 6, 23, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 24px rgba(34, 211, 238, 0.14) !important;
+}
+
+#attack-modal .attack-modal__stats .modal__row,
+#district-defense-modal .attack-modal__stats .modal__row {
+  background: rgba(8, 14, 26, 0.18) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  backdrop-filter: blur(10px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(125%) !important;
+}
+
+#attack-modal .attack-modal__weapon,
+#district-defense-modal .attack-modal__weapon {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(34, 211, 238, 0.1), transparent 42%),
+    linear-gradient(180deg, rgba(6, 12, 21, 0.26), rgba(6, 12, 21, 0.3)) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  backdrop-filter: blur(9px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(9px) saturate(125%) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 10px 22px rgba(2, 6, 23, 0.24) !important;
+}
+
+#attack-modal .modal__backdrop,
+#district-defense-modal .modal__backdrop {
+  background: rgba(3, 6, 12, 0.34) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+/* Absolute final transparency overrides for attack/defense + storage */
+#attack-modal .modal__content,
+#district-defense-modal .modal__content {
+  background: rgba(8, 14, 26, 0.22) !important;
+  border: 1px solid rgba(255, 255, 255, 0.26) !important;
+  backdrop-filter: blur(20px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+}
+
+#attack-modal .modal__body,
+#district-defense-modal .modal__body,
+#attack-modal .modal__row,
+#district-defense-modal .modal__row {
+  background: rgba(8, 14, 26, 0.14) !important;
+}
+
+#attack-modal .attack-modal__weapon,
+#district-defense-modal .attack-modal__weapon {
+  background: rgba(8, 14, 26, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+
+#attack-modal .modal__backdrop,
+#district-defense-modal .modal__backdrop {
+  background: rgba(2, 6, 12, 0.26) !important;
+}
+
+#storage-modal .modal__content {
+  background: rgba(8, 14, 26, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  backdrop-filter: blur(20px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(135%) !important;
+}
+
+#storage-modal .modal__body,
+#storage-modal .storage-modal__section,
+#storage-modal .storage-modal__item {
+  background: rgba(8, 14, 26, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#storage-modal .modal__backdrop {
+  background: rgba(2, 6, 12, 0.24) !important;
+}
+
+/* Gentle glass for action result info windows */
+#spy-result-modal .modal__content,
+#spy-warning-modal .modal__content,
+#raid-result-modal .modal__content,
+#attack-result-modal .modal__content,
+#police-action-result-modal .modal__content {
+  background: rgba(8, 14, 26, 0.22) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  backdrop-filter: blur(16px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(130%) !important;
+}
+
+#spy-result-modal .modal__body,
+#spy-warning-modal .modal__body,
+#raid-result-modal .modal__body,
+#attack-result-modal .modal__body,
+#police-action-result-modal .modal__body,
+#spy-result-modal .modal__row,
+#spy-warning-modal .modal__row,
+#raid-result-modal .modal__row,
+#attack-result-modal .modal__row,
+#police-action-result-modal .modal__row {
+  background: rgba(8, 14, 26, 0.12) !important;
+}
+
+#spy-result-modal .modal__backdrop,
+#spy-warning-modal .modal__backdrop,
+#raid-result-modal .modal__backdrop,
+#attack-result-modal .modal__backdrop,
+#police-action-result-modal .modal__backdrop {
+  background: rgba(2, 6, 12, 0.24) !important;
+}
+
+/* Gentle glass for City Events modal */
+#events-modal .modal__content,
+#events-modal .events-modal__content {
+  background: rgba(8, 14, 26, 0.22) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  backdrop-filter: blur(16px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(130%) !important;
+}
+
+#events-modal .modal__body,
+#events-modal .events-modal__detail,
+#events-modal .events-task,
+#events-modal .events-modal__header {
+  background: rgba(8, 14, 26, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#events-modal .modal__backdrop {
+  background: rgba(2, 6, 12, 0.24) !important;
+}
+
+/* City Events text readability: light dark chips */
+#events-modal .events-modal__title,
+#events-modal .events-modal__subtitle,
+#events-modal .events-modal__tagline,
+#events-modal #events-agent-desc,
+#events-modal .events-task__title,
+#events-modal .events-task__desc {
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.28) !important;
+  border-radius: 8px;
+  padding: 4px 7px;
+}
+
+/* City Events: accept/decline rows -> light black glass + centered buttons */
+#events-modal .events-task {
+  background: rgba(0, 0, 0, 0.28) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+#events-modal .events-task__actions {
+  align-self: center !important;
+  align-items: center !important;
+  grid-column: 2 !important;
+  grid-row: 1 / span 2 !important;
+  justify-content: center !important;
+}
+
+#events-modal .events-task__actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#events-modal .events-task__title {
+  grid-column: 1 !important;
+}
+
+#events-modal .events-task__desc {
+  grid-column: 1 !important;
 }

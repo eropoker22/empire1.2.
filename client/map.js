@@ -18204,6 +18204,10 @@ window.Empire.Map = (() => {
     state.modal.root.classList.add("hidden");
   }
 
+  function closeSelectedDistrictModal() {
+    hideModal();
+  }
+
   function refreshSelectedDistrictModal() {
     if (!state.modal?.root || state.modal.root.classList.contains("hidden")) return;
     const selected = window.Empire.selectedDistrict?.id != null
@@ -18608,6 +18612,7 @@ window.Empire.Map = (() => {
     setMapMode,
     setDistricts,
     refreshSelectedDistrictModal,
+    closeSelectedDistrictModal,
     applyUpdate,
     setVisionContext,
     showBuildingDetail,
