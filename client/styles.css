@@ -2729,6 +2729,16 @@ body::before {
   z-index: 7;
 }
 
+@media (min-width: 1201px) {
+  .panel--left > .city-events-card {
+    margin-top: 42px;
+  }
+
+  .panel--right > #profile-gang-card {
+    margin-top: 60px;
+  }
+}
+
 .card {
   background: var(--panel);
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -6993,6 +7003,7 @@ body::before {
 
 .city-events-card {
   position: relative;
+  border: none !important;
 }
 
 .city-events-target-btn {
@@ -8897,7 +8908,7 @@ body::before {
   --events-shine: rgba(165, 243, 252, 0.24);
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--events-border);
+  border: none !important;
   background:
     radial-gradient(circle at 15% 18%, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0) 42%),
     linear-gradient(138deg, var(--events-a), var(--events-b)),
@@ -8952,7 +8963,7 @@ body::before {
 
 #city-events-open:hover {
   transform: translateY(-2px) scale(1.01);
-  border-color: var(--events-border-strong);
+  border-color: transparent !important;
   background:
     radial-gradient(circle at 15% 18%, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0) 45%),
     linear-gradient(138deg, var(--events-a-hover), var(--events-b-hover)),
