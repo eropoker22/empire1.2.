@@ -925,7 +925,9 @@ window.Empire.UI = (() => {
       "Zbrojovka",
       "Sklad",
       "Energetická stanice",
-      "Datové centrum"
+      "Datové centrum",
+      "Výzkumné centrum",
+      "Recyklační centrum"
     ],
     park: [
       "Drug lab",
@@ -1207,6 +1209,28 @@ window.Empire.UI = (() => {
     "Recoil Factory",
     "Phantom Arms Lab",
     "Iron Rain Arsenal"
+  ];
+
+  const namedIndustrialResearchCenters = [
+    "Neon Research Hub",
+    "IronMind Labs",
+    "Quantum Black Lab",
+    "Synapse Forge Center",
+    "DarkPulse Research",
+    "CipherWorks Institute",
+    "NovaCore Laboratory",
+    "Obsidian Research Vault"
+  ];
+
+  const namedIndustrialRecyclingCenters = [
+    "SteelLoop Recycling",
+    "BlackCycle Depot",
+    "NeoWaste Recovery",
+    "Iron Reclaim Facility",
+    "ScrapCore Center",
+    "Urban Reforge Plant",
+    "DustLine Recycling",
+    "GhostMetal Recovery"
   ];
 
   const namedResidentialBrainwashCenters = [
@@ -1703,6 +1727,18 @@ window.Empire.UI = (() => {
         tier: "early",
         title: "Zásobovací uzel",
         buildings: ["Sklad", "Energetická stanice"]
+      },
+      {
+        key: "ind-early-5",
+        tier: "early",
+        title: "Základní výzkum",
+        buildings: ["Továrna", "Výzkumné centrum"]
+      },
+      {
+        key: "ind-early-6",
+        tier: "early",
+        title: "Recyklační tok",
+        buildings: ["Sklad", "Recyklační centrum"]
       }
     ],
     mid: [
@@ -1735,6 +1771,18 @@ window.Empire.UI = (() => {
         tier: "mid",
         title: "Datová výroba",
         buildings: ["Sklad", "Datové centrum"]
+      },
+      {
+        key: "ind-mid-6",
+        tier: "mid",
+        title: "Výzkum a obrana",
+        buildings: ["Výzkumné centrum", "Zbrojovka"]
+      },
+      {
+        key: "ind-mid-7",
+        tier: "mid",
+        title: "Obnova zdrojů",
+        buildings: ["Továrna", "Recyklační centrum", "Sklad"]
       }
     ],
     top: [
@@ -1761,6 +1809,18 @@ window.Empire.UI = (() => {
         tier: "top",
         title: "Critical infrastructure",
         buildings: ["Energetická stanice", "Datové centrum", "Sklad"]
+      },
+      {
+        key: "ind-top-5",
+        tier: "top",
+        title: "War research nexus",
+        buildings: ["Zbrojovka", "Výzkumné centrum", "Datové centrum"]
+      },
+      {
+        key: "ind-top-6",
+        tier: "top",
+        title: "Circular war industry",
+        buildings: ["Zbrojovka", "Recyklační centrum", "Továrna"]
       }
     ]
   };
@@ -1863,6 +1923,9 @@ window.Empire.UI = (() => {
   let onboardingGrowthTimer = null;
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
+  const LOCAL_BOUNTY_STORAGE_KEY = "empire_local_bounties_v1";
+  const DRUG_LAB_PLAYER_STORAGE_KEY = "empire_drug_lab_player_v1";
+  const FACTORY_PLAYER_SUPPLIES_STORAGE_KEY = "empire_factory_player_supplies_v1";
   const LOCAL_GANG_MEMBERS_KEY = "empire_local_gang_members";
   const LOCAL_GANG_MEMBERS_SPENT_KEY = "empire_local_gang_members_spent";
   const LOCAL_DISTRICT_DEFENSE_ASSIGNMENTS_KEY = "empire_local_district_defense_assignments_v1";
@@ -1913,6 +1976,8 @@ window.Empire.UI = (() => {
   let scenarioEnemyOwnerNames = new Set();
   let guestModeActive = false;
   let attackModalRefreshTimer = null;
+  let lastAttackStepperInteractionAt = 0;
+  let lastDefenseStepperInteractionAt = 0;
   let attackResultTimer = null;
   let raidActionTimeoutId = null;
   let raidActionState = { districtId: null, startedAt: 0, endsAt: 0 };
@@ -1941,6 +2006,7 @@ window.Empire.UI = (() => {
   ]);
   let cachedSpyCount = null;
   let isSpyCountShownInTopbar = false;
+  let actionConfirmPopupTimeoutId = null;
   let topbarStatSwitchTimer = null;
   let roundPhaseTimer = null;
   let policeRaidProtectionTimer = null;
@@ -2346,6 +2412,25 @@ window.Empire.UI = (() => {
     "VIP salonek": Object.freeze({ clean: 8, dirty: 22 }),
     "Taxi služba": Object.freeze({ clean: 5.5, dirty: 1.5 })
   });
+  const BLACKOUT_BUILDING_MINUTE_HEAT_RULES = Object.freeze({
+    "Pašovací tunel": Object.freeze({ heat: 4.3 / 1440 }),
+    "Strip club": Object.freeze({ heat: 5 / 1440 }),
+    "Datové centrum": Object.freeze({ heat: 5.5 / 1440 }),
+    Sklad: Object.freeze({ heat: 2.8 / 1440 }),
+    "Večerka": Object.freeze({ heat: 2.5 / 1440 }),
+    "Výzkumné centrum": Object.freeze({ heat: 4.8 / 1440 }),
+    "Recyklační centrum": Object.freeze({ heat: 4 / 1440 })
+  });
+  const BLACKOUT_BUILDING_MINUTE_INFLUENCE_RULES = Object.freeze({
+    "Pašovací tunel": Object.freeze({ influence: 18 / 1440 }),
+    "Pouliční dealeři": Object.freeze({ influence: 3.5 / 1440 }),
+    "Strip club": Object.freeze({ influence: 28 / 1440 }),
+    "Datové centrum": Object.freeze({ influence: 32 / 1440 }),
+    Sklad: Object.freeze({ influence: 14 / 1440 }),
+    "Večerka": Object.freeze({ influence: 8 / 1440 }),
+    "Výzkumné centrum": Object.freeze({ influence: 30 / 1440 }),
+    "Recyklační centrum": Object.freeze({ influence: 16 / 1440 })
+  });
 
   function computeOwnedBuildingMinuteIncome(districts, ownerName) {
     if (!ownerName && !Array.isArray(districts)) return { clean: 0, dirty: 0, byBuilding: {} };
@@ -2390,6 +2475,84 @@ window.Empire.UI = (() => {
     return { clean, dirty, byBuilding };
   }
 
+  function computeOwnedBuildingMinuteHeat(districts, ownerName) {
+    if (!ownerName && !Array.isArray(districts)) return { total: 0, byBuilding: {} };
+
+    let total = 0;
+    const byBuilding = {};
+    (Array.isArray(districts) ? districts : []).forEach((district) => {
+      if (!isDistrictOwnedByScenarioPlayer(district, ownerName)) return;
+      if (Boolean(district?.isDestroyed)) return;
+      (Array.isArray(district?.buildings) ? district.buildings : []).forEach((building) => {
+        const rule = BLACKOUT_BUILDING_MINUTE_HEAT_RULES[String(building || "").trim()];
+        if (!rule) return;
+        const heat = Number(rule.heat || 0);
+        total += heat;
+        byBuilding[building] = byBuilding[building] || { heat: 0, count: 0 };
+        byBuilding[building].heat += heat;
+        byBuilding[building].count += 1;
+      });
+    });
+    return { total, byBuilding };
+  }
+
+  function computeBuildingMinuteHeatFromOwnedDistricts(districts) {
+    let total = 0;
+    const byBuilding = {};
+    (Array.isArray(districts) ? districts : []).forEach((district) => {
+      if (Boolean(district?.isDestroyed)) return;
+      (Array.isArray(district?.buildings) ? district.buildings : []).forEach((building) => {
+        const rule = BLACKOUT_BUILDING_MINUTE_HEAT_RULES[String(building || "").trim()];
+        if (!rule) return;
+        const heat = Number(rule.heat || 0);
+        total += heat;
+        byBuilding[building] = byBuilding[building] || { heat: 0, count: 0 };
+        byBuilding[building].heat += heat;
+        byBuilding[building].count += 1;
+      });
+    });
+    return { total, byBuilding };
+  }
+
+  function computeOwnedBuildingMinuteInfluence(districts, ownerName) {
+    if (!ownerName && !Array.isArray(districts)) return { total: 0, byBuilding: {} };
+
+    let total = 0;
+    const byBuilding = {};
+    (Array.isArray(districts) ? districts : []).forEach((district) => {
+      if (!isDistrictOwnedByScenarioPlayer(district, ownerName)) return;
+      if (Boolean(district?.isDestroyed)) return;
+      (Array.isArray(district?.buildings) ? district.buildings : []).forEach((building) => {
+        const rule = BLACKOUT_BUILDING_MINUTE_INFLUENCE_RULES[String(building || "").trim()];
+        if (!rule) return;
+        const influence = Number(rule.influence || 0);
+        total += influence;
+        byBuilding[building] = byBuilding[building] || { influence: 0, count: 0 };
+        byBuilding[building].influence += influence;
+        byBuilding[building].count += 1;
+      });
+    });
+    return { total, byBuilding };
+  }
+
+  function computeBuildingMinuteInfluenceFromOwnedDistricts(districts) {
+    let total = 0;
+    const byBuilding = {};
+    (Array.isArray(districts) ? districts : []).forEach((district) => {
+      if (Boolean(district?.isDestroyed)) return;
+      (Array.isArray(district?.buildings) ? district.buildings : []).forEach((building) => {
+        const rule = BLACKOUT_BUILDING_MINUTE_INFLUENCE_RULES[String(building || "").trim()];
+        if (!rule) return;
+        const influence = Number(rule.influence || 0);
+        total += influence;
+        byBuilding[building] = byBuilding[building] || { influence: 0, count: 0 };
+        byBuilding[building].influence += influence;
+        byBuilding[building].count += 1;
+      });
+    });
+    return { total, byBuilding };
+  }
+
   function buildBlackoutPlayerSourcesSnapshot(districts, ownerName) {
     const districtSource = getBlackoutIncomeDistricts(districts);
     const districtIncome = districtSource.length
@@ -2401,6 +2564,12 @@ window.Empire.UI = (() => {
     const buildingIncome = districtSource.length
       ? computeBuildingMinuteIncomeFromOwnedDistricts(districtSource)
       : computeOwnedBuildingMinuteIncome(districts, ownerName);
+    const buildingHeat = districtSource.length
+      ? computeBuildingMinuteHeatFromOwnedDistricts(districtSource)
+      : computeOwnedBuildingMinuteHeat(districts, ownerName);
+    const buildingInfluence = districtSource.length
+      ? computeBuildingMinuteInfluenceFromOwnedDistricts(districtSource)
+      : computeOwnedBuildingMinuteInfluence(districts, ownerName);
     return {
       districtIncomePerMinute: districtIncome,
       districtInfluencePerMinute,
@@ -2409,10 +2578,19 @@ window.Empire.UI = (() => {
         dirty: buildingIncome.dirty,
         byBuilding: buildingIncome.byBuilding
       },
+      buildingHeatPerMinute: {
+        total: buildingHeat.total,
+        byBuilding: buildingHeat.byBuilding
+      },
+      buildingInfluencePerMinute: {
+        total: buildingInfluence.total,
+        byBuilding: buildingInfluence.byBuilding
+      },
       totalPerMinute: {
         clean: districtIncome.clean + buildingIncome.clean,
         dirty: districtIncome.dirty + buildingIncome.dirty,
-        influence: districtInfluencePerMinute
+        influence: districtInfluencePerMinute + buildingInfluence.total,
+        heat: buildingHeat.total
       }
     };
   }
@@ -2425,7 +2603,9 @@ window.Empire.UI = (() => {
       || Number(district.dirty || 0) > 0
       || Number(snapshot.districtInfluencePerMinute || 0) > 0
       || Number(building.clean || 0) > 0
-      || Number(building.dirty || 0) > 0;
+      || Number(building.dirty || 0) > 0
+      || Number(snapshot?.buildingHeatPerMinute?.total || 0) > 0
+      || Number(snapshot?.buildingInfluencePerMinute?.total || 0) > 0;
   }
 
   function syncBlackoutScenarioDistrictIncome(now = Date.now()) {
@@ -2441,6 +2621,7 @@ window.Empire.UI = (() => {
     let dirtyRemainder = Number(scenarioIncomeState.dirtyRemainder || 0);
     let buildingCleanRemainder = Number(scenarioIncomeState.buildingCleanRemainder || 0);
     let buildingDirtyRemainder = Number(scenarioIncomeState.buildingDirtyRemainder || 0);
+    let buildingHeatRemainder = Number(scenarioIncomeState.buildingHeatRemainder || 0);
     if (!Number.isFinite(lastAppliedAt) || lastAppliedAt > now) {
       lastAppliedAt = now;
     }
@@ -2455,6 +2636,9 @@ window.Empire.UI = (() => {
     }
     if (!Number.isFinite(buildingDirtyRemainder) || buildingDirtyRemainder < 0) {
       buildingDirtyRemainder = 0;
+    }
+    if (!Number.isFinite(buildingHeatRemainder) || buildingHeatRemainder < 0) {
+      buildingHeatRemainder = 0;
     }
 
     const elapsedMs = Math.max(0, now - lastAppliedAt);
@@ -2478,8 +2662,11 @@ window.Empire.UI = (() => {
       ? liveBlackoutSources
       : lastValidBlackoutSources || liveBlackoutSources;
     const incomePerMinute = activeBlackoutSources.districtIncomePerMinute || { clean: 0, dirty: 0 };
-    const influencePerMinute = Math.max(0, Number(activeBlackoutSources.districtInfluencePerMinute || 0));
+    const influencePerMinute =
+      Math.max(0, Number(activeBlackoutSources.districtInfluencePerMinute || 0))
+      + Math.max(0, Number(activeBlackoutSources?.buildingInfluencePerMinute?.total || 0));
     const buildingIncomePerMinute = activeBlackoutSources.buildingIncomePerMinute || { clean: 0, dirty: 0, byBuilding: {} };
+    const buildingHeatPerMinute = Math.max(0, Number(activeBlackoutSources?.buildingHeatPerMinute?.total || 0));
     let influenceRemainder = Math.max(0, Number(scenarioIncomeState.influenceRemainder || 0));
     let influenceTickRemainderMs = Math.max(0, Number(scenarioIncomeState.influenceTickRemainderMs || 0));
     const elapsedMinutes = elapsedMs / 60000;
@@ -2538,6 +2725,16 @@ window.Empire.UI = (() => {
     } else {
       influenceTickRemainderMs = 0;
     }
+    if (buildingHeatPerMinute > 0) {
+      const heatRaw = buildingHeatPerMinute * elapsedMinutes + buildingHeatRemainder;
+      const heatTenths = Math.floor((heatRaw + Number.EPSILON) * 10);
+      const heatDelta = heatTenths / 10;
+      buildingHeatRemainder = Math.max(0, heatRaw - heatDelta);
+      if (heatDelta > 0) {
+        const currentHeat = resolveWantedLevel(cachedProfile || window.Empire.player || {});
+        setPlayerWantedHeat(currentHeat + heatDelta);
+      }
+    }
 
     marketState.scenarioIncome = {
       ...scenarioIncomeState,
@@ -2546,12 +2743,16 @@ window.Empire.UI = (() => {
       dirtyRemainder,
       buildingCleanRemainder,
       buildingDirtyRemainder,
+      buildingHeatRemainder,
       influenceRemainder,
       influenceTickRemainderMs,
       buildingIncome: {
         cleanPerMinute: buildingIncomePerMinute.clean,
         dirtyPerMinute: buildingIncomePerMinute.dirty,
         byBuilding: buildingIncomePerMinute.byBuilding
+      },
+      buildingHeat: {
+        perMinute: buildingHeatPerMinute
       }
     };
     saveLocalMarketState(marketState);
@@ -2886,6 +3087,7 @@ window.Empire.UI = (() => {
     const topbarHiddenModalIds = new Set([
       "events-modal",
       "buildings-modal",
+      "bounty-modal",
       "storage-modal",
       "leaderboard-modal",
       "profile-modal",
@@ -3363,6 +3565,7 @@ window.Empire.UI = (() => {
 
   function bindActions() {
     initEventsModal();
+    initBountyModal();
     initBuildingsModal();
     initAllianceModal();
     initMarketModal();
@@ -3373,17 +3576,6 @@ window.Empire.UI = (() => {
     initStorageModal();
     initMoneyStatSkipControls();
     initInfluenceSpyToggle();
-    const bountyBtn = document.getElementById("city-events-target-btn");
-    if (bountyBtn) {
-      bountyBtn.addEventListener("click", () => {
-        document.dispatchEvent(new CustomEvent("empire:bounty-button-clicked", {
-          detail: {
-            source: "city-events-card"
-          }
-        }));
-        pushEvent("Bounty je zatím připravené tlačítko.");
-      });
-    }
     initWeaponsModal();
     initWeaponsPopover();
     initDistrictDefenseModal();
@@ -4384,14 +4576,19 @@ window.Empire.UI = (() => {
     if (backdrop) backdrop.addEventListener("click", closeDefenseModal);
     if (closeBtn) closeBtn.addEventListener("click", closeDefenseModal);
     if (weaponButtons) {
-      weaponButtons.addEventListener("dblclick", (event) => {
-        event.preventDefault();
-      });
-      weaponButtons.addEventListener("click", (event) => {
+      const handleDefenseStepperInteraction = (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         const button = target.closest("[data-defense-weapon][data-defense-action]");
         if (!button) return;
+        const now = Date.now();
+        if (event.type === "click" && now - lastDefenseStepperInteractionAt < 120) {
+          return;
+        }
+        lastDefenseStepperInteractionAt = now;
+        if (event.type === "pointerdown") {
+          event.preventDefault();
+        }
         const name = String(button.getAttribute("data-defense-weapon") || "").trim();
         const action = String(button.getAttribute("data-defense-action") || "").trim();
         if (!name) return;
@@ -4417,7 +4614,12 @@ window.Empire.UI = (() => {
         }
         setDefenseModalNote("");
         renderDefenseModal();
+      };
+      weaponButtons.addEventListener("dblclick", (event) => {
+        event.preventDefault();
       });
+      weaponButtons.addEventListener("pointerdown", handleDefenseStepperInteraction);
+      weaponButtons.addEventListener("click", handleDefenseStepperInteraction);
     }
     if (startBtn) {
       startBtn.addEventListener("click", () => {
@@ -5276,6 +5478,7 @@ window.Empire.UI = (() => {
       attackResultTimer = null;
       applyAttackOutcomeLosses(safeSelectionSummary, safeDetails.outcomeKey);
       const district = resolveDistrictById(safeDetails.districtId);
+      const previousOwnerName = district ? String(district?.ownerNick || district?.owner || "").trim() : "";
       const outcomeKey = String(safeDetails.outcomeKey || "").trim().toLowerCase();
       if (district && (outcomeKey === "catastrophe" || safeDetails.districtDestroyed)) {
         district.owner = null;
@@ -5298,7 +5501,11 @@ window.Empire.UI = (() => {
         detail: {
           districtId: safeDetails.districtId ?? null,
           outcomeKey,
-          details: safeDetails
+          previousOwnerName,
+          details: {
+            ...safeDetails,
+            previousOwnerName
+          }
         }
       }));
     }, Math.max(1000, Math.floor(Number(safeDetails.durationMs || ATTACK_ACTION_DURATION_MS))));
@@ -5730,6 +5937,11 @@ window.Empire.UI = (() => {
     const attackSpecial = getAttackSpecialModifiers(selectionSummary?.selection);
     const demoMode = scenarioVisionEnabled && !window.Empire.token;
     const trapEntry = getDistrictTrapEntry(district?.id);
+    showActionConfirmPopup({
+      tone: "attack",
+      title: "ÚTOK POTVRZEN",
+      subtitle: district?.name || `Distrikt #${district?.id ?? "-"}`
+    });
 
     if (trapEntry) {
       const consumedTrap = consumeDistrictTrap(district?.id);
@@ -5930,14 +6142,19 @@ window.Empire.UI = (() => {
     if (backdrop) backdrop.addEventListener("click", closeAttackModal);
     if (closeBtn) closeBtn.addEventListener("click", closeAttackModal);
     if (weaponButtons) {
-      weaponButtons.addEventListener("dblclick", (event) => {
-        event.preventDefault();
-      });
-      weaponButtons.addEventListener("click", (event) => {
+      const handleAttackStepperInteraction = (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         const button = target.closest("[data-attack-weapon][data-attack-action]");
         if (!button) return;
+        const now = Date.now();
+        if (event.type === "click" && now - lastAttackStepperInteractionAt < 120) {
+          return;
+        }
+        lastAttackStepperInteractionAt = now;
+        if (event.type === "pointerdown") {
+          event.preventDefault();
+        }
         const name = String(button.getAttribute("data-attack-weapon") || "").trim();
         const action = String(button.getAttribute("data-attack-action") || "").trim();
         if (!name) return;
@@ -5964,7 +6181,12 @@ window.Empire.UI = (() => {
         }
         setAttackModalNote("");
         renderAttackModal();
+      };
+      weaponButtons.addEventListener("dblclick", (event) => {
+        event.preventDefault();
       });
+      weaponButtons.addEventListener("pointerdown", handleAttackStepperInteraction);
+      weaponButtons.addEventListener("click", handleAttackStepperInteraction);
     }
     if (startBtn) {
       startBtn.addEventListener("click", async () => {
@@ -7559,7 +7781,7 @@ window.Empire.UI = (() => {
           { label: "Cíl", value: districtLabel },
           { label: "Ztráta členů", value: `${gangLoss}` },
           { label: "Cooldown", value: formatRaidCooldownLabel(cooldownMs) },
-          { label: "Zisk", value: "Nic" }
+          { label: "Zisk", value: formatRaidLootLabel(loot) }
         ]
       };
     }
@@ -7602,50 +7824,66 @@ window.Empire.UI = (() => {
     const outcomeKey = resolveRaidOutcomeKey(district);
     let cooldownMs = RAID_BASE_COOLDOWN_MS;
     let loot = {};
+    let cleanLoot = {};
     let gangLoss = 0;
     let targetAlerted = false;
 
+    if (isDistrictUnownedForSpyOutcome(district)) {
+      const nextLoot = {};
+      updateDistrictRaidStash(district, (current) => {
+        const next = { ...current };
+        Object.entries(current).forEach(([resourceKey, amount]) => {
+          const available = Math.max(0, Math.floor(Number(amount || 0)));
+          const stolen = available > 0
+            ? Math.min(available, Math.max(1, Math.floor(available * 0.25)))
+            : 0;
+          if (stolen > 0) {
+            nextLoot[resourceKey] = stolen;
+            next[resourceKey] = Math.max(0, available - stolen);
+          }
+        });
+        return next;
+      });
+      cleanLoot = nextLoot;
+    } else {
+      const nextLoot = {};
+      const stealPct = 2 + Math.floor(Math.random() * 5);
+      updateOwnerRaidInventory(district.owner, (current) => {
+        const next = { ...current };
+        ["metal_parts", "tech_core", "combat_module", "drugs", "weapons"].forEach((resourceKey) => {
+          const available = Math.max(0, Math.floor(Number(current[resourceKey] || 0)));
+          const stolen = available > 0
+            ? Math.min(available, Math.max(1, Math.floor(available * (stealPct / 100))))
+            : 0;
+          if (stolen > 0) {
+            nextLoot[resourceKey] = stolen;
+            next[resourceKey] = Math.max(0, available - stolen);
+          }
+        });
+        return next;
+      });
+      cleanLoot = nextLoot;
+    }
+
     if (outcomeKey === "clean_success") {
-      if (isDistrictUnownedForSpyOutcome(district)) {
-        updateDistrictRaidStash(district, (current) => {
-          const next = { ...current };
-          Object.entries(current).forEach(([resourceKey, amount]) => {
-            const available = Math.max(0, Math.floor(Number(amount || 0)));
-            const stolen = available > 0
-              ? Math.min(available, Math.max(1, Math.floor(available * 0.25)))
-              : 0;
-            if (stolen > 0) {
-              loot[resourceKey] = stolen;
-              next[resourceKey] = Math.max(0, available - stolen);
-            }
-          });
-          return next;
-        });
-      } else {
-        const nextLoot = {};
-        const stealPct = 2 + Math.floor(Math.random() * 5);
-        updateOwnerRaidInventory(district.owner, (current) => {
-          const next = { ...current };
-          ["metal_parts", "tech_core", "combat_module", "drugs", "weapons"].forEach((resourceKey) => {
-            const available = Math.max(0, Math.floor(Number(current[resourceKey] || 0)));
-            const stolen = available > 0
-              ? Math.min(available, Math.max(1, Math.floor(available * (stealPct / 100))))
-              : 0;
-            if (stolen > 0) {
-              nextLoot[resourceKey] = stolen;
-              next[resourceKey] = Math.max(0, available - stolen);
-            }
-          });
-          return next;
-        });
-        loot = nextLoot;
-      }
+      loot = cleanLoot;
       applyRaidLootToPlayer(loot);
       pushEvent(`Krádež v districtu ${district.name || `#${district.id}`} dopadla čistě. Zisk: ${formatRaidLootLabel(loot)}.`);
     } else if (outcomeKey === "dirty_fail") {
+      const dirtyPct = 20 + Math.floor(Math.random() * 11);
+      loot = Object.entries(cleanLoot).reduce((acc, [resourceKey, amount]) => {
+        const baseAmount = Math.max(0, Math.floor(Number(amount || 0)));
+        if (baseAmount <= 0) return acc;
+        const dirtyAmount = Math.max(1, Math.floor(baseAmount * dirtyPct / 100));
+        if (dirtyAmount > 0) acc[resourceKey] = dirtyAmount;
+        return acc;
+      }, {});
+      if (Object.keys(loot).length) {
+        applyRaidLootToPlayer(loot);
+      }
       cooldownMs = Math.round(RAID_BASE_COOLDOWN_MS * 1.2);
       gangLoss = applyRaidGangLoss(2.5);
-      pushEvent(`Špinavá krádež v districtu ${district.name || `#${district.id}`}. Přišel jsi o ${gangLoss} členů gangu.`);
+      pushEvent(`Špinavá krádež v districtu ${district.name || `#${district.id}`}. Zisk: ${formatRaidLootLabel(loot)}. Přišel jsi o ${gangLoss} členů gangu.`);
     } else {
       cooldownMs = Math.round(RAID_BASE_COOLDOWN_MS * 1.5);
       gangLoss = applyRaidGangLoss(5);
@@ -8357,6 +8595,48 @@ window.Empire.UI = (() => {
     raidConfirmModalState = { districtId: null };
   }
 
+  function ensureActionConfirmPopup() {
+    let root = document.getElementById("empire-action-confirm-popup");
+    if (root) return root;
+    root = document.createElement("div");
+    root.id = "empire-action-confirm-popup";
+    root.className = "empire-action-confirm-popup hidden";
+    root.setAttribute("aria-hidden", "true");
+    root.innerHTML = `
+      <div class="empire-action-confirm-popup__card" data-tone="attack">
+        <div id="empire-action-confirm-popup-title" class="empire-action-confirm-popup__title">AKCE POTVRZENA</div>
+        <div id="empire-action-confirm-popup-subtitle" class="empire-action-confirm-popup__subtitle">District: -</div>
+      </div>
+    `;
+    root.addEventListener("click", () => {
+      root.classList.add("hidden");
+      root.setAttribute("aria-hidden", "true");
+    });
+    document.body.appendChild(root);
+    return root;
+  }
+
+  function showActionConfirmPopup({ tone = "attack", title = "AKCE POTVRZENA", subtitle = "" } = {}) {
+    const root = ensureActionConfirmPopup();
+    const card = root.querySelector(".empire-action-confirm-popup__card");
+    const titleEl = document.getElementById("empire-action-confirm-popup-title");
+    const subtitleEl = document.getElementById("empire-action-confirm-popup-subtitle");
+    if (card) {
+      card.dataset.tone = String(tone || "attack").trim().toLowerCase();
+    }
+    if (titleEl) titleEl.textContent = String(title || "AKCE POTVRZENA").trim() || "AKCE POTVRZENA";
+    if (subtitleEl) subtitleEl.textContent = String(subtitle || "").trim();
+    root.classList.remove("hidden");
+    root.setAttribute("aria-hidden", "false");
+    if (actionConfirmPopupTimeoutId) {
+      clearTimeout(actionConfirmPopupTimeoutId);
+    }
+    actionConfirmPopupTimeoutId = setTimeout(() => {
+      root.classList.add("hidden");
+      root.setAttribute("aria-hidden", "true");
+    }, 2600);
+  }
+
   function renderSpyConfirmModal() {
     const root = document.getElementById("spy-confirm-modal");
     const districtEl = document.getElementById("spy-confirm-modal-district");
@@ -8485,6 +8765,11 @@ window.Empire.UI = (() => {
     }
     closeRaidConfirmModal();
     startRaidAction(district);
+    showActionConfirmPopup({
+      tone: "raid",
+      title: "KRÁDEŽ POTVRZENA",
+      subtitle: district?.name || `Distrikt #${district?.id ?? "-"}`
+    });
   }
 
   function initRaidConfirmModal() {
@@ -8552,6 +8837,11 @@ window.Empire.UI = (() => {
     closeSpyConfirmModal();
     const districtModal = document.getElementById("district-modal");
     if (districtModal) districtModal.classList.add("hidden");
+    showActionConfirmPopup({
+      tone: "spy",
+      title: "ŠPEHOVÁNÍ POTVRZENO",
+      subtitle: district?.name || `Distrikt #${district?.id ?? "-"}`
+    });
   }
 
   function initSpyConfirmModal() {
@@ -8635,7 +8925,7 @@ window.Empire.UI = (() => {
     }));
   }
 
-  function renderOccupationResultModal({ outcomeKey, district, requiredMembers, returnedMembers }) {
+  function renderOccupationResultModal({ outcomeKey, district, requiredMembers, returnedMembers, bountySummary = "" }) {
     const root = document.getElementById("spy-result-modal");
     const content = document.getElementById("spy-result-modal-content");
     const title = document.getElementById("spy-result-modal-title");
@@ -8653,6 +8943,7 @@ window.Empire.UI = (() => {
       details.innerHTML = `
         <div class="modal__row"><span>Nasazeno členů</span><strong>${requiredMembers}</strong></div>
         <div class="modal__row"><span>Vráceno do profilu</span><strong>${returnedMembers}</strong></div>
+        ${bountySummary ? `<div class="modal__row"><span>Bounty vyplacena</span><strong>${escapeHtml(bountySummary)}</strong></div>` : ""}
       `;
       root.classList.remove("hidden");
       return;
@@ -8688,17 +8979,24 @@ window.Empire.UI = (() => {
     renderOccupationResultModal(payload);
   }
 
-  function finalizeOccupationActionResult({ districtId, requiredMembers }) {
+  async function finalizeOccupationActionResult({ districtId, requiredMembers }) {
     const district = resolveDistrictById(districtId);
     if (!district) return;
+    const previousOwnerName = String(district?.ownerNick || district?.owner || "").trim();
     const rolled = rollSpyOutcome(district);
     const outcomeKey = rolled.key;
     const returnedMembers = Math.floor(Math.max(0, Number(requiredMembers) || 0) / 2);
+    let bountySummary = "";
 
     if (outcomeKey === "success") {
       if (returnedMembers > 0) addGangMembers(returnedMembers);
       claimDistrictForPlayer(district);
+      const bountyResult = await claimMatchingBountiesForOccupation(district, previousOwnerName);
+      bountySummary = bountyResult.rewardSummary || "";
       pushEvent(`Obsazení distriktu ${district.name || `#${district.id}`} bylo úspěšné.`);
+      if (bountySummary) {
+        pushEvent(`Bounty vyplacena: ${bountySummary}.`);
+      }
       recordVerifiedIntelEvent({ type: "attack_success", districtId: district.id });
     } else if (outcomeKey === "medium_fail") {
       if (returnedMembers > 0) addGangMembers(returnedMembers);
@@ -8711,7 +9009,8 @@ window.Empire.UI = (() => {
       outcomeKey,
       district,
       requiredMembers: Math.max(0, Math.floor(Number(requiredMembers) || 0)),
-      returnedMembers
+      returnedMembers,
+      bountySummary
     });
     document.dispatchEvent(new CustomEvent("empire:occupy-resolved", {
       detail: {
@@ -8726,7 +9025,7 @@ window.Empire.UI = (() => {
   function scheduleOccupationActionResult(districtId, requiredMembers) {
     const timeoutId = setTimeout(() => {
       occupyActionResultTimeouts.delete(timeoutId);
-      finalizeOccupationActionResult({ districtId, requiredMembers });
+      void finalizeOccupationActionResult({ districtId, requiredMembers });
     }, resolveOnboardingActionDurationMs(OCCUPY_ACTION_DURATION_MS));
     occupyActionResultTimeouts.add(timeoutId);
   }
@@ -8893,6 +9192,11 @@ window.Empire.UI = (() => {
         ? `Past přesunuta do districtu ${districtLabel}. Přesun bude znovu možný za 20s.`
         : `Past nastražena do districtu ${districtLabel}. Přesun bude znovu možný za 20s.`
     );
+    showActionConfirmPopup({
+      tone: "trap",
+      title: result.moved ? "PAST PŘESUNUTA" : "PAST POTVRZENA",
+      subtitle: districtLabel
+    });
     document.dispatchEvent(new CustomEvent("empire:trap-placed", {
       detail: {
         districtId: district?.id ?? null,
@@ -9205,6 +9509,13 @@ window.Empire.UI = (() => {
       if (action === "raid") {
         if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_RAID_DISTRICT_ID) {
           return { allowed: true, reason: "" };
+        }
+        const globalRaidCooldownMs = getRaidCooldownRemainingMs();
+        if (globalRaidCooldownMs > 0) {
+          return {
+            allowed: false,
+            reason: `Krádež je na cooldownu ještě ${formatRaidCooldownLabel(globalRaidCooldownMs)}.`
+          };
         }
         const districtRaidLockMs = getDistrictRaidLockRemainingMs(districtId);
         if (districtRaidLockMs > 0) {
@@ -9800,7 +10111,7 @@ window.Empire.UI = (() => {
 
     const ownerName = resolveScenarioOwnerName();
     activeScenarioOwnerName = ownerName;
-    const allyName = `${ownerName} - spojenec`;
+    const allyName = "Chavi_Cz";
     scenarioUniqueOwnerColors = false;
     scenarioProfileAvatarOverride = normalizedScenarioKey === "onboarding-20-edge" ? ONBOARDING_PROFILE_AVATAR : null;
     setScenarioAllianceIcons([]);
@@ -9865,7 +10176,7 @@ window.Empire.UI = (() => {
       pushEvent("Ukázka: hráč drží pouze jeden distrikt.");
     } else if (normalizedScenarioKey === "alliance-ten") {
       const enemyOneName = "Mariah";
-      const enemyTwoName = "Stínoví vlci B";
+      const enemyTwoName = "Willy";
       const enemyOwners = [enemyOneName, enemyTwoName];
       const ownAllianceName = "Zabijáci";
       const blackoutAllyName = "Knedlík";
@@ -9903,6 +10214,13 @@ window.Empire.UI = (() => {
       roundStatusOverride = buildRoundStatusPresetForMode(
         activePlayerScenarioKey === "alliance-ten-blackout" ? "blackout" : "night"
       );
+      nextDistricts = nextDistricts.map((district) => {
+        if (normalizeOwnerName(district?.owner) !== normalizeOwnerName(allyName)) return district;
+        return {
+          ...district,
+          ownerAllianceName: blackoutEnemyAllianceName
+        };
+      });
       {
         const blackoutPlayerDistrictIds = new Set([84, 95, 92, 120, 126]);
         setScenarioAllianceOwners([blackoutAllyName]);
@@ -9980,7 +10298,7 @@ window.Empire.UI = (() => {
           if (normalizeOwnerName(district?.owner) === normalizeOwnerName(allyName)) {
             return {
               ...district,
-              ownerAllianceName: blackoutAllianceName
+              ownerAllianceName: blackoutEnemyAllianceName
             };
           }
           return district;
@@ -9992,11 +10310,12 @@ window.Empire.UI = (() => {
       if (activePlayerScenarioKey === "alliance-ten-blackout") {
         scenarioPoliceIncidentIds = [143, 38];
       }
-      pushEvent(`Ukázka: ${ownerName} drží ${ownDistrictCount} sektorů, spojenec ${allyDistrictCount}.`);
+      pushEvent(`Ukázka: ${ownerName} drží ${ownDistrictCount} sektorů, Chavi_Cz ${allyDistrictCount}.`);
       pushEvent(`Hrozba: nepřátelská aliance (${enemyOneName} + ${enemyTwoName}) drží ${enemyDistrictCount} sousedních sektorů.`);
     } else if (normalizedScenarioKey === "alliance-war") {
       const allyOneName = `${ownerName} - spojenec A`;
-      const allyTwoName = `${ownerName} - spojenec B`;
+      const allyTwoName = "Chavi_Cz";
+      const allyTwoAllianceName = "Ledovec";
       const enemyAllianceOne = ["Stínoví vlci 1", "Stínoví vlci 2", "Stínoví vlci 3"];
       const enemyAllianceTwo = ["Neonové kobry 1", "Neonové kobry 2", "Neonové kobry 3"];
       const enemyOwners = [...enemyAllianceOne, ...enemyAllianceTwo];
@@ -10013,6 +10332,13 @@ window.Empire.UI = (() => {
       ];
       nextDistricts = assignOwnersToNeighborClusters(districts, allocations, {
         excludeTypes: ["downtown"]
+      });
+      nextDistricts = nextDistricts.map((district) => {
+        if (normalizeOwnerName(district?.owner) !== normalizeOwnerName(allyTwoName)) return district;
+        return {
+          ...district,
+          ownerAllianceName: allyTwoAllianceName
+        };
       });
       const ownDistrictCount = countOwnedDistrictsForOwner(nextDistricts, ownerName);
       const allyTotal = countOwnedDistrictsForOwner(nextDistricts, allyOneName)
@@ -11477,6 +11803,1545 @@ window.Empire.UI = (() => {
     }
   }
 
+  const BOUNTY_HUNT_MODE_THRESHOLD = 10000;
+  const bountyUnitValueMap = {
+    clean_cash: 1,
+    neonDust: 180,
+    pulseShot: 220,
+    velvetSmoke: 260,
+    ghostSerum: 320,
+    overdriveX: 420,
+    metalParts: 120,
+    techCore: 220,
+    combatModule: 340
+  };
+
+  function formatBountyMoneyValue(value) {
+    return `$${Math.max(0, Math.floor(Number(value) || 0)).toLocaleString("cs-CZ")}`;
+  }
+
+  function formatBountyObjectiveLabel(value) {
+    const safeValue = String(value || "").trim();
+    if (safeValue === "successful-attack") return "Za úspěšný útok";
+    if (safeValue === "destroy-units") return "Za zničení jednotek";
+    return "Za obsazení districtu";
+  }
+
+  function resolveBountyThreatLevel(districtCount) {
+    const safeCount = Math.max(0, Math.floor(Number(districtCount || 0)));
+    if (safeCount >= 18) return { label: "Extreme threat", tone: "extreme" };
+    if (safeCount >= 10) return { label: "High threat", tone: "high" };
+    if (safeCount >= 5) return { label: "Medium threat", tone: "medium" };
+    return { label: "Low threat", tone: "low" };
+  }
+
+  function resolveBountyLastActivityLabel(player) {
+    const explicitValue = String(
+      player?.lastActivity
+      || player?.lastActivityLabel
+      || player?.activity
+      || ""
+    ).trim();
+    if (explicitValue) return explicitValue;
+    return Math.max(0, Math.floor(Number(player?.districtCount || 0))) > 0
+      ? "Aktivní na mapě"
+      : "Bez potvrzené aktivity";
+  }
+
+  function getBountyUnitValue(resourceKey) {
+    return Math.max(0, Math.floor(Number(
+      bountyUnitValueMap[String(resourceKey || "").trim()]
+      || 0
+    )));
+  }
+
+  function initBountyModal() {
+    window.Empire.openBountyModalShortcut = () => {
+      window.Empire.Bounty?.openModal?.();
+    };
+    const existingModal = document.getElementById("bounty-modal");
+    if (existingModal) existingModal.remove();
+    setMobileTopbarCoveredByPrimaryModal(false);
+    try {
+      localStorage.removeItem(LOCAL_BOUNTY_STORAGE_KEY);
+    } catch {}
+    syncBountyDistrictMarkers([]);
+    return;
+    const shell = ensureBountyModalShell();
+    const {
+      root,
+      backdrop,
+      closeBtn,
+      cancelBtn,
+      targetSelect,
+      districtSelect,
+      submitBtn,
+      targetName,
+      targetAlliance,
+      targetDistricts,
+      targetActivity,
+      targetThreat,
+      targetAvatar,
+      targetAvatarFallback,
+      cashRange,
+      cashInput,
+      cashAvailable,
+      drugTypeSelect,
+      drugsInput,
+      drugsAvailable,
+      materialTypeSelect,
+      materialsInput,
+      materialsAvailable,
+      anonymousInput,
+      previewTarget,
+      previewValue,
+      previewType,
+      previewDuration,
+      previewAnonymous,
+      huntModeState,
+      huntModeProgressFill,
+      huntModeProgressLabel,
+      districtField
+    } = shell;
+    if (
+      !root || !targetSelect || !districtSelect || !submitBtn || !cancelBtn
+      || !targetName || !targetAlliance || !targetDistricts || !targetActivity || !targetThreat
+      || !targetAvatar || !targetAvatarFallback
+      || !cashRange || !cashInput || !cashAvailable
+      || !drugTypeSelect || !drugsInput || !drugsAvailable
+      || !materialTypeSelect || !materialsInput || !materialsAvailable
+      || !anonymousInput
+      || !previewTarget || !previewValue || !previewType || !previewDuration || !previewAnonymous
+      || !huntModeState || !huntModeProgressFill || !huntModeProgressLabel || !districtField
+    ) return;
+
+    const objectiveInputs = Array.from(root.querySelectorAll('input[name="bounty-objective"]'));
+    const durationInputs = Array.from(root.querySelectorAll('input[name="bounty-duration"]'));
+    if (!objectiveInputs.length || !durationInputs.length) return;
+
+    const getSelectedObjectiveType = () => {
+      const selected = objectiveInputs.find((input) => input.checked);
+      return String(selected?.value || "occupy-sector").trim() || "occupy-sector";
+    };
+    const getSelectedDurationHours = () => {
+      const selected = durationInputs.find((input) => input.checked);
+      return Math.max(1, Math.floor(Number(selected?.value || 12)));
+    };
+
+    const clampInputValue = (input, maxValue) => {
+      const safeMax = Math.max(0, Math.floor(Number(maxValue || 0)));
+      const nextValue = Math.min(safeMax, Math.max(0, Math.floor(Number(input?.value || 0))));
+      if (input) {
+        input.max = String(safeMax);
+        input.value = String(nextValue);
+      }
+      return nextValue;
+    };
+
+    const renderTargetOptions = (players) => {
+      let safePlayers = Array.isArray(players) ? players : [];
+      if (!safePlayers.length && (activePlayerScenarioKey === "alliance-ten-blackout" || scenarioVisionEnabled)) {
+        const byName = new Map();
+        (Array.isArray(window.Empire.districts) ? window.Empire.districts : []).forEach((district) => {
+          const ownerName = String(
+            district?.ownerNick
+            || district?.owner_username
+            || district?.ownerUsername
+            || district?.owner
+            || ""
+          ).trim();
+          const normalized = normalizeOwnerName(ownerName);
+          if (!normalized) return;
+          const current = byName.get(normalized) || {
+            name: ownerName,
+            districtCount: 0,
+            allianceName: String(
+              district?.ownerAllianceName
+              || district?.owner_alliance_name
+              || ""
+            ).trim() || "Bez aliance",
+            avatar: String(district?.ownerAvatar || "").trim()
+          };
+          current.districtCount += 1;
+          byName.set(normalized, current);
+        });
+        safePlayers = Array.from(byName.values())
+          .filter((entry) => normalizeOwnerName(entry?.name) !== resolveCurrentPlayerOwnerKey())
+          .sort((a, b) => String(a?.name || "").localeCompare(String(b?.name || ""), "cs"));
+      }
+      if (!safePlayers.length && !window.Empire.token) {
+        safePlayers = [{
+          name: "Mariah",
+          districtCount: 1,
+          allianceName: "Bez aliance",
+          avatar: ""
+        }];
+      }
+      const currentValue = String(targetSelect.value || "").trim();
+      targetSelect.innerHTML = safePlayers.length
+        ? [
+          '<option value="">Vyber hráče</option>',
+          ...safePlayers.map((player) => {
+            const districtCount = Math.max(0, Math.floor(Number(player?.districtCount || 0)));
+            return `<option value="${escapeHtml(String(player?.name || ""))}">${escapeHtml(String(player?.name || ""))} • ${districtCount} districtů</option>`;
+          })
+        ].join("")
+        : '<option value="">Žádný nepřátelský hráč na mapě</option>';
+      if (safePlayers.some((player) => String(player?.name || "") === currentValue)) {
+        targetSelect.value = currentValue;
+      } else if (safePlayers[0]?.name) {
+        targetSelect.value = String(safePlayers[0].name);
+        if (targetSelect.selectedIndex <= 0 && targetSelect.options.length > 1) {
+          targetSelect.selectedIndex = 1;
+        }
+      }
+    };
+
+    const renderDistrictOptions = (playerName) => {
+      const normalized = normalizeOwnerName(playerName);
+      const districts = (Array.isArray(window.Empire.districts) ? window.Empire.districts : [])
+        .filter((district) => normalizeOwnerName(
+          district?.ownerNick
+          || district?.owner_username
+          || district?.ownerUsername
+          || district?.owner
+        ) === normalized)
+        .sort((a, b) => String(a?.id || "").localeCompare(String(b?.id || ""), "cs", { numeric: true }));
+      const currentValue = String(districtSelect.value || "").trim();
+      districtSelect.innerHTML = [
+        '<option value="">Jakýkoli district</option>',
+        ...districts.map((district) => {
+          const districtId = String(district?.id || "").trim();
+          const districtName = String(district?.name || "Distrikt").trim() || "Distrikt";
+          return `<option value="${escapeHtml(districtId)}">#${escapeHtml(districtId)} • ${escapeHtml(districtName)}</option>`;
+        })
+      ].join("");
+      if (currentValue && districts.some((district) => String(district?.id || "") === currentValue)) {
+        districtSelect.value = currentValue;
+      }
+    };
+
+    const renderRewardTypeOptions = () => {
+      const availability = getBountyAvailableResourceMap();
+      const currentDrugKey = String(drugTypeSelect.value || "").trim();
+      const currentMaterialKey = String(materialTypeSelect.value || "").trim();
+
+      drugTypeSelect.innerHTML = storageDrugTypes
+        .map((item) => {
+          const available = Math.max(0, Math.floor(Number(availability[item.key] || 0)));
+          return `<option value="${escapeHtml(item.key)}">${escapeHtml(item.name)} • ${available} ks</option>`;
+        })
+        .join("");
+      materialTypeSelect.innerHTML = factorySupplyTypes
+        .map((item) => {
+          const available = Math.max(0, Math.floor(Number(availability[item.key] || 0)));
+          return `<option value="${escapeHtml(item.key)}">${escapeHtml(item.name)} • ${available} ks</option>`;
+        })
+        .join("");
+
+      if (storageDrugTypes.some((item) => item.key === currentDrugKey)) {
+        drugTypeSelect.value = currentDrugKey;
+      } else if (storageDrugTypes[0]?.key) {
+        drugTypeSelect.value = storageDrugTypes[0].key;
+      }
+      if (factorySupplyTypes.some((item) => item.key === currentMaterialKey)) {
+        materialTypeSelect.value = currentMaterialKey;
+      } else if (factorySupplyTypes[0]?.key) {
+        materialTypeSelect.value = factorySupplyTypes[0].key;
+      }
+    };
+
+    const renderTargetCard = (players, playerName) => {
+      const selected = (Array.isArray(players) ? players : []).find((player) => String(player?.name || "") === String(playerName || ""));
+      if (!selected) {
+        targetName.textContent = "Nevybrán cíl";
+        targetAlliance.textContent = "Bez aliance";
+        targetDistricts.textContent = "Districtů: 0";
+        targetActivity.textContent = "Poslední aktivita: -";
+        targetThreat.textContent = "Low threat";
+        targetThreat.dataset.tone = "low";
+        targetAvatar.src = "";
+        targetAvatar.alt = "Target avatar";
+        targetAvatar.classList.add("is-empty");
+        targetAvatarFallback.textContent = "??";
+        return null;
+      }
+
+      const allianceLabel = String(selected?.allianceName || "").trim() || "Bez aliance";
+      const districtCount = Math.max(0, Math.floor(Number(selected?.districtCount || 0)));
+      const threat = resolveBountyThreatLevel(districtCount);
+      const avatar = String(selected?.avatar || "").trim();
+
+      targetName.textContent = String(selected?.name || "Hráč");
+      targetAlliance.textContent = allianceLabel === "Bez aliance" ? "Bez aliance" : `[${allianceLabel}]`;
+      targetDistricts.textContent = `Districtů: ${districtCount}`;
+      targetActivity.textContent = `Poslední aktivita: ${resolveBountyLastActivityLabel(selected)}`;
+      targetThreat.textContent = threat.label;
+      targetThreat.dataset.tone = threat.tone;
+      targetAvatarFallback.textContent = String(selected?.name || "??").trim().slice(0, 2).toUpperCase() || "??";
+
+      if (avatar) {
+        targetAvatar.src = avatar;
+        targetAvatar.alt = `Avatar ${selected.name}`;
+        targetAvatar.classList.remove("is-empty");
+      } else {
+        targetAvatar.src = "";
+        targetAvatar.alt = "Target avatar";
+        targetAvatar.classList.add("is-empty");
+      }
+
+      return selected;
+    };
+    const syncRewardInputs = () => {
+      const aggregateAvailability = getBountyAggregateAvailabilityMap();
+      const detailedAvailability = getBountyAvailableResourceMap();
+      const selectedDrugKey = String(drugTypeSelect.value || "").trim();
+      const selectedMaterialKey = String(materialTypeSelect.value || "").trim();
+
+      const cashMax = Math.max(0, Math.floor(Number(aggregateAvailability.cash || 0)));
+      const drugsMax = Math.max(0, Math.floor(Number(detailedAvailability[selectedDrugKey] || 0)));
+      const materialsMax = Math.max(0, Math.floor(Number(detailedAvailability[selectedMaterialKey] || 0)));
+
+      cashRange.max = String(cashMax);
+      cashInput.max = String(cashMax);
+      cashRange.value = String(Math.min(cashMax, Math.max(0, Math.floor(Number(cashRange.value || cashInput.value || 0)))));
+      cashInput.value = String(Math.min(cashMax, Math.max(0, Math.floor(Number(cashInput.value || cashRange.value || 0)))));
+      clampInputValue(drugsInput, drugsMax);
+      clampInputValue(materialsInput, materialsMax);
+
+      cashAvailable.textContent = `máš: ${cashMax.toLocaleString("cs-CZ")}`;
+      drugsAvailable.textContent = `máš: ${drugsMax.toLocaleString("cs-CZ")} ks`;
+      materialsAvailable.textContent = `máš: ${materialsMax.toLocaleString("cs-CZ")} ks`;
+    };
+
+    const syncDistrictFieldState = () => {
+      const objectiveType = getSelectedObjectiveType();
+      const districtMode = objectiveType === "occupy-sector";
+      districtField.hidden = !districtMode;
+      districtSelect.disabled = !districtMode;
+      if (!districtMode) districtSelect.value = "";
+    };
+
+    const syncPreview = (players) => {
+      const selectedTarget = renderTargetCard(players, targetSelect.value);
+      const objectiveType = getSelectedObjectiveType();
+      const durationHours = getSelectedDurationHours();
+      const selectedDrug = storageDrugTypes.find((item) => item.key === String(drugTypeSelect.value || "").trim());
+      const selectedMaterial = factorySupplyTypes.find((item) => item.key === String(materialTypeSelect.value || "").trim());
+      const cashAmount = Math.max(0, Math.floor(Number(cashInput.value || cashRange.value || 0)));
+      const drugAmount = Math.max(0, Math.floor(Number(drugsInput.value || 0)));
+      const materialAmount = Math.max(0, Math.floor(Number(materialsInput.value || 0)));
+      const totalValue = cashAmount
+        + drugAmount * getBountyUnitValue(selectedDrug?.key)
+        + materialAmount * getBountyUnitValue(selectedMaterial?.key);
+      const progressPct = Math.max(0, Math.min(100, Math.round((totalValue / BOUNTY_HUNT_MODE_THRESHOLD) * 100)));
+
+      previewTarget.textContent = selectedTarget?.name || "Nevybrán cíl";
+      previewValue.textContent = formatBountyMoneyValue(totalValue);
+      previewType.textContent = formatBountyObjectiveLabel(objectiveType);
+      previewDuration.textContent = `${durationHours}h`;
+      previewAnonymous.textContent = anonymousInput.checked ? "Anonymní vypsání" : "Veřejné vypsání";
+
+      if (totalValue >= BOUNTY_HUNT_MODE_THRESHOLD) {
+        huntModeState.textContent = "HUNT MODE AKTIVNÍ";
+        huntModeState.dataset.mode = "active";
+        huntModeProgressFill.style.width = "100%";
+        huntModeProgressLabel.textContent = "Celé město dostalo důvod jít po cíli.";
+      } else {
+        huntModeState.textContent = "Hunt mode se plní";
+        huntModeState.dataset.mode = "charging";
+        huntModeProgressFill.style.width = `${progressPct}%`;
+        huntModeProgressLabel.textContent = `Do HUNT MODE zbývá ${formatBountyMoneyValue(BOUNTY_HUNT_MODE_THRESHOLD - totalValue)}.`;
+      }
+
+      submitBtn.disabled = !selectedTarget || totalValue <= 0;
+    };
+
+    const renderBountyModalState = () => {
+      const players = collectBountyEligiblePlayers();
+      renderTargetOptions(players);
+      renderDistrictOptions(targetSelect.value);
+      renderRewardTypeOptions();
+      syncRewardInputs();
+      syncDistrictFieldState();
+      syncPreview(players);
+      return players;
+    };
+
+    let initialized = root.dataset.initialized === "1";
+    const closeModal = () => {
+      root.classList.add("hidden");
+      setMobileTopbarCoveredByPrimaryModal(false);
+    };
+    const openModal = () => {
+      root.classList.remove("hidden");
+      setMobileTopbarCoveredByPrimaryModal(true);
+      try {
+        renderBountyModalState();
+      } catch {
+        pushEvent("Bounty kartu se nepodařilo načíst.");
+      }
+    };
+
+    if (!initialized) {
+      root.dataset.initialized = "1";
+      let lastTriggerAt = 0;
+      const openFromTrigger = (source = "city-events-card") => {
+        const now = Date.now();
+        if (now - lastTriggerAt < 220) return;
+        lastTriggerAt = now;
+        document.dispatchEvent(new CustomEvent("empire:bounty-button-clicked", {
+          detail: { source }
+        }));
+        openModal();
+      };
+
+      const bindDirectButton = () => {
+        const button = document.getElementById("city-events-target-btn");
+        if (!button || button.dataset.bountyBound === "1") return;
+        button.dataset.bountyBound = "1";
+        const handleOpen = (event, source) => {
+          event.preventDefault();
+          openFromTrigger(source);
+        };
+        button.addEventListener("click", (event) => handleOpen(event, "city-events-card-direct"));
+        button.addEventListener("pointerdown", (event) => handleOpen(event, "city-events-card-pointer"));
+      };
+
+      bindDirectButton();
+      window.Empire.openBountyModalShortcut = () => {
+        openFromTrigger("city-events-card-shortcut");
+      };
+
+      if (root.dataset.triggerBound !== "1") {
+        root.dataset.triggerBound = "1";
+        document.addEventListener("click", (event) => {
+          const trigger = event.target instanceof Element ? event.target.closest("#city-events-target-btn") : null;
+          if (!trigger) return;
+          event.preventDefault();
+          openFromTrigger("city-events-card-delegated");
+        }, true);
+        document.addEventListener("pointerdown", (event) => {
+          const trigger = event.target instanceof Element ? event.target.closest("#city-events-target-btn") : null;
+          if (!trigger) return;
+          event.preventDefault();
+          openFromTrigger("city-events-card-delegated-pointer");
+        }, true);
+        document.addEventListener("empire:open-bounty-modal", () => {
+          openFromTrigger("city-events-card-custom-event");
+        });
+      }
+
+      if (backdrop) backdrop.addEventListener("click", closeModal);
+      if (closeBtn) closeBtn.addEventListener("click", closeModal);
+      cancelBtn.addEventListener("click", closeModal);
+
+      targetSelect.addEventListener("change", () => {
+        const players = collectBountyEligiblePlayers();
+        renderDistrictOptions(targetSelect.value);
+        syncPreview(players);
+      });
+      districtSelect.addEventListener("change", () => {
+        syncPreview(collectBountyEligiblePlayers());
+      });
+
+      cashRange.addEventListener("input", () => {
+        cashInput.value = String(Math.max(0, Math.floor(Number(cashRange.value || 0))));
+        syncPreview(collectBountyEligiblePlayers());
+      });
+      cashInput.addEventListener("input", () => {
+        const nextValue = clampInputValue(cashInput, Number(cashInput.max || 0));
+        cashRange.value = String(nextValue);
+        syncPreview(collectBountyEligiblePlayers());
+      });
+      drugsInput.addEventListener("input", () => {
+        clampInputValue(drugsInput, Number(drugsInput.max || 0));
+        syncPreview(collectBountyEligiblePlayers());
+      });
+      materialsInput.addEventListener("input", () => {
+        clampInputValue(materialsInput, Number(materialsInput.max || 0));
+        syncPreview(collectBountyEligiblePlayers());
+      });
+      drugTypeSelect.addEventListener("change", () => {
+        syncRewardInputs();
+        syncPreview(collectBountyEligiblePlayers());
+      });
+      materialTypeSelect.addEventListener("change", () => {
+        syncRewardInputs();
+        syncPreview(collectBountyEligiblePlayers());
+      });
+      anonymousInput.addEventListener("change", () => {
+        syncPreview(collectBountyEligiblePlayers());
+      });
+      objectiveInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          syncDistrictFieldState();
+          syncPreview(collectBountyEligiblePlayers());
+        });
+      });
+      durationInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          syncPreview(collectBountyEligiblePlayers());
+        });
+      });
+      submitBtn.addEventListener("click", async () => {
+        const eligiblePlayers = collectBountyEligiblePlayers();
+        const targetNameValue = String(targetSelect.value || "").trim();
+        if (!targetNameValue) {
+          pushEvent("Vyber cílového hráče pro bounty.");
+          return;
+        }
+        const selectedTarget = eligiblePlayers.find((player) => String(player?.name || "").trim() === targetNameValue);
+        if (!selectedTarget) {
+          pushEvent("Na členy vlastní aliance nelze bounty vypsat.");
+          return;
+        }
+
+        const selectedDrug = storageDrugTypes.find((item) => item.key === String(drugTypeSelect.value || "").trim());
+        const selectedMaterial = factorySupplyTypes.find((item) => item.key === String(materialTypeSelect.value || "").trim());
+        const rewards = [
+          {
+            key: "cash_bundle",
+            label: "Cash",
+            amount: Math.max(0, Math.floor(Number(cashInput.value || cashRange.value || 0)))
+          },
+          selectedDrug ? {
+            key: selectedDrug.key,
+            label: selectedDrug.name,
+            amount: Math.max(0, Math.floor(Number(drugsInput.value || 0)))
+          } : null,
+          selectedMaterial ? {
+            key: selectedMaterial.key,
+            label: selectedMaterial.name,
+            amount: Math.max(0, Math.floor(Number(materialsInput.value || 0)))
+          } : null
+        ].filter((entry) => entry && entry.amount > 0);
+        if (!rewards.length) {
+          pushEvent("Bounty musí obsahovat alespoň jednu odměnu.");
+          return;
+        }
+
+        for (let i = 0; i < rewards.length; i += 1) {
+          const spendResult = spendBountyResource(rewards[i].key, rewards[i].amount);
+          if (!spendResult?.ok) {
+            for (let rollbackIndex = 0; rollbackIndex < i; rollbackIndex += 1) {
+              restoreBountyResource(rewards[rollbackIndex].key, rewards[rollbackIndex].amount);
+            }
+            pushEvent(`Nedostatek zdroje pro bounty: ${rewards[i].label}.`);
+            syncRewardInputs();
+            syncPreview(eligiblePlayers);
+            return;
+          }
+        }
+
+        const objectiveType = getSelectedObjectiveType();
+        const districtValue = objectiveType === "occupy-sector"
+          ? String(districtSelect.value || "").trim()
+          : "";
+
+        try {
+          await createPersistedBounty({
+            targetUsername: selectedTarget.name,
+            targetDistrictId: districtValue || null,
+            rewards,
+            objectiveType,
+            isAnonymous: Boolean(anonymousInput.checked),
+            durationHours: getSelectedDurationHours()
+          });
+          pushEvent(
+            districtValue
+              ? `Bounty vypsána na ${selectedTarget.name} za #${districtValue}.`
+              : `Bounty vypsána na ${selectedTarget.name}.`
+          );
+          renderBountyModalState();
+        } catch (error) {
+          rewards.forEach((reward) => {
+            restoreBountyResource(reward.key, reward.amount);
+          });
+          const errorCode = String(error?.message || error?.error || "").trim();
+          if (errorCode === "allied_target") {
+            pushEvent("Na členy vlastní aliance nelze bounty vypsat.");
+          } else if (errorCode === "invalid_target_district") {
+            pushEvent("Vybraný district už cíli nepatří.");
+          } else if (errorCode === "missing_target") {
+            pushEvent("Cílový hráč už není dostupný.");
+          } else {
+            pushEvent("Bounty se nepodařilo uložit.");
+          }
+          syncRewardInputs();
+          syncPreview(eligiblePlayers);
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !root.classList.contains("hidden")) {
+          closeModal();
+        }
+      });
+      initialized = true;
+    }
+
+    try {
+      renderBountyModalState();
+    } catch {}
+
+    void loadPersistedBounties().then((entries) => {
+      syncBountyDistrictMarkers(entries);
+    }).catch(() => {
+      syncBountyDistrictMarkers([]);
+    });
+  }
+
+  function ensureBountyModalShell() {
+    return ensureBountyModalShellV2();
+    let root = document.getElementById("bounty-modal");
+    if (root) {
+      const requiredIds = [
+        "bounty-modal-target",
+        "bounty-target-avatar",
+        "bounty-target-activity",
+        "bounty-drug-type",
+        "bounty-material-type",
+        "bounty-preview-value",
+        "bounty-hunt-progress-fill"
+      ];
+      const missingRequiredNode = requiredIds.some((id) => !root.querySelector(`#${id}`));
+      if (missingRequiredNode) {
+        root.remove();
+        root = null;
+      }
+    }
+
+    if (!root) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = `
+        <div id="bounty-modal" class="modal hidden bounty-modal">
+          <div id="bounty-modal-backdrop" class="modal__backdrop"></div>
+          <div class="modal__content bounty-modal__content">
+            <div class="bounty-modal__header">
+              <div class="bounty-modal__header-copy">
+                <div class="bounty-modal__eyebrow">Bounty board</div>
+                <h3>VYPSAT ODMĚNU</h3>
+                <div class="bounty-modal__header-note">Označ hráče a vystav ho celému městu.</div>
+              </div>
+              <button id="bounty-modal-close" class="modal__close" type="button" aria-label="Zavřít">×</button>
+            </div>
+            <div class="bounty-modal__body">
+              <section class="storage-modal__section bounty-modal__column bounty-modal__column--left">
+                <div class="bounty-modal__block">
+                  <div class="bounty-modal__block-head">
+                    <div class="bounty-modal__block-kicker">Target</div>
+                    <div class="bounty-modal__block-title">Koho jdeš označit</div>
+                  </div>
+                  <label class="bounty-modal__field">
+                    <span>Hráč</span>
+                    <select id="bounty-modal-target" class="bounty-modal__input">
+                      <option value="Mariah">Mariah • 1 district</option>
+                    </select>
+                  </label>
+                  <div class="bounty-modal__target-card">
+                    <div class="bounty-modal__target-avatar-wrap">
+                      <img id="bounty-target-avatar" class="bounty-modal__target-avatar is-empty" alt="Target avatar" />
+                      <span id="bounty-target-avatar-fallback" class="bounty-modal__target-avatar-fallback">??</span>
+                    </div>
+                    <div class="bounty-modal__target-copy">
+                      <div id="bounty-target-name" class="bounty-modal__target-name">Nevybrán cíl</div>
+                      <div id="bounty-target-alliance" class="bounty-modal__target-alliance">Bez aliance</div>
+                      <div id="bounty-target-districts" class="bounty-modal__target-stat">Districtů: 0</div>
+                      <div id="bounty-target-activity" class="bounty-modal__target-stat">Poslední aktivita: -</div>
+                    </div>
+                    <div id="bounty-target-threat" class="bounty-modal__threat-badge" data-tone="low">Low threat</div>
+                  </div>
+                </div>
+
+                <div class="bounty-modal__block">
+                  <div class="bounty-modal__block-head">
+                    <div class="bounty-modal__block-kicker">Nastavení odměny</div>
+                    <div class="bounty-modal__block-title">Co za něj vypisuješ</div>
+                  </div>
+                  <div class="bounty-modal__resource-stack">
+                    <div class="bounty-modal__resource-row">
+                      <div class="bounty-modal__resource-meta">
+                        <span class="bounty-modal__resource-icon">💵</span>
+                        <div class="bounty-modal__resource-copy">
+                          <div class="bounty-modal__resource-name">Cash</div>
+                          <div id="bounty-cash-available" class="bounty-modal__resource-have">máš: 0</div>
+                        </div>
+                      </div>
+                      <div class="bounty-modal__cash-controls">
+                        <input id="bounty-cash-range" class="bounty-modal__range" type="range" min="0" max="0" step="1" value="0" />
+                        <input id="bounty-cash-input" class="bounty-modal__input bounty-modal__number-input" type="number" min="0" max="0" step="1" value="0" />
+                      </div>
+                    </div>
+                    <div class="bounty-modal__resource-row">
+                      <div class="bounty-modal__resource-meta">
+                        <span class="bounty-modal__resource-icon">💊</span>
+                        <div class="bounty-modal__resource-copy">
+                          <div class="bounty-modal__resource-name">Drogy</div>
+                          <div id="bounty-drugs-available" class="bounty-modal__resource-have">máš: 0 ks</div>
+                        </div>
+                      </div>
+                      <div class="bounty-modal__typed-resource">
+                        <select id="bounty-drug-type" class="bounty-modal__input"></select>
+                        <input id="bounty-drugs-input" class="bounty-modal__input bounty-modal__number-input" type="number" min="0" max="0" step="1" value="0" />
+                      </div>
+                    </div>
+                    <div class="bounty-modal__resource-row">
+                      <div class="bounty-modal__resource-meta">
+                        <span class="bounty-modal__resource-icon">🧱</span>
+                        <div class="bounty-modal__resource-copy">
+                          <div class="bounty-modal__resource-name">Materiály</div>
+                          <div id="bounty-materials-available" class="bounty-modal__resource-have">máš: 0 ks</div>
+                        </div>
+                      </div>
+                      <div class="bounty-modal__typed-resource">
+                        <select id="bounty-material-type" class="bounty-modal__input"></select>
+                        <input id="bounty-materials-input" class="bounty-modal__input bounty-modal__number-input" type="number" min="0" max="0" step="1" value="0" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="bounty-modal__block">
+                  <div class="bounty-modal__block-head">
+                    <div class="bounty-modal__block-kicker">Typ bounty</div>
+                    <div class="bounty-modal__block-title">Co má město splnit</div>
+                  </div>
+                  <div class="bounty-modal__card-choice-grid">
+                    <label class="bounty-modal__choice-card">
+                      <input type="radio" name="bounty-objective" value="occupy-sector" checked />
+                      <span>Za obsazení districtu</span>
+                    </label>
+                    <label class="bounty-modal__choice-card">
+                      <input type="radio" name="bounty-objective" value="successful-attack" />
+                      <span>Za úspěšný útok</span>
+                    </label>
+                    <label class="bounty-modal__choice-card">
+                      <input type="radio" name="bounty-objective" value="destroy-units" />
+                      <span>Za zničení jednotek</span>
+                    </label>
+                  </div>
+                  <label id="bounty-district-field" class="bounty-modal__field bounty-modal__field--district">
+                    <span>Konkrétní district</span>
+                    <select id="bounty-modal-district" class="bounty-modal__input"></select>
+                  </label>
+                </div>
+
+                <div class="bounty-modal__settings-grid">
+                  <div class="bounty-modal__block bounty-modal__block--compact">
+                    <div class="bounty-modal__block-head">
+                      <div class="bounty-modal__block-kicker">Trvání</div>
+                    </div>
+                    <div class="bounty-modal__segmented">
+                      <label class="bounty-modal__segment">
+                        <input type="radio" name="bounty-duration" value="6" />
+                        <span>6h</span>
+                      </label>
+                      <label class="bounty-modal__segment">
+                        <input type="radio" name="bounty-duration" value="12" checked />
+                        <span>12h</span>
+                      </label>
+                      <label class="bounty-modal__segment">
+                        <input type="radio" name="bounty-duration" value="24" />
+                        <span>24h</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="bounty-modal__block bounty-modal__block--compact">
+                    <div class="bounty-modal__block-head">
+                      <div class="bounty-modal__block-kicker">Anonymita</div>
+                    </div>
+                    <label class="bounty-modal__toggle-card">
+                      <input id="bounty-anonymous-input" type="checkbox" checked />
+                      <span>Anonymní vypsání odměny</span>
+                      <small>OFF = target vidí, kdo ho označil</small>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="storage-modal__section bounty-modal__column bounty-modal__column--right">
+                <div class="bounty-modal__preview-card">
+                  <div class="bounty-modal__preview-label">HOT TARGET</div>
+                  <div id="bounty-preview-target" class="bounty-modal__preview-target">Nevybrán cíl</div>
+                  <div id="bounty-preview-value" class="bounty-modal__preview-value">$0</div>
+                  <div class="bounty-modal__preview-meta">
+                    <div><span>Typ</span><strong id="bounty-preview-type">Za obsazení districtu</strong></div>
+                    <div><span>Trvání</span><strong id="bounty-preview-duration">12h</strong></div>
+                    <div><span>Anonymita</span><strong id="bounty-preview-anonymous">Anonymní vypsání</strong></div>
+                  </div>
+                </div>
+
+                <div class="bounty-modal__hunt-box">
+                  <div id="bounty-hunt-state" class="bounty-modal__hunt-state" data-mode="charging">Hunt mode se plní</div>
+                  <div class="bounty-modal__hunt-progress">
+                    <div id="bounty-hunt-progress-fill" class="bounty-modal__hunt-progress-fill"></div>
+                  </div>
+                  <div id="bounty-hunt-progress-label" class="bounty-modal__hunt-progress-label">Do HUNT MODE zbývá $10,000.</div>
+                </div>
+
+                <div class="bounty-modal__warning-box">
+                  <div>Ta akce upozorní celé město.</div>
+                  <div>Po potvrzení nelze bounty zrušit.</div>
+                  <div>Target může reagovat protiakcí.</div>
+                </div>
+
+                <div class="bounty-modal__actions">
+                  <button id="bounty-modal-cancel" class="btn bounty-modal__cancel" type="button">Zrušit</button>
+                  <button id="bounty-modal-submit" class="btn bounty-modal__submit" type="button">VYPSAT ODMĚNU</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      `;
+      root = wrapper.firstElementChild;
+      document.body.appendChild(root);
+    }
+
+    return {
+      root,
+      backdrop: document.getElementById("bounty-modal-backdrop"),
+      closeBtn: document.getElementById("bounty-modal-close"),
+      cancelBtn: document.getElementById("bounty-modal-cancel"),
+      targetSelect: document.getElementById("bounty-modal-target"),
+      districtSelect: document.getElementById("bounty-modal-district"),
+      submitBtn: document.getElementById("bounty-modal-submit"),
+      targetName: document.getElementById("bounty-target-name"),
+      targetAlliance: document.getElementById("bounty-target-alliance"),
+      targetDistricts: document.getElementById("bounty-target-districts"),
+      targetActivity: document.getElementById("bounty-target-activity"),
+      targetThreat: document.getElementById("bounty-target-threat"),
+      targetAvatar: document.getElementById("bounty-target-avatar"),
+      targetAvatarFallback: document.getElementById("bounty-target-avatar-fallback"),
+      cashRange: document.getElementById("bounty-cash-range"),
+      cashInput: document.getElementById("bounty-cash-input"),
+      cashAvailable: document.getElementById("bounty-cash-available"),
+      drugTypeSelect: document.getElementById("bounty-drug-type"),
+      drugsInput: document.getElementById("bounty-drugs-input"),
+      drugsAvailable: document.getElementById("bounty-drugs-available"),
+      materialTypeSelect: document.getElementById("bounty-material-type"),
+      materialsInput: document.getElementById("bounty-materials-input"),
+      materialsAvailable: document.getElementById("bounty-materials-available"),
+      anonymousInput: document.getElementById("bounty-anonymous-input"),
+      previewTarget: document.getElementById("bounty-preview-target"),
+      previewValue: document.getElementById("bounty-preview-value"),
+      previewType: document.getElementById("bounty-preview-type"),
+      previewDuration: document.getElementById("bounty-preview-duration"),
+      previewAnonymous: document.getElementById("bounty-preview-anonymous"),
+      huntModeState: document.getElementById("bounty-hunt-state"),
+      huntModeProgressFill: document.getElementById("bounty-hunt-progress-fill"),
+      huntModeProgressLabel: document.getElementById("bounty-hunt-progress-label"),
+      districtField: document.getElementById("bounty-district-field")
+    };
+  }
+
+  function collectBountyEligiblePlayersV2() {
+    const ownOwnerNames = new Set(getPlayerOwnerNameSet());
+    const ownOwnerKey = resolveCurrentPlayerOwnerKey();
+    if (ownOwnerKey) ownOwnerNames.add(ownOwnerKey);
+
+    const alliedOwnerNames = new Set(getActiveAllianceOwnerNames());
+    const localAllianceState = !window.Empire.token ? getLocalAllianceState() : null;
+    const activeAlliance = localAllianceState?.activeAlliance || null;
+    (Array.isArray(activeAlliance?.members) ? activeAlliance.members : [])
+      .map((member) => normalizeOwnerName(member?.username))
+      .filter(Boolean)
+      .forEach((key) => alliedOwnerNames.add(key));
+
+    const ownAllianceName = extractAllianceDisplayName(
+      activeAlliance?.name
+      || cachedProfile?.alliance
+      || window.Empire.player?.alliance
+      || "Bez aliance"
+    );
+    const shouldFilterAllianceByName = ownAllianceName && ownAllianceName !== "Žádná" && ownAllianceName !== "Bez aliance";
+
+    const byName = new Map();
+    (Array.isArray(window.Empire.districts) ? window.Empire.districts : []).forEach((district) => {
+      const ownerName = String(
+        district?.ownerNick
+        || district?.owner_username
+        || district?.ownerUsername
+        || district?.owner
+        || ""
+      ).trim();
+      const ownerKey = normalizeOwnerName(ownerName);
+      if (!ownerKey || ownOwnerNames.has(ownerKey) || alliedOwnerNames.has(ownerKey)) return;
+
+      const allianceName = String(
+        district?.ownerAllianceName
+        || district?.owner_alliance_name
+        || ""
+      ).trim() || "Bez aliance";
+      if (shouldFilterAllianceByName && extractAllianceDisplayName(allianceName) === ownAllianceName) return;
+
+      const current = byName.get(ownerKey) || {
+        name: ownerName,
+        allianceName,
+        districtCount: 0,
+        avatar: String(district?.ownerAvatar || "").trim()
+      };
+      current.districtCount += 1;
+      if (!current.avatar) current.avatar = String(district?.ownerAvatar || "").trim();
+      if (!current.allianceName || current.allianceName === "Bez aliance") {
+        current.allianceName = allianceName;
+      }
+      byName.set(ownerKey, current);
+    });
+
+    let result = Array.from(byName.values())
+      .filter((entry) => Math.max(0, Math.floor(Number(entry?.districtCount || 0))) > 0)
+      .sort((a, b) => String(a?.name || "").localeCompare(String(b?.name || ""), "cs"));
+
+    if (!result.length && activePlayerScenarioKey === "alliance-ten-blackout") {
+      result = [{
+        name: "Mariah",
+        allianceName: "Bez aliance",
+        districtCount: 1,
+        avatar: ""
+      }];
+    }
+
+    return result;
+  }
+
+  function getBountyModalResourceAvailabilityV2() {
+    const economy = getLiveBountyEconomySnapshot();
+    const marketBalances = getGuestBlackoutLiveBalances() || {};
+    const domEconomy = getEconomySnapshotFromDom();
+    const factoryState = readFactoryPlayerSuppliesState();
+    const drugInventory = economy?.drugInventory && typeof economy.drugInventory === "object"
+      ? economy.drugInventory
+      : {};
+    const economyMoney = resolveMoneyBreakdown(economy || {});
+    const marketMoney = resolveMoneyBreakdown(marketBalances || {});
+    const domMoney = resolveMoneyBreakdown(domEconomy || {});
+
+    const availability = {
+      cash: Math.max(
+        0,
+        Math.floor(
+          isGuestBlackoutScenarioActive()
+            ? Math.max(economyMoney.cleanMoney || 0, marketMoney.cleanMoney || 0, domMoney.cleanMoney || 0)
+            : Math.max(economyMoney.cleanMoney || 0, domMoney.cleanMoney || 0)
+        )
+      )
+    };
+
+    storageDrugTypes.forEach((item) => {
+      availability[item.key] = Math.max(
+        0,
+        Math.floor(
+          Number(drugInventory[item.key] || 0)
+          || Number(economy?.[item.key] || 0)
+          || Number(marketBalances[item.key] || 0)
+        )
+      );
+    });
+
+    factorySupplyTypes.forEach((item) => {
+      availability[item.key] = Math.max(
+        0,
+        Math.floor(
+          Number(factoryState?.[item.key] || 0)
+          || Number(economy?.[item.key] || 0)
+          || Number(marketBalances[item.key] || 0)
+        )
+      );
+    });
+
+    return availability;
+  }
+
+  function formatBountyRewardSummaryV2(rewards) {
+    return (Array.isArray(rewards) ? rewards : [])
+      .map((reward) => `${Math.max(0, Math.floor(Number(reward?.amount || 0)))}x ${String(reward?.label || "").trim()}`)
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  function ensureBountyModalShellV2() {
+    let root = document.getElementById("bounty-modal");
+    if (root && !root.querySelector(".bounty-board__content")) {
+      root.remove();
+      root = null;
+    }
+
+    if (!root) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = `
+        <div id="bounty-modal" class="modal hidden bounty-board-modal">
+          <div id="bounty-modal-backdrop" class="modal__backdrop"></div>
+          <div class="modal__content bounty-board__content">
+            <header class="bounty-board__header">
+              <div class="bounty-board__header-copy">
+                <div class="bounty-board__eyebrow">Bounty board</div>
+                <h3>VYPSAT ODMĚNU</h3>
+                <p>Označ hráče a vystav ho celému městu.</p>
+              </div>
+              <button id="bounty-modal-close" class="modal__close" type="button" aria-label="Zavřít">×</button>
+            </header>
+            <div class="bounty-board__layout">
+              <section class="bounty-board__column bounty-board__column--left">
+                <div class="bounty-board__panel">
+                  <div class="bounty-board__panel-head">
+                    <span class="bounty-board__kicker">Target</span>
+                    <strong>Koho jdeš označit</strong>
+                  </div>
+                  <label class="bounty-board__field">
+                    <span>Hráč</span>
+                    <select id="bounty-modal-target" class="bounty-board__input"></select>
+                  </label>
+                  <div class="bounty-board__target-card">
+                    <div class="bounty-board__avatar-wrap">
+                      <img id="bounty-target-avatar" class="bounty-board__avatar is-empty" alt="Target avatar" />
+                      <span id="bounty-target-avatar-fallback" class="bounty-board__avatar-fallback">??</span>
+                    </div>
+                    <div class="bounty-board__target-copy">
+                      <div id="bounty-target-name" class="bounty-board__target-name">Nevybrán cíl</div>
+                      <div id="bounty-target-alliance" class="bounty-board__target-meta">Bez aliance</div>
+                      <div id="bounty-target-districts" class="bounty-board__target-meta">Districtů: 0</div>
+                      <div id="bounty-target-activity" class="bounty-board__target-meta">Poslední aktivita: -</div>
+                    </div>
+                    <div id="bounty-target-threat" class="bounty-board__threat" data-tone="low">Low threat</div>
+                  </div>
+                </div>
+
+                <div class="bounty-board__panel">
+                  <div class="bounty-board__panel-head">
+                    <span class="bounty-board__kicker">Nastavení odměny</span>
+                    <strong>Cash, drogy a materiály</strong>
+                  </div>
+                  <div class="bounty-board__resource-list">
+                    <div class="bounty-board__resource-row">
+                      <div class="bounty-board__resource-head">
+                        <span class="bounty-board__resource-icon">💵</span>
+                        <div>
+                          <div class="bounty-board__resource-name">Cash</div>
+                          <div id="bounty-cash-available" class="bounty-board__resource-have">Máš: 0$</div>
+                        </div>
+                      </div>
+                      <div class="bounty-board__resource-controls bounty-board__resource-controls--cash">
+                        <input id="bounty-cash-range" class="bounty-board__range" type="range" min="0" max="0" step="1" value="0" />
+                        <input id="bounty-cash-input" class="bounty-board__input bounty-board__input--number" type="number" min="0" max="0" step="1" value="0" />
+                      </div>
+                    </div>
+
+                    <div class="bounty-board__resource-row">
+                      <div class="bounty-board__resource-head">
+                        <span class="bounty-board__resource-icon">💊</span>
+                        <div>
+                          <div class="bounty-board__resource-name">Drogy</div>
+                          <div id="bounty-drugs-available" class="bounty-board__resource-have">Máš: 0 ks</div>
+                        </div>
+                      </div>
+                      <div class="bounty-board__resource-controls">
+                        <select id="bounty-drug-type" class="bounty-board__input"></select>
+                        <input id="bounty-drugs-input" class="bounty-board__input bounty-board__input--number" type="number" min="0" max="0" step="1" value="0" />
+                      </div>
+                    </div>
+
+                    <div class="bounty-board__resource-row">
+                      <div class="bounty-board__resource-head">
+                        <span class="bounty-board__resource-icon">🧱</span>
+                        <div>
+                          <div class="bounty-board__resource-name">Materiály</div>
+                          <div id="bounty-materials-available" class="bounty-board__resource-have">Máš: 0 ks</div>
+                        </div>
+                      </div>
+                      <div class="bounty-board__resource-controls">
+                        <select id="bounty-material-type" class="bounty-board__input"></select>
+                        <input id="bounty-materials-input" class="bounty-board__input bounty-board__input--number" type="number" min="0" max="0" step="1" value="0" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bounty-board__panel">
+                  <div class="bounty-board__panel-head">
+                    <span class="bounty-board__kicker">Typ bounty</span>
+                    <strong>Co musí město splnit</strong>
+                  </div>
+                  <div class="bounty-board__choice-grid">
+                    <label class="bounty-board__choice">
+                      <input type="radio" name="bounty-objective" value="occupy-sector" checked />
+                      <span>Za obsazení districtu</span>
+                    </label>
+                    <label class="bounty-board__choice">
+                      <input type="radio" name="bounty-objective" value="successful-attack" />
+                      <span>Za úspěšný útok</span>
+                    </label>
+                    <label class="bounty-board__choice">
+                      <input type="radio" name="bounty-objective" value="destroy-units" />
+                      <span>Za zničení jednotek</span>
+                    </label>
+                  </div>
+                  <label id="bounty-district-field" class="bounty-board__field">
+                    <span>Konkrétní district</span>
+                    <select id="bounty-modal-district" class="bounty-board__input"></select>
+                  </label>
+                </div>
+
+                <div class="bounty-board__settings">
+                  <div class="bounty-board__panel bounty-board__panel--compact">
+                    <div class="bounty-board__panel-head">
+                      <span class="bounty-board__kicker">Trvání</span>
+                    </div>
+                    <div class="bounty-board__segment-grid">
+                      <label class="bounty-board__segment"><input type="radio" name="bounty-duration" value="6" /><span>6h</span></label>
+                      <label class="bounty-board__segment"><input type="radio" name="bounty-duration" value="12" checked /><span>12h</span></label>
+                      <label class="bounty-board__segment"><input type="radio" name="bounty-duration" value="24" /><span>24h</span></label>
+                    </div>
+                  </div>
+                  <div class="bounty-board__panel bounty-board__panel--compact">
+                    <div class="bounty-board__panel-head">
+                      <span class="bounty-board__kicker">Anonymita</span>
+                    </div>
+                    <label class="bounty-board__toggle">
+                      <input id="bounty-anonymous-input" type="checkbox" checked />
+                      <span>Anonymní vypsání odměny</span>
+                      <small>OFF = target vidí, kdo ho označil.</small>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="bounty-board__column bounty-board__column--right">
+                <div class="bounty-board__panel bounty-board__preview">
+                  <div class="bounty-board__preview-label">HOT TARGET</div>
+                  <div id="bounty-preview-target" class="bounty-board__preview-target">Nevybrán cíl</div>
+                  <div id="bounty-preview-value" class="bounty-board__preview-value">$0</div>
+                  <div class="bounty-board__preview-grid">
+                    <div><span>Typ</span><strong id="bounty-preview-type">Za obsazení districtu</strong></div>
+                    <div><span>Trvání</span><strong id="bounty-preview-duration">12h</strong></div>
+                    <div><span>Anonymita</span><strong id="bounty-preview-anonymous">Anonymní</strong></div>
+                  </div>
+                </div>
+
+                <div class="bounty-board__panel">
+                  <div id="bounty-hunt-state" class="bounty-board__hunt-state" data-mode="charging">Hunt mode se plní</div>
+                  <div class="bounty-board__progress"><div id="bounty-hunt-progress-fill" class="bounty-board__progress-fill"></div></div>
+                  <div id="bounty-hunt-progress-label" class="bounty-board__progress-label">Do HUNT MODE zbývá $10,000.</div>
+                </div>
+
+                <div class="bounty-board__panel bounty-board__warning">
+                  <div>Ta akce upozorní celé město.</div>
+                  <div>Po potvrzení nelze bounty zrušit.</div>
+                  <div>Target může reagovat protiakcí.</div>
+                </div>
+
+                <div class="bounty-board__panel bounty-board__table-panel">
+                  <div class="bounty-board__panel-head">
+                    <span class="bounty-board__kicker">Aktivní odměny</span>
+                    <strong>Hráči a odměny</strong>
+                  </div>
+                  <div class="bounty-board__table-wrap">
+                    <table class="bounty-board__table">
+                      <thead>
+                        <tr><th>Hráč</th><th>District</th><th>Odměna</th><th>Režim</th><th>Do</th></tr>
+                      </thead>
+                      <tbody id="bounty-board-body"></tbody>
+                    </table>
+                    <div id="bounty-board-empty" class="bounty-board__empty">Zatím tu není žádná aktivní bounty.</div>
+                  </div>
+                </div>
+
+                <div class="bounty-board__actions">
+                  <button id="bounty-modal-cancel" class="btn bounty-board__cancel" type="button">Zrušit</button>
+                  <button id="bounty-modal-submit" class="btn bounty-board__submit" type="button">VYPSAT ODMĚNU</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      `;
+      root = wrapper.firstElementChild;
+      document.body.appendChild(root);
+    }
+
+    return {
+      root,
+      backdrop: document.getElementById("bounty-modal-backdrop"),
+      closeBtn: document.getElementById("bounty-modal-close"),
+      cancelBtn: document.getElementById("bounty-modal-cancel"),
+      targetSelect: document.getElementById("bounty-modal-target"),
+      districtSelect: document.getElementById("bounty-modal-district"),
+      submitBtn: document.getElementById("bounty-modal-submit"),
+      targetName: document.getElementById("bounty-target-name"),
+      targetAlliance: document.getElementById("bounty-target-alliance"),
+      targetDistricts: document.getElementById("bounty-target-districts"),
+      targetActivity: document.getElementById("bounty-target-activity"),
+      targetThreat: document.getElementById("bounty-target-threat"),
+      targetAvatar: document.getElementById("bounty-target-avatar"),
+      targetAvatarFallback: document.getElementById("bounty-target-avatar-fallback"),
+      cashRange: document.getElementById("bounty-cash-range"),
+      cashInput: document.getElementById("bounty-cash-input"),
+      cashAvailable: document.getElementById("bounty-cash-available"),
+      drugTypeSelect: document.getElementById("bounty-drug-type"),
+      drugsInput: document.getElementById("bounty-drugs-input"),
+      drugsAvailable: document.getElementById("bounty-drugs-available"),
+      materialTypeSelect: document.getElementById("bounty-material-type"),
+      materialsInput: document.getElementById("bounty-materials-input"),
+      materialsAvailable: document.getElementById("bounty-materials-available"),
+      anonymousInput: document.getElementById("bounty-anonymous-input"),
+      previewTarget: document.getElementById("bounty-preview-target"),
+      previewValue: document.getElementById("bounty-preview-value"),
+      previewType: document.getElementById("bounty-preview-type"),
+      previewDuration: document.getElementById("bounty-preview-duration"),
+      previewAnonymous: document.getElementById("bounty-preview-anonymous"),
+      huntModeState: document.getElementById("bounty-hunt-state"),
+      huntModeProgressFill: document.getElementById("bounty-hunt-progress-fill"),
+      huntModeProgressLabel: document.getElementById("bounty-hunt-progress-label"),
+      districtField: document.getElementById("bounty-district-field"),
+      boardBody: document.getElementById("bounty-board-body"),
+      boardEmpty: document.getElementById("bounty-board-empty")
+    };
+  }
+
+  function initBountyModalV2() {
+    const shell = ensureBountyModalShellV2();
+    const {
+      root,
+      backdrop,
+      closeBtn,
+      cancelBtn,
+      targetSelect,
+      districtSelect,
+      submitBtn,
+      targetName,
+      targetAlliance,
+      targetDistricts,
+      targetActivity,
+      targetThreat,
+      targetAvatar,
+      targetAvatarFallback,
+      cashRange,
+      cashInput,
+      cashAvailable,
+      drugTypeSelect,
+      drugsInput,
+      drugsAvailable,
+      materialTypeSelect,
+      materialsInput,
+      materialsAvailable,
+      anonymousInput,
+      previewTarget,
+      previewValue,
+      previewType,
+      previewDuration,
+      previewAnonymous,
+      huntModeState,
+      huntModeProgressFill,
+      huntModeProgressLabel,
+      districtField,
+      boardBody,
+      boardEmpty
+    } = shell;
+    if (!root || !targetSelect || !districtSelect || !submitBtn || !boardBody || !boardEmpty) return;
+
+    const objectiveInputs = Array.from(root.querySelectorAll('input[name="bounty-objective"]'));
+    const durationInputs = Array.from(root.querySelectorAll('input[name="bounty-duration"]'));
+    if (!objectiveInputs.length || !durationInputs.length) return;
+
+    const modalState = root.__bountyV2State || {
+      players: [],
+      bounties: [],
+      openLock: 0
+    };
+    root.__bountyV2State = modalState;
+
+    const getSelectedObjectiveType = () => {
+      const selected = objectiveInputs.find((input) => input.checked);
+      return String(selected?.value || "occupy-sector").trim() || "occupy-sector";
+    };
+    const getSelectedDurationHours = () => {
+      const selected = durationInputs.find((input) => input.checked);
+      return Math.max(1, Math.min(24, Math.floor(Number(selected?.value || 12))));
+    };
+    const clampIntInput = (input, maxValue) => {
+      const safeMax = Math.max(0, Math.floor(Number(maxValue || 0)));
+      const nextValue = Math.min(safeMax, Math.max(0, Math.floor(Number(input?.value || 0))));
+      input.max = String(safeMax);
+      input.value = String(nextValue);
+      return nextValue;
+    };
+    const selectedPlayer = () => modalState.players.find((player) => String(player?.name || "").trim() === String(targetSelect.value || "").trim()) || null;
+    const selectedDrug = () => storageDrugTypes.find((item) => item.key === String(drugTypeSelect.value || "").trim()) || null;
+    const selectedMaterial = () => factorySupplyTypes.find((item) => item.key === String(materialTypeSelect.value || "").trim()) || null;
+
+    const renderTargetOptions = () => {
+      const previous = String(targetSelect.value || "").trim();
+      targetSelect.innerHTML = modalState.players.length
+        ? [
+          '<option value="">Vyber hráče</option>',
+          ...modalState.players.map((player) => `<option value="${escapeHtml(String(player?.name || "").trim())}">${escapeHtml(`${String(player?.name || "").trim()} • ${Math.max(0, Math.floor(Number(player?.districtCount || 0)))} districtů`)}</option>`)
+        ].join("")
+        : '<option value="">Žádný dostupný cíl</option>';
+      if (modalState.players.some((player) => String(player?.name || "").trim() === previous)) {
+        targetSelect.value = previous;
+      } else if (modalState.players[0]?.name) {
+        targetSelect.value = String(modalState.players[0].name).trim();
+      }
+    };
+
+    const renderDistrictOptions = () => {
+      const target = selectedPlayer();
+      const previous = String(districtSelect.value || "").trim();
+      const districts = (Array.isArray(window.Empire.districts) ? window.Empire.districts : [])
+        .filter((district) => normalizeOwnerName(
+          district?.ownerNick
+          || district?.owner_username
+          || district?.ownerUsername
+          || district?.owner
+        ) === normalizeOwnerName(target?.name))
+        .sort((a, b) => String(a?.id || "").localeCompare(String(b?.id || ""), "cs", { numeric: true }));
+      districtSelect.innerHTML = [
+        '<option value="">Jakýkoli district</option>',
+        ...districts.map((district) => `<option value="${escapeHtml(String(district?.id || "").trim())}">#${escapeHtml(String(district?.id || "").trim())} • ${escapeHtml(String(district?.name || "Distrikt").trim())}</option>`)
+      ].join("");
+      if (previous && districts.some((district) => String(district?.id || "").trim() === previous)) {
+        districtSelect.value = previous;
+      }
+    };
+
+    const renderResourceOptions = () => {
+      const availability = getBountyModalResourceAvailabilityV2();
+      const currentDrugKey = String(drugTypeSelect.value || "").trim();
+      const currentMaterialKey = String(materialTypeSelect.value || "").trim();
+      drugTypeSelect.innerHTML = storageDrugTypes.map((item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.name)} • ${Math.max(0, Math.floor(Number(availability[item.key] || 0)))} ks</option>`).join("");
+      materialTypeSelect.innerHTML = factorySupplyTypes.map((item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.name)} • ${Math.max(0, Math.floor(Number(availability[item.key] || 0)))} ks</option>`).join("");
+      drugTypeSelect.value = storageDrugTypes.some((item) => item.key === currentDrugKey) ? currentDrugKey : (storageDrugTypes[0]?.key || "");
+      materialTypeSelect.value = factorySupplyTypes.some((item) => item.key === currentMaterialKey) ? currentMaterialKey : (factorySupplyTypes[0]?.key || "");
+    };
+
+    const syncInputs = () => {
+      const availability = getBountyModalResourceAvailabilityV2();
+      const cashMax = Math.max(0, Math.floor(Number(availability.cash || 0)));
+      cashRange.max = String(cashMax);
+      cashInput.max = String(cashMax);
+      const cashValue = Math.min(cashMax, Math.max(Math.floor(Number(cashRange.value || 0)), Math.floor(Number(cashInput.value || 0))));
+      cashRange.value = String(cashValue);
+      cashInput.value = String(cashValue);
+      clampIntInput(drugsInput, Number(availability[String(drugTypeSelect.value || "").trim()] || 0));
+      clampIntInput(materialsInput, Number(availability[String(materialTypeSelect.value || "").trim()] || 0));
+      cashAvailable.textContent = `Máš: ${cashMax.toLocaleString("cs-CZ")}$`;
+      drugsAvailable.textContent = `Máš: ${Math.max(0, Math.floor(Number(availability[String(drugTypeSelect.value || "").trim()] || 0))).toLocaleString("cs-CZ")} ks`;
+      materialsAvailable.textContent = `Máš: ${Math.max(0, Math.floor(Number(availability[String(materialTypeSelect.value || "").trim()] || 0))).toLocaleString("cs-CZ")} ks`;
+    };
+
+    const syncTargetCard = () => {
+      const target = selectedPlayer();
+      if (!target) {
+        targetName.textContent = "Nevybrán cíl";
+        targetAlliance.textContent = "Bez aliance";
+        targetDistricts.textContent = "Districtů: 0";
+        targetActivity.textContent = "Poslední aktivita: -";
+        targetThreat.textContent = "Low threat";
+        targetThreat.dataset.tone = "low";
+        targetAvatar.src = "";
+        targetAvatar.classList.add("is-empty");
+        targetAvatarFallback.textContent = "??";
+        return null;
+      }
+      const threat = resolveBountyThreatLevel(Math.max(0, Math.floor(Number(target?.districtCount || 0))));
+      targetName.textContent = String(target?.name || "Hráč");
+      targetAlliance.textContent = String(target?.allianceName || "").trim() || "Bez aliance";
+      targetDistricts.textContent = `Districtů: ${Math.max(0, Math.floor(Number(target?.districtCount || 0)))}`;
+      targetActivity.textContent = `Poslední aktivita: ${resolveBountyLastActivityLabel(target)}`;
+      targetThreat.textContent = threat.label;
+      targetThreat.dataset.tone = threat.tone;
+      targetAvatarFallback.textContent = String(target?.name || "??").trim().slice(0, 2).toUpperCase() || "??";
+      if (String(target?.avatar || "").trim()) {
+        targetAvatar.src = String(target.avatar).trim();
+        targetAvatar.classList.remove("is-empty");
+      } else {
+        targetAvatar.src = "";
+        targetAvatar.classList.add("is-empty");
+      }
+      return target;
+    };
+
+    const collectRewards = () => {
+      const rewards = [];
+      const cashAmount = Math.max(0, Math.floor(Number(cashInput.value || cashRange.value || 0)));
+      const drugAmount = Math.max(0, Math.floor(Number(drugsInput.value || 0)));
+      const materialAmount = Math.max(0, Math.floor(Number(materialsInput.value || 0)));
+      if (cashAmount > 0) rewards.push({ key: "cash_bundle", label: "Cash", amount: cashAmount });
+      if (selectedDrug() && drugAmount > 0) rewards.push({ key: selectedDrug().key, label: selectedDrug().name, amount: drugAmount });
+      if (selectedMaterial() && materialAmount > 0) rewards.push({ key: selectedMaterial().key, label: selectedMaterial().name, amount: materialAmount });
+      return rewards;
+    };
+
+    const syncPreview = () => {
+      const target = syncTargetCard();
+      const rewards = collectRewards();
+      const totalValue = rewards.reduce((sum, reward) => sum + (reward.key === "cash_bundle" ? reward.amount : reward.amount * getBountyUnitValue(reward.key)), 0);
+      const progressPct = Math.max(0, Math.min(100, Math.round((totalValue / BOUNTY_HUNT_MODE_THRESHOLD) * 100)));
+      previewTarget.textContent = target?.name || "Nevybrán cíl";
+      previewValue.textContent = formatBountyMoneyValue(totalValue);
+      previewType.textContent = formatBountyObjectiveLabel(getSelectedObjectiveType());
+      previewDuration.textContent = `${getSelectedDurationHours()}h`;
+      previewAnonymous.textContent = anonymousInput.checked ? "Anonymní" : "Veřejné";
+      if (totalValue >= BOUNTY_HUNT_MODE_THRESHOLD) {
+        huntModeState.textContent = "HUNT MODE AKTIVNÍ";
+        huntModeState.dataset.mode = "active";
+        huntModeProgressFill.style.width = "100%";
+        huntModeProgressLabel.textContent = "Celé město dostalo důvod jít po cíli.";
+      } else {
+        huntModeState.textContent = "Hunt mode se plní";
+        huntModeState.dataset.mode = "charging";
+        huntModeProgressFill.style.width = `${progressPct}%`;
+        huntModeProgressLabel.textContent = `Do HUNT MODE zbývá ${formatBountyMoneyValue(BOUNTY_HUNT_MODE_THRESHOLD - totalValue)}.`;
+      }
+      districtField.hidden = getSelectedObjectiveType() !== "occupy-sector";
+      districtSelect.disabled = getSelectedObjectiveType() !== "occupy-sector";
+      submitBtn.disabled = !target || rewards.length === 0;
+      return { target, rewards };
+    };
+
+    const renderBoard = () => {
+      const activeEntries = (Array.isArray(modalState.bounties) ? modalState.bounties : [])
+        .filter((entry) => String(entry?.status || "active").trim() === "active")
+        .slice(0, 8);
+      boardBody.innerHTML = activeEntries.map((entry) => `
+        <tr>
+          <td>${escapeHtml(String(entry?.targetName || "-").trim() || "-")}</td>
+          <td>${String(entry?.districtId || "").trim() ? `#${escapeHtml(String(entry.districtId).trim())}` : "Jakýkoli"}</td>
+          <td>${escapeHtml(formatBountyRewardSummaryV2(entry?.rewards) || "-")}</td>
+          <td>${entry?.isAnonymous === false ? "Veřejná" : "Anonymní"}</td>
+          <td>${escapeHtml(formatBountyExpiryLabel(entry?.expiresAt))}</td>
+        </tr>
+      `).join("");
+      boardEmpty.hidden = activeEntries.length > 0;
+    };
+
+    const refreshView = () => {
+      modalState.players = collectBountyEligiblePlayersV2();
+      renderTargetOptions();
+      renderDistrictOptions();
+      renderResourceOptions();
+      syncInputs();
+      syncPreview();
+      renderBoard();
+    };
+
+    const reloadBoard = async () => {
+      try {
+        modalState.bounties = await loadPersistedBounties();
+      } catch {
+        modalState.bounties = readBountyEntries();
+      }
+      renderBoard();
+    };
+
+    const closeModal = () => {
+      root.classList.add("hidden");
+      setMobileTopbarCoveredByPrimaryModal(false);
+    };
+    const openModal = async () => {
+      root.classList.remove("hidden");
+      setMobileTopbarCoveredByPrimaryModal(true);
+      try {
+        refreshView();
+        await reloadBoard();
+      } catch (error) {
+        console.error("Bounty open failed", error);
+        pushEvent("Bounty kartu se nepodařilo načíst.");
+      }
+    };
+
+    if (root.dataset.bountyV2Bound !== "1") {
+      root.dataset.bountyV2Bound = "1";
+      const openFromTrigger = (event) => {
+        if (event?.preventDefault) event.preventDefault();
+        const now = Date.now();
+        if (now - modalState.openLock < 220) return;
+        modalState.openLock = now;
+        void openModal().catch(() => pushEvent("Bounty kartu se nepodařilo načíst."));
+      };
+
+      const trigger = document.getElementById("city-events-target-btn");
+      if (trigger && trigger.dataset.bountyBoundV2 !== "1") {
+        trigger.dataset.bountyBoundV2 = "1";
+        trigger.addEventListener("click", openFromTrigger);
+        trigger.addEventListener("pointerdown", openFromTrigger);
+      }
+
+      window.Empire.openBountyModalShortcut = () => openFromTrigger();
+      document.addEventListener("empire:open-bounty-modal", openFromTrigger);
+      backdrop.addEventListener("click", closeModal);
+      closeBtn.addEventListener("click", closeModal);
+      cancelBtn.addEventListener("click", closeModal);
+      targetSelect.addEventListener("change", () => { renderDistrictOptions(); syncPreview(); });
+      districtSelect.addEventListener("change", syncPreview);
+      cashRange.addEventListener("input", () => { cashInput.value = String(Math.max(0, Math.floor(Number(cashRange.value || 0)))); syncPreview(); });
+      cashInput.addEventListener("input", () => { cashRange.value = String(clampIntInput(cashInput, Number(cashInput.max || 0))); syncPreview(); });
+      drugsInput.addEventListener("input", () => { clampIntInput(drugsInput, Number(drugsInput.max || 0)); syncPreview(); });
+      materialsInput.addEventListener("input", () => { clampIntInput(materialsInput, Number(materialsInput.max || 0)); syncPreview(); });
+      drugTypeSelect.addEventListener("change", () => { syncInputs(); syncPreview(); });
+      materialTypeSelect.addEventListener("change", () => { syncInputs(); syncPreview(); });
+      anonymousInput.addEventListener("change", syncPreview);
+      objectiveInputs.forEach((input) => input.addEventListener("change", syncPreview));
+      durationInputs.forEach((input) => input.addEventListener("change", syncPreview));
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !root.classList.contains("hidden")) closeModal();
+      });
+
+      submitBtn.addEventListener("click", async () => {
+        const preview = syncPreview();
+        if (!preview.target) {
+          pushEvent("Vyber cílového hráče pro bounty.");
+          return;
+        }
+        if (!preview.rewards.length) {
+          pushEvent("Bounty musí obsahovat alespoň jednu odměnu.");
+          return;
+        }
+
+        const spentRewards = [];
+        for (const reward of preview.rewards) {
+          const spendResult = spendBountyResource(reward.key, reward.amount);
+          if (!spendResult?.ok) {
+            spentRewards.forEach((entry) => restoreBountyResource(entry.key, entry.amount));
+            pushEvent(`Nedostatek zdroje pro bounty: ${reward.label}.`);
+            syncInputs();
+            syncPreview();
+            return;
+          }
+          spentRewards.push(reward);
+        }
+
+        try {
+          const objectiveType = getSelectedObjectiveType();
+          const districtId = objectiveType === "occupy-sector" ? String(districtSelect.value || "").trim() || null : null;
+          await createPersistedBounty({
+            targetUsername: preview.target.name,
+            targetDistrictId: districtId,
+            objectiveType,
+            rewards: preview.rewards,
+            isAnonymous: Boolean(anonymousInput.checked),
+            durationHours: getSelectedDurationHours()
+          });
+          pushEvent(districtId ? `Bounty vypsána na ${preview.target.name} za #${districtId}.` : `Bounty vypsána na ${preview.target.name}.`);
+          await reloadBoard();
+          refreshView();
+        } catch (error) {
+          spentRewards.forEach((reward) => restoreBountyResource(reward.key, reward.amount));
+          const errorCode = String(error?.message || error?.error || "").trim();
+          if (errorCode === "allied_target") pushEvent("Na členy vlastní aliance nelze bounty vypsat.");
+          else if (errorCode === "invalid_target_district") pushEvent("Vybraný district už cíli nepatří.");
+          else if (errorCode === "missing_target") pushEvent("Cílový hráč už není dostupný.");
+          else pushEvent("Bounty se nepodařilo uložit.");
+          syncInputs();
+          syncPreview();
+        }
+      });
+    }
+
+    root.classList.add("hidden");
+  }
+
   function initBuildingsModal() {
     const openBtn = document.getElementById("buildings-open");
     const root = document.getElementById("buildings-modal");
@@ -11911,7 +13776,51 @@ window.Empire.UI = (() => {
       reduceDataCenters: 5,
       reducePowerStations: 10
     });
+    rebalanceIndustrialStrategicCounts(nextDistricts, {
+      targetArmories: 10,
+      targetResearchCenters: 8,
+      targetRecyclingCenters: 8
+    });
     rebalanceDowntownCivicInfrastructure(nextDistricts);
+    spreadRareDistrictBuildingSets(nextDistricts, [
+      {
+        type: "park",
+        rareBuildings: ["Drug lab", "Strip club", "Pašovací tunel"],
+        onlyTiers: ["mid", "top"]
+      },
+      {
+        type: "industrial",
+        rareBuildings: ["Datové centrum", "Výzkumné centrum", "Recyklační centrum", "Zbrojovka"],
+        onlyTiers: ["mid", "top"]
+      },
+      {
+        type: "commercial",
+        rareBuildings: ["Kasino", "Obchodní centrum"],
+        onlyTiers: ["top"]
+      },
+      {
+        type: "residential",
+        rareBuildings: ["Škola", "Brainwash centrum"],
+        onlyTiers: ["mid", "late"]
+      }
+    ]);
+    swapDistrictMetadataByIds(nextDistricts, 112, 80);
+    swapDistrictMetadataByIds(nextDistricts, 157, 80);
+    swapDistrictMetadataByIds(nextDistricts, 68, 114);
+    swapDistrictTypeByIds(nextDistricts, 112, 68);
+    swapDistrictTypeByIds(nextDistricts, 161, 26);
+    swapDistrictTypeByIds(nextDistricts, 161, 68);
+    swapDistrictTypeByIds(nextDistricts, 121, 27);
+    swapDistrictTypeByIds(nextDistricts, 20, 3);
+    swapDistrictTypeByIds(nextDistricts, 3, 27);
+    swapDistrictTypeByIds(nextDistricts, 20, 3);
+    swapDistrictTypeByIds(nextDistricts, 95, 3);
+    swapDistrictTypeByIds(nextDistricts, 95, 27);
+    swapDistrictTypeByIds(nextDistricts, 143, 161);
+    swapDistrictTypeByIds(nextDistricts, 21, 152);
+    swapDistrictTypeByIds(nextDistricts, 19, 149);
+    setDistrictTypeByIdWithPreservedCounts(nextDistricts, 2, "industrial", [19]);
+    setDistrictTypeByIdWithPreservedCounts(nextDistricts, 19, "industrial", [2]);
     assignDowntownExchangeNames(nextDistricts);
     assignDowntownCentralBankNames(nextDistricts);
     assignDowntownAirportNames(nextDistricts);
@@ -11935,6 +13844,8 @@ window.Empire.UI = (() => {
     assignIndustrialStorageNames(nextDistricts);
     assignIndustrialFactoryNames(nextDistricts);
     assignIndustrialArmoryNames(nextDistricts);
+    assignIndustrialResearchCenterNames(nextDistricts);
+    assignIndustrialRecyclingCenterNames(nextDistricts);
     assignResidentialBrainwashNames(nextDistricts);
     assignResidentialApartmentBlockNames(nextDistricts);
     assignResidentialGarageNames(nextDistricts);
@@ -12047,6 +13958,14 @@ window.Empire.UI = (() => {
 
   function assignIndustrialArmoryNames(districts) {
     assignNamedIndustrialBuildings(districts, "Zbrojovka", namedIndustrialArmories);
+  }
+
+  function assignIndustrialResearchCenterNames(districts) {
+    assignNamedIndustrialBuildings(districts, "Výzkumné centrum", namedIndustrialResearchCenters);
+  }
+
+  function assignIndustrialRecyclingCenterNames(districts) {
+    assignNamedIndustrialBuildings(districts, "Recyklační centrum", namedIndustrialRecyclingCenters);
   }
 
   function assignResidentialBrainwashNames(districts) {
@@ -12344,6 +14263,87 @@ window.Empire.UI = (() => {
     applyReplacement("Energetická stanice", powerReduction);
   }
 
+  function rebalanceIndustrialStrategicCounts(
+    districts,
+    { targetArmories = 10, targetResearchCenters = 8, targetRecyclingCenters = 8 } = {}
+  ) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    const industrialDistricts = districts
+      .filter((district) => district.type === "industrial" && Array.isArray(district.buildings))
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+    if (!industrialDistricts.length) return;
+
+    const desired = new Map([
+      ["Zbrojovka", Math.max(0, Math.floor(Number(targetArmories) || 0))],
+      ["Výzkumné centrum", Math.max(0, Math.floor(Number(targetResearchCenters) || 0))],
+      ["Recyklační centrum", Math.max(0, Math.floor(Number(targetRecyclingCenters) || 0))]
+    ]);
+    const protectedNames = new Set(desired.keys());
+    const fallbackCycle = ["Továrna", "Sklad", "Energetická stanice", "Datové centrum"];
+
+    const collectSlots = () => industrialDistricts.flatMap((district) =>
+      district.buildings.map((building, index) => ({
+        district,
+        index,
+        key: `${district.id}:${index}`,
+        building: String(building || "")
+      }))
+    );
+
+    const countByBuilding = () => {
+      const counts = new Map();
+      collectSlots().forEach((slot) => {
+        counts.set(slot.building, (counts.get(slot.building) || 0) + 1);
+      });
+      return counts;
+    };
+
+    const chooseFallback = (counts) => {
+      let pick = fallbackCycle[0];
+      let pickCount = Number.POSITIVE_INFINITY;
+      fallbackCycle.forEach((name) => {
+        const value = counts.get(name) || 0;
+        if (value < pickCount) {
+          pick = name;
+          pickCount = value;
+        }
+      });
+      return pick;
+    };
+
+    desired.forEach((targetCount, targetName) => {
+      const counts = countByBuilding();
+      const currentCount = counts.get(targetName) || 0;
+      if (currentCount <= targetCount) return;
+      const overflow = collectSlots().filter((slot) => slot.building === targetName).slice(targetCount);
+      overflow.forEach((slot) => {
+        const fallback = chooseFallback(countByBuilding());
+        slot.district.buildings[slot.index] = fallback;
+      });
+    });
+
+    desired.forEach((targetCount, targetName) => {
+      let currentCount = countByBuilding().get(targetName) || 0;
+      if (currentCount >= targetCount) return;
+      let needed = targetCount - currentCount;
+      while (needed > 0) {
+        const counts = countByBuilding();
+        const candidates = collectSlots().filter((slot) => {
+          if (slot.building === targetName) return false;
+          if (!protectedNames.has(slot.building)) return true;
+          const slotDesired = desired.get(slot.building) || 0;
+          return (counts.get(slot.building) || 0) > slotDesired;
+        });
+        if (!candidates.length) break;
+        const slot = candidates[0];
+        slot.district.buildings[slot.index] = targetName;
+        needed -= 1;
+      }
+      currentCount = countByBuilding().get(targetName) || 0;
+      if (currentCount < targetCount) return;
+    });
+  }
+
   function rebalanceResidentialTaxi(
     districts,
     { removeBrainwash = 11, addTaxi = 11 } = {}
@@ -12429,6 +14429,234 @@ window.Empire.UI = (() => {
       entry.district.buildingSetKey = set.key;
       entry.district.buildingSetTitle = set.title;
     });
+  }
+
+  function spreadRareDistrictBuildingSets(districts, configs) {
+    if (!Array.isArray(districts) || !districts.length || !Array.isArray(configs)) return;
+    configs.forEach((config) => {
+      spreadRareDistrictBuildingSetsByType(districts, config);
+    });
+  }
+
+  function swapDistrictMetadataByIds(districts, firstId, secondId) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    const first = districts.find((district) => Number(district?.id) === Number(firstId));
+    const second = districts.find((district) => Number(district?.id) === Number(secondId));
+    if (!first || !second) return;
+
+    const firstSnapshot = {
+      type: first.type,
+      income: first.income,
+      influence: first.influence,
+      buildings: Array.isArray(first.buildings) ? [...first.buildings] : [],
+      buildingNameOverrides: Array.isArray(first.buildingNameOverrides) ? [...first.buildingNameOverrides] : [],
+      buildingTier: first.buildingTier || null,
+      buildingSetKey: first.buildingSetKey || null,
+      buildingSetTitle: first.buildingSetTitle || null
+    };
+    const secondSnapshot = {
+      type: second.type,
+      income: second.income,
+      influence: second.influence,
+      buildings: Array.isArray(second.buildings) ? [...second.buildings] : [],
+      buildingNameOverrides: Array.isArray(second.buildingNameOverrides) ? [...second.buildingNameOverrides] : [],
+      buildingTier: second.buildingTier || null,
+      buildingSetKey: second.buildingSetKey || null,
+      buildingSetTitle: second.buildingSetTitle || null
+    };
+
+    first.type = secondSnapshot.type;
+    first.income = secondSnapshot.income;
+    first.influence = secondSnapshot.influence;
+    first.buildings = secondSnapshot.buildings;
+    first.buildingNameOverrides = secondSnapshot.buildingNameOverrides;
+    first.buildingTier = secondSnapshot.buildingTier;
+    first.buildingSetKey = secondSnapshot.buildingSetKey;
+    first.buildingSetTitle = secondSnapshot.buildingSetTitle;
+
+    second.type = firstSnapshot.type;
+    second.income = firstSnapshot.income;
+    second.influence = firstSnapshot.influence;
+    second.buildings = firstSnapshot.buildings;
+    second.buildingNameOverrides = firstSnapshot.buildingNameOverrides;
+    second.buildingTier = firstSnapshot.buildingTier;
+    second.buildingSetKey = firstSnapshot.buildingSetKey;
+    second.buildingSetTitle = firstSnapshot.buildingSetTitle;
+  }
+
+  function swapDistrictTypeByIds(districts, firstId, secondId) {
+    if (!Array.isArray(districts) || !districts.length) return;
+    const first = districts.find((district) => Number(district?.id) === Number(firstId));
+    const second = districts.find((district) => Number(district?.id) === Number(secondId));
+    if (!first || !second) return;
+
+    const firstType = first.type;
+    first.type = second.type;
+    second.type = firstType;
+  }
+
+  function setDistrictTypeByIdWithPreservedCounts(districts, districtId, nextType, protectedIds = []) {
+    if (!Array.isArray(districts) || !districts.length) return false;
+    const safeType = String(nextType || "").trim().toLowerCase();
+    if (!safeType) return false;
+    const target = districts.find((entry) => Number(entry?.id) === Number(districtId));
+    if (!target) return false;
+    const currentType = String(target?.type || "").trim().toLowerCase();
+    if (!currentType || currentType === safeType) return true;
+
+    const protectedSet = new Set((Array.isArray(protectedIds) ? protectedIds : []).map((id) => Number(id)));
+    protectedSet.add(Number(districtId));
+
+    const donor = districts.find((entry) => {
+      const entryId = Number(entry?.id);
+      if (!Number.isFinite(entryId) || protectedSet.has(entryId)) return false;
+      return String(entry?.type || "").trim().toLowerCase() === safeType;
+    });
+    if (!donor) return false;
+
+    donor.type = currentType;
+    target.type = safeType;
+    return true;
+  }
+
+  function spreadRareDistrictBuildingSetsByType(districts, config) {
+    const type = String(config?.type || "").trim().toLowerCase();
+    const rareBuildings = new Set(
+      (Array.isArray(config?.rareBuildings) ? config.rareBuildings : [])
+        .map((name) => String(name || "").trim())
+        .filter(Boolean)
+    );
+    if (!type || !rareBuildings.size) return;
+
+    const allowedTiers = new Set(
+      (Array.isArray(config?.onlyTiers) ? config.onlyTiers : [])
+        .map((tier) => String(tier || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    const typedDistricts = districts.filter((district) => {
+      if (String(district?.type || "").trim().toLowerCase() !== type) return false;
+      if (!allowedTiers.size) return true;
+      return allowedTiers.has(String(district?.buildingTier || "").trim().toLowerCase());
+    });
+    if (typedDistricts.length < 2) return;
+
+    const packageEntries = typedDistricts.map((district) => {
+      const buildings = Array.isArray(district.buildings) ? [...district.buildings] : [];
+      const rareCount = buildings.reduce((sum, building) => sum + (rareBuildings.has(String(building || "").trim()) ? 1 : 0), 0);
+      return {
+        district,
+        packageData: {
+          buildings,
+          buildingNameOverrides: Array.isArray(district.buildingNameOverrides) ? [...district.buildingNameOverrides] : [],
+          buildingTier: district.buildingTier || null,
+          buildingSetKey: district.buildingSetKey || null,
+          buildingSetTitle: district.buildingSetTitle || null
+        },
+        rareCount,
+        centroid: polygonCentroid(district.polygon || [])
+      };
+    });
+
+    const rarePackages = packageEntries.filter((entry) => entry.rareCount > 0);
+    if (rarePackages.length < 2) return;
+
+    const targets = pickMaxSpreadDistrictTargets(packageEntries, rarePackages.length);
+    if (targets.length !== rarePackages.length) return;
+
+    const targetIds = new Set(targets.map((entry) => Number(entry?.district?.id)));
+    const rareSourceIds = new Set(rarePackages.map((entry) => Number(entry?.district?.id)));
+    const rareByStrength = [...rarePackages].sort((a, b) => {
+      if (a.rareCount === b.rareCount) return Number(a.district?.id || 0) - Number(b.district?.id || 0);
+      return b.rareCount - a.rareCount;
+    });
+    const nonRarePackages = packageEntries.filter((entry) => !rareSourceIds.has(Number(entry?.district?.id)));
+
+    const finalPackagesByDistrictId = new Map();
+    targets.forEach((target, index) => {
+      finalPackagesByDistrictId.set(Number(target.district?.id), rareByStrength[index].packageData);
+    });
+
+    const remainingTargetDistricts = packageEntries
+      .filter((entry) => !targetIds.has(Number(entry?.district?.id)))
+      .sort((a, b) => Number(a.district?.id || 0) - Number(b.district?.id || 0));
+    nonRarePackages.forEach((entry, index) => {
+      const target = remainingTargetDistricts[index];
+      if (!target) return;
+      finalPackagesByDistrictId.set(Number(target.district?.id), entry.packageData);
+    });
+
+    packageEntries.forEach((entry) => {
+      const nextPackage = finalPackagesByDistrictId.get(Number(entry.district?.id));
+      if (!nextPackage) return;
+      entry.district.buildings = [...nextPackage.buildings];
+      entry.district.buildingNameOverrides = [...nextPackage.buildingNameOverrides];
+      entry.district.buildingTier = nextPackage.buildingTier;
+      entry.district.buildingSetKey = nextPackage.buildingSetKey;
+      entry.district.buildingSetTitle = nextPackage.buildingSetTitle;
+    });
+  }
+
+  function pickMaxSpreadDistrictTargets(entries, count) {
+    const pool = Array.isArray(entries) ? entries.filter(Boolean) : [];
+    const targetCount = Math.max(0, Math.min(pool.length, Math.floor(Number(count) || 0)));
+    if (!targetCount) return [];
+
+    const center = resolveEntriesCenter(pool);
+    const sorted = [...pool].sort((a, b) => {
+      const aRadius = distanceFromMapPoint(a.centroid, center);
+      const bRadius = distanceFromMapPoint(b.centroid, center);
+      if (aRadius === bRadius) return Number(a.district?.id || 0) - Number(b.district?.id || 0);
+      return bRadius - aRadius;
+    });
+    const selected = [sorted[0]];
+
+    while (selected.length < targetCount) {
+      let bestCandidate = null;
+      let bestDistance = -1;
+      for (let i = 0; i < sorted.length; i += 1) {
+        const candidate = sorted[i];
+        if (!candidate || selected.includes(candidate)) continue;
+        const nearestSelectedDistance = selected.reduce((minDistance, chosen) => {
+          const distance = distanceBetweenPoints(candidate.centroid, chosen.centroid);
+          return Math.min(minDistance, distance);
+        }, Number.POSITIVE_INFINITY);
+        if (nearestSelectedDistance > bestDistance) {
+          bestDistance = nearestSelectedDistance;
+          bestCandidate = candidate;
+        }
+      }
+      if (!bestCandidate) break;
+      selected.push(bestCandidate);
+    }
+
+    return selected;
+  }
+
+  function distanceFromMapPoint(point, target) {
+    const dx = Number(point?.x || 0) - Number(target?.x || 0);
+    const dy = Number(point?.y || 0) - Number(target?.y || 0);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function resolveEntriesCenter(entries) {
+    const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
+    if (!safeEntries.length) return { x: 0, y: 0 };
+    const total = safeEntries.reduce((acc, entry) => {
+      acc.x += Number(entry?.centroid?.x || 0);
+      acc.y += Number(entry?.centroid?.y || 0);
+      return acc;
+    }, { x: 0, y: 0 });
+    return {
+      x: total.x / safeEntries.length,
+      y: total.y / safeEntries.length
+    };
+  }
+
+  function distanceBetweenPoints(a, b) {
+    const dx = Number(a?.x || 0) - Number(b?.x || 0);
+    const dy = Number(a?.y || 0) - Number(b?.y || 0);
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
   function pickCommercialSet(district, tier, index) {
@@ -15483,7 +17711,27 @@ window.Empire.UI = (() => {
     const buttons = Array.from(root.querySelectorAll("[data-market-building-base-name]"));
     if (!buttons.length) return;
     const lockFlashTimers = new WeakMap();
-    const onboardingShortcutNames = new Set(["lekarna", "drug lab", "druglab", "tovarna", "zbrojovka"]);
+    const onboardingShortcutNames = new Set([
+      "lekarna",
+      "drug lab",
+      "druglab",
+      "tovarna",
+      "zbrojovka",
+      "fitness club",
+      "fitness centrum",
+      "kasino",
+      "casino",
+      "herna",
+      "arcade",
+      "autosalon",
+      "auto salon",
+      "smenarna",
+      "exchange",
+      "restaurace",
+      "restaurant",
+      "vecerka",
+      "convenience store"
+    ]);
 
     const normalizeBuildingName = (value) => normalizeOwnerName(String(value || "").replace(/\s+/g, " ").trim());
 
@@ -16139,6 +18387,687 @@ window.Empire.UI = (() => {
     return value;
   }
 
+  function readBountyEntries() {
+    return [];
+  }
+
+  function saveBountyEntries(entries) {
+    try {
+      localStorage.removeItem(LOCAL_BOUNTY_STORAGE_KEY);
+    } catch {}
+    syncBountyDistrictMarkers([]);
+    return [];
+  }
+
+  function hasPersistedBountyApi() {
+    return Boolean(
+      window.Empire?.token
+      && window.Empire?.API?.getBounties
+      && window.Empire?.API?.createBounty
+      && window.Empire?.API?.claimBounties
+    );
+  }
+
+  function resolveBountyCreatedAtValue(entry) {
+    const raw = entry?.createdAt;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    const parsed = Date.parse(String(raw || ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  async function loadPersistedBounties() {
+    syncBountyDistrictMarkers([]);
+    return [];
+  }
+
+  async function createPersistedBounty(payload) {
+    syncBountyDistrictMarkers([]);
+    return { ok: false, bounties: [] };
+  }
+
+  function readDrugLabPlayerSupplyState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DRUG_LAB_PLAYER_STORAGE_KEY) || "null");
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeDrugLabPlayerSupplyState(state) {
+    localStorage.setItem(DRUG_LAB_PLAYER_STORAGE_KEY, JSON.stringify(state && typeof state === "object" ? state : {}));
+  }
+
+  function readFactoryPlayerSuppliesState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FACTORY_PLAYER_SUPPLIES_STORAGE_KEY) || "null");
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeFactoryPlayerSuppliesState(state) {
+    localStorage.setItem(FACTORY_PLAYER_SUPPLIES_STORAGE_KEY, JSON.stringify(state && typeof state === "object" ? state : {}));
+  }
+
+  function isGuestBlackoutScenarioActive() {
+    return !window.Empire.token && activePlayerScenarioKey === "alliance-ten-blackout";
+  }
+
+  function syncGuestBlackoutMarketBalancesFromEconomy() {
+    if (!isGuestBlackoutScenarioActive()) return;
+    const state = getLocalMarketState();
+    const balances = state?.balances && typeof state.balances === "object" ? state.balances : null;
+    if (!balances) return;
+    const economySnapshot = ensureEconomyCache();
+    const money = resolveMoneyBreakdown(economySnapshot || {});
+    const nextCleanMoney = Math.max(0, Math.floor(Number(money.cleanMoney || 0)));
+    const nextDirtyMoney = Math.max(0, Math.floor(Number(money.dirtyMoney || 0)));
+    if (
+      Number(balances.cleanMoney || 0) === nextCleanMoney
+      && Number(balances.dirtyMoney || 0) === nextDirtyMoney
+    ) {
+      return;
+    }
+    balances.cleanMoney = nextCleanMoney;
+    balances.dirtyMoney = nextDirtyMoney;
+    balances.money = nextCleanMoney + nextDirtyMoney;
+    saveLocalMarketState(state);
+  }
+
+  function applyGuestBlackoutCleanCashDelta(delta) {
+    if (!isGuestBlackoutScenarioActive()) return null;
+    syncGuestBlackoutMarketBalancesFromEconomy();
+    const state = getLocalMarketState();
+    const balances = state?.balances && typeof state.balances === "object" ? state.balances : null;
+    if (!balances) return null;
+    const current = Math.max(0, Math.floor(Number(balances.cleanMoney || 0)));
+    const next = Math.max(0, current + Math.floor(Number(delta || 0)));
+    const appliedDelta = next - current;
+    balances.cleanMoney = next;
+    balances.money = Math.max(0, Math.floor(Number(balances.cleanMoney || 0) + Number(balances.dirtyMoney || 0)));
+    saveLocalMarketState(state);
+    syncGuestEconomyFromMarket();
+    return appliedDelta;
+  }
+
+  function applyGuestBlackoutInventoryDelta(balanceKey, delta) {
+    if (!isGuestBlackoutScenarioActive()) return null;
+    const state = getLocalMarketState();
+    const balances = state?.balances && typeof state.balances === "object" ? state.balances : null;
+    if (!balances) return null;
+    const safeKey = String(balanceKey || "").trim();
+    if (!safeKey) return null;
+    const current = Math.max(0, Math.floor(Number(balances[safeKey] || 0)));
+    const next = Math.max(0, current + Math.floor(Number(delta || 0)));
+    const appliedDelta = next - current;
+    balances[safeKey] = next;
+    if (storageDrugTypes.some((item) => item.key === safeKey)) {
+      balances.drugs = Math.max(0, Math.floor(Number(balances.drugs || 0) + appliedDelta));
+    }
+    if (factorySupplyTypes.some((item) => item.key === safeKey)) {
+      balances.materials = Math.max(0, Math.floor(Number(balances.materials || 0) + appliedDelta));
+    }
+    saveLocalMarketState(state);
+    syncGuestEconomyFromMarket();
+    return appliedDelta;
+  }
+
+  function getLiveBountyEconomySnapshot() {
+    if (isGuestBlackoutScenarioActive()) {
+      syncBlackoutScenarioDistrictIncome();
+      syncGuestBlackoutMarketBalancesFromEconomy();
+      syncGuestEconomyFromMarket();
+      const state = getLocalMarketState();
+      const balances = state?.balances && typeof state.balances === "object" ? state.balances : {};
+      return {
+        ...getEconomySnapshot(),
+        cleanMoney: Math.max(0, Math.floor(Number(balances.cleanMoney || 0))),
+        dirtyMoney: Math.max(0, Math.floor(Number(balances.dirtyMoney || 0))),
+        drugs: Math.max(0, Math.floor(Number(balances.drugs || 0))),
+        materials: Math.max(0, Math.floor(Number(balances.materials || 0))),
+        neonDust: Math.max(0, Math.floor(Number(balances.neonDust || 0))),
+        pulseShot: Math.max(0, Math.floor(Number(balances.pulseShot || 0))),
+        velvetSmoke: Math.max(0, Math.floor(Number(balances.velvetSmoke || 0))),
+        ghostSerum: Math.max(0, Math.floor(Number(balances.ghostSerum || 0))),
+        overdriveX: Math.max(0, Math.floor(Number(balances.overdriveX || 0))),
+        metalParts: Math.max(0, Math.floor(Number(balances.metalParts || 0))),
+        techCore: Math.max(0, Math.floor(Number(balances.techCore || 0))),
+        combatModule: Math.max(0, Math.floor(Number(balances.combatModule || 0))),
+        drugInventory: storageDrugTypes.reduce((acc, item) => {
+          acc[item.key] = Math.max(0, Math.floor(Number(balances[item.key] || 0)));
+          return acc;
+        }, {})
+      };
+    }
+    return getEconomySnapshot();
+  }
+
+  function getGuestBlackoutLiveBalances() {
+    if (!isGuestBlackoutScenarioActive()) return null;
+    const state = getLocalMarketState();
+    const balances = state?.balances && typeof state.balances === "object" ? state.balances : null;
+    return balances || null;
+  }
+
+  function getBountyResourceDefinitions() {
+    return [
+      { key: "clean_cash", label: "Clean cash", source: "cash", group: "Peníze" },
+      ...pharmacySupplyTypes.map((item) => ({
+        key: item.key,
+        label: item.name,
+        source: "pharmacy",
+        group: "Lékárna"
+      })),
+      ...storageDrugTypes.map((item) => ({
+        key: item.key,
+        label: item.name,
+        source: "drugLab",
+        group: "Drug lab"
+      })),
+      ...factorySupplyTypes.map((item) => ({
+        key: item.key,
+        label: item.name,
+        source: "factory",
+        group: "Továrna"
+      })),
+      ...attackWeaponStats.map((item) => ({
+        key: `attack:${item.name}`,
+        label: item.name,
+        source: "armoryAttack",
+        group: "Zbrojovka"
+      })),
+      ...defenseWeaponStats.map((item) => ({
+        key: `defense:${item.name}`,
+        label: item.name,
+        source: "armoryDefense",
+        group: "Zbrojovka"
+      }))
+    ];
+  }
+
+  function getBountyAvailableResourceMap() {
+    const economy = getLiveBountyEconomySnapshot();
+    const drugLabPlayer = readDrugLabPlayerSupplyState();
+    const labSupplies = drugLabPlayer?.labSupplies && typeof drugLabPlayer.labSupplies === "object"
+      ? drugLabPlayer.labSupplies
+      : {};
+    const attackCounts = resolveWeaponCounts();
+    const defenseCounts = resolveDefenseCounts();
+    const availability = {
+      clean_cash: Math.max(0, Math.floor(Number(economy.cleanMoney || 0)))
+    };
+
+    pharmacySupplyTypes.forEach((item) => {
+      availability[item.key] = Math.max(0, Math.floor(Number(labSupplies[item.key] || 0)));
+    });
+    storageDrugTypes.forEach((item) => {
+      availability[item.key] = Math.max(0, Math.floor(Number(economy?.drugInventory?.[item.key] || economy?.[item.key] || 0)));
+    });
+    factorySupplyTypes.forEach((item) => {
+      availability[item.key] = Math.max(0, Math.floor(Number(economy?.[item.key] || 0)));
+    });
+    attackWeaponStats.forEach((item) => {
+      availability[`attack:${item.name}`] = Math.max(0, Math.floor(Number(attackCounts[item.name] || 0)));
+    });
+    defenseWeaponStats.forEach((item) => {
+      availability[`defense:${item.name}`] = Math.max(0, Math.floor(Number(defenseCounts[item.name] || 0)));
+    });
+
+    return availability;
+  }
+
+  function getBountyAggregateAvailabilityMap() {
+    const economy = getLiveBountyEconomySnapshot();
+    return {
+      cash: Math.max(0, Math.floor(Number(economy.cleanMoney || 0))),
+      drugs: Math.max(0, Math.floor(Number(economy.drugs || 0))),
+      materials: Math.max(0, Math.floor(Number(economy.materials || 0)))
+    };
+  }
+
+  function formatBountyExpiryLabel(value) {
+    const expiresAt = Date.parse(String(value || ""));
+    if (!Number.isFinite(expiresAt)) return "-";
+    return new Date(expiresAt).toLocaleString("cs-CZ", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function spendBountyResource(resourceKey, amount) {
+    const key = String(resourceKey || "").trim();
+    const value = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!key || value <= 0) return { ok: true, spent: 0 };
+
+    if (key === "cash_bundle") {
+      if (isGuestBlackoutScenarioActive()) {
+        const appliedDelta = applyGuestBlackoutCleanCashDelta(-value);
+        if (appliedDelta == null || Math.abs(appliedDelta) < value) {
+          if (appliedDelta != null && appliedDelta < 0) applyGuestBlackoutCleanCashDelta(-appliedDelta);
+          return { ok: false, reason: "insufficient_clean_cash", available: Math.abs(appliedDelta || 0) };
+        }
+        return { ok: true, spent: value, cleanSpent: value, dirtySpent: 0 };
+      }
+      return trySpendCleanCash(value);
+    }
+
+    if (key === "material_bundle") {
+      const removed = removeEconomyResource("materials", value);
+      if (removed < value) {
+        if (removed > 0) addEconomyResource("materials", removed);
+        return { ok: false, reason: "insufficient_resource", available: removed };
+      }
+      return { ok: true, spent: value };
+    }
+
+    if (key === "drug_bundle") {
+      let remaining = value;
+      let removedTotal = 0;
+      for (const drug of storageDrugTypes) {
+        if (remaining <= 0) break;
+        const available = Math.max(0, Math.floor(Number(getEconomySnapshot()?.drugInventory?.[drug.key] || getEconomySnapshot()?.[drug.key] || 0)));
+        const toRemove = Math.min(available, remaining);
+        if (toRemove <= 0) continue;
+        const removed = removeEconomyResource(drug.key, toRemove);
+        removedTotal += removed;
+        remaining -= removed;
+      }
+      if (removedTotal < value) {
+        if (removedTotal > 0) {
+          addEconomyResource(storageDrugTypes[0]?.key || "neonDust", removedTotal);
+        }
+        return { ok: false, reason: "insufficient_resource", available: removedTotal };
+      }
+      hydrateStorageModalValues();
+      return { ok: true, spent: value };
+    }
+
+    if (key === "clean_cash") {
+      if (isGuestBlackoutScenarioActive()) {
+        const appliedDelta = applyGuestBlackoutCleanCashDelta(-value);
+        if (appliedDelta == null || Math.abs(appliedDelta) < value) {
+          if (appliedDelta != null && appliedDelta < 0) applyGuestBlackoutCleanCashDelta(-appliedDelta);
+          return { ok: false, reason: "insufficient_clean_cash", available: Math.abs(appliedDelta || 0) };
+        }
+        return { ok: true, spent: value, cleanSpent: value, dirtySpent: 0 };
+      }
+      return trySpendCleanCash(value);
+    }
+
+    if (pharmacySupplyTypes.some((item) => item.key === key)) {
+      const playerState = readDrugLabPlayerSupplyState();
+      const nextSupplies = playerState?.labSupplies && typeof playerState.labSupplies === "object"
+        ? { ...playerState.labSupplies }
+        : {};
+      const available = Math.max(0, Math.floor(Number(nextSupplies[key] || 0)));
+      if (available < value) {
+        return { ok: false, reason: "insufficient_resource", available };
+      }
+      nextSupplies[key] = available - value;
+      writeDrugLabPlayerSupplyState({
+        ...playerState,
+        labSupplies: nextSupplies
+      });
+      hydrateStorageModalValues();
+      return { ok: true, spent: value };
+    }
+
+    if (storageDrugTypes.some((item) => item.key === key)) {
+      if (isGuestBlackoutScenarioActive()) {
+        const appliedDelta = applyGuestBlackoutInventoryDelta(key, -value);
+        if (appliedDelta == null || Math.abs(appliedDelta) < value) {
+          if (appliedDelta != null && appliedDelta < 0) applyGuestBlackoutInventoryDelta(key, -appliedDelta);
+          return { ok: false, reason: "insufficient_resource", available: Math.abs(appliedDelta || 0) };
+        }
+        hydrateStorageModalValues();
+        return { ok: true, spent: value };
+      }
+      const resourceKeyMapped = storageDrugTypes.find((item) => item.key === key)?.resourceKey || key;
+      const removed = removeEconomyResource(resourceKeyMapped, value);
+      if (removed < value) {
+        if (removed > 0) addEconomyResource(resourceKeyMapped, removed);
+        return { ok: false, reason: "insufficient_resource", available: removed };
+      }
+      hydrateStorageModalValues();
+      return { ok: true, spent: value };
+    }
+
+    if (factorySupplyTypes.some((item) => item.key === key)) {
+      if (isGuestBlackoutScenarioActive()) {
+        const appliedDelta = applyGuestBlackoutInventoryDelta(key, -value);
+        if (appliedDelta == null || Math.abs(appliedDelta) < value) {
+          if (appliedDelta != null && appliedDelta < 0) applyGuestBlackoutInventoryDelta(key, -appliedDelta);
+          return { ok: false, reason: "insufficient_resource", available: Math.abs(appliedDelta || 0) };
+        }
+        const nextFactorySupplies = {
+          ...readFactoryPlayerSuppliesState()
+        };
+        nextFactorySupplies[key] = Math.max(0, Math.floor(Number(nextFactorySupplies[key] || 0) - value));
+        writeFactoryPlayerSuppliesState(nextFactorySupplies);
+        hydrateStorageModalValues();
+        return { ok: true, spent: value };
+      }
+      const marketKey =
+        key === "metalParts" ? "metal_parts"
+        : key === "techCore" ? "tech_core"
+        : "combat_module";
+      const removed = removeEconomyResource(marketKey, value);
+      if (removed < value) {
+        if (removed > 0) addEconomyResource(marketKey, removed);
+        return { ok: false, reason: "insufficient_resource", available: removed };
+      }
+      const nextFactorySupplies = {
+        ...readFactoryPlayerSuppliesState()
+      };
+      nextFactorySupplies[key] = Math.max(0, Math.floor(Number(nextFactorySupplies[key] || 0) - value));
+      writeFactoryPlayerSuppliesState(nextFactorySupplies);
+      hydrateStorageModalValues();
+      return { ok: true, spent: value };
+    }
+
+    if (key.startsWith("attack:")) {
+      const weaponName = key.slice("attack:".length);
+      const available = Math.max(0, Math.floor(Number(resolveWeaponCounts()?.[weaponName] || 0)));
+      if (available < value) {
+        return { ok: false, reason: "insufficient_resource", available };
+      }
+      consumeAttackWeaponCounts({ [weaponName]: value });
+      return { ok: true, spent: value };
+    }
+
+    if (key.startsWith("defense:")) {
+      const defenseName = key.slice("defense:".length);
+      const available = Math.max(0, Math.floor(Number(resolveDefenseCounts()?.[defenseName] || 0)));
+      if (available < value) {
+        return { ok: false, reason: "insufficient_resource", available };
+      }
+      const current = resolveDefenseCounts();
+      current[defenseName] = Math.max(0, Math.floor(Number(current[defenseName] || 0) - value));
+      persistDefenseCounts(current);
+      return { ok: true, spent: value };
+    }
+
+    return { ok: false, reason: "unsupported_resource", available: 0 };
+  }
+
+  function syncBountyDistrictMarkers(entries = readBountyEntries()) {
+    if (window.Empire.Map?.setBountyDistrictMarkers) {
+      window.Empire.Map.setBountyDistrictMarkers([]);
+    }
+  }
+
+  function grantBountyReward(resourceKey, amount) {
+    const key = String(resourceKey || "").trim();
+    const value = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!key || value <= 0) return;
+    restoreBountyResource(key, value);
+  }
+
+  async function claimMatchingBountiesForOccupation(district, previousOwnerName) {
+    if (window.Empire.Bounty?.claimMatchingBountiesForOccupation) {
+      return window.Empire.Bounty.claimMatchingBountiesForOccupation(district, previousOwnerName);
+    }
+    return { claimedEntries: [], rewardSummary: "" };
+  }
+
+  function restoreBountyResource(resourceKey, amount) {
+    const key = String(resourceKey || "").trim();
+    const value = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!key || value <= 0) return;
+
+    if (key === "cash_bundle") {
+      if (isGuestBlackoutScenarioActive()) {
+        applyGuestBlackoutCleanCashDelta(value);
+        return;
+      }
+      addCleanCash(value);
+      return;
+    }
+    if (key === "material_bundle") {
+      addEconomyResource("materials", value);
+      return;
+    }
+    if (key === "drug_bundle") {
+      addEconomyResource(storageDrugTypes[0]?.key || "neonDust", value);
+      hydrateStorageModalValues();
+      return;
+    }
+
+    if (key === "clean_cash") {
+      if (isGuestBlackoutScenarioActive()) {
+        applyGuestBlackoutCleanCashDelta(value);
+        return;
+      }
+      addCleanCash(value);
+      return;
+    }
+    if (pharmacySupplyTypes.some((item) => item.key === key)) {
+      const playerState = readDrugLabPlayerSupplyState();
+      const nextSupplies = playerState?.labSupplies && typeof playerState.labSupplies === "object"
+        ? { ...playerState.labSupplies }
+        : {};
+      nextSupplies[key] = Math.max(0, Math.floor(Number(nextSupplies[key] || 0) + value));
+      writeDrugLabPlayerSupplyState({
+        ...playerState,
+        labSupplies: nextSupplies
+      });
+      hydrateStorageModalValues();
+      return;
+    }
+    if (storageDrugTypes.some((item) => item.key === key)) {
+      if (isGuestBlackoutScenarioActive()) {
+        applyGuestBlackoutInventoryDelta(key, value);
+        hydrateStorageModalValues();
+        return;
+      }
+      const resourceKeyMapped = storageDrugTypes.find((item) => item.key === key)?.resourceKey || key;
+      addEconomyResource(resourceKeyMapped, value);
+      hydrateStorageModalValues();
+      return;
+    }
+    if (factorySupplyTypes.some((item) => item.key === key)) {
+      if (isGuestBlackoutScenarioActive()) {
+        applyGuestBlackoutInventoryDelta(key, value);
+        const nextFactorySupplies = {
+          ...readFactoryPlayerSuppliesState()
+        };
+        nextFactorySupplies[key] = Math.max(0, Math.floor(Number(nextFactorySupplies[key] || 0) + value));
+        writeFactoryPlayerSuppliesState(nextFactorySupplies);
+        hydrateStorageModalValues();
+        return;
+      }
+      const marketKey =
+        key === "metalParts" ? "metal_parts"
+        : key === "techCore" ? "tech_core"
+        : "combat_module";
+      addEconomyResource(marketKey, value);
+      const nextFactorySupplies = {
+        ...readFactoryPlayerSuppliesState()
+      };
+      nextFactorySupplies[key] = Math.max(0, Math.floor(Number(nextFactorySupplies[key] || 0) + value));
+      writeFactoryPlayerSuppliesState(nextFactorySupplies);
+      hydrateStorageModalValues();
+      return;
+    }
+    if (key.startsWith("attack:")) {
+      addCraftedWeapons({ [key.slice("attack:".length)]: value });
+      return;
+    }
+    if (key.startsWith("defense:")) {
+      addCraftedDefense({ [key.slice("defense:".length)]: value });
+    }
+  }
+
+  function collectBountyEligiblePlayers() {
+    const ownOwnerNames = getPlayerOwnerNameSet();
+    const ownName = resolveCurrentPlayerOwnerKey();
+    const localAllianceState = !window.Empire.token ? getLocalAllianceState() : null;
+    const activeAlliance = localAllianceState?.activeAlliance || null;
+    const activeAllianceName = extractAllianceDisplayName(
+      activeAlliance?.name
+      || cachedProfile?.alliance
+      || window.Empire.player?.alliance
+      || "Žádná"
+    );
+    const alliedPlayers = new Set([
+      ...Array.from(getActiveAllianceOwnerNames()),
+      ...Array.from(ownOwnerNames)
+    ]);
+    (
+      (Array.isArray(activeAlliance?.members) ? activeAlliance.members : [])
+        .map((member) => normalizeOwnerName(member?.username))
+        .filter(Boolean)
+    ).forEach((memberName) => alliedPlayers.add(memberName));
+    if (ownName) alliedPlayers.add(ownName);
+
+    const byName = new Map();
+    const pushCandidate = (name, allianceName = "Bez aliance", districtCountDelta = 0, avatar = "") => {
+      const safeName = String(name || "").trim();
+      const normalized = normalizeOwnerName(safeName);
+      if (!normalized || alliedPlayers.has(normalized)) return;
+      const current = byName.get(normalized) || {
+        name: safeName,
+        allianceName: String(allianceName || "").trim() || "Bez aliance",
+        districtCount: 0,
+        avatar: String(avatar || "").trim()
+      };
+      current.districtCount = Math.max(0, Math.floor(Number(current.districtCount || 0) + Number(districtCountDelta || 0)));
+      if (!current.allianceName || current.allianceName === "Bez aliance") {
+        current.allianceName = String(allianceName || "").trim() || "Bez aliance";
+      }
+      if (!current.avatar) {
+        current.avatar = String(avatar || "").trim();
+      }
+      byName.set(normalized, current);
+    };
+
+    const mapOwners = new Map();
+    (Array.isArray(window.Empire.districts) ? window.Empire.districts : []).forEach((district) => {
+      const ownerName = String(
+        district?.ownerNick
+        || district?.owner_username
+        || district?.ownerUsername
+        || district?.owner
+        || ""
+      ).trim();
+      const normalized = normalizeOwnerName(ownerName);
+      if (!normalized || alliedPlayers.has(normalized)) return;
+      const current = mapOwners.get(normalized) || {
+        name: ownerName,
+        allianceName: String(
+          district?.ownerAllianceName
+          || district?.owner_alliance_name
+          || ""
+        ).trim() || "Bez aliance",
+        districtCount: 0,
+        avatar: String(district?.ownerAvatar || "").trim()
+      };
+      current.districtCount += 1;
+      if (!current.avatar) current.avatar = String(district?.ownerAvatar || "").trim();
+      if (!current.allianceName || current.allianceName === "Bez aliance") {
+        current.allianceName = String(
+          district?.ownerAllianceName
+          || district?.owner_alliance_name
+          || ""
+        ).trim() || "Bez aliance";
+      }
+      mapOwners.set(normalized, current);
+    });
+
+    Array.from(mapOwners.values()).forEach((entry) => {
+      pushCandidate(
+        entry.name,
+        entry.allianceName,
+        entry.districtCount,
+        entry.avatar
+      );
+    });
+
+    if (activePlayerScenarioKey === "alliance-ten-blackout" || scenarioVisionEnabled) {
+      Array.from(getActiveEnemyOwnerNames()).forEach((enemyOwner) => {
+        const normalizedEnemy = normalizeOwnerName(enemyOwner);
+        if (!normalizedEnemy || alliedPlayers.has(normalizedEnemy)) return;
+        const mapEntry = mapOwners.get(normalizedEnemy);
+        pushCandidate(
+          mapEntry?.name || enemyOwner,
+          mapEntry?.allianceName || "Bez aliance",
+          mapEntry?.districtCount || 0,
+          mapEntry?.avatar || ""
+        );
+      });
+    }
+
+    if (window.Empire.token) {
+      (Array.isArray(window.Empire.leaderboardServerPlayers) ? window.Empire.leaderboardServerPlayers : []).forEach((player) => {
+        const safeId = String(player?.id || "");
+        if (safeId.startsWith("leaderboard-")) return;
+        const playerName = String(player?.name || player?.nick || "").trim();
+        const districtCount = Math.max(0, Math.floor(Number(player?.districtCount || player?.ownedDistrictCount || 0)));
+        pushCandidate(playerName, "Bez aliance", districtCount, String(player?.avatar || "").trim());
+      });
+    }
+
+    const safeActiveAllianceName = extractAllianceDisplayName(activeAllianceName || "Žádná");
+    const compareAllianceName = safeActiveAllianceName
+      && safeActiveAllianceName !== "Žádná"
+      && safeActiveAllianceName !== "Bez aliance";
+
+    let result = Array.from(byName.values())
+      .filter((player) => !ownOwnerNames.has(normalizeOwnerName(player?.name)))
+      .filter((player) => {
+        if (!compareAllianceName) return true;
+        const playerAllianceName = extractAllianceDisplayName(player?.allianceName || "Bez aliance");
+        return playerAllianceName !== safeActiveAllianceName;
+      })
+      .filter((player) => Math.max(0, Math.floor(Number(player?.districtCount || 0))) > 0 || !scenarioVisionEnabled)
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "cs"));
+
+    if (!result.length && (activePlayerScenarioKey === "alliance-ten-blackout" || scenarioVisionEnabled)) {
+      const fallback = [];
+      const seen = new Set();
+      (Array.isArray(window.Empire.districts) ? window.Empire.districts : []).forEach((district) => {
+        const ownerName = String(
+          district?.ownerNick
+          || district?.owner_username
+          || district?.ownerUsername
+          || district?.owner
+          || ""
+        ).trim();
+        const normalized = normalizeOwnerName(ownerName);
+        if (!normalized || ownOwnerNames.has(normalized) || alliedPlayers.has(normalized) || seen.has(normalized)) return;
+        const districtCount = (Array.isArray(window.Empire.districts) ? window.Empire.districts : []).filter((entry) => normalizeOwnerName(
+          entry?.ownerNick
+          || entry?.owner_username
+          || entry?.ownerUsername
+          || entry?.owner
+        ) === normalized).length;
+        fallback.push({
+          name: ownerName,
+          allianceName: String(district?.ownerAllianceName || district?.owner_alliance_name || "").trim() || "Bez aliance",
+          districtCount,
+          avatar: String(district?.ownerAvatar || "").trim()
+        });
+        seen.add(normalized);
+      });
+      result = fallback.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "cs"));
+    }
+
+    if (!result.length && activePlayerScenarioKey === "alliance-ten-blackout") {
+      result = [{
+        name: "Mariah",
+        allianceName: "Bez aliance",
+        districtCount: 1,
+        avatar: ""
+      }];
+    }
+
+    return result;
+  }
+
   function launderDirtyCash(portion) {
     const ratioRaw = Number(portion);
     if (!Number.isFinite(ratioRaw)) return 0;
@@ -16465,10 +19394,18 @@ window.Empire.UI = (() => {
       dirtyMoney: money.dirtyMoney,
       influence: currentInfluence,
       drugs: Number(state.balances.drugs || 0),
+      neonDust: Number(state.balances.neonDust || 0),
+      pulseShot: Number(state.balances.pulseShot || 0),
+      velvetSmoke: Number(state.balances.velvetSmoke || 0),
+      ghostSerum: Number(state.balances.ghostSerum || 0),
+      overdriveX: Number(state.balances.overdriveX || 0),
       drugInventory,
       weapons: Number(state.balances.weapons || 0),
       defense: 0,
       materials: Number(state.balances.materials || 0),
+      metalParts: Number(state.balances.metalParts || 0),
+      techCore: Number(state.balances.techCore || 0),
+      combatModule: Number(state.balances.combatModule || 0),
       dataShards: Number(state.balances.dataShards || 0)
     });
     if (currentProfile && typeof currentProfile === "object") {
@@ -16538,6 +19475,31 @@ window.Empire.UI = (() => {
     root.classList.remove("hidden");
   }
 
+  function collectBlackoutMapPlayerSummaries() {
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const ownOwnerNames = getPlayerOwnerNameSet();
+    const players = new Map();
+    districts.forEach((district) => {
+      const ownerName = String(
+        district?.ownerNick
+        || district?.owner_username
+        || district?.ownerUsername
+        || district?.owner
+        || ""
+      ).trim();
+      const normalized = normalizeOwnerName(ownerName);
+      if (!normalized || ownOwnerNames.has(normalized)) return;
+      const current = players.get(normalized) || {
+        name: ownerName,
+        districtCount: 0
+      };
+      current.districtCount += 1;
+      players.set(normalized, current);
+    });
+    return Array.from(players.values())
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "cs"));
+  }
+
   function hydrateProfileModal(profile) {
     if (!profile) return;
     const economy = cachedEconomy || {};
@@ -16589,6 +19551,8 @@ window.Empire.UI = (() => {
     setText("profile-modal-districts", profile.districts || 0);
     const blackoutSourceRow = document.getElementById("profile-modal-blackout-source-row");
     const blackoutSourceValue = document.getElementById("profile-modal-blackout-source");
+    const blackoutPlayersRow = document.getElementById("profile-modal-blackout-players-row");
+    const blackoutPlayersValue = document.getElementById("profile-modal-blackout-players");
     try {
       const rawBlackoutSources = activePlayerScenarioKey === "alliance-ten-blackout"
         ? buildBlackoutPlayerSourcesSnapshot(window.Empire.districts, resolveActiveScenarioOwnerName())
@@ -16609,16 +19573,28 @@ window.Empire.UI = (() => {
       if (blackoutSourceRow) {
         blackoutSourceRow.classList.toggle("hidden", !showBlackoutSource);
       }
+      if (blackoutPlayersRow) {
+        blackoutPlayersRow.classList.toggle("hidden", !showBlackoutSource);
+      }
       if (blackoutSourceValue && showBlackoutSource) {
         const districtCleanPerHour = Number(districtMinuteIncome.clean || 0) * 60;
         const districtDirtyPerHour = Number(districtMinuteIncome.dirty || 0) * 60;
         const districtInfluencePerHour = Number(blackoutSources?.districtInfluencePerMinute || 0) * 60;
         const buildingCleanPerHour = Number(buildingMinuteIncome.clean || 0) * 60;
         const buildingDirtyPerHour = Number(buildingMinuteIncome.dirty || 0) * 60;
+        const buildingInfluencePerHour = Number(blackoutSources?.buildingInfluencePerMinute?.total || 0) * 60;
+        const buildingHeatPerDay = Number(blackoutSources?.buildingHeatPerMinute?.total || 0) * 1440;
         blackoutSourceValue.textContent =
           `Districts C${formatDecimalValue(districtCleanPerHour, 2)}/D${formatDecimalValue(districtDirtyPerHour, 2)} / hod`
           + ` • Buildings C${formatDecimalValue(buildingCleanPerHour, 2)}/D${formatDecimalValue(buildingDirtyPerHour, 2)} / hod`
-          + ` • Vliv ${formatDecimalValue(districtInfluencePerHour, 2)} / hod`;
+          + ` • Vliv ${formatDecimalValue(districtInfluencePerHour + buildingInfluencePerHour, 2)} / hod`
+          + ` • Heat ${formatDecimalValue(buildingHeatPerDay, 2)} / den`;
+      }
+      if (blackoutPlayersValue && showBlackoutSource) {
+        const playersLabel = collectBlackoutMapPlayerSummaries()
+          .map((entry) => `${entry.name} (${entry.districtCount})`)
+          .join(", ");
+        blackoutPlayersValue.textContent = playersLabel || "-";
       }
       if (liveBlackoutSources && profile && typeof profile === "object") {
         profile.sources = liveBlackoutSources;
@@ -16628,6 +19604,9 @@ window.Empire.UI = (() => {
       console.error("Profile blackout source render failed", error);
       if (blackoutSourceRow) {
         blackoutSourceRow.classList.add("hidden");
+      }
+      if (blackoutPlayersRow) {
+        blackoutPlayersRow.classList.add("hidden");
       }
     }
     const profileHasMoneyData =
@@ -17208,9 +20187,11 @@ window.Empire.UI = (() => {
     updateDistrict,
     updateRound,
     pushEvent,
+    collectBountyEligiblePlayers,
     refreshMarketBuildingShortcuts,
     handleMarketUpdate,
     getDistrictRaidLockRemainingMs,
+    getRaidCooldownRemainingMs,
     getRoundStatusSnapshot,
     setGuestMode,
     initProfileModal,

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Empire Streets — Bounty Demo</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Empire Streets</div>
+        <h1>BOUNTY SYSTEM DEMO</h1>
+      </div>
+      <div class="topbar__meta">
+        <div class="topbar__chip">Dark / Cyberpunk</div>
+        <div class="topbar__chip">No framework</div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <div class="panel__header">
+          <div>
+            <div class="eyebrow">Players</div>
+            <h2>Hráči</h2>
+          </div>
+          <div id="current-player-badge" class="current-player-badge"></div>
+        </div>
+        <div id="player-list" class="player-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <div>
+            <div class="eyebrow">Map</div>
+            <h2>Districty</h2>
+          </div>
+          <div class="panel__hint">Aktivní bounty zvýrazní targetovy districty.</div>
+        </div>
+        <div id="district-map" class="district-map"></div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel__header">
+            <div>
+              <div class="eyebrow">Active</div>
+              <h2>Aktivní bounty</h2>
+            </div>
+          </div>
+          <div id="active-bounties" class="bounty-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel__header">
+            <div>
+              <div class="eyebrow">Simulator</div>
+              <h2>Simulace útoku</h2>
+            </div>
+          </div>
+          <form id="attack-simulator" class="simulator">
+            <label>
+              <span>Attacker</span>
+              <select id="sim-attacker"></select>
+            </label>
+            <label>
+              <span>Target</span>
+              <select id="sim-target"></select>
+            </label>
+            <label>
+              <span>Typ výsledku</span>
+              <select id="sim-type">
+                <option value="successful_attack">Úspěšný útok</option>
+                <option value="destroy_units">Zničení jednotek</option>
+                <option value="capture_district">Obsazení districtu</option>
+              </select>
+            </label>
+            <label>
+              <span>Contribution / damage</span>
+              <input id="sim-damage" type="number" min="1" step="1" value="120" />
+            </label>
+            <label>
+              <span>Zničené jednotky</span>
+              <input id="sim-units" type="number" min="0" step="1" value="8" />
+            </label>
+            <label>
+              <span>District pro capture</span>
+              <select id="sim-district"></select>
+            </label>
+            <button class="btn btn--danger" type="submit">Simulovat útok</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel__header">
+            <div>
+              <div class="eyebrow">Feed</div>
+              <h2>Event feed</h2>
+            </div>
+          </div>
+          <div id="event-feed" class="event-feed"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div id="bounty-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal__backdrop" data-close-modal="true"></div>
+    <div class="modal__panel">
+      <header class="modal__header">
+        <div>
+          <div class="eyebrow">Bounty board</div>
+          <h3>VYPSAT ODMĚNU</h3>
+          <p>Označ hráče a vystav ho celému městu.</p>
+        </div>
+        <button id="bounty-close-btn" class="modal__close" type="button" aria-label="Zavřít">×</button>
+      </header>
+
+      <div class="modal__body">
+        <section class="modal__column">
+          <div class="card-section">
+            <div class="card-section__header">
+              <div class="eyebrow">Target</div>
+              <strong>Koho jdeš označit</strong>
+            </div>
+            <div id="bounty-target-card" class="target-card">
+              <div id="target-avatar" class="target-card__avatar"></div>
+              <div class="target-card__copy">
+                <div id="target-name" class="target-card__name">Nevybrán target</div>
+                <div id="target-alliance" class="target-card__meta">Bez aliance</div>
+                <div id="target-district-count" class="target-card__meta">Districtů: 0</div>
+                <div id="target-last-activity" class="target-card__meta">Poslední aktivita: -</div>
+              </div>
+              <div id="target-threat-level" class="target-card__threat">LOW</div>
+            </div>
+          </div>
+
+          <div class="card-section">
+            <div class="card-section__header">
+              <div class="eyebrow">Rewards</div>
+              <strong>Co vypisuješ</strong>
+            </div>
+            <div class="resource-grid">
+              <label class="resource-row">
+                <span>💵 Cash</span>
+                <input id="reward-cash" type="number" min="0" step="100" value="0" />
+                <small id="reward-cash-available"></small>
+              </label>
+              <label class="resource-row">
+                <span>💊 Drogy</span>
+                <input id="reward-drugs" type="number" min="0" step="1" value="0" />
+                <small id="reward-drugs-available"></small>
+              </label>
+              <label class="resource-row">
+                <span>🧱 Materiály</span>
+                <input id="reward-materials" type="number" min="0" step="1" value="0" />
+                <small id="reward-materials-available"></small>
+              </label>
+            </div>
+          </div>
+
+          <div class="card-section">
+            <div class="card-section__header">
+              <div class="eyebrow">Type</div>
+              <strong>Typ bounty</strong>
+            </div>
+            <div class="choice-grid">
+              <label class="choice-card"><input type="radio" name="bounty-type" value="capture_district" checked /><span>Za obsazení districtu</span></label>
+              <label class="choice-card"><input type="radio" name="bounty-type" value="successful_attack" /><span>Za úspěšný útok</span></label>
+              <label class="choice-card"><input type="radio" name="bounty-type" value="destroy_units" /><span>Za zničení jednotek</span></label>
+            </div>
+          </div>
+
+          <div class="choice-row">
+            <div class="card-section card-section--compact">
+              <div class="card-section__header">
+                <div class="eyebrow">Duration</div>
+                <strong>Trvání</strong>
+              </div>
+              <div class="choice-grid choice-grid--three">
+                <label class="choice-card"><input type="radio" name="bounty-duration" value="6" /><span>6h</span></label>
+                <label class="choice-card"><input type="radio" name="bounty-duration" value="12" checked /><span>12h</span></label>
+                <label class="choice-card"><input type="radio" name="bounty-duration" value="24" /><span>24h</span></label>
+              </div>
+            </div>
+            <div class="card-section card-section--compact">
+              <div class="card-section__header">
+                <div class="eyebrow">Anonymita</div>
+                <strong>Režim</strong>
+              </div>
+              <label class="toggle-card">
+                <input id="bounty-anonymous" type="checkbox" checked />
+                <span>Anonymní vypsání odměny</span>
+                <small>OFF = target vidí, kdo ho označil.</small>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="modal__column modal__column--side">
+          <div class="preview-card">
+            <div class="eyebrow">HOT TARGET</div>
+            <div id="preview-target-name" class="preview-card__title">Nevybrán target</div>
+            <div id="preview-total-value" class="preview-card__value">$0</div>
+            <div class="preview-card__meta">
+              <div><span>Typ</span><strong id="preview-type"></strong></div>
+              <div><span>Trvání</span><strong id="preview-duration"></strong></div>
+              <div><span>Autor</span><strong id="preview-author"></strong></div>
+            </div>
+          </div>
+
+          <div class="hunt-card">
+            <div id="hunt-mode-state" class="hunt-card__state">Hunt mode se plní</div>
+            <div class="hunt-card__progress"><div id="hunt-mode-bar" class="hunt-card__progress-fill"></div></div>
+            <div id="hunt-mode-label" class="hunt-card__label"></div>
+          </div>
+
+          <div class="warning-card">
+            <div>Vypsání bounty upozorní celé město.</div>
+            <div>Po potvrzení nelze akci vrátit zpět.</div>
+            <div>Target může reagovat protiakcí.</div>
+          </div>
+
+          <div class="modal__actions">
+            <button id="bounty-cancel-btn" class="btn btn--ghost" type="button">Zrušit</button>
+            <button id="bounty-submit-btn" class="btn btn--danger" type="button">VYPSAT ODMĚNU</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script src="./data.js"></script>
+  <script src="./bounty.js"></script>
+  <script src="./map.js"></script>
+  <script src="./game.js"></script>
+</body>
+</html>

@@ -254,6 +254,49 @@ window.Empire.API = (() => {
     window.Empire.UI.updateRound(data);
   }
 
+  async function getBounties() {
+    const res = await fetch(`${baseUrl}/bounties`, {
+      headers: authHeaders()
+    });
+    return res.json();
+  }
+
+  async function createBounty(payload) {
+    const res = await fetch(`${baseUrl}/bounties`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload || {})
+    });
+    return res.json();
+  }
+
+  async function claimBounties(payload) {
+    const res = await fetch(`${baseUrl}/bounties/claim`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload || {})
+    });
+    return res.json();
+  }
+
+  async function resolveBounties(payload) {
+    const res = await fetch(`${baseUrl}/bounties/resolve`, {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload || {})
+    });
+    return res.json();
+  }
+
   function authHeaders() {
     return window.Empire.token
       ? { Authorization: `Bearer ${window.Empire.token}` }
@@ -287,6 +330,10 @@ window.Empire.API = (() => {
     createMarketOrder,
     cancelMarketOrder,
     attackDistrict,
-    refreshRound
+    refreshRound,
+    getBounties,
+    createBounty,
+    claimBounties,
+    resolveBounties
   };
 })();

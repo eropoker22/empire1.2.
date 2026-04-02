@@ -18,6 +18,7 @@ const economyRoutes = require("./routes/economy");
 const marketRoutes = require("./routes/market");
 const allianceRoutes = require("./routes/alliances");
 const roundRoutes = require("./routes/rounds");
+const bountyRoutes = require("./routes/bounties");
 
 loadEnv();
 
@@ -40,6 +41,7 @@ app.use("/economy", economyRoutes);
 app.use("/market", marketRoutes);
 app.use("/alliances", allianceRoutes);
 app.use("/rounds", roundRoutes);
+app.use("/bounties", bountyRoutes);
 
 const port = Number(process.env.PORT || 3000);
 const server = http.createServer(app);

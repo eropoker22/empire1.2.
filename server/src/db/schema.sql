@@ -219,3 +219,24 @@ CREATE TABLE IF NOT EXISTS market_trades (
 
 CREATE INDEX IF NOT EXISTS idx_market_trades_resource_created
   ON market_trades (resource_key, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS bounties (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_by_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  target_district_id UUID NULL REFERENCES districts(id) ON DELETE SET NULL,
+  objective_type TEXT NOT NULL DEFAULT 'capture_district',
+  is_anonymous BOOLEAN NOT NULL DEFAULT TRUE,
+  expires_at TIMESTAMP NULL,
+  rewards JSONB NOT NULL DEFAULT '[]'::jsonb,
+  status TEXT NOT NULL DEFAULT 'active',
+  claimed_by_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
+  claimed_at TIMESTAMP NULL,
+  contributors JSONB NOT NULL DEFAULT '[]'::jsonb,
+  total_value INT NOT NULL DEFAULT 0,
+  hunt_mode_active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bounties_target_active
+  ON bounties (target_player_id, status, created_at DESC);

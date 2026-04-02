@@ -9,8 +9,9 @@ window.Empire.CityGen = (() => {
 
     const sites = generateSites(rng, width, height, districtCount);
     const relaxed = lloydRelaxation(sites, { minX: 0, minY: 0, maxX: width, maxY: height }, 2);
+    const centerBiased = biasSitesForLargerDowntown(relaxed, { minX: 0, minY: 0, maxX: width, maxY: height });
 
-    const cells = window.Empire.Voronoi.computeVoronoi(relaxed, {
+    const cells = window.Empire.Voronoi.computeVoronoi(centerBiased, {
       minX: 0,
       minY: 0,
       maxX: width,
@@ -95,6 +96,35 @@ window.Empire.CityGen = (() => {
       });
     }
     return current;
+  }
+
+  function biasSitesForLargerDowntown(sites, bounds) {
+    const safeSites = Array.isArray(sites) ? sites : [];
+    const centerX = (Number(bounds?.minX || 0) + Number(bounds?.maxX || 0)) / 2;
+    const centerY = (Number(bounds?.minY || 0) + Number(bounds?.maxY || 0)) / 2;
+    const maxRadius = Math.max(
+      1,
+      Math.hypot(
+        Number(bounds?.maxX || 0) - centerX,
+        Number(bounds?.maxY || 0) - centerY
+      )
+    );
+
+    return safeSites.map((site) => {
+      const dx = Number(site?.x || 0) - centerX;
+      const dy = Number(site?.y || 0) - centerY;
+      const radius = Math.hypot(dx, dy);
+      const normalizedRadius = Math.max(0, Math.min(1, radius / maxRadius));
+      const pushStrength = Math.max(0, 1 - normalizedRadius) * 0.18;
+      const pushX = dx * pushStrength;
+      const pushY = dy * pushStrength;
+      const quadrantBounds = resolveQuadrantBoundsByPoint(bounds, site?.quadrant);
+      return {
+        ...site,
+        x: clamp(Number(site?.x || 0) + pushX, quadrantBounds.minX + 10, quadrantBounds.maxX - 10),
+        y: clamp(Number(site?.y || 0) + pushY, quadrantBounds.minY + 10, quadrantBounds.maxY - 10)
+      };
+    });
   }
 
   function resolveBalancedQuadrantCounts(count) {
@@ -183,26 +213,19 @@ window.Empire.CityGen = (() => {
 
     const nonDowntownTargets = {
       residential: 42,
-      industrial: 36,
+      industrial: 46,
       commercial: 30,
       park: 34
     };
     const typeOrder = ["residential", "industrial", "commercial", "park"];
-    const typePlan = buildBalancedTypePlan(remaining.length, nonDowntownTargets, typeOrder);
-    const balancedByLeftRight = assignTypesBalancedLeftRightDowntown(
-      remaining,
-      downtownCenter,
+    const evenlyDistributed = distributeEntriesAroundDowntown(remaining, downtownCenter, 16);
+    const typePlan = buildClusteredTypePlan(
+      evenlyDistributed.length,
+      nonDowntownTargets,
       typeOrder,
-      typePlan
+      2,
+      3
     );
-    if (balancedByLeftRight) {
-      for (let i = 0; i < balancedByLeftRight.length; i += 1) {
-        typeMap.set(balancedByLeftRight[i].id, balancedByLeftRight[i].type || "residential");
-      }
-      return typeMap;
-    }
-
-    const evenlyDistributed = distributeEntriesAroundDowntown(remaining, downtownCenter, 12);
     for (let i = 0; i < evenlyDistributed.length; i += 1) {
       typeMap.set(evenlyDistributed[i].id, typePlan[i] || "residential");
     }
@@ -408,6 +431,131 @@ window.Empire.CityGen = (() => {
     }
 
     return plan;
+  }
+
+  function buildClusteredTypePlan(total, targets, order, minCluster = 2, maxCluster = 3) {
+    const safeOrder = Array.isArray(order) ? order.filter(Boolean) : [];
+    if (!Number.isFinite(total) || total <= 0 || !safeOrder.length) return [];
+
+    const counts = buildTypeCounts(total, targets, safeOrder);
+    const remaining = new Map();
+    safeOrder.forEach((type, index) => {
+      remaining.set(type, counts[index] || 0);
+    });
+
+    const plan = [];
+    let previousType = "";
+    let cursor = 0;
+
+    while (plan.length < total) {
+      const nextType = pickNextClusterType(remaining, safeOrder, previousType, cursor);
+      if (!nextType) break;
+      const remainingForType = Math.max(0, Number(remaining.get(nextType) || 0));
+      const clusterSize = resolveClusterSize(
+        remainingForType,
+        Math.max(1, Math.floor(Number(minCluster) || 2)),
+        Math.max(1, Math.floor(Number(maxCluster) || 3)),
+        cursor
+      );
+
+      for (let i = 0; i < clusterSize && plan.length < total; i += 1) {
+        plan.push(nextType);
+      }
+
+      remaining.set(nextType, Math.max(0, remainingForType - clusterSize));
+      previousType = nextType;
+      cursor += 1;
+    }
+
+    while (plan.length < total) {
+      plan.push(safeOrder[plan.length % safeOrder.length]);
+    }
+
+    return plan;
+  }
+
+  function buildTypeCounts(total, targets, order) {
+    const normalizedOrder = Array.isArray(order) ? order.filter(Boolean) : [];
+    if (!normalizedOrder.length) return [];
+
+    const baseCounts = normalizedOrder.map((type) =>
+      Math.max(0, Math.floor(Number(targets?.[type]) || 0))
+    );
+    const baseTotal = baseCounts.reduce((sum, count) => sum + count, 0);
+
+    if (baseTotal <= 0) {
+      const fallback = normalizedOrder.map(() => 0);
+      for (let i = 0; i < total; i += 1) {
+        fallback[i % fallback.length] += 1;
+      }
+      return fallback;
+    }
+
+    if (baseTotal === total) {
+      return [...baseCounts];
+    }
+
+    const scale = total / baseTotal;
+    const counts = baseCounts.map((count) => Math.floor(count * scale));
+    let assigned = counts.reduce((sum, count) => sum + count, 0);
+    const fractions = baseCounts
+      .map((count, index) => ({
+        index,
+        fraction: count * scale - Math.floor(count * scale)
+      }))
+      .sort((a, b) => b.fraction - a.fraction);
+
+    let cursor = 0;
+    while (assigned < total && fractions.length) {
+      const targetIndex = fractions[cursor % fractions.length].index;
+      counts[targetIndex] += 1;
+      assigned += 1;
+      cursor += 1;
+    }
+
+    while (assigned > total) {
+      const removeIndex = counts.findIndex((count) => count > 0);
+      if (removeIndex < 0) break;
+      counts[removeIndex] -= 1;
+      assigned -= 1;
+    }
+
+    return counts;
+  }
+
+  function pickNextClusterType(remaining, order, previousType, cursor) {
+    const candidates = order
+      .map((type, index) => ({
+        type,
+        index,
+        remaining: Math.max(0, Number(remaining.get(type) || 0))
+      }))
+      .filter((entry) => entry.remaining > 0);
+    if (!candidates.length) return null;
+
+    const withoutPrevious = candidates.filter((entry) => entry.type !== previousType);
+    const pool = withoutPrevious.length ? withoutPrevious : candidates;
+    pool.sort((a, b) => {
+      if (a.remaining === b.remaining) {
+        const aOffset = (a.index - cursor + order.length) % order.length;
+        const bOffset = (b.index - cursor + order.length) % order.length;
+        return aOffset - bOffset;
+      }
+      return b.remaining - a.remaining;
+    });
+    return pool[0]?.type || null;
+  }
+
+  function resolveClusterSize(remainingCount, minCluster, maxCluster, cursor) {
+    const safeRemaining = Math.max(0, Math.floor(Number(remainingCount) || 0));
+    if (safeRemaining <= 0) return 0;
+    if (safeRemaining <= maxCluster) {
+      return safeRemaining;
+    }
+    if (safeRemaining === maxCluster + 1) {
+      return minCluster;
+    }
+    return cursor % 2 === 0 ? maxCluster : minCluster;
   }
 
   function baseIncome(type) {

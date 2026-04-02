@@ -71,6 +71,7 @@
               aria-label="City Events cíl"
               title="Bounty."
               data-tooltip="Bounty."
+              onclick="window.Empire && typeof window.Empire.openBountyModalShortcut === 'function' ? window.Empire.openBountyModalShortcut() : document.dispatchEvent(new CustomEvent('empire:open-bounty-modal'))"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <circle cx="12" cy="12" r="7"></circle>
@@ -428,21 +429,23 @@
           <button class="modal__close" id="district-defense-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body defense-modal__body attack-modal__body">
-          <div class="modal__row">
-            <span>Vybraný distrikt</span>
-            <strong id="defense-modal-district">-</strong>
-          </div>
-          <div class="modal__row">
-            <span>Zbývá členů gangu</span>
-            <strong id="defense-modal-members-count">-</strong>
-          </div>
-          <div class="modal__row">
-            <span>Použito členů</span>
-            <strong id="defense-modal-used-members">-</strong>
-          </div>
-          <div class="modal__row">
-            <span>Výsledná síla obrany</span>
-            <strong id="defense-modal-power">-</strong>
+          <div class="attack-modal__stats defense-modal__stats">
+            <div class="modal__row">
+              <span>Vybraný distrikt</span>
+              <strong id="defense-modal-district">-</strong>
+            </div>
+            <div class="modal__row">
+              <span>Zbývá členů gangu</span>
+              <strong id="defense-modal-members-count">-</strong>
+            </div>
+            <div class="modal__row">
+              <span>Použito členů</span>
+              <strong id="defense-modal-used-members">-</strong>
+            </div>
+            <div class="modal__row">
+              <span>Výsledná síla obrany</span>
+              <strong id="defense-modal-power">-</strong>
+            </div>
           </div>
           <div class="attack-modal__weapons defense-modal__weapons" id="defense-modal-weapons"></div>
           <p class="muted defense-modal__note" id="defense-modal-note">
@@ -634,21 +637,23 @@
           <button class="modal__close" id="attack-modal-close" aria-label="Zavřít">✕</button>
         </div>
         <div class="modal__body attack-modal__body">
-          <div class="modal__row">
-            <span>Cíl</span>
-            <strong id="attack-modal-district">-</strong>
-          </div>
-          <div class="modal__row">
-            <span>Zbývá členů gangu</span>
-            <strong id="attack-modal-members-count">-</strong>
-          </div>
-          <div class="modal__row">
-            <span>Použito členů</span>
-            <strong id="attack-modal-used-members">-</strong>
-          </div>
-          <div class="modal__row">
-            <span>Výsledná síla útoku</span>
-            <strong id="attack-modal-power">-</strong>
+          <div class="attack-modal__stats">
+            <div class="modal__row">
+              <span>Cíl</span>
+              <strong id="attack-modal-district">-</strong>
+            </div>
+            <div class="modal__row">
+              <span>Zbývá členů gangu</span>
+              <strong id="attack-modal-members-count">-</strong>
+            </div>
+            <div class="modal__row">
+              <span>Použito členů</span>
+              <strong id="attack-modal-used-members">-</strong>
+            </div>
+            <div class="modal__row">
+              <span>Výsledná síla útoku</span>
+              <strong id="attack-modal-power">-</strong>
+            </div>
           </div>
           <div class="attack-modal__weapons" id="attack-modal-weapons"></div>
           <div class="modal__row">
@@ -848,7 +853,7 @@
 
           <div id="building-detail-panel-stats" class="building-detail-panel">
             <div class="building-detail-divider" aria-hidden="true"></div>
-            <div class="modal__row">
+            <div class="modal__row building-detail-row--name">
               <span>Název</span>
               <strong id="building-detail-name">-</strong>
             </div>
@@ -893,7 +898,7 @@
                 <span id="building-detail-label-heat">Heat</span>
                 <strong id="building-detail-heat">0 / 24h</strong>
               </div>
-              <div class="modal__row">
+              <div class="modal__row building-detail-row--effects">
                 <span id="building-detail-label-effects">Aktivní efekty</span>
                 <strong id="building-detail-effects">Žádné</strong>
               </div>
@@ -907,12 +912,7 @@
                   <button class="btn btn--primary building-detail-action-btn building-detail-action-btn--a1" type="button" data-building-action="1">Akce 1</button>
                   <button class="btn btn--ghost building-detail-action-btn building-detail-action-btn--a2" type="button" data-building-action="2">Akce 2</button>
                   <button class="btn btn--warn building-detail-action-btn building-detail-action-btn--a3" type="button" data-building-action="3">Akce 3</button>
-                </div>
-              </div>
-              <div class="building-detail-actions__group">
-                <div class="building-detail-actions__label">Vylepšení</div>
-                <div class="building-detail-actions__grid building-detail-actions__grid--single">
-                  <button class="btn btn--primary building-detail-action-btn building-detail-action-btn--upgrade" type="button" data-building-action="upgrade">Upgrade</button>
+                  <button class="btn btn--primary hidden building-detail-action-btn building-detail-action-btn--upgrade" type="button" data-building-action="upgrade">Upgrade</button>
                 </div>
               </div>
             </div>
@@ -1119,6 +1119,10 @@
           <div class="modal__row hidden" id="profile-modal-blackout-source-row">
             <span>Blackout source</span>
             <strong id="profile-modal-blackout-source">Districts C0/D0 / hod • Buildings C0/D0 / hod</strong>
+          </div>
+          <div class="modal__row hidden" id="profile-modal-blackout-players-row">
+            <span>Hráči na mapě</span>
+            <strong id="profile-modal-blackout-players">-</strong>
           </div>
           <div class="modal__row">
             <span>Čisté peníze</span>
@@ -1500,6 +1504,7 @@
     <script src="map.js"></script>
     <script src="police-heat.js"></script>
     <script src="ui.js"></script>
+    <script src="bounty.js"></script>
     <script src="onboarding.js"></script>
   </body>
 </html>
