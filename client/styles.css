@@ -4487,6 +4487,11 @@ body::before {
   overflow-y: auto;
 }
 
+html:has(body.auth-body--faction) {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .auth-card--faction {
   --faction-accent: rgba(34, 211, 238, 0.82);
   --faction-accent-soft: rgba(34, 211, 238, 0.16);
@@ -18127,6 +18132,22 @@ body::before {
 }
 
 @media (max-width: 900px) {
+  .auth-body--login .auth-form input {
+    font-size: 16px !important;
+  }
+
+  .auth-body--faction {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  html:has(body.auth-body--faction) {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
   .auth-mobile-fit-frame {
     width: 100%;
     height: 100svh;
