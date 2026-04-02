@@ -18450,6 +18450,14 @@ body::before {
 }
 
 @media (max-width: 720px) {
+  body:not(.auth-body--login) {
+    --mobile-topbar-offset: 0px !important;
+  }
+
+  body:not(.auth-body--login) .topbar {
+    display: none !important;
+  }
+
   #building-detail-modal .drug-lab-stepper,
   #building-detail-modal .drug-lab-mini-btn,
   #building-detail-modal .drug-lab-mini-btn--step {
@@ -18470,7 +18478,7 @@ body::before {
   }
 
   .app {
-    padding-top: var(--mobile-topbar-offset, 176px);
+    padding-top: 0 !important;
   }
 
   .main > .map-area {
@@ -21704,4 +21712,91 @@ body.mobile-storage-modal-open {
 
 #events-modal .events-task__desc {
   grid-column: 1 !important;
+}
+
+/* Final mobile transparency restore for locked top resources bar */
+@media (max-width: 1200px) {
+  .topbar {
+    background: rgba(10, 15, 28, 0.16) !important;
+    border-bottom-color: rgba(34, 211, 238, 0.14) !important;
+    box-shadow: 0 8px 20px rgba(2, 6, 23, 0.1) !important;
+  }
+
+  .brand {
+    background: transparent !important;
+    gap: 8px !important;
+  }
+
+  .brand__logo {
+    width: 26px !important;
+    height: 26px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.24) !important;
+  }
+
+  .brand__name {
+    font-size: 11px !important;
+    text-shadow: 0 0 7px rgba(34, 211, 238, 0.26) !important;
+  }
+
+  .stat {
+    background: rgba(8, 14, 26, 0.12) !important;
+    border-color: rgba(34, 211, 238, 0.16) !important;
+    box-shadow: inset 0 0 8px rgba(34, 211, 238, 0.05) !important;
+    min-height: 50px !important;
+    padding: 5px 6px !important;
+    border-radius: 9px !important;
+    gap: 3px !important;
+  }
+
+  .topbar__stats {
+    gap: 6px !important;
+  }
+
+  .stat__label {
+    min-height: 0 !important;
+    font-size: 9px !important;
+    line-height: 1.05 !important;
+  }
+
+  .stat__value {
+    font-size: 13px !important;
+    line-height: 1 !important;
+  }
+
+  #stat-influence {
+    font-size: 30px !important;
+    line-height: 1 !important;
+    font-weight: 700 !important;
+  }
+
+  .stat__label--storage {
+    font-size: 12px !important;
+  }
+
+  body.is-mobile-topbar-condensed .topbar {
+    background: rgba(10, 15, 28, 0.14) !important;
+    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.08) !important;
+  }
+
+  body.is-mobile-topbar-condensed .brand__logo {
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 7px !important;
+  }
+
+  body.is-mobile-topbar-condensed .brand__name {
+    font-size: 10px !important;
+  }
+
+  body.is-mobile-topbar-condensed #stat-influence {
+    font-size: 19px !important;
+  }
+
+  body.is-mobile-topbar-condensed .stat {
+    background: rgba(8, 14, 26, 0.1) !important;
+    box-shadow: inset 0 0 6px rgba(34, 211, 238, 0.04) !important;
+    min-height: 40px !important;
+    padding: 4px 5px !important;
+  }
 }
