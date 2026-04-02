@@ -1922,6 +1922,7 @@ window.Empire.UI = (() => {
   let scenarioIncomeTimer = null;
   let onboardingGrowthTimer = null;
   const LOCAL_ALLIANCE_KEY = "empire_local_alliance_state";
+  const LOCAL_SERVER_CHAT_KEY = "empire_local_server_chat_v1";
   const LOCAL_MARKET_KEY = "empire_local_market_state";
   const LOCAL_BOUNTY_STORAGE_KEY = "empire_local_bounties_v1";
   const DRUG_LAB_PLAYER_STORAGE_KEY = "empire_drug_lab_player_v1";
@@ -2040,7 +2041,8 @@ window.Empire.UI = (() => {
 
   function init() {
     selectedMapBorderMode = resolveStoredMapBorderMode();
-    unknownNeutralFillEnabled = resolveStoredUnknownNeutralFillEnabled();
+    localStorage.setItem(MAP_UNKNOWN_NEUTRAL_FILL_STORAGE_KEY, "0");
+    unknownNeutralFillEnabled = false;
     readStoredDistrictSpyIntel();
     applyOneTimeDistrictSpyIntelReset();
     processSpyRecoveryQueue({ notify: false });
@@ -2811,7 +2813,7 @@ window.Empire.UI = (() => {
     if (!root || !buttons.length) return;
 
     const syncVisibility = () => {
-      root.classList.toggle("hidden", activePlayerScenarioKey === "alliance-ten-blackout");
+      root.classList.remove("hidden");
     };
 
     const syncState = () => {
@@ -10304,7 +10306,7 @@ window.Empire.UI = (() => {
           return district;
         });
         setScenarioEnemyOwners([enemyOneName, enemyTwoName, blackoutSecondEnemyName, blackoutThirdEnemyName, blackoutFourthEnemyName, blackoutFifthEnemyName]);
-        baseProfile.alliance = `${blackoutAllianceName} (2/4)`;
+        baseProfile.alliance = blackoutAllianceName;
         baseProfile.districts = countOwnedDistrictsForOwner(nextDistricts, ownerName);
       }
       if (activePlayerScenarioKey === "alliance-ten-blackout") {
@@ -12197,15 +12199,15 @@ window.Empire.UI = (() => {
       };
 
       const bindDirectButton = () => {
-        const button = document.getElementById("city-events-target-btn");
+        const button = document.getElementById("map-bounty-open");
         if (!button || button.dataset.bountyBound === "1") return;
         button.dataset.bountyBound = "1";
         const handleOpen = (event, source) => {
           event.preventDefault();
           openFromTrigger(source);
         };
-        button.addEventListener("click", (event) => handleOpen(event, "city-events-card-direct"));
-        button.addEventListener("pointerdown", (event) => handleOpen(event, "city-events-card-pointer"));
+        button.addEventListener("click", (event) => handleOpen(event, "map-bounty-direct"));
+        button.addEventListener("pointerdown", (event) => handleOpen(event, "map-bounty-pointer"));
       };
 
       bindDirectButton();
@@ -12216,16 +12218,16 @@ window.Empire.UI = (() => {
       if (root.dataset.triggerBound !== "1") {
         root.dataset.triggerBound = "1";
         document.addEventListener("click", (event) => {
-          const trigger = event.target instanceof Element ? event.target.closest("#city-events-target-btn") : null;
+          const trigger = event.target instanceof Element ? event.target.closest("#map-bounty-open") : null;
           if (!trigger) return;
           event.preventDefault();
-          openFromTrigger("city-events-card-delegated");
+          openFromTrigger("map-bounty-delegated");
         }, true);
         document.addEventListener("pointerdown", (event) => {
-          const trigger = event.target instanceof Element ? event.target.closest("#city-events-target-btn") : null;
+          const trigger = event.target instanceof Element ? event.target.closest("#map-bounty-open") : null;
           if (!trigger) return;
           event.preventDefault();
-          openFromTrigger("city-events-card-delegated-pointer");
+          openFromTrigger("map-bounty-delegated-pointer");
         }, true);
         document.addEventListener("empire:open-bounty-modal", () => {
           openFromTrigger("city-events-card-custom-event");
@@ -13261,7 +13263,7 @@ window.Empire.UI = (() => {
         void openModal().catch(() => pushEvent("Bounty kartu se nepodařilo načíst."));
       };
 
-      const trigger = document.getElementById("city-events-target-btn");
+      const trigger = document.getElementById("map-bounty-open");
       if (trigger && trigger.dataset.bountyBoundV2 !== "1") {
         trigger.dataset.bountyBoundV2 = "1";
         trigger.addEventListener("click", openFromTrigger);
@@ -15650,6 +15652,7 @@ window.Empire.UI = (() => {
       setSpyCount(baseSpies, { persist: true });
       const state = getLocalAllianceState();
       renderAllianceChat(state.chat);
+      renderGlobalServerChat();
       syncGuestAllianceLabel(state.activeAlliance?.name || "Žádná");
       setLiveAllianceOwnersFromAlliance(state.activeAlliance || null);
       syncGuestEconomyFromMarket();
@@ -15788,6 +15791,7 @@ window.Empire.UI = (() => {
         renderAllianceState(resolvedLocalState.activeAlliance, resolvedLocalState.alliances, resolvedLocalState.incomingInvites || []);
         renderAllianceManagementState(resolvedLocalState.activeAlliance);
         renderAllianceChat(resolvedLocalState.chat);
+        renderGlobalServerChat();
         setLiveAllianceOwnersFromAlliance(resolvedLocalState.activeAlliance || null);
         syncBlackoutScenarioAllianceDistrictState(resolvedLocalState.activeAlliance || null);
         syncGuestAllianceLabel(resolvedLocalState.activeAlliance?.name || "Žádná");
@@ -15808,6 +15812,7 @@ window.Empire.UI = (() => {
       renderAllianceState(mine.alliance || null, listing.alliances || [], mine.incomingInvites || []);
       renderAllianceManagementState(mine.alliance || null);
       renderAllianceChat([]);
+      renderGlobalServerChat();
       setLiveAllianceOwnersFromAlliance(mine.alliance || null);
       restoreAllianceScrollState(scrollState);
       (mine.notifications || []).forEach((notification) => {
@@ -15836,6 +15841,22 @@ window.Empire.UI = (() => {
         }
       });
       renderAllianceChat(state.chat);
+    };
+
+    const sendGlobalChatMessage = async (input) => {
+      const targetInput = input instanceof HTMLInputElement ? input : null;
+      const text = String(targetInput?.value || "").trim();
+      if (!text) return;
+      appendLocalServerChatMessage({
+        author: resolveCurrentServerChatAuthorName(),
+        text
+      });
+      document.querySelectorAll("[data-global-chat-input]").forEach((field) => {
+        if (field instanceof HTMLInputElement) {
+          field.value = "";
+        }
+      });
+      renderGlobalServerChat();
     };
 
     openBtn.addEventListener("click", async () => {
@@ -16000,15 +16021,15 @@ window.Empire.UI = (() => {
         }
       }
     });
-    chatInput.setAttribute("data-alliance-chat-input", "");
-    chatSend.setAttribute("data-alliance-chat-send", "");
+    chatInput.setAttribute("data-global-chat-input", "");
+    chatSend.setAttribute("data-global-chat-send", "");
     chatSend.addEventListener("click", async () => {
-      await sendAllianceChatMessage(chatInput);
+      await sendGlobalChatMessage(chatInput);
     });
     chatInput.addEventListener("keydown", async (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
-      await sendAllianceChatMessage(chatInput);
+      await sendGlobalChatMessage(chatInput);
     });
     if (activePanel) {
       activePanel.addEventListener("click", async (event) => {
@@ -16032,6 +16053,9 @@ window.Empire.UI = (() => {
     renderAllianceIconPicker();
     setCreateAllianceModalVisible(false);
     setAllianceManagementModalVisible(false);
+    const localState = !window.Empire.token ? getLocalAllianceState() : null;
+    renderAllianceChat(localState?.chat || []);
+    renderGlobalServerChat();
   }
 
   function getAllianceIconOption(iconKey) {
@@ -16815,6 +16839,117 @@ window.Empire.UI = (() => {
     });
   }
 
+  function resolveCurrentServerChatAuthorName() {
+    return String(
+      resolveActiveScenarioOwnerName()
+      || window.Empire.player?.username
+      || window.Empire.player?.name
+      || cachedProfile?.username
+      || cachedProfile?.name
+      || cachedProfile?.gangName
+      || cachedProfile?.gang_name
+      || localStorage.getItem("empire_guest_username")
+      || localStorage.getItem("empire_gang_name")
+      || "Ty"
+    ).trim() || "Ty";
+  }
+
+  function collectServerChatParticipants(limit = 10) {
+    const byName = new Map();
+    const pushParticipant = (name) => {
+      const safeName = String(name || "").trim();
+      const normalized = normalizeOwnerName(safeName);
+      if (!normalized || byName.has(normalized)) return;
+      byName.set(normalized, safeName);
+    };
+    pushParticipant(resolveCurrentServerChatAuthorName());
+    (Array.isArray(window.Empire.districts) ? window.Empire.districts : []).forEach((district) => {
+      pushParticipant(
+        district?.ownerNick
+        || district?.owner_username
+        || district?.ownerUsername
+        || district?.owner
+      );
+    });
+    (Array.isArray(window.Empire.leaderboardServerPlayers) ? window.Empire.leaderboardServerPlayers : []).forEach((player) => {
+      const safeId = String(player?.id || "");
+      if (safeId.startsWith("leaderboard-")) return;
+      pushParticipant(player?.name || player?.nick);
+    });
+    return Array.from(byName.values())
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b), "cs"))
+      .slice(0, Math.max(1, Math.floor(Number(limit || 10))));
+  }
+
+  function normalizeServerChatMessages(rawMessages) {
+    return (Array.isArray(rawMessages) ? rawMessages : [])
+      .map((entry) => ({
+        time: String(entry?.time || "").trim().slice(0, 5),
+        author: String(entry?.author || "").trim().slice(0, 48),
+        text: String(entry?.text || "").trim().slice(0, 300)
+      }))
+      .filter((entry) => entry.time && entry.author && entry.text)
+      .slice(0, 30);
+  }
+
+  function buildDefaultServerChatMessages() {
+    const names = collectServerChatParticipants(4);
+    const first = names[0] || "Mariah";
+    const second = names[1] || "Willy";
+    return [
+      { time: "09:10", author: first, text: "Kdo drží severní sektor?" },
+      { time: "09:12", author: second, text: "Jdu na útok za 5 minut." },
+      { time: "09:15", author: "System", text: "Server chat je aktivní pro všechny hráče." }
+    ];
+  }
+
+  function getLocalServerChatMessages() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(LOCAL_SERVER_CHAT_KEY) || "[]");
+      const normalized = normalizeServerChatMessages(parsed);
+      if (normalized.length) return normalized;
+    } catch {}
+    const fallback = buildDefaultServerChatMessages();
+    localStorage.setItem(LOCAL_SERVER_CHAT_KEY, JSON.stringify(fallback));
+    return fallback;
+  }
+
+  function saveLocalServerChatMessages(messages) {
+    localStorage.setItem(
+      LOCAL_SERVER_CHAT_KEY,
+      JSON.stringify(normalizeServerChatMessages(messages))
+    );
+  }
+
+  function appendLocalServerChatMessage(message) {
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const nextMessages = normalizeServerChatMessages([
+      {
+        time,
+        author: String(message?.author || "Ty").trim() || "Ty",
+        text: String(message?.text || "").trim()
+      },
+      ...getLocalServerChatMessages()
+    ]).slice(0, 30);
+    saveLocalServerChatMessages(nextMessages);
+    return nextMessages;
+  }
+
+  function renderGlobalServerChat(messages) {
+    const logs = Array.from(document.querySelectorAll("[data-global-chat-log]"));
+    if (!logs.length) return;
+    const safeMessages = normalizeServerChatMessages(messages);
+    const renderedMessages = safeMessages.length ? safeMessages : getLocalServerChatMessages();
+    const markup = renderedMessages
+      .map((message) => `<div class="alliance-chat__item">[${message.time}] ${message.author}: ${message.text}</div>`)
+      .join("");
+    logs.forEach((log) => {
+      log.innerHTML = markup;
+    });
+  }
+
   function renderAllianceChat(messages) {
     const logs = Array.from(document.querySelectorAll("[data-alliance-chat-log]"));
     if (!logs.length) return;
@@ -17373,13 +17508,23 @@ window.Empire.UI = (() => {
     const languageSelect = document.getElementById("settings-language");
     const mapDistrictBordersInput = document.getElementById("settings-map-district-borders");
     const mapAllianceSymbolsInput = document.getElementById("settings-map-alliance-symbols");
+    const mapUnknownNeutralFillBtn = document.getElementById("settings-map-unknown-neutral-fill-btn");
     const mapVisibilitySelect = document.getElementById("settings-map-visibility");
     if (!root) return;
     const mobileMedia = window.matchMedia("(max-width: 720px)");
     let settingsSnapshot = null;
+    let unknownNeutralFillSnapshot = null;
 
     const syncMobileSettingsBackdropState = (open) => {
       document.body.classList.toggle("mobile-settings-modal-open", Boolean(open) && mobileMedia.matches);
+    };
+
+    const renderUnknownNeutralFillButton = () => {
+      if (!mapUnknownNeutralFillBtn) return;
+      const active = resolveStoredUnknownNeutralFillEnabled();
+      mapUnknownNeutralFillBtn.dataset.active = active ? "true" : "false";
+      mapUnknownNeutralFillBtn.setAttribute("aria-pressed", active ? "true" : "false");
+      mapUnknownNeutralFillBtn.textContent = active ? "Zapnuto" : "Vypnuto";
     };
 
     const applySettingsToForm = () => {
@@ -17390,7 +17535,22 @@ window.Empire.UI = (() => {
       if (languageSelect) languageSelect.value = settings.language;
       if (mapDistrictBordersInput) mapDistrictBordersInput.checked = Boolean(settings.mapDistrictBorders);
       if (mapAllianceSymbolsInput) mapAllianceSymbolsInput.checked = Boolean(settings.mapAllianceSymbols);
+      renderUnknownNeutralFillButton();
       if (mapVisibilitySelect) mapVisibilitySelect.value = normalizeMapVisibilityMode(settings.mapVisibilityMode);
+    };
+
+    const applyUnknownNeutralFillFromSettings = (nextEnabled) => {
+      const enabled = typeof nextEnabled === "boolean"
+        ? nextEnabled
+        : resolveStoredUnknownNeutralFillEnabled();
+      unknownNeutralFillEnabled = Boolean(enabled);
+      localStorage.setItem(
+        MAP_UNKNOWN_NEUTRAL_FILL_STORAGE_KEY,
+        unknownNeutralFillEnabled ? "1" : "0"
+      );
+      applyMapBorderSwitchVisuals();
+      syncMapVisionContext();
+      renderUnknownNeutralFillButton();
     };
 
     const captureFormSettings = () => ({
@@ -17407,12 +17567,16 @@ window.Empire.UI = (() => {
     const writeFormSettings = () => {
       const settings = captureFormSettings();
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      applyUnknownNeutralFillFromSettings();
       syncMapVisionContext();
     };
 
     const revertSettingsPreview = () => {
       if (!settingsSnapshot) return;
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settingsSnapshot));
+      if (typeof unknownNeutralFillSnapshot === "boolean") {
+        applyUnknownNeutralFillFromSettings(unknownNeutralFillSnapshot);
+      }
       syncMapVisionContext();
       applySettingsToForm();
     };
@@ -17423,6 +17587,7 @@ window.Empire.UI = (() => {
         revertSettingsPreview();
       }
       settingsSnapshot = null;
+      unknownNeutralFillSnapshot = null;
       root.classList.add("hidden");
       syncMobileSettingsBackdropState(false);
     };
@@ -17432,8 +17597,10 @@ window.Empire.UI = (() => {
         ...captureFormSettings()
       };
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      applyUnknownNeutralFillFromSettings(resolveStoredUnknownNeutralFillEnabled());
       syncMapVisionContext();
       settingsSnapshot = settings;
+      unknownNeutralFillSnapshot = resolveStoredUnknownNeutralFillEnabled();
       root.classList.add("hidden");
       syncMobileSettingsBackdropState(false);
       pushEvent("Nastavení bylo uloženo.");
@@ -17450,12 +17617,19 @@ window.Empire.UI = (() => {
     if (languageSelect) languageSelect.addEventListener("change", onLiveChange);
     if (mapDistrictBordersInput) mapDistrictBordersInput.addEventListener("change", onLiveChange);
     if (mapAllianceSymbolsInput) mapAllianceSymbolsInput.addEventListener("change", onLiveChange);
+    if (mapUnknownNeutralFillBtn) {
+      mapUnknownNeutralFillBtn.addEventListener("click", () => {
+        const current = resolveStoredUnknownNeutralFillEnabled();
+        applyUnknownNeutralFillFromSettings(!current);
+      });
+    }
     if (mapVisibilitySelect) mapVisibilitySelect.addEventListener("change", onLiveChange);
     if (backdrop) backdrop.addEventListener("click", () => closeSettingsModal({ revert: true }));
     if (closeBtn) closeBtn.addEventListener("click", () => closeSettingsModal({ revert: true }));
     if (saveBtn) saveBtn.addEventListener("click", saveSettings);
     root.addEventListener("settings:open", () => {
       settingsSnapshot = getSettingsState();
+      unknownNeutralFillSnapshot = resolveStoredUnknownNeutralFillEnabled();
       applySettingsToForm();
       syncMobileSettingsBackdropState(true);
     });

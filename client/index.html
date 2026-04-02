@@ -35,6 +35,11 @@
             <button class="nav-btn nav-btn--profile" id="nav-profile">Profil hráče</button>
           </nav>
         </div>
+        <div class="topbar__scenarios" aria-label="Ukázkové stavy hráče">
+          <button class="topbar__scenario-btn" data-player-scenario="full-map">ALL</button>
+          <button class="topbar__scenario-btn" data-player-scenario="alliance-ten-blackout">HRA</button>
+          <button class="topbar__scenario-btn" data-player-scenario="onboarding-20-edge">ONBOARDING</button>
+        </div>
         <div class="topbar__right">
           <div class="topbar__stats">
             <div class="stat" id="stat-clean-wrap">
@@ -64,23 +69,6 @@
         <section class="panel panel--left">
           <div id="city-events-card-anchor" class="hidden" aria-hidden="true"></div>
           <div class="card city-events-card">
-            <button
-              class="city-events-target-btn"
-              id="city-events-target-btn"
-              type="button"
-              aria-label="City Events cíl"
-              title="Bounty."
-              data-tooltip="Bounty."
-              onclick="window.Empire && typeof window.Empire.openBountyModalShortcut === 'function' ? window.Empire.openBountyModalShortcut() : document.dispatchEvent(new CustomEvent('empire:open-bounty-modal'))"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <circle cx="12" cy="12" r="7"></circle>
-                <circle cx="12" cy="12" r="3.2"></circle>
-                <path d="M5.5 5.5L12 12"></path>
-                <path d="M5.5 5.5H9.2"></path>
-                <path d="M5.5 5.5V9.2"></path>
-              </svg>
-            </button>
             <p class="muted">Dočasné úkoly s omezenou platností.</p>
             <button class="btn btn--primary events-hero" id="city-events-open" type="button" aria-label="City Events">
               City Events
@@ -239,16 +227,24 @@
                   data-map-border-color="black"
                   aria-label="Černá barva hranic"
                 ></button>
-                <button
-                  class="map-border-neutral-toggle"
-                  id="map-unknown-neutral-fill-toggle"
-                  type="button"
-                  aria-label="Přepnout šedé zvýraznění neznámých neobsazených distriktů"
-                  aria-pressed="false"
-                >
-                  Neznámé
-                </button>
               </div>
+              <button
+                class="city-events-target-btn map-bounty-shortcut"
+                id="map-bounty-open"
+                type="button"
+                aria-label="Otevřít bounty panel"
+                title="Bounty"
+                data-tooltip="Bounty."
+                onclick="window.Empire && typeof window.Empire.openBountyModalShortcut === 'function' ? window.Empire.openBountyModalShortcut() : document.dispatchEvent(new CustomEvent('empire:open-bounty-modal'))"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="12" r="7"></circle>
+                  <circle cx="12" cy="12" r="3.2"></circle>
+                  <path d="M5.5 5.5L12 12"></path>
+                  <path d="M5.5 5.5H9.2"></path>
+                  <path d="M5.5 5.5V9.2"></path>
+                </svg>
+              </button>
               <button class="map-boost-btn" id="map-boost-btn" type="button" aria-label="Map boost">
                 Boost
               </button>
@@ -277,7 +273,7 @@
         </section>
 
         <section class="panel panel--right">
-          <div class="card">
+          <div class="card" id="profile-gang-card">
             <div class="profile-heading">
               <h2>Profil gangu</h2>
               <div class="profile-wanted-stars" id="profile-wanted-stars" aria-label="Stupeň hledanosti">
@@ -324,13 +320,10 @@
             <p class="muted">Klikni a zobrazí se, jak vypadá profil a mapa v dané situaci.</p>
             <div class="scenario-preview">
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="full-map">
-                Hráč ovládá celou mapu
-              </button>
-              <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-ten">
-                Aliance 2lidi DEN/NOC
+                ALL
               </button>
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="alliance-ten-blackout">
-                BLACKOUT
+                HRA
               </button>
               <button class="btn btn--ghost scenario-preview__btn" data-player-scenario="onboarding-20-edge">
                 ONBOARDING!!
@@ -338,17 +331,18 @@
             </div>
           </div>
           <div class="card" id="alliance-chat-card">
-            <p class="muted">Vytvoř nebo se připoj k alianci pro sdílené bonusy.</p>
             <button class="btn btn--primary" id="alliance-btn">Aliance</button>
+          </div>
+          <div class="card" id="global-chat-card">
             <div class="alliance-chat">
-              <div class="alliance-chat__title">Chat aliance</div>
-              <div class="alliance-chat__log" id="alliance-chat-log" data-alliance-chat-log>
+              <div class="alliance-chat__title">Globální chat</div>
+              <div class="alliance-chat__log" id="alliance-chat-log" data-global-chat-log>
                 <div class="alliance-chat__item">[09:12] Raven: Potřebujeme posily na sever.</div>
                 <div class="alliance-chat__item">[09:14] Lira: Posílám tým, 5 minut.</div>
               </div>
               <div class="alliance-chat__input">
-                <input id="alliance-chat-input" type="text" placeholder="Napiš zprávu..." />
-                <button class="btn btn--ghost" id="alliance-chat-send">Odeslat</button>
+                <input id="alliance-chat-input" type="text" placeholder="Napiš zprávu do globálního chatu..." data-global-chat-input />
+                <button class="btn btn--ghost" id="alliance-chat-send" data-global-chat-send>Odeslat</button>
               </div>
             </div>
           </div>
@@ -1341,6 +1335,17 @@
               <input id="settings-map-alliance-symbols" type="checkbox" checked />
               <span class="toggle__track"></span>
             </label>
+          </div>
+          <div class="modal__row settings-modal__row settings-modal__row--toggle">
+            <span class="settings-modal__label">Neznámé distrikty (šedé)</span>
+            <button
+              id="settings-map-unknown-neutral-fill-btn"
+              class="btn btn--ghost settings-modal__unknown-neutral-btn"
+              type="button"
+              aria-pressed="false"
+            >
+              Vypnuto
+            </button>
           </div>
           <div class="modal__row settings-modal__row settings-modal__row--visibility">
             <span class="settings-modal__label">Viditelnost mapy</span>
