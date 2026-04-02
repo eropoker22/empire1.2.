@@ -18457,14 +18457,6 @@ body::before {
 }
 
 @media (max-width: 720px) {
-  body:not(.auth-body--login) {
-    --mobile-topbar-offset: 0px !important;
-  }
-
-  body:not(.auth-body--login) .topbar {
-    display: none !important;
-  }
-
   #building-detail-modal .drug-lab-stepper,
   #building-detail-modal .drug-lab-mini-btn,
   #building-detail-modal .drug-lab-mini-btn--step {
@@ -18485,7 +18477,7 @@ body::before {
   }
 
   .app {
-    padding-top: 0 !important;
+    padding-top: var(--mobile-topbar-offset, 176px);
   }
 
   .main > .map-area {
@@ -21797,7 +21789,7 @@ body.mobile-storage-modal-open {
   }
 
   body.is-mobile-topbar-condensed #stat-influence {
-    font-size: 19px !important;
+    font-size: 28px !important;
   }
 
   body.is-mobile-topbar-condensed .stat {

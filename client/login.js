@@ -148,6 +148,31 @@ function initMobileLoginFit() {
   let frame = 0;
   const fitClasses = ["login-mobile-fit-compact", "login-mobile-fit-tight", "login-mobile-fit-ultra"];
   let keyboardEditingLock = false;
+  let keyboardScrollLockY = 0;
+
+  const lockMobileViewportForEditing = () => {
+    if (!media.matches) return;
+    keyboardScrollLockY = Math.max(0, window.scrollY || window.pageYOffset || 0);
+    body.style.position = "fixed";
+    body.style.top = `-${keyboardScrollLockY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+  };
+
+  const unlockMobileViewportAfterEditing = () => {
+    const restoreY = Math.max(0, Number(keyboardScrollLockY) || 0);
+    body.style.position = "";
+    body.style.top = "";
+    body.style.left = "";
+    body.style.right = "";
+    body.style.width = "";
+    body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+    window.scrollTo(0, restoreY);
+  };
 
   const getOuterHeight = (element) => {
     const rect = element.getBoundingClientRect();
@@ -210,6 +235,7 @@ function initMobileLoginFit() {
     if (!isEditableField(event.target)) return;
     keyboardEditingLock = true;
     body.classList.add("login-mobile-keyboard-lock");
+    lockMobileViewportForEditing();
   });
 
   document.addEventListener("focusout", () => {
@@ -219,7 +245,10 @@ function initMobileLoginFit() {
       const stillEditing = isEditableField(active);
       keyboardEditingLock = stillEditing;
       body.classList.toggle("login-mobile-keyboard-lock", stillEditing);
-      if (!stillEditing) requestMeasure();
+      if (!stillEditing) {
+        unlockMobileViewportAfterEditing();
+        requestMeasure();
+      }
     }, 40);
   });
 
@@ -231,8 +260,22 @@ function initMobileLoginFit() {
     window.visualViewport.addEventListener("scroll", requestMeasure);
   }
   if (typeof media.addEventListener === "function") {
-    media.addEventListener("change", requestMeasure);
+    media.addEventListener("change", () => {
+      if (!media.matches && keyboardEditingLock) {
+        keyboardEditingLock = false;
+        body.classList.remove("login-mobile-keyboard-lock");
+        unlockMobileViewportAfterEditing();
+      }
+      requestMeasure();
+    });
   } else if (typeof media.addListener === "function") {
-    media.addListener(requestMeasure);
+    media.addListener(() => {
+      if (!media.matches && keyboardEditingLock) {
+        keyboardEditingLock = false;
+        body.classList.remove("login-mobile-keyboard-lock");
+        unlockMobileViewportAfterEditing();
+      }
+      requestMeasure();
+    });
   }
 }
