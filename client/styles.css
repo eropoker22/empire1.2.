@@ -10769,6 +10769,17 @@ html:has(body.auth-body--faction) {
     0 16px 32px rgba(0, 0, 0, 0.42);
 }
 
+@media (min-width: 901px) {
+  #district-modal .modal__row--owner-meta .modal__owner-atmosphere {
+    max-width: 44%;
+  }
+
+  #district-modal .modal__row--owner-meta .modal__owner-atmosphere img {
+    width: min(190px, 100%);
+    border-radius: 12px;
+  }
+}
+
 .district-atmosphere-lightbox__content {
   width: min(76vw, 1024px);
   padding: 13px;
@@ -11072,6 +11083,22 @@ html:has(body.auth-body--faction) {
   margin-left: auto;
   justify-self: end;
   touch-action: manipulation;
+}
+
+.attack-modal__weapon--launch {
+  align-items: stretch;
+}
+
+.attack-modal__weapon-stepper--launch {
+  grid-template-columns: minmax(0, 1fr);
+  align-self: stretch;
+  justify-self: stretch;
+  width: 100%;
+}
+
+.attack-modal__launch-inline-btn {
+  width: 100%;
+  min-height: 100%;
 }
 
 .attack-modal__step-btn {
@@ -21894,6 +21921,65 @@ body.mobile-storage-modal-open {
     0 10px 32px rgba(127, 29, 29, 0.28) !important;
 }
 
+#gang-heat-modal .modal__backdrop {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#gang-heat-modal .gang-heat-modal__content {
+  background:
+    linear-gradient(145deg, rgba(6, 10, 18, 0.18), rgba(9, 14, 24, 0.1)) !important;
+  backdrop-filter: blur(18px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(130%) !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 18px 42px rgba(2, 6, 23, 0.24),
+    0 0 24px rgba(56, 189, 248, 0.16),
+    0 0 24px rgba(239, 68, 68, 0.12) !important;
+}
+
+#police-action-result-modal .modal__backdrop {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#police-action-result-modal .police-action-result-modal__content.is-district-raid-warning,
+#police-action-result-modal .modal__content.is-district-raid-warning {
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background:
+    linear-gradient(135deg, rgba(18, 40, 76, 0.16), rgba(62, 10, 18, 0.14)) !important;
+  backdrop-filter: blur(18px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(135%) !important;
+  box-shadow:
+    inset 1px 0 0 rgba(34, 211, 238, 0.88),
+    inset -1px 0 0 rgba(248, 113, 113, 0.88),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 0 20px rgba(34, 211, 238, 0.24),
+    0 0 22px rgba(248, 113, 113, 0.24),
+    0 18px 42px rgba(2, 6, 23, 0.28) !important;
+}
+
+#police-action-result-modal .police-action-result-modal__content.is-district-raid-warning .police-action-result-modal__badge,
+#police-action-result-modal .modal__content.is-district-raid-warning .police-action-result-modal__badge {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background:
+    linear-gradient(90deg, rgba(8, 47, 73, 0.48), rgba(127, 29, 29, 0.46)) !important;
+  color: #f8fafc !important;
+  box-shadow:
+    0 0 14px rgba(34, 211, 238, 0.2),
+    0 0 14px rgba(248, 113, 113, 0.18) !important;
+}
+
+#police-action-result-modal .police-action-result-modal__content.is-district-raid-warning .police-action-result-modal__summary,
+#police-action-result-modal .police-action-result-modal__content.is-district-raid-warning .modal__row,
+#police-action-result-modal .modal__content.is-district-raid-warning .police-action-result-modal__summary,
+#police-action-result-modal .modal__content.is-district-raid-warning .modal__row {
+  background: rgba(8, 14, 26, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
 /* Gentle glass for City Events modal */
 #events-modal .modal__content,
 #events-modal .events-modal__content {
@@ -22132,4 +22218,443 @@ body.mobile-storage-modal-open {
     0 0 0 1px rgba(255, 255, 255, 0.03) !important;
   backdrop-filter: blur(12px) saturate(125%) !important;
   -webkit-backdrop-filter: blur(12px) saturate(125%) !important;
+}
+
+/* Final transparent district, heat and alliance glass */
+#gang-heat-modal .modal__backdrop,
+#alliance-management-modal .modal__backdrop,
+#district-modal .modal__backdrop,
+#district-defense-modal .modal__backdrop,
+#spy-confirm-modal .modal__backdrop,
+#raid-confirm-modal .modal__backdrop,
+#attack-confirm-modal .modal__backdrop,
+#occupy-confirm-modal .modal__backdrop,
+#trap-confirm-modal .modal__backdrop,
+#spy-result-modal .modal__backdrop,
+#spy-warning-modal .modal__backdrop,
+#raid-result-modal .modal__backdrop,
+#attack-modal .modal__backdrop,
+#attack-result-modal .modal__backdrop,
+#building-detail-modal .modal__backdrop {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#gang-heat-modal .gang-heat-modal__content,
+#alliance-management-modal .alliance-management-modal__content,
+#district-modal .modal__content,
+#district-defense-modal .modal__content,
+#spy-confirm-modal .modal__content,
+#raid-confirm-modal .modal__content,
+#attack-confirm-modal .modal__content,
+#occupy-confirm-modal .modal__content,
+#trap-confirm-modal .modal__content,
+#spy-result-modal .modal__content,
+#spy-warning-modal .modal__content,
+#raid-result-modal .modal__content,
+#attack-modal .modal__content,
+#attack-result-modal .modal__content,
+#building-detail-modal .building-detail-modal__content,
+#building-detail-modal .modal__content {
+  background: rgba(7, 12, 18, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  box-shadow:
+    0 18px 40px rgba(2, 6, 23, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(18px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(145%) !important;
+}
+
+#gang-heat-modal .gang-heat-modal__content {
+  background: rgba(7, 12, 18, 0.035) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow:
+    0 14px 30px rgba(2, 6, 23, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(14px) saturate(128%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(128%) !important;
+}
+
+#gang-heat-modal .gang-heat-modal__body,
+#gang-heat-modal .gang-heat-modal__hero,
+#gang-heat-modal .gang-heat-modal__panel,
+#gang-heat-modal .gang-heat-modal__actions,
+#gang-heat-modal .gang-heat-modal__level,
+#gang-heat-modal .gang-heat-modal__item,
+#gang-heat-modal .gang-heat-modal__empty,
+#alliance-management-modal .alliance-management-modal__body,
+#alliance-management-modal .alliance-management-ready,
+#alliance-management-modal .alliance-control,
+#alliance-management-modal .alliance-list__item,
+#district-modal .modal__body,
+#district-modal .modal__row,
+#district-defense-modal .modal__body,
+#district-defense-modal .modal__row,
+#spy-confirm-modal .modal__body,
+#raid-confirm-modal .modal__body,
+#attack-confirm-modal .modal__body,
+#occupy-confirm-modal .modal__body,
+#trap-confirm-modal .modal__body,
+#spy-result-modal .modal__body,
+#spy-warning-modal .modal__body,
+#raid-result-modal .modal__body,
+#attack-modal .modal__body,
+#attack-result-modal .modal__body,
+#attack-result-modal .modal__row,
+#building-detail-modal .modal__body,
+#building-detail-modal .building-detail-panel,
+#building-detail-modal .building-info-card,
+#building-detail-modal .drug-lab-log {
+  background: rgba(7, 12, 18, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+#gang-heat-modal .gang-heat-modal__body,
+#gang-heat-modal .gang-heat-modal__hero,
+#gang-heat-modal .gang-heat-modal__panel,
+#gang-heat-modal .gang-heat-modal__actions,
+#gang-heat-modal .gang-heat-modal__level,
+#gang-heat-modal .gang-heat-modal__item,
+#gang-heat-modal .gang-heat-modal__empty {
+  background: rgba(7, 12, 18, 0.028) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .building-detail-modal__content,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .building-detail-modal__content,
+#building-detail-modal[data-building-mechanics-type="factory"] .building-detail-modal__content,
+#building-detail-modal[data-building-mechanics-type="armory"] .building-detail-modal__content {
+  background: rgba(7, 12, 18, 0.05) !important;
+  backdrop-filter: blur(18px) saturate(138%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(138%) !important;
+}
+
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .building-detail-panel,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .building-info-card,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .pharmacy-card,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .pharmacy-stock-card,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .pharmacy-slot,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .lab-info-block,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .lab-info-chip,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .building-info-card__effects,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .building-info-card__actions,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .building-info-action-row,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .building-detail-panel,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .building-info-card,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-lab-card,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-lab-slot,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-lab-list__item,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-lab-log,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .building-info-card__effects,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .building-info-card__actions,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .building-info-action-row,
+#building-detail-modal[data-building-mechanics-type="factory"] .building-detail-panel,
+#building-detail-modal[data-building-mechanics-type="factory"] .building-info-card,
+#building-detail-modal[data-building-mechanics-type="factory"] .lab-info-block,
+#building-detail-modal[data-building-mechanics-type="factory"] .lab-info-chip,
+#building-detail-modal[data-building-mechanics-type="factory"] .building-info-card__effects,
+#building-detail-modal[data-building-mechanics-type="factory"] .building-info-card__actions,
+#building-detail-modal[data-building-mechanics-type="factory"] .building-info-action-row,
+#building-detail-modal[data-building-mechanics-type="armory"] .building-detail-panel,
+#building-detail-modal[data-building-mechanics-type="armory"] .building-info-card,
+#building-detail-modal[data-building-mechanics-type="armory"] .armory-card,
+#building-detail-modal[data-building-mechanics-type="armory"] .armory-card--materials-sticky,
+#building-detail-modal[data-building-mechanics-type="armory"] .building-info-card__effects,
+#building-detail-modal[data-building-mechanics-type="armory"] .building-info-card__actions,
+#building-detail-modal[data-building-mechanics-type="armory"] .building-info-action-row {
+  background: rgba(7, 12, 18, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 24px rgba(2, 6, 23, 0.12) !important;
+  backdrop-filter: blur(12px) saturate(128%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(128%) !important;
+}
+
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .modal__header,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .modal__header,
+#building-detail-modal[data-building-mechanics-type="factory"] .modal__header,
+#building-detail-modal[data-building-mechanics-type="armory"] .modal__header,
+#building-detail-modal[data-building-mechanics-type="pharmacy"] .building-detail-title__badge,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .building-detail-title__badge,
+#building-detail-modal[data-building-mechanics-type="factory"] .building-detail-title__badge,
+#building-detail-modal[data-building-mechanics-type="armory"] .building-detail-title__badge,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-production-slot__controls select,
+#building-detail-modal[data-building-mechanics-type="drug-lab"] .drug-lab-slot__controls select {
+  background-color: rgba(7, 12, 18, 0.18) !important;
+}
+
+#police-action-result-modal .police-action-result-modal__content.is-district-attack-warning,
+#police-action-result-modal .modal__content.is-district-attack-warning {
+  background:
+    linear-gradient(140deg, rgba(8, 16, 28, 0.12), rgba(8, 16, 28, 0.05)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow:
+    0 0 20px rgba(239, 68, 68, 0.18),
+    0 0 20px rgba(56, 189, 248, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(16px) saturate(135%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(135%) !important;
+}
+
+#police-action-result-modal .police-action-result-modal__content.is-district-attack-warning .police-action-result-modal__badge,
+#police-action-result-modal .modal__content.is-district-attack-warning .police-action-result-modal__badge {
+  background:
+    linear-gradient(90deg, rgba(127, 29, 29, 0.34), rgba(8, 47, 73, 0.3)) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow:
+    0 0 14px rgba(239, 68, 68, 0.18),
+    0 0 14px rgba(56, 189, 248, 0.16) !important;
+}
+
+#police-action-result-modal .police-action-result-modal__content.is-district-attack-warning .modal__row,
+#police-action-result-modal .modal__content.is-district-attack-warning .modal__row {
+  background: rgba(8, 14, 26, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+@media (max-width: 640px) {
+  #bounty-modal {
+    place-items: start center !important;
+    align-items: start !important;
+    padding-top: max(8px, env(safe-area-inset-top)) !important;
+    padding-right: 6px !important;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    padding-left: 6px !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #bounty-modal .modal__backdrop {
+    inset: 0 !important;
+  }
+
+  #bounty-modal .bounty-board__content {
+    align-self: start !important;
+    justify-self: center !important;
+    margin-top: 0 !important;
+    width: calc(100vw - 12px) !important;
+    max-width: calc(100vw - 12px) !important;
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 8px - env(safe-area-inset-bottom)) !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media (max-width: 430px) {
+  #bounty-modal .bounty-board__table th {
+    font-size: 9px !important;
+    letter-spacing: 0.04em !important;
+    padding: 7px 4px !important;
+  }
+}
+
+/* Final neon action frames for attack / spy / raid result modals */
+#attack-result-modal .attack-result-modal__content {
+  border: 1px solid rgba(251, 146, 60, 0.46) !important;
+  box-shadow:
+    0 18px 44px rgba(2, 6, 23, 0.42),
+    0 0 0 1px rgba(251, 146, 60, 0.18),
+    0 0 18px rgba(251, 146, 60, 0.22),
+    0 0 34px rgba(239, 68, 68, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+#attack-result-modal .attack-result-modal__content.is-total-success,
+#attack-result-modal .attack-result-modal__content.is-pyrrhic-victory,
+#attack-result-modal .attack-result-modal__content.is-failure,
+#attack-result-modal .attack-result-modal__content.is-catastrophe {
+  border-width: 1px !important;
+  box-shadow:
+    0 18px 44px rgba(2, 6, 23, 0.42),
+    0 0 0 1px rgba(251, 146, 60, 0.18),
+    0 0 18px rgba(251, 146, 60, 0.22),
+    0 0 34px rgba(239, 68, 68, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+#spy-result-modal .spy-result-modal__content,
+#spy-warning-modal .spy-result-modal__content {
+  border: 1px solid rgba(34, 211, 238, 0.44) !important;
+  box-shadow:
+    0 18px 44px rgba(2, 6, 23, 0.42),
+    0 0 0 1px rgba(34, 211, 238, 0.16),
+    0 0 18px rgba(34, 211, 238, 0.24),
+    0 0 34px rgba(96, 165, 250, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+#spy-result-modal .spy-result-modal__content.is-success,
+#spy-result-modal .spy-result-modal__content.is-medium-fail,
+#spy-result-modal .spy-result-modal__content.is-major-fail,
+#spy-result-modal .spy-result-modal__content.is-player-alert,
+#spy-result-modal .spy-result-modal__content.is-alliance-alert,
+#spy-warning-modal .spy-result-modal__content.is-success,
+#spy-warning-modal .spy-result-modal__content.is-medium-fail,
+#spy-warning-modal .spy-result-modal__content.is-major-fail,
+#spy-warning-modal .spy-result-modal__content.is-player-alert,
+#spy-warning-modal .spy-result-modal__content.is-alliance-alert {
+  border-width: 1px !important;
+  box-shadow:
+    0 18px 44px rgba(2, 6, 23, 0.42),
+    0 0 0 1px rgba(34, 211, 238, 0.16),
+    0 0 18px rgba(34, 211, 238, 0.24),
+    0 0 34px rgba(96, 165, 250, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+#raid-result-modal .spy-result-modal__content {
+  border: 1px solid rgba(244, 63, 94, 0.46) !important;
+  box-shadow:
+    0 18px 44px rgba(2, 6, 23, 0.42),
+    0 0 0 1px rgba(244, 63, 94, 0.18),
+    0 0 18px rgba(244, 63, 94, 0.22),
+    0 0 34px rgba(251, 113, 133, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+#raid-result-modal .spy-result-modal__content.is-clean-success,
+#raid-result-modal .spy-result-modal__content.is-dirty-fail,
+#raid-result-modal .spy-result-modal__content.is-disaster,
+#raid-result-modal .spy-result-modal__content.is-alert {
+  border-width: 1px !important;
+  box-shadow:
+    0 18px 44px rgba(2, 6, 23, 0.42),
+    0 0 0 1px rgba(244, 63, 94, 0.18),
+    0 0 18px rgba(244, 63, 94, 0.22),
+    0 0 34px rgba(251, 113, 133, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+@media (min-width: 901px) {
+  #attack-modal,
+  #district-defense-modal {
+    padding: 18px !important;
+    place-items: center !important;
+  }
+
+  #attack-modal .modal__content.attack-modal__content,
+  #attack-modal .modal__content,
+  #district-defense-modal .modal__content.defense-modal__content,
+  #district-defense-modal .modal__content {
+    width: min(620px, calc(100vw - 36px)) !important;
+    max-width: min(620px, calc(100vw - 36px)) !important;
+    max-height: calc(100vh - 36px) !important;
+    overflow: hidden !important;
+    padding: 14px !important;
+  }
+
+  #attack-modal .modal__header,
+  #district-defense-modal .modal__header {
+    padding-bottom: 8px !important;
+    margin-bottom: 8px !important;
+  }
+
+  #attack-modal .modal__header h3,
+  #district-defense-modal .modal__header h3 {
+    font-size: 20px !important;
+  }
+
+  #attack-modal .modal__body,
+  #district-defense-modal .modal__body {
+    gap: 8px !important;
+  }
+
+  #attack-modal .attack-modal__stats,
+  #district-defense-modal .attack-modal__stats {
+    gap: 5px !important;
+  }
+
+  #attack-modal .attack-modal__stats .modal__row,
+  #district-defense-modal .attack-modal__stats .modal__row {
+    padding: 8px 10px !important;
+    min-height: 0 !important;
+  }
+
+  #attack-modal .attack-modal__weapons,
+  #district-defense-modal .attack-modal__weapons {
+    gap: 6px !important;
+  }
+
+  #attack-modal .attack-modal__weapon,
+  #district-defense-modal .attack-modal__weapon {
+    gap: 8px 10px !important;
+    padding: 10px 10px 9px !important;
+    border-radius: 10px !important;
+  }
+
+  #attack-modal .attack-modal__weapon--launch,
+  #district-defense-modal .attack-modal__weapon--launch {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-content: space-between !important;
+  }
+
+  #attack-modal .attack-modal__weapon-body,
+  #district-defense-modal .attack-modal__weapon-body {
+    gap: 2px !important;
+  }
+
+  #attack-modal .attack-modal__weapon-name,
+  #district-defense-modal .attack-modal__weapon-name {
+    font-size: 13px !important;
+    line-height: 1.15 !important;
+  }
+
+  #attack-modal .attack-modal__weapon-meta,
+  #district-defense-modal .attack-modal__weapon-meta {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  #attack-modal .attack-modal__weapon-stepper,
+  #district-defense-modal .attack-modal__weapon-stepper {
+    grid-template-columns: 34px auto 34px !important;
+    gap: 4px !important;
+  }
+
+  #attack-modal .attack-modal__step-btn,
+  #district-defense-modal .attack-modal__step-btn {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 10px !important;
+    font-size: 20px !important;
+  }
+
+  #attack-modal .attack-modal__weapon-count,
+  #district-defense-modal .attack-modal__weapon-count {
+    min-width: 24px !important;
+    font-size: 15px !important;
+  }
+
+  #attack-modal .attack-modal__weapon-stepper--launch,
+  #district-defense-modal .attack-modal__weapon-stepper--launch {
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+  }
+
+  #attack-modal .attack-modal__launch-inline-btn,
+  #district-defense-modal .attack-modal__launch-inline-btn {
+    width: 100% !important;
+    min-height: 40px !important;
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    font-size: 13px !important;
+  }
+
+  #attack-modal #attack-modal-note,
+  #district-defense-modal #defense-modal-note {
+    margin: 0 !important;
+    min-height: 0 !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+
+  #attack-modal .modal__actions,
+  #district-defense-modal .modal__actions {
+    display: none !important;
+  }
 }

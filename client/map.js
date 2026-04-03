@@ -12664,8 +12664,8 @@ window.Empire.Map = (() => {
     const [cx, cy] = polygonCentroid(district.polygon);
     const bounds = polygonBounds(district.polygon);
     const safeSeed = hashOwner(`trap:${normalizeDistrictId(district?.id) || district?.name || "district"}`);
-    const particleCount = Math.max(8, Math.min(16, Math.round(Math.max(bounds.width || 18, bounds.height || 18) / 9)));
-    const baseRadius = Math.max(1.5, Math.min(3.4, Math.min(bounds.width || 18, bounds.height || 18) * 0.034));
+    const particleCount = Math.max(12, Math.min(22, Math.round(Math.max(bounds.width || 18, bounds.height || 18) / 7)));
+    const baseRadius = Math.max(1.8, Math.min(4.6, Math.min(bounds.width || 18, bounds.height || 18) * 0.041));
 
     if (!drawDistrictPolygonPath(ctx, district.polygon)) return;
 
@@ -12674,49 +12674,73 @@ window.Empire.Map = (() => {
     ctx.clip();
     ctx.globalCompositeOperation = "screen";
 
+    const pulse = 0.5 + 0.5 * Math.sin(now / 320 + safeSeed * 0.00019);
+    const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(bounds.width || 24, bounds.height || 24) * 0.8);
+    coreGlow.addColorStop(0, `rgba(214, 255, 82, ${(0.18 + pulse * 0.1).toFixed(3)})`);
+    coreGlow.addColorStop(0.35, `rgba(57, 255, 20, ${(0.16 + pulse * 0.08).toFixed(3)})`);
+    coreGlow.addColorStop(0.7, `rgba(0, 255, 170, ${(0.12 + pulse * 0.06).toFixed(3)})`);
+    coreGlow.addColorStop(1, "rgba(0, 255, 170, 0)");
+    ctx.fillStyle = coreGlow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(bounds.width || 24, bounds.height || 24) * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+
     for (let i = 0; i < particleCount; i += 1) {
       const phase = i * 0.73 + safeSeed * 0.00011;
-      const progress = ((now / (5200 + (i % 5) * 340)) + i * 0.097 + safeSeed * 0.0000017) % 1;
+      const progress = ((now / (4300 + (i % 5) * 260)) + i * 0.124 + safeSeed * 0.0000017) % 1;
       const rise = 1 - progress;
-      const lateralBase = Math.sin(phase * 1.8) * (bounds.width || 20) * 0.18;
-      const sway = Math.sin(now / (900 + (i % 4) * 120) + phase) * (2.4 + (i % 3) * 0.9);
-      const drift = Math.cos(now / (1300 + (i % 6) * 110) + phase * 1.7) * (1.2 + (i % 2) * 0.7);
+      const lateralBase = Math.sin(phase * 2.1) * (bounds.width || 20) * 0.22;
+      const sway = Math.sin(now / (640 + (i % 4) * 90) + phase) * (3.2 + (i % 3) * 1.2);
+      const drift = Math.cos(now / (920 + (i % 6) * 84) + phase * 1.7) * (1.8 + (i % 2) * 1.1);
       const x = cx + lateralBase + sway + drift;
       const y = cy + (bounds.height || 20) * (0.28 - rise * 0.6) + Math.sin(phase) * 4;
-      const radius = baseRadius * (0.82 + (i % 4) * 0.22);
-      const alpha = 0.1 + ((Math.sin(now / 760 + phase) + 1) * 0.5) * 0.1;
-      const gradient = ctx.createRadialGradient(x, y, radius * 0.16, x, y, radius * 2.2);
-      gradient.addColorStop(0, `rgba(182, 255, 102, ${Math.min(0.2, alpha + 0.03).toFixed(3)})`);
-      gradient.addColorStop(0.38, `rgba(56, 255, 178, ${Math.min(0.18, alpha + 0.01).toFixed(3)})`);
-      gradient.addColorStop(0.72, `rgba(34, 211, 238, ${Math.min(0.14, alpha * 0.78).toFixed(3)})`);
+      const radius = baseRadius * (0.9 + (i % 4) * 0.26);
+      const alpha = 0.14 + ((Math.sin(now / 540 + phase) + 1) * 0.5) * 0.14;
+      const gradient = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius * 2.6);
+      gradient.addColorStop(0, `rgba(240, 255, 110, ${Math.min(0.34, alpha + 0.09).toFixed(3)})`);
+      gradient.addColorStop(0.24, `rgba(132, 255, 0, ${Math.min(0.3, alpha + 0.06).toFixed(3)})`);
+      gradient.addColorStop(0.58, `rgba(0, 255, 157, ${Math.min(0.24, alpha).toFixed(3)})`);
+      gradient.addColorStop(0.82, `rgba(0, 230, 255, ${Math.min(0.18, alpha * 0.82).toFixed(3)})`);
       gradient.addColorStop(1, "rgba(22, 163, 74, 0)");
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(x, y, radius * 2.2, 0, Math.PI * 2);
+      ctx.arc(x, y, radius * 2.6, 0, Math.PI * 2);
       ctx.fill();
 
       if (i % 3 === 0) {
-        ctx.fillStyle = `rgba(110, 255, 234, ${Math.min(0.16, alpha * 0.9).toFixed(3)})`;
+        ctx.fillStyle = `rgba(201, 255, 84, ${Math.min(0.24, alpha).toFixed(3)})`;
         ctx.beginPath();
-        ctx.arc(x + Math.cos(phase) * 1.6, y - radius * 0.3, radius * 0.5, 0, Math.PI * 2);
+        ctx.arc(x + Math.cos(phase) * 1.8, y - radius * 0.3, radius * 0.56, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (i % 4 === 1) {
+        ctx.fillStyle = `rgba(0, 255, 170, ${Math.min(0.2, alpha * 0.92).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x - Math.sin(phase) * 1.4, y + radius * 0.22, radius * 0.42, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    const borderPulse = 0.5 + 0.5 * Math.sin(now / 820 + safeSeed * 0.00017);
+    const borderPulse = 0.5 + 0.5 * Math.sin(now / 540 + safeSeed * 0.00017);
     ctx.globalCompositeOperation = "lighter";
-    ctx.shadowBlur = 14 + borderPulse * 9;
-    ctx.shadowColor = `rgba(56, 255, 178, ${(0.18 + borderPulse * 0.1).toFixed(3)})`;
+    ctx.shadowBlur = 18 + borderPulse * 14;
+    ctx.shadowColor = `rgba(57, 255, 20, ${(0.24 + borderPulse * 0.14).toFixed(3)})`;
     if (drawDistrictPolygonPath(ctx, district.polygon)) {
-      ctx.strokeStyle = `rgba(56, 255, 178, ${(0.18 + borderPulse * 0.08).toFixed(3)})`;
-      ctx.lineWidth = 1.2 + borderPulse * 0.9;
-      ctx.setLineDash([5, 7]);
-      ctx.lineDashOffset = -((now / 55 + safeSeed) % 120);
+      ctx.strokeStyle = `rgba(132, 255, 0, ${(0.22 + borderPulse * 0.12).toFixed(3)})`;
+      ctx.lineWidth = 1.5 + borderPulse * 1.15;
+      ctx.setLineDash([6, 6]);
+      ctx.lineDashOffset = -((now / 42 + safeSeed) % 120);
       ctx.stroke();
-      ctx.strokeStyle = `rgba(34, 211, 238, ${(0.1 + borderPulse * 0.06).toFixed(3)})`;
-      ctx.lineWidth = 0.8 + borderPulse * 0.45;
-      ctx.setLineDash([2, 10]);
-      ctx.lineDashOffset = (now / 48 + safeSeed) % 120;
+      ctx.strokeStyle = `rgba(0, 255, 255, ${(0.14 + borderPulse * 0.08).toFixed(3)})`;
+      ctx.lineWidth = 0.95 + borderPulse * 0.58;
+      ctx.setLineDash([2, 8]);
+      ctx.lineDashOffset = (now / 36 + safeSeed) % 120;
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(240, 255, 110, ${(0.1 + borderPulse * 0.08).toFixed(3)})`;
+      ctx.lineWidth = 0.55 + borderPulse * 0.34;
+      ctx.setLineDash([1, 7]);
+      ctx.lineDashOffset = -((now / 24 + safeSeed) % 120);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -17934,6 +17958,11 @@ window.Empire.Map = (() => {
   function showModal(district) {
     if (!state.modal?.root) return;
     const districtKey = normalizeDistrictId(district?.id);
+    const activeAttackMarker = districtKey ? state.attackedDistricts.get(districtKey) : null;
+    if (activeAttackMarker && Number(activeAttackMarker.expiresAt || 0) > Date.now()) {
+      window.Empire.UI?.openDistrictAttackInProgressModal?.(district, activeAttackMarker);
+      return;
+    }
     const activePoliceAction = districtKey ? state.policeDistrictActions.get(districtKey) : null;
     if (activePoliceAction && Number(activePoliceAction.expiresAt || 0) > Date.now()) {
       window.Empire.UI?.openDistrictPoliceRaidWarningModal?.(district, activePoliceAction);
@@ -17949,6 +17978,10 @@ window.Empire.Map = (() => {
     const revealDistrictDetails = !state.vision.fogPreviewMode || defendableByPlayer || revealEnemyIntelInFog;
     const spyIntel = window.Empire.UI?.getDistrictSpyIntel?.(district?.id) || null;
     const hasSpyIntel = Boolean(spyIntel);
+    const spyKnownFields = spyIntel?.knownFields && typeof spyIntel.knownFields === "object"
+      ? spyIntel.knownFields
+      : {};
+    const hasDistrictTypeIntel = Boolean(spyKnownFields.districtType);
     applyDistrictModalAccent(district);
     updateModalActionsForDistrict(district);
     updateDistrictRaidLockRow(district);
@@ -17973,8 +18006,8 @@ window.Empire.Map = (() => {
       updateDistrictBuildings(defendableByPlayer ? district : null, { spyIntel });
       updateDistrictGossip(district);
     } else {
-      document.getElementById("modal-name").textContent = isDowntown
-        ? `Downtown sektor #${districtNumber}`
+      document.getElementById("modal-name").textContent = hasDistrictTypeIntel
+        ? (district.name || `District č. ${districtNumber}`)
         : `District č. ${districtNumber}`;
       document.getElementById("modal-name-income").textContent = "Skryto";
       document.getElementById("modal-owner").textContent = "Skryto";
@@ -18301,7 +18334,7 @@ window.Empire.Map = (() => {
     const spyIntel = window.Empire.UI?.getDistrictSpyIntel?.(district?.id) || null;
     const hasSpyIntel = Boolean(spyIntel);
     const hasCompleteSpyIntel = Boolean(window.Empire.UI?.hasCompleteSpyIntel?.(spyIntel));
-    const attackActionMode = isUnowned && hasSpyIntel ? "occupy" : "attack";
+    const attackActionMode = isUnowned && hasCompleteSpyIntel ? "occupy" : "attack";
     const attackState = typeof evaluateAction === "function"
       ? evaluateAction(district, attackActionMode)
       : { allowed: !defendableByPlayer, reason: "" };

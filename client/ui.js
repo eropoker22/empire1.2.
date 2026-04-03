@@ -2029,6 +2029,7 @@ window.Empire.UI = (() => {
   let roundStatusState = null;
   let roundStatusOverride = null;
   let spyRecoveryIntervalId = null;
+  let districtAttackWarningTimer = null;
   const spyActionResultTimeouts = new Set();
   const occupyActionResultTimeouts = new Set();
   const pendingResultModalQueue = [];
@@ -4657,6 +4658,11 @@ window.Empire.UI = (() => {
       const handleDefenseStepperInteraction = (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        const launchButton = target.closest("[data-defense-launch]");
+        if (launchButton) {
+          if (startBtn && !startBtn.disabled) startBtn.click();
+          return;
+        }
         const button = target.closest("[data-defense-weapon][data-defense-action]");
         if (!button) return;
         const now = Date.now();
@@ -4837,7 +4843,7 @@ window.Empire.UI = (() => {
       return sum + (count * Number(item.power || 0));
     }, 0));
     renderDefenseWeaponButtons(weaponButtons, availability);
-    let noteText = defenseModalState.message || "Šipkou doprava přidáváš, šipkou doleva ubíráš. Členové gangu se přepočítají automaticky.";
+    let noteText = defenseModalState.message || "";
     if (hasExistingDefense) {
       noteText = defenseModalState.message || "Uprava obrany je aktivní. Odebrané zbraně a členové se po uložení vrátí zpět.";
     }
@@ -5401,6 +5407,11 @@ window.Empire.UI = (() => {
     });
   }
 
+  function resolveCompleteSpyIntel(districtId) {
+    const intel = getDistrictSpyIntel(districtId);
+    return hasCompleteSpyIntel(intel) ? intel : null;
+  }
+
   function getAttackResultDetails(district, availability) {
     const nick = String(district?.ownerNick || district?.owner_username || district?.ownerUsername || district?.owner || "Neznámý").trim() || "Neznámý";
     const factionRaw = String(
@@ -5811,7 +5822,7 @@ window.Empire.UI = (() => {
   function renderAttackWeaponButtons(container, availability) {
     if (!container) return;
     const summary = getAttackSelectionSummary(availability);
-    container.innerHTML = attackWeaponStats
+    const weaponCards = attackWeaponStats
       .map((item) => {
         const amount = Math.max(0, Math.floor(Number(summary.selection[item.name] || 0)));
         const stock = Math.max(0, Math.floor(Number(summary.remainingWeaponCounts[item.name] || 0)));
@@ -5845,6 +5856,28 @@ window.Empire.UI = (() => {
         `;
       })
       .join("");
+    const selectedDistrict = resolveDistrictById(attackModalState.districtId);
+    const nextAvailability = availability || getAttackModalAvailability(selectedDistrict);
+    const nextSummary = getAttackSelectionSummary(nextAvailability);
+    const isReady = Number(nextAvailability?.cooldownMs || 0) <= 0
+      && nextSummary.totalUsedMembers > 0
+      && (scenarioVisionEnabled && !window.Empire.token || Boolean(window.Empire.token));
+    container.innerHTML = `${weaponCards}
+      <div class="attack-modal__weapon attack-modal__weapon--launch ${isReady ? "" : "is-locked"}">
+        <div class="attack-modal__weapon-body">
+          <span class="attack-modal__weapon-name">Spustit útok</span>
+          <span class="attack-modal__weapon-meta">Potvrdí vybranou sestavu a otevře finální potvrzení útoku.</span>
+        </div>
+        <div class="attack-modal__weapon-stepper attack-modal__weapon-stepper--launch">
+          <button
+            type="button"
+            class="btn btn--danger attack-modal__launch-inline-btn"
+            data-attack-launch="1"
+            ${isReady ? "" : "disabled"}
+          >Spustit útok</button>
+        </div>
+      </div>
+    `;
   }
 
   function getDefenseModalAvailability() {
@@ -5916,7 +5949,7 @@ window.Empire.UI = (() => {
   function renderDefenseWeaponButtons(container, availability) {
     if (!container) return;
     const summary = getDefenseSelectionSummary(availability);
-    container.innerHTML = defenseWeaponStats
+    const weaponCards = defenseWeaponStats
       .map((item) => {
         const amount = Math.max(0, Math.floor(Number(summary.selection[item.name] || 0)));
         const stock = Math.max(0, Math.floor(Number(summary.remainingWeaponCounts[item.name] || 0)));
@@ -5950,6 +5983,23 @@ window.Empire.UI = (() => {
         `;
       })
       .join("");
+    const isReady = summary.totalUsedMembers > 0 || Boolean(defenseModalState.hasInitialAssignment);
+    container.innerHTML = `${weaponCards}
+      <div class="attack-modal__weapon attack-modal__weapon--launch ${isReady ? "" : "is-locked"}">
+        <div class="attack-modal__weapon-body">
+          <span class="attack-modal__weapon-name">Nastavit obranu</span>
+          <span class="attack-modal__weapon-meta">Uloží aktuální rozložení obranných zbraní do districtu.</span>
+        </div>
+        <div class="attack-modal__weapon-stepper attack-modal__weapon-stepper--launch">
+          <button
+            type="button"
+            class="btn btn--primary attack-modal__launch-inline-btn"
+            data-defense-launch="1"
+            ${isReady ? "" : "disabled"}
+          >Nastavit obranu</button>
+        </div>
+      </div>
+    `;
   }
 
   function openAttackResultModal(details) {
@@ -6011,7 +6061,7 @@ window.Empire.UI = (() => {
       ...availability,
       ...selectionSummary
     });
-    const spyIntel = getDistrictSpyIntel(district?.id);
+    const spyIntel = resolveCompleteSpyIntel(district?.id);
     const usedMembers = Math.max(0, Math.floor(Number(selectionSummary?.totalUsedMembers || 0)));
     const attackPower = Math.max(0, Math.floor(Number(baseDetails.attackPower || 0)));
     const defensePowerEstimate = Math.max(0, Math.floor(Number(
@@ -6058,7 +6108,7 @@ window.Empire.UI = (() => {
     }));
   }
 
-  function startAttackActionFromConfirmModal() {
+  async function startAttackActionFromConfirmModal() {
     const district = resolveDistrictById(attackConfirmModalState.districtId);
     if (!district) {
       closeAttackConfirmModal();
@@ -6077,14 +6127,18 @@ window.Empire.UI = (() => {
     )));
     const attackSpecial = getAttackSpecialModifiers(selectionSummary?.selection);
     const demoMode = scenarioVisionEnabled && !window.Empire.token;
+    const actionDurationMs = Math.max(1000, Math.floor(Number(baseDetails.durationMs || ATTACK_ACTION_DURATION_MS)));
+    const confirmBtn = document.getElementById("attack-confirm-modal-confirm");
+    const noteEl = document.getElementById("attack-confirm-modal-note");
     const trapEntry = getDistrictTrapEntry(district?.id);
-    showActionConfirmPopup({
-      tone: "attack",
-      title: "ÚTOK POTVRZEN",
-      subtitle: district?.name || `Distrikt #${district?.id ?? "-"}`
-    });
+    let sourceDistrictId = null;
 
     if (trapEntry) {
+      showActionConfirmPopup({
+        tone: "attack",
+        title: "ÚTOK POTVRZEN",
+        subtitle: district?.name || `Distrikt #${district?.id ?? "-"}`
+      });
       const consumedTrap = consumeDistrictTrap(district?.id);
       const lockUntil = setAttackTargetLockUntil(district?.owner, Date.now() + TRAP_ATTACK_TARGET_LOCK_MS);
       const lockMs = Math.max(0, Number(lockUntil || 0) - Date.now());
@@ -6092,7 +6146,7 @@ window.Empire.UI = (() => {
       closeAllPopupWindows();
       setAttackTargetCooldownUntil(
         district?.owner,
-        Date.now() + ATTACK_ACTION_DURATION_MS + ATTACK_TARGET_COOLDOWN_MS
+        Date.now() + actionDurationMs + ATTACK_TARGET_COOLDOWN_MS
       );
       pushEvent(`Past v districtu ${district?.name || `#${district?.id ?? "-"}`} zrušila útok. Na hráče ${targetLabel} máš cooldown ${formatDurationLabel(lockMs || TRAP_ATTACK_TARGET_LOCK_MS)}.`);
       openAttackResultModal({
@@ -6114,23 +6168,75 @@ window.Empire.UI = (() => {
       return;
     }
 
-    const outcomeRoll = resolveAttackOutcomeFromPower(baseDetails.attackPower, defensePowerEstimate, {
-      bonusCatastropheChancePct: attackSpecial.bazookaCatastropheChancePct,
-      districtId: district?.id
-    });
-    const details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
-      ...outcomeRoll,
-      attackPower: baseDetails.attackPower,
-      defensePower: defensePowerEstimate
+    if (!demoMode && !window.Empire.token) {
+      const message = "Bez přihlášení lze útok jen připravit.";
+      if (noteEl) noteEl.textContent = message;
+      pushEvent(message);
+      return;
+    }
+
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (noteEl) noteEl.textContent = "Po potvrzení se útok spouští...";
+
+    let details = null;
+    if (demoMode) {
+      const outcomeRoll = resolveAttackOutcomeFromPower(baseDetails.attackPower, defensePowerEstimate, {
+        bonusCatastropheChancePct: attackSpecial.bazookaCatastropheChancePct,
+        districtId: district?.id
+      });
+      details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
+        ...outcomeRoll,
+        attackPower: baseDetails.attackPower,
+        defensePower: defensePowerEstimate
+      });
+    } else {
+      try {
+        const result = await window.Empire.API.attackDistrict(district.id);
+        if (result?.error) {
+          const errorMessage = result.error === "cooldown" && Number(result?.cooldownMs || 0) > 0
+            ? `Na stejného hráče můžeš znovu zaútočit za ${formatAttackCooldownLabel(Number(result.cooldownMs || 0))}.`
+            : formatAttackError(result.error);
+          if (noteEl) noteEl.textContent = errorMessage;
+          if (confirmBtn) confirmBtn.disabled = false;
+          pushEvent(errorMessage);
+          recordVerifiedIntelEvent({
+            type: "attack_failed",
+            districtId: district.id,
+            message: errorMessage
+          });
+          return;
+        }
+        details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
+          ...result,
+          attackPower: result?.attackPower ?? baseDetails.attackPower,
+          defensePower: result?.defensePower ?? defensePowerEstimate
+        });
+        sourceDistrictId = result?.sourceDistrictId ?? null;
+      } catch (error) {
+        const message = error?.message || "Útok se nepodařilo spustit.";
+        if (noteEl) noteEl.textContent = message;
+        if (confirmBtn) confirmBtn.disabled = false;
+        pushEvent(message);
+        return;
+      }
+    }
+
+    showActionConfirmPopup({
+      tone: "attack",
+      title: "ÚTOK POTVRZEN",
+      subtitle: district?.name || `Distrikt #${district?.id ?? "-"}`
     });
 
     const markerResult = window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
-      attackerDistrictId: district.id,
-      durationMs: Math.max(1000, Math.floor(Number(baseDetails.durationMs || ATTACK_ACTION_DURATION_MS))),
+      attackerDistrictId: sourceDistrictId,
+      durationMs: actionDurationMs,
       source: demoMode ? "scenario-attack" : "player-attack"
     });
     if (markerResult && markerResult.ok === false) {
-      pushEvent("Útok se nepodařilo spustit. Zkus to znovu.");
+      const message = "Útok se nepodařilo spustit. Zkus to znovu.";
+      if (noteEl) noteEl.textContent = message;
+      if (confirmBtn) confirmBtn.disabled = false;
+      pushEvent(message);
       return;
     }
 
@@ -6139,12 +6245,12 @@ window.Empire.UI = (() => {
       detail: {
         districtId: district?.id ?? null,
         district: district || null,
-        durationMs: Math.max(1000, Math.floor(Number(baseDetails.durationMs || ATTACK_ACTION_DURATION_MS)))
+        durationMs: actionDurationMs
       }
     }));
     setAttackTargetCooldownUntil(
       district?.owner,
-      Date.now() + ATTACK_ACTION_DURATION_MS + ATTACK_TARGET_COOLDOWN_MS
+      Date.now() + actionDurationMs + ATTACK_TARGET_COOLDOWN_MS
     );
 
     pushEvent(`${details.title}: ${details.summary}`);
@@ -6218,9 +6324,7 @@ window.Empire.UI = (() => {
       ? formatAttackCooldownLabel(cooldownMs)
       : "Připraveno";
 
-    let noteText = attackModalState.message || (demoMode
-      ? "Šipkou doprava přidáváš, šipkou doleva ubíráš. Členové gangu se přepočítají automaticky."
-      : "Šipkou doprava přidáváš, šipkou doleva ubíráš. Členové gangu se přepočítají automaticky.");
+    let noteText = attackModalState.message || "";
     if (!window.Empire.token && !demoMode) {
       noteText = "Bez přihlášení lze v této verzi útok jen připravit.";
     } else if (cooldownMs > 0) {
@@ -6289,6 +6393,11 @@ window.Empire.UI = (() => {
       const handleAttackStepperInteraction = (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
+        const launchButton = target.closest("[data-attack-launch]");
+        if (launchButton) {
+          if (startBtn && !startBtn.disabled) startBtn.click();
+          return;
+        }
         const button = target.closest("[data-attack-weapon][data-attack-action]");
         if (!button) return;
         const now = Date.now();
@@ -6363,76 +6472,19 @@ window.Empire.UI = (() => {
         });
         const defensePowerEstimate = getAttackDefensePowerEstimate(district, selectionSummary?.selection);
 
-        if (demoMode) {
-          openAttackConfirmModal({
-            districtId: district.id,
-            availability,
-            selectionSummary,
-            baseDetails,
-            defensePowerEstimate
-          });
-          return;
-        }
-
-        if (!window.Empire.token) {
+        if (!window.Empire.token && !demoMode) {
           setAttackModalNote("Bez přihlášení lze útok jen připravit v ukázkovém stavu.");
           renderAttackModal();
           return;
         }
 
-        startBtn.disabled = true;
-        setAttackModalNote("Útok probíhá...");
-        try {
-          const result = await window.Empire.API.attackDistrict(district.id);
-          if (result?.error) {
-            const errorMessage = result.error === "cooldown" && Number(result?.cooldownMs || 0) > 0
-              ? `Na stejného hráče můžeš znovu zaútočit za ${formatAttackCooldownLabel(Number(result.cooldownMs || 0))}.`
-              : formatAttackError(result.error);
-            setAttackModalNote(errorMessage);
-            pushEvent(errorMessage);
-            recordVerifiedIntelEvent({
-              type: "attack_failed",
-              districtId: district.id,
-              message: errorMessage
-            });
-            renderAttackModal();
-            return;
-          }
-          const details = buildAttackOutcomeDetails(district, availability, selectionSummary, {
-            ...result,
-            attackPower: result?.attackPower ?? baseDetails.attackPower,
-            defensePower: result?.defensePower ?? defensePowerEstimate
-          });
-          const markerResult = window.Empire.Map?.markDistrictUnderAttack?.(district.id, {
-            attackerDistrictId: result?.sourceDistrictId ?? result?.attackerDistrictId ?? null,
-            durationMs: ATTACK_ACTION_DURATION_MS,
-            source: "player-attack"
-          });
-          if (markerResult && markerResult.ok === false) {
-            const markerErrorMessage = "Útok se nepodařilo spustit. Zkus to znovu.";
-            setAttackModalNote(markerErrorMessage);
-            pushEvent(markerErrorMessage);
-            renderAttackModal();
-            return;
-          }
-          setAttackTargetCooldownUntil(
-            district?.owner,
-            Date.now() + ATTACK_ACTION_DURATION_MS + ATTACK_TARGET_COOLDOWN_MS
-          );
-          pushEvent(details.summary);
-          recordVerifiedIntelEvent({
-            type: "attack_outcome",
-            districtId: district.id,
-            message: details.summary
-          });
-          closeAttackModal();
-          scheduleAttackResultModal(details, selectionSummary);
-        } catch (error) {
-          const message = error?.message || "Útok se nepodařilo spustit.";
-          setAttackModalNote(message);
-          pushEvent(message);
-          renderAttackModal();
-        }
+        openAttackConfirmModal({
+          districtId: district.id,
+          availability,
+          selectionSummary,
+          baseDetails,
+          defensePowerEstimate
+        });
       });
     }
 
@@ -6521,6 +6573,7 @@ window.Empire.UI = (() => {
   }
 
   function closePoliceActionResultModal() {
+    clearDistrictAttackWarningTimer();
     window.Empire.mapClickLockUntil = Date.now() + 420;
     const root = document.getElementById("police-action-result-modal");
     if (root) {
@@ -6547,12 +6600,18 @@ window.Empire.UI = (() => {
       return;
     }
 
-    const tone = String(payload.tone || "").trim();
+    const toneTokens = String(payload.tone || "")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean);
     content.classList.remove(
       "is-tier-1", "is-tier-2", "is-tier-3", "is-tier-4", "is-tier-5", "is-tier-6",
-      "is-specialty-financial", "is-specialty-drug", "is-specialty-weapons", "is-specialty-arrests", "is-specialty-total"
+      "is-specialty-financial", "is-specialty-drug", "is-specialty-weapons", "is-specialty-arrests", "is-specialty-total",
+      "is-district-raid-warning", "is-district-attack-warning"
     );
-    if (tone) content.classList.add(tone);
+    toneTokens.forEach((token) => {
+      content.classList.add(token);
+    });
 
     title.textContent = String(payload.title || "Policejní akce").trim() || "Policejní akce";
     badge.textContent = String(payload.badge || "").trim() || "Policejní zásah";
@@ -6568,6 +6627,14 @@ window.Empire.UI = (() => {
     `).join("");
     root.style.zIndex = "9999";
     root.classList.remove("hidden");
+    clearDistrictAttackWarningTimer();
+    if (typeof payload.onOpen === "function") {
+      try {
+        payload.onOpen({ root, content, title, badge, summary, details });
+      } catch (error) {
+        console.error("Police action modal onOpen failed", error);
+      }
+    }
   }
 
   function openDistrictPoliceRaidWarningModal(district = null, policeAction = {}) {
@@ -6604,7 +6671,7 @@ window.Empire.UI = (() => {
     })[raidSpecialtyKey] || "is-specialty-total";
 
     openPoliceActionResultModal({
-      tone: specialtyTone,
+      tone: `${specialtyTone} is-district-raid-warning`,
       title: "Policejní razie v districtu",
       badge: raidTypeLabel,
       summary: resolvedWarningSummary,
@@ -6612,6 +6679,69 @@ window.Empire.UI = (() => {
         { label: "Hráč", value: ownerNick },
         { label: "Typ razie", value: raidTypeLabel }
       ]
+    });
+  }
+
+  function openDistrictAttackInProgressModal(district = null, attackMarker = {}) {
+    const districts = Array.isArray(window.Empire.districts) ? window.Empire.districts : [];
+    const attackerDistrictId = Number(attackMarker?.attackerDistrictId);
+    const attackerDistrict = Number.isFinite(attackerDistrictId)
+      ? districts.find((entry) => Number(entry?.id) === attackerDistrictId) || null
+      : null;
+    const attackerName = String(
+      attackerDistrict?.ownerNick
+      || attackerDistrict?.owner_username
+      || attackerDistrict?.ownerUsername
+      || attackerDistrict?.owner
+      || "Neznámý gang"
+    ).trim() || "Neznámý gang";
+    const defenderName = String(
+      district?.ownerNick
+      || district?.owner_username
+      || district?.ownerUsername
+      || district?.owner
+      || "Neobsazeno"
+    ).trim() || "Neobsazeno";
+
+    openPoliceActionResultModal({
+      tone: "is-district-attack-warning",
+      title: "Útok probíhá",
+      badge: "Boj o district",
+      summary: "",
+      rows: [
+        { label: "Útočník", value: attackerName },
+        { label: "Obránce", value: defenderName },
+        { label: "Konec boje za", value: formatAttackDurationLabel(Math.max(0, Number(attackMarker?.expiresAt || 0) - Date.now())) }
+      ],
+      onOpen: ({ root, details }) => {
+        const renderRows = () => {
+          if (!root || root.classList.contains("hidden")) {
+            clearDistrictAttackWarningTimer();
+            return;
+          }
+          const remainingMs = Math.max(0, Number(attackMarker?.expiresAt || 0) - Date.now());
+          details.innerHTML = `
+            <div class="modal__row">
+              <span>Útočník</span>
+              <strong>${attackerName}</strong>
+            </div>
+            <div class="modal__row">
+              <span>Obránce</span>
+              <strong>${defenderName}</strong>
+            </div>
+            <div class="modal__row">
+              <span>Konec boje za</span>
+              <strong>${formatAttackDurationLabel(remainingMs)}</strong>
+            </div>
+          `;
+          if (remainingMs <= 0) {
+            clearDistrictAttackWarningTimer();
+            closePoliceActionResultModal();
+          }
+        };
+        renderRows();
+        districtAttackWarningTimer = window.setInterval(renderRows, 1000);
+      }
     });
   }
 
@@ -9032,7 +9162,7 @@ window.Empire.UI = (() => {
     if (!districtEl || !availableEl || !requiredEl || !noteEl || !confirmBtn) return;
 
     const district = resolveDistrictById(occupyConfirmModalState.districtId);
-    const spyIntel = getDistrictSpyIntel(district?.id);
+    const spyIntel = resolveCompleteSpyIntel(district?.id);
     const requiredMembers = resolveOccupationRequiredMembers(district, spyIntel);
     const availableMembers = countPlayerControlledPopulation(cachedProfile || window.Empire.player || {});
     const availability = evaluateDistrictActionAvailability(district, "occupy");
@@ -9210,7 +9340,7 @@ window.Empire.UI = (() => {
       return;
     }
 
-    const requiredMembers = resolveOccupationRequiredMembers(district, getDistrictSpyIntel(district.id));
+    const requiredMembers = resolveOccupationRequiredMembers(district, resolveCompleteSpyIntel(district.id));
     const availableMembers = countPlayerControlledPopulation(cachedProfile || window.Empire.player || {});
     if (availableMembers < requiredMembers) {
       pushEvent(`Na obsazení chybí ${requiredMembers - availableMembers} členů gangu.`);
@@ -9617,10 +9747,11 @@ window.Empire.UI = (() => {
       if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID) {
         return { allowed: true, reason: "" };
       }
-      if (isDistrictUnownedForSpyOutcome(district) && !getDistrictSpyIntel(district?.id)) {
+      const completeSpyIntel = resolveCompleteSpyIntel(district?.id);
+      if (isDistrictUnownedForSpyOutcome(district) && !completeSpyIntel) {
         return { allowed: false, reason: "Na neobsazený distrikt musí nejdřív proběhnout úspěšné špehování." };
       }
-      if (isDistrictUnownedForSpyOutcome(district) && getDistrictSpyIntel(district?.id)) {
+      if (isDistrictUnownedForSpyOutcome(district) && completeSpyIntel) {
         return { allowed: false, reason: "Pro prázdný vyspěhovaný distrikt použij akci Obsadit." };
       }
       const targetAttackLockMs = getAttackTargetLockRemainingMs(district?.owner);
@@ -9638,7 +9769,7 @@ window.Empire.UI = (() => {
 
     if (action === "occupy") {
       if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_SPY_DISTRICT_ID) {
-        if (!getDistrictSpyIntel(district?.id)) {
+        if (!resolveCompleteSpyIntel(district?.id)) {
           return { allowed: false, reason: "Nejdřív musí proběhnout úspěšné špehování tohoto distriktu." };
         }
         return { allowed: true, reason: "" };
@@ -9646,7 +9777,7 @@ window.Empire.UI = (() => {
       if (!isDistrictUnownedForSpyOutcome(district)) {
         return { allowed: false, reason: "Obsadit lze jen neobsazený distrikt." };
       }
-      if (!getDistrictSpyIntel(district?.id)) {
+      if (!resolveCompleteSpyIntel(district?.id)) {
         return { allowed: false, reason: "Nejdřív musí proběhnout úspěšné špehování tohoto distriktu." };
       }
       const adjacent = isDistrictAdjacentToOwnedTerritory(district, { includeAllianceTerritory: true });
@@ -10061,6 +10192,13 @@ window.Empire.UI = (() => {
     if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
     if (hours > 0) return `${hours}h`;
     return `${minutes}m`;
+  }
+
+  function clearDistrictAttackWarningTimer() {
+    if (districtAttackWarningTimer) {
+      window.clearInterval(districtAttackWarningTimer);
+      districtAttackWarningTimer = null;
+    }
   }
 
   function pickRandomPoliceRaidSpecialtyKey() {
@@ -13000,7 +13138,7 @@ window.Empire.UI = (() => {
                     </div>
                     <div class="bounty-board__target-copy">
                       <div id="bounty-target-name" class="bounty-board__target-name">Nevybrán cíl</div>
-                      <div id="bounty-target-alliance" class="bounty-board__target-meta">Bez aliance</div>
+                      <div id="bounty-target-alliance" class="bounty-board__target-meta">Aliance: Bez aliance</div>
                       <div id="bounty-target-districts" class="bounty-board__target-meta">Districtů: 0</div>
                       <div id="bounty-target-activity" class="bounty-board__target-meta">Poslední aktivita: -</div>
                     </div>
@@ -13018,7 +13156,6 @@ window.Empire.UI = (() => {
                       <div class="bounty-board__resource-head">
                         <span class="bounty-board__resource-icon">💵</span>
                         <div>
-                          <div class="bounty-board__resource-name">Cash</div>
                           <div id="bounty-cash-available" class="bounty-board__resource-have">Máš: 0$</div>
                         </div>
                       </div>
@@ -13109,7 +13246,6 @@ window.Empire.UI = (() => {
 
               <section class="bounty-board__column bounty-board__column--right">
                 <div class="bounty-board__panel bounty-board__preview">
-                  <div class="bounty-board__preview-label">HOT TARGET</div>
                   <div id="bounty-preview-target" class="bounty-board__preview-target">Nevybrán cíl</div>
                   <div id="bounty-preview-value" class="bounty-board__preview-value">$0</div>
                   <div class="bounty-board__preview-grid">
@@ -13334,7 +13470,7 @@ window.Empire.UI = (() => {
       const target = selectedPlayer();
       if (!target) {
         targetName.textContent = "Nevybrán cíl";
-        targetAlliance.textContent = "Bez aliance";
+        targetAlliance.textContent = "Aliance: Bez aliance";
         targetDistricts.textContent = "Districtů: 0";
         targetActivity.textContent = "Poslední aktivita: -";
         targetThreat.textContent = "Low threat";
@@ -13346,7 +13482,7 @@ window.Empire.UI = (() => {
       }
       const threat = resolveBountyThreatLevel(Math.max(0, Math.floor(Number(target?.districtCount || 0))));
       targetName.textContent = String(target?.name || "Hráč");
-      targetAlliance.textContent = String(target?.allianceName || "").trim() || "Bez aliance";
+      targetAlliance.textContent = `Aliance: ${String(target?.allianceName || "").trim() || "Bez aliance"}`;
       targetDistricts.textContent = `Districtů: ${Math.max(0, Math.floor(Number(target?.districtCount || 0)))}`;
       targetActivity.textContent = `Poslední aktivita: ${resolveBountyLastActivityLabel(target)}`;
       targetThreat.textContent = threat.label;
@@ -20575,6 +20711,7 @@ window.Empire.UI = (() => {
     hasCompleteSpyIntel,
     getDistrictTrapControlState,
     resolveAllianceIconKeyByName,
-    openDistrictPoliceRaidWarningModal
+    openDistrictPoliceRaidWarningModal,
+    openDistrictAttackInProgressModal
   };
 })();
