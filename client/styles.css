@@ -22761,6 +22761,12 @@ body.mobile-storage-modal-open {
   }
 }
 
+@media (max-width: 720px) {
+  .topbar__scenarios {
+    display: none !important;
+  }
+}
+
 @media (max-width: 640px) {
   #bounty-modal {
     padding-top: max(12px, env(safe-area-inset-top)) !important;

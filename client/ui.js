@@ -3195,11 +3195,7 @@ window.Empire.UI = (() => {
       const shouldHideTopbar = openModals.some((modal) => topbarHiddenModalIds.has(modal.id)) || hasNonSpecialBuildingDetailOpen;
       const policeModalOpen = openModals.some((modal) => modal.id === "police-action-result-modal");
       const boostModalOpen = openModals.some((modal) => modal.id === "boost-modal");
-      const keepStatsVisible = openModals.some((modal) => (
-        modal.id === "market-modal"
-        || modal.id === "alliance-modal"
-      )) || hasSpecialBuildingDetailOpen;
-      const shouldHideStats = openModals.length > 0 && !keepStatsVisible;
+      const shouldHideStats = false;
       document.body.classList.toggle("mobile-hide-topbar", shouldHideTopbar);
       document.body.classList.toggle("mobile-hide-topbar-stats", shouldHideStats);
       document.body.classList.toggle("mobile-police-modal-open", policeModalOpen);
