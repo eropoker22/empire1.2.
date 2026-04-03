@@ -18354,12 +18354,14 @@ window.Empire.Map = (() => {
     actionWrap.classList.toggle("hidden", destroyed);
     const globalRaidCooldownMs = window.Empire.UI?.getRaidCooldownRemainingMs?.() || 0;
     const raidLockRemainingMs = window.Empire.UI?.getDistrictRaidLockRemainingMs?.(district?.id) || 0;
+    const activeAttackCooldownMs = window.Empire.UI?.getActiveAttackCooldownRemainingMs?.() || 0;
     const showTrapControl = !destroyed
       && defendableByPlayer
       && trapControlState.visible;
     const showTrapActionButton = showTrapControl && !trapControlState.isActiveHere;
 
-    const showAttack = !destroyed && !defendableByPlayer && attackState.allowed;
+    const hasAttackCooldown = attackActionMode === "attack" && activeAttackCooldownMs > 0;
+    const showAttack = !destroyed && !defendableByPlayer && (attackState.allowed || hasAttackCooldown);
     const hasRaidCooldown = globalRaidCooldownMs > 0 || raidLockRemainingMs > 0;
     const showRaid = !destroyed && !defendableByPlayer && (raidState.allowed || hasRaidCooldown);
     const showSpy = !destroyed && !defendableByPlayer && spyState.allowed && !hasCompleteSpyIntel;
@@ -18378,16 +18380,20 @@ window.Empire.Map = (() => {
     actionWrap.classList.toggle("district-modal__actions--defense-only", !destroyed && defendableByPlayer && !showTrapActionButton);
     actionWrap.classList.toggle("district-modal__actions--enemy", !destroyed && isEnemyDistrict && showAttack && showSpy);
     attackBtn.dataset.actionMode = attackActionMode;
-    attackBtn.textContent = attackActionMode === "occupy" ? "Obsadit" : "Zaútočit";
+    if (attackActionMode === "attack" && hasAttackCooldown) {
+      attackBtn.textContent = `Zaútočit • ${formatDistrictRaidLockLabel(activeAttackCooldownMs)}`;
+    } else {
+      attackBtn.textContent = attackActionMode === "occupy" ? "Obsadit" : "Zaútočit";
+    }
     if (globalRaidCooldownMs > 0) {
-      raidBtn.textContent = `Vykrást • CD ${formatDistrictRaidLockLabel(globalRaidCooldownMs)}`;
+      raidBtn.textContent = `Vykrást • ${formatDistrictRaidLockLabel(globalRaidCooldownMs)}`;
     } else if (raidLockRemainingMs > 0) {
       raidBtn.textContent = `Vykrást • ${formatDistrictRaidLockLabel(raidLockRemainingMs)}`;
     } else {
       raidBtn.textContent = "Vykrást";
     }
     if (showSpy && noSpyAvailable && spyRecoveryRemainingMs > 0) {
-      spyBtn.textContent = `Špehovat • CD ${formatDistrictRaidLockLabel(spyRecoveryRemainingMs)}`;
+      spyBtn.textContent = `Špehovat • ${formatDistrictRaidLockLabel(spyRecoveryRemainingMs)}`;
     } else if (showSpy && noSpyAvailable) {
       spyBtn.textContent = "Špehovat • 0 špehů";
     } else {
@@ -18399,17 +18405,17 @@ window.Empire.Map = (() => {
     trapBtn.innerHTML = trapSubtitle
       ? `<span class="district-action-btn__label">${trapLabel}</span><span class="district-action-btn__sub">${trapSubtitle}</span>`
       : `<span class="district-action-btn__label">${trapLabel}</span>`;
-    attackBtn.disabled = false;
+    attackBtn.disabled = !attackState.allowed;
     raidBtn.disabled = !raidState.allowed;
     spyBtn.disabled = Boolean(showSpy && (noSpyAvailable || !spyState.allowed));
     defenseBtn.disabled = false;
     trapBtn.disabled = Boolean(trapControlState.buttonDisabled);
-    attackBtn.setAttribute("aria-disabled", "false");
+    attackBtn.setAttribute("aria-disabled", attackState.allowed ? "false" : "true");
     raidBtn.setAttribute("aria-disabled", raidState.allowed ? "false" : "true");
     spyBtn.setAttribute("aria-disabled", spyBtn.disabled ? "true" : "false");
     defenseBtn.setAttribute("aria-disabled", "false");
     trapBtn.setAttribute("aria-disabled", trapControlState.buttonDisabled ? "true" : "false");
-    attackBtn.title = "";
+    attackBtn.title = attackState.allowed ? "" : (attackState.reason || "");
     raidBtn.title = raidState.allowed ? "" : (raidState.reason || "");
     if (spyBtn.disabled && noSpyAvailable && spyRecoveryRemainingMs > 0) {
       spyBtn.title = `Nemáš dostupného špeha. Další bude k dispozici za ${formatDistrictRaidLockLabel(spyRecoveryRemainingMs)}.`;
@@ -18422,6 +18428,7 @@ window.Empire.Map = (() => {
     trapBtn.title = trapControlState.title || "";
     trapBtn.classList.toggle("district-action-btn--cooldown", Boolean(trapControlState.moveLocked));
     trapBtn.classList.toggle("district-action-btn--active", Boolean(trapControlState.isActiveHere));
+    attackBtn.classList.toggle("district-action-btn--cooldown", !attackState.allowed && hasAttackCooldown);
     raidBtn.classList.toggle("district-action-btn--cooldown", !raidState.allowed && hasRaidCooldown);
     spyBtn.classList.toggle("district-action-btn--cooldown", Boolean(showSpy && noSpyAvailable));
     trapBtn.setAttribute("aria-label", trapSubtitle ? `${trapLabel} ${trapSubtitle}` : trapLabel);

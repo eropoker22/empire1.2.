@@ -402,6 +402,7 @@ window.Empire.UI = (() => {
   const ATTACK_TARGET_COOLDOWN_STORAGE_KEY = "empire_attack_target_cooldown_state_v1";
   const ATTACK_TARGET_COOLDOWN_MS = 30 * 1000;
   const ATTACK_ACTION_DURATION_MS = 20 * 1000;
+  const ATTACK_ACTION_LOCK_STORAGE_KEY = "empire_attack_action_lock_until_v1";
   const DISTRICT_TRAP_STORAGE_KEY = "empire_district_trap_state_v1";
   const ATTACK_TARGET_LOCK_STORAGE_KEY = "empire_attack_target_lock_state_v1";
   const TRAP_ATTACK_TARGET_LOCK_MS = 5 * 60 * 60 * 1000;
@@ -4951,6 +4952,25 @@ window.Empire.UI = (() => {
     return seconds > 0 ? `${seconds}s` : "Připraveno";
   }
 
+  function getActiveAttackCooldownRemainingMs() {
+    const until = Number(localStorage.getItem(ATTACK_ACTION_LOCK_STORAGE_KEY) || 0);
+    if (!Number.isFinite(until) || until <= Date.now()) {
+      localStorage.removeItem(ATTACK_ACTION_LOCK_STORAGE_KEY);
+      return 0;
+    }
+    return Math.max(0, until - Date.now());
+  }
+
+  function setActiveAttackCooldownUntil(value) {
+    const safeValue = Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+    if (safeValue <= Date.now()) {
+      localStorage.removeItem(ATTACK_ACTION_LOCK_STORAGE_KEY);
+      return 0;
+    }
+    localStorage.setItem(ATTACK_ACTION_LOCK_STORAGE_KEY, String(safeValue));
+    return safeValue;
+  }
+
   function formatAttackDurationLabel(ms) {
     const safe = Math.max(0, Math.floor(Number(ms) || 0));
     const seconds = Math.ceil(safe / 1000);
@@ -5323,13 +5343,15 @@ window.Empire.UI = (() => {
     const actualMembers = Math.max(0, Math.floor(Number(countPlayerControlledPopulation(cachedProfile || window.Empire.player || {})) || 0));
     const weaponAccess = resolveCombatWeaponAccess("attack", actualMembers);
     const cooldownTargetOwner = normalizeOwnerName(district?.owner);
+    const targetCooldownMs = getAttackTargetCooldownRemainingMs(cooldownTargetOwner);
+    const activeAttackCooldownMs = getActiveAttackCooldownRemainingMs();
     return {
       availableWeapons,
       actualMembers,
       weaponCounts: counts,
       weaponAccess,
       unlockedWeapon: weaponAccess.weapon || null,
-      cooldownMs: getAttackTargetCooldownRemainingMs(cooldownTargetOwner)
+      cooldownMs: Math.max(targetCooldownMs, activeAttackCooldownMs)
     };
   }
 
@@ -6083,9 +6105,11 @@ window.Empire.UI = (() => {
     weaponsEl.textContent = formatAttackSelectionSummary(selectionSummary);
     membersEl.textContent = String(usedMembers);
     powerEl.textContent = String(attackPower);
-    noteEl.textContent = `Po potvrzení se útok spustí na ${baseDetails.durationLabel || formatAttackDurationLabel(ATTACK_ACTION_DURATION_MS)}. Odhad šance na výhru: ${winChancePct} %. Výsledek se ukáže až po doběhnutí plamenů.`;
+    noteEl.textContent = Number(availability?.cooldownMs || 0) > 0
+      ? `Další útok můžeš spustit za ${formatAttackCooldownLabel(availability.cooldownMs)}.`
+      : `Po potvrzení se útok spustí na ${baseDetails.durationLabel || formatAttackDurationLabel(ATTACK_ACTION_DURATION_MS)}. Odhad šance na výhru: ${winChancePct} %. Výsledek se ukáže až po doběhnutí plamenů.`;
 
-    confirmBtn.disabled = !district || usedMembers <= 0 || attackPower <= 0;
+    confirmBtn.disabled = !district || usedMembers <= 0 || attackPower <= 0 || Number(availability?.cooldownMs || 0) > 0;
   }
 
   function openAttackConfirmModal(payload) {
@@ -6132,6 +6156,12 @@ window.Empire.UI = (() => {
     const noteEl = document.getElementById("attack-confirm-modal-note");
     const trapEntry = getDistrictTrapEntry(district?.id);
     let sourceDistrictId = null;
+
+    if (Number(availability?.cooldownMs || 0) > 0) {
+      if (noteEl) noteEl.textContent = `Další útok můžeš spustit za ${formatAttackCooldownLabel(availability.cooldownMs)}.`;
+      if (confirmBtn) confirmBtn.disabled = true;
+      return;
+    }
 
     if (trapEntry) {
       showActionConfirmPopup({
@@ -6241,6 +6271,7 @@ window.Empire.UI = (() => {
     }
 
     closeAllPopupWindows();
+    setActiveAttackCooldownUntil(Date.now() + actionDurationMs);
     document.dispatchEvent(new CustomEvent("empire:attack-started", {
       detail: {
         districtId: district?.id ?? null,
@@ -9746,6 +9777,13 @@ window.Empire.UI = (() => {
     if (action === "attack") {
       if (onboardingDemoActive && districtId === ONBOARDING_TUTORIAL_ATTACK_DISTRICT_ID) {
         return { allowed: true, reason: "" };
+      }
+      const activeAttackCooldownMs = getActiveAttackCooldownRemainingMs();
+      if (activeAttackCooldownMs > 0) {
+        return {
+          allowed: false,
+          reason: `Další útok můžeš spustit za ${formatAttackCooldownLabel(activeAttackCooldownMs)}.`
+        };
       }
       const completeSpyIntel = resolveCompleteSpyIntel(district?.id);
       if (isDistrictUnownedForSpyOutcome(district) && !completeSpyIntel) {
@@ -20710,6 +20748,7 @@ window.Empire.UI = (() => {
     getDistrictSpyIntel,
     hasCompleteSpyIntel,
     getDistrictTrapControlState,
+    getActiveAttackCooldownRemainingMs,
     resolveAllianceIconKeyByName,
     openDistrictPoliceRaidWarningModal,
     openDistrictAttackInProgressModal

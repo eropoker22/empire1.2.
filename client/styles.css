@@ -22537,12 +22537,12 @@ body.mobile-storage-modal-open {
 
 /* Final neon action frames for attack / spy / raid result modals */
 #attack-result-modal .attack-result-modal__content {
-  border: 1px solid rgba(251, 146, 60, 0.46) !important;
+  border: 1px solid rgba(248, 113, 113, 0.52) !important;
   box-shadow:
     0 18px 44px rgba(2, 6, 23, 0.42),
-    0 0 0 1px rgba(251, 146, 60, 0.18),
-    0 0 18px rgba(251, 146, 60, 0.22),
-    0 0 34px rgba(239, 68, 68, 0.16),
+    0 0 0 1px rgba(248, 113, 113, 0.2),
+    0 0 20px rgba(248, 113, 113, 0.32),
+    0 0 42px rgba(239, 68, 68, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
 }
 
@@ -22553,20 +22553,20 @@ body.mobile-storage-modal-open {
   border-width: 1px !important;
   box-shadow:
     0 18px 44px rgba(2, 6, 23, 0.42),
-    0 0 0 1px rgba(251, 146, 60, 0.18),
-    0 0 18px rgba(251, 146, 60, 0.22),
-    0 0 34px rgba(239, 68, 68, 0.16),
+    0 0 0 1px rgba(248, 113, 113, 0.2),
+    0 0 20px rgba(248, 113, 113, 0.32),
+    0 0 42px rgba(239, 68, 68, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
 }
 
 #spy-result-modal .spy-result-modal__content,
 #spy-warning-modal .spy-result-modal__content {
-  border: 1px solid rgba(34, 211, 238, 0.44) !important;
+  border: 1px solid rgba(250, 204, 21, 0.5) !important;
   box-shadow:
     0 18px 44px rgba(2, 6, 23, 0.42),
-    0 0 0 1px rgba(34, 211, 238, 0.16),
-    0 0 18px rgba(34, 211, 238, 0.24),
-    0 0 34px rgba(96, 165, 250, 0.16),
+    0 0 0 1px rgba(250, 204, 21, 0.18),
+    0 0 20px rgba(250, 204, 21, 0.3),
+    0 0 40px rgba(251, 191, 36, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
 }
 
@@ -22583,19 +22583,19 @@ body.mobile-storage-modal-open {
   border-width: 1px !important;
   box-shadow:
     0 18px 44px rgba(2, 6, 23, 0.42),
-    0 0 0 1px rgba(34, 211, 238, 0.16),
-    0 0 18px rgba(34, 211, 238, 0.24),
-    0 0 34px rgba(96, 165, 250, 0.16),
+    0 0 0 1px rgba(250, 204, 21, 0.18),
+    0 0 20px rgba(250, 204, 21, 0.3),
+    0 0 40px rgba(251, 191, 36, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
 }
 
 #raid-result-modal .spy-result-modal__content {
-  border: 1px solid rgba(244, 63, 94, 0.46) !important;
+  border: 1px solid rgba(56, 189, 248, 0.5) !important;
   box-shadow:
     0 18px 44px rgba(2, 6, 23, 0.42),
-    0 0 0 1px rgba(244, 63, 94, 0.18),
-    0 0 18px rgba(244, 63, 94, 0.22),
-    0 0 34px rgba(251, 113, 133, 0.18),
+    0 0 0 1px rgba(56, 189, 248, 0.18),
+    0 0 20px rgba(56, 189, 248, 0.3),
+    0 0 42px rgba(34, 211, 238, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
 }
 
@@ -22606,9 +22606,9 @@ body.mobile-storage-modal-open {
   border-width: 1px !important;
   box-shadow:
     0 18px 44px rgba(2, 6, 23, 0.42),
-    0 0 0 1px rgba(244, 63, 94, 0.18),
-    0 0 18px rgba(244, 63, 94, 0.22),
-    0 0 34px rgba(251, 113, 133, 0.18),
+    0 0 0 1px rgba(56, 189, 248, 0.18),
+    0 0 20px rgba(56, 189, 248, 0.3),
+    0 0 42px rgba(34, 211, 238, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
 }
 
