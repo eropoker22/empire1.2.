@@ -325,20 +325,20 @@ body.onboarding-ui-locked .onboarding-overlay__sidecard * {
 
 /* Final bounty modal override */
 #bounty-modal {
-  padding-top: 88px;
-  padding-bottom: 16px;
+  padding-top: 74px;
+  padding-bottom: 12px;
 }
 
 #bounty-modal .bounty-board__content {
-  width: min(1100px, 94vw) !important;
-  max-width: 94vw !important;
-  max-height: calc(100vh - 120px) !important;
+  width: min(1060px, 93vw) !important;
+  max-width: 93vw !important;
+  max-height: calc(100vh - 96px) !important;
   overflow: hidden !important;
-  padding: 16px !important;
+  padding: 13px !important;
   border-radius: 18px !important;
   border: 1px solid rgba(248, 113, 113, 0.75) !important;
-  background: rgba(10, 10, 14, 0.46) !important;
-  backdrop-filter: blur(10px);
+  background: rgba(10, 10, 14, 0.36) !important;
+  backdrop-filter: blur(9px);
   box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.2), 0 0 24px rgba(239, 68, 68, 0.22), 0 20px 44px rgba(0, 0, 0, 0.4) !important;
 }
 
@@ -353,10 +353,10 @@ body.onboarding-ui-locked .onboarding-overlay__sidecard * {
 
 #bounty-modal .bounty-board__header {
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 10px;
   align-items: start;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid rgba(248, 113, 113, 0.16);
 }
 
@@ -370,45 +370,45 @@ body.onboarding-ui-locked .onboarding-overlay__sidecard * {
 }
 
 #bounty-modal .bounty-board__header h3 {
-  margin: 4px 0;
+  margin: 2px 0;
   color: #fff1f2;
-  font-size: clamp(24px, 2.4vw, 32px);
+  font-size: clamp(22px, 2.2vw, 29px);
   line-height: 1;
 }
 
 #bounty-modal .bounty-board__header p {
   margin: 0;
   color: rgba(255, 228, 230, 0.74);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 #bounty-modal .bounty-board__layout {
   grid-template-columns: minmax(0, 1.06fr) minmax(340px, 0.84fr);
-  gap: 12px;
+  gap: 10px;
   align-items: start;
 }
 
 #bounty-modal .bounty-board__column {
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 #bounty-modal .bounty-board__panel {
   min-width: 0;
-  padding: 12px;
+  padding: 10px;
   border-radius: 16px;
   border: 1px solid rgba(248, 113, 113, 0.14);
-  background: rgba(20, 10, 15, 0.34);
+  background: rgba(20, 10, 15, 0.26);
 }
 
 #bounty-modal .bounty-board__panel--compact {
-  padding: 10px;
+  padding: 9px;
 }
 
 #bounty-modal .bounty-board__panel-head {
   display: grid;
   gap: 3px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 #bounty-modal .bounty-board__panel-head strong,
@@ -459,13 +459,13 @@ body.onboarding-ui-locked .onboarding-overlay__sidecard * {
 }
 
 #bounty-modal .bounty-board__target-card {
-  grid-template-columns: 66px minmax(0, 1fr) auto;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
 }
 
 #bounty-modal .bounty-board__avatar-wrap {
   position: relative;
-  width: 66px;
-  height: 66px;
+  width: 58px;
+  height: 58px;
   overflow: hidden;
   border-radius: 14px;
   border: 1px solid rgba(248, 113, 113, 0.18);
@@ -538,10 +538,10 @@ body.onboarding-ui-locked .onboarding-overlay__sidecard * {
 
 #bounty-modal .bounty-board__resource-row {
   grid-template-columns: minmax(0, 1fr) minmax(210px, 280px);
-  padding: 10px;
+  padding: 9px;
   border-radius: 14px;
   border: 1px solid rgba(248, 113, 113, 0.12);
-  background: rgba(15, 8, 12, 0.28);
+  background: rgba(15, 8, 12, 0.22);
 }
 
 #bounty-modal .bounty-board__resource-head {
@@ -717,6 +717,24 @@ body.onboarding-ui-locked .onboarding-overlay__sidecard * {
   display: grid;
   grid-template-columns: 1fr 1.1fr;
   gap: 8px;
+}
+
+@media (min-width: 981px) {
+  #bounty-modal {
+    place-items: start center !important;
+    align-items: start !important;
+    padding-top: 16px !important;
+    padding-bottom: 8px !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #bounty-modal .bounty-board__content {
+    align-self: start !important;
+    max-height: calc(100dvh - 24px) !important;
+    overflow-y: auto !important;
+  }
 }
 
 #bounty-modal .bounty-board__cancel,
