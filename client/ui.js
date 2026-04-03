@@ -6282,7 +6282,6 @@ window.Empire.UI = (() => {
       return;
     }
 
-    consumeAttackWeaponCounts(selectionSummary?.selection || {});
     closeAllPopupWindows();
     setActiveAttackCooldownUntil(Date.now() + actionDurationMs);
     document.dispatchEvent(new CustomEvent("empire:attack-started", {
@@ -6303,6 +6302,11 @@ window.Empire.UI = (() => {
       districtId: district.id,
       message: details.summary
     });
+    try {
+      consumeAttackWeaponCounts(selectionSummary?.selection || {});
+    } catch (error) {
+      console.error("Attack weapon consume failed", error);
+    }
     scheduleAttackResultModal(details, selectionSummary);
   }
 

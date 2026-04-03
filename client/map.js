@@ -17960,11 +17960,13 @@ window.Empire.Map = (() => {
     const districtKey = normalizeDistrictId(district?.id);
     const activeAttackMarker = districtKey ? state.attackedDistricts.get(districtKey) : null;
     if (activeAttackMarker && Number(activeAttackMarker.expiresAt || 0) > Date.now()) {
+      hideModal();
       window.Empire.UI?.openDistrictAttackInProgressModal?.(district, activeAttackMarker);
       return;
     }
     const activePoliceAction = districtKey ? state.policeDistrictActions.get(districtKey) : null;
     if (activePoliceAction && Number(activePoliceAction.expiresAt || 0) > Date.now()) {
+      hideModal();
       window.Empire.UI?.openDistrictPoliceRaidWarningModal?.(district, activePoliceAction);
       return;
     }
@@ -18135,6 +18137,7 @@ window.Empire.Map = (() => {
       allianceRow.classList.add("hidden");
       factionRow.classList.add("hidden");
       atmosphereRow.classList.add("hidden");
+      content.classList.remove("district-modal--unowned");
       allianceValue.textContent = "Bez aliance";
       factionValue.textContent = "Neznámá";
       atmosphereValue.textContent = "Neznámá";
@@ -18173,6 +18176,7 @@ window.Empire.Map = (() => {
       ? "Nezjištěno"
       : String(spyIntel?.atmosphere || "").trim();
     const atmosphereSrc = useSpyOnlyIntel ? "" : resolveDistrictAtmosphereImage(district, isEnemy);
+    content.classList.toggle("district-modal--unowned", !useSpyOnlyIntel && hasNoOwner);
 
     ownerValue.textContent = ownerNick;
     allianceValue.textContent = ownerAlliance;
