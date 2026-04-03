@@ -10507,6 +10507,10 @@ window.Empire.Map = (() => {
     };
   }
 
+  function isMapClickTemporarilyLocked() {
+    return Number(window.Empire.mapClickLockUntil || 0) > Date.now();
+  }
+
   function onMouseMove(event) {
     if (isTouchGhost()) return;
     if (state.isPanning) {
@@ -10537,6 +10541,7 @@ window.Empire.Map = (() => {
 
   function onMouseDown(event) {
     if (isTouchGhost()) return;
+    if (isMapClickTemporarilyLocked()) return;
     if (event.button !== 0) return;
     state.isPanning = true;
     state.hasViewportOverride = true;
@@ -10629,6 +10634,7 @@ window.Empire.Map = (() => {
 
   function onMouseUp(event) {
     if (isTouchGhost()) return;
+    if (isMapClickTemporarilyLocked()) return;
     if (event.button !== 0) return;
     if (!state.isPanning) return;
     const moved = Math.hypot(
@@ -10687,6 +10693,10 @@ window.Empire.Map = (() => {
 
   function onTouchStart(event) {
     if (!event.touches.length) return;
+    if (isMapClickTemporarilyLocked()) {
+      event.preventDefault();
+      return;
+    }
     state.lastTouchAt = Date.now();
     hideTooltip();
 
@@ -10750,6 +10760,10 @@ window.Empire.Map = (() => {
   }
 
   function onTouchEnd(event) {
+    if (isMapClickTemporarilyLocked()) {
+      event.preventDefault();
+      return;
+    }
     state.lastTouchAt = Date.now();
 
     if (state.isPinching && event.touches.length >= 2) {
@@ -18133,6 +18147,10 @@ window.Empire.Map = (() => {
     const spyState = typeof evaluateAction === "function"
       ? evaluateAction(district, "spy")
       : { allowed: !defendableByPlayer, reason: "" };
+    const spyAvailability = window.Empire.UI?.getSpyAvailabilitySnapshot?.()
+      || { available: 0, hasRecoveryQueued: false, nextRecoveryRemainingMs: 0 };
+    const noSpyAvailable = Number(spyAvailability.available || 0) <= 0;
+    const spyRecoveryRemainingMs = Math.max(0, Math.floor(Number(spyAvailability.nextRecoveryRemainingMs) || 0));
     const trapControlState = window.Empire.UI?.getDistrictTrapControlState?.(district)
       || { visible: false, label: "Past", title: "", isActiveHere: false };
     const destroyed = isDistrictDestroyed(district);
@@ -18171,6 +18189,13 @@ window.Empire.Map = (() => {
     } else {
       raidBtn.textContent = "Vykrást";
     }
+    if (showSpy && noSpyAvailable && spyRecoveryRemainingMs > 0) {
+      spyBtn.textContent = `Špehovat • CD ${formatDistrictRaidLockLabel(spyRecoveryRemainingMs)}`;
+    } else if (showSpy && noSpyAvailable) {
+      spyBtn.textContent = "Špehovat • 0 špehů";
+    } else {
+      spyBtn.textContent = "Špehovat";
+    }
     defenseBtn.textContent = "Obrana";
     const trapLabel = trapControlState.label || "Past";
     const trapSubtitle = String(trapControlState.subtitle || "").trim();
@@ -18179,22 +18204,29 @@ window.Empire.Map = (() => {
       : `<span class="district-action-btn__label">${trapLabel}</span>`;
     attackBtn.disabled = false;
     raidBtn.disabled = !raidState.allowed;
-    spyBtn.disabled = false;
+    spyBtn.disabled = Boolean(showSpy && (noSpyAvailable || !spyState.allowed));
     defenseBtn.disabled = false;
     trapBtn.disabled = Boolean(trapControlState.buttonDisabled);
     attackBtn.setAttribute("aria-disabled", "false");
     raidBtn.setAttribute("aria-disabled", raidState.allowed ? "false" : "true");
-    spyBtn.setAttribute("aria-disabled", "false");
+    spyBtn.setAttribute("aria-disabled", spyBtn.disabled ? "true" : "false");
     defenseBtn.setAttribute("aria-disabled", "false");
     trapBtn.setAttribute("aria-disabled", trapControlState.buttonDisabled ? "true" : "false");
     attackBtn.title = "";
     raidBtn.title = raidState.allowed ? "" : (raidState.reason || "");
-    spyBtn.title = "";
+    if (spyBtn.disabled && noSpyAvailable && spyRecoveryRemainingMs > 0) {
+      spyBtn.title = `Nemáš dostupného špeha. Další bude k dispozici za ${formatDistrictRaidLockLabel(spyRecoveryRemainingMs)}.`;
+    } else if (spyBtn.disabled && noSpyAvailable) {
+      spyBtn.title = "Nemáš žádné dostupné špehy.";
+    } else {
+      spyBtn.title = spyState.allowed ? "" : (spyState.reason || "");
+    }
     defenseBtn.title = "Nastav obranu districtu.";
     trapBtn.title = trapControlState.title || "";
     trapBtn.classList.toggle("district-action-btn--cooldown", Boolean(trapControlState.moveLocked));
     trapBtn.classList.toggle("district-action-btn--active", Boolean(trapControlState.isActiveHere));
     raidBtn.classList.toggle("district-action-btn--cooldown", !raidState.allowed && hasRaidCooldown);
+    spyBtn.classList.toggle("district-action-btn--cooldown", Boolean(showSpy && noSpyAvailable));
     trapBtn.setAttribute("aria-label", trapSubtitle ? `${trapLabel} ${trapSubtitle}` : trapLabel);
   }
 
