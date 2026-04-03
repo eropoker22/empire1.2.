@@ -3145,6 +3145,7 @@ window.Empire.UI = (() => {
   function initMobileModalTopbarResourceVisibility() {
     const media = window.matchMedia("(max-width: 720px)");
     const modalNodes = Array.from(document.querySelectorAll(".modal"));
+    const topbarVisibleBuildingTypes = new Set(["building-detail-modal:drug-lab", "building-detail-modal:pharmacy", "building-detail-modal:factory", "building-detail-modal:armory"]);
     const topbarHiddenModalIds = new Set([
       "events-modal",
       "buildings-modal",
@@ -3183,14 +3184,21 @@ window.Empire.UI = (() => {
       }
 
       const openModals = modalNodes.filter((modal) => !modal.classList.contains("hidden"));
-      const shouldHideTopbar = openModals.some((modal) => topbarHiddenModalIds.has(modal.id));
+      const hasNonSpecialBuildingDetailOpen = openModals.some((modal) => (
+        modal.id === "building-detail-modal"
+        && !topbarVisibleBuildingTypes.has(`${modal.id}:${String(modal.dataset.buildingMechanicsType || "").trim()}`)
+      ));
+      const hasSpecialBuildingDetailOpen = openModals.some((modal) => (
+        modal.id === "building-detail-modal"
+        && topbarVisibleBuildingTypes.has(`${modal.id}:${String(modal.dataset.buildingMechanicsType || "").trim()}`)
+      ));
+      const shouldHideTopbar = openModals.some((modal) => topbarHiddenModalIds.has(modal.id)) || hasNonSpecialBuildingDetailOpen;
       const policeModalOpen = openModals.some((modal) => modal.id === "police-action-result-modal");
       const boostModalOpen = openModals.some((modal) => modal.id === "boost-modal");
       const keepStatsVisible = openModals.some((modal) => (
-        modal.id === "building-detail-modal"
-        || modal.id === "market-modal"
+        modal.id === "market-modal"
         || modal.id === "alliance-modal"
-      ));
+      )) || hasSpecialBuildingDetailOpen;
       const shouldHideStats = openModals.length > 0 && !keepStatsVisible;
       document.body.classList.toggle("mobile-hide-topbar", shouldHideTopbar);
       document.body.classList.toggle("mobile-hide-topbar-stats", shouldHideStats);
@@ -5751,28 +5759,32 @@ window.Empire.UI = (() => {
 
   function applyAttackOutcomeLosses(selectionSummary, outcomeKey) {
     const key = String(outcomeKey || "").trim().toLowerCase();
-    if (key === "total_success") {
-      return { weaponLosses: {}, lostMembers: 0 };
-    }
     const weaponLosses = {};
+    const returnedWeapons = {};
     attackWeaponStats.forEach((item) => {
       const selected = Math.max(0, Math.floor(Number(selectionSummary?.selection?.[item.name] || 0)));
       if (!selected) return;
       const lost = key === "pyrrhic_victory"
         ? Math.ceil(selected * 0.5)
-        : selected;
+        : key === "total_success"
+          ? 0
+          : selected;
       if (lost > 0) weaponLosses[item.name] = lost;
+      const returned = Math.max(0, selected - lost);
+      if (returned > 0) returnedWeapons[item.name] = returned;
     });
     const lostMembers = key === "pyrrhic_victory"
       ? Math.ceil(Math.max(0, Number(selectionSummary?.totalUsedMembers || 0)) * 0.5)
-      : Math.max(0, Math.floor(Number(selectionSummary?.totalUsedMembers || 0)));
-    if (Object.keys(weaponLosses).length > 0) {
-      consumeAttackWeaponCounts(weaponLosses);
+      : key === "total_success"
+        ? 0
+        : Math.max(0, Math.floor(Number(selectionSummary?.totalUsedMembers || 0)));
+    if (Object.keys(returnedWeapons).length > 0) {
+      restoreAttackWeaponCounts(returnedWeapons);
     }
     if (lostMembers > 0) {
       consumeGangMembers(lostMembers);
     }
-    return { weaponLosses, lostMembers };
+    return { weaponLosses, returnedWeapons, lostMembers };
   }
 
   function isOnboardingDemoScenarioActive() {
@@ -6270,6 +6282,7 @@ window.Empire.UI = (() => {
       return;
     }
 
+    consumeAttackWeaponCounts(selectionSummary?.selection || {});
     closeAllPopupWindows();
     setActiveAttackCooldownUntil(Date.now() + actionDurationMs);
     document.dispatchEvent(new CustomEvent("empire:attack-started", {
@@ -12838,19 +12851,6 @@ window.Empire.UI = (() => {
                   <div class="bounty-modal__resource-stack">
                     <div class="bounty-modal__resource-row">
                       <div class="bounty-modal__resource-meta">
-                        <span class="bounty-modal__resource-icon">💵</span>
-                        <div class="bounty-modal__resource-copy">
-                          <div class="bounty-modal__resource-name">Cash</div>
-                          <div id="bounty-cash-available" class="bounty-modal__resource-have">máš: 0</div>
-                        </div>
-                      </div>
-                      <div class="bounty-modal__cash-controls">
-                        <input id="bounty-cash-range" class="bounty-modal__range" type="range" min="0" max="0" step="1" value="0" />
-                        <input id="bounty-cash-input" class="bounty-modal__input bounty-modal__number-input" type="number" min="0" max="0" step="1" value="0" />
-                      </div>
-                    </div>
-                    <div class="bounty-modal__resource-row">
-                      <div class="bounty-modal__resource-meta">
                         <span class="bounty-modal__resource-icon">💊</span>
                         <div class="bounty-modal__resource-copy">
                           <div class="bounty-modal__resource-name">Drogy</div>
@@ -12938,7 +12938,6 @@ window.Empire.UI = (() => {
 
               <section class="storage-modal__section bounty-modal__column bounty-modal__column--right">
                 <div class="bounty-modal__preview-card">
-                  <div class="bounty-modal__preview-label">HOT TARGET</div>
                   <div id="bounty-preview-target" class="bounty-modal__preview-target">Nevybrán cíl</div>
                   <div id="bounty-preview-value" class="bounty-modal__preview-value">$0</div>
                   <div class="bounty-modal__preview-meta">
@@ -13190,19 +13189,6 @@ window.Empire.UI = (() => {
                     <strong>Cash, drogy a materiály</strong>
                   </div>
                   <div class="bounty-board__resource-list">
-                    <div class="bounty-board__resource-row">
-                      <div class="bounty-board__resource-head">
-                        <span class="bounty-board__resource-icon">💵</span>
-                        <div>
-                          <div id="bounty-cash-available" class="bounty-board__resource-have">Máš: 0$</div>
-                        </div>
-                      </div>
-                      <div class="bounty-board__resource-controls bounty-board__resource-controls--cash">
-                        <input id="bounty-cash-range" class="bounty-board__range" type="range" min="0" max="0" step="1" value="0" />
-                        <input id="bounty-cash-input" class="bounty-board__input bounty-board__input--number" type="number" min="0" max="0" step="1" value="0" />
-                      </div>
-                    </div>
-
                     <div class="bounty-board__resource-row">
                       <div class="bounty-board__resource-head">
                         <span class="bounty-board__resource-icon">💊</span>
@@ -19088,7 +19074,6 @@ window.Empire.UI = (() => {
 
   function getBountyResourceDefinitions() {
     return [
-      { key: "clean_cash", label: "Clean cash", source: "cash", group: "Peníze" },
       ...pharmacySupplyTypes.map((item) => ({
         key: item.key,
         label: item.name,
@@ -20404,6 +20389,17 @@ window.Empire.UI = (() => {
       openWeaponsModal("attack");
     }
     return next;
+  }
+
+  function restoreAttackWeaponCounts(selectionCounts = {}) {
+    const restored = {};
+    attackWeaponStats.forEach((item) => {
+      const delta = Math.max(0, Math.floor(Number(selectionCounts?.[item.name] || 0)));
+      if (!delta) return;
+      restored[item.name] = delta;
+    });
+    if (!Object.keys(restored).length) return resolveWeaponCounts();
+    return addCraftedWeapons(restored);
   }
 
   function readLocalDefenseCounts() {
