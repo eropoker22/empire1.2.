@@ -12,6 +12,7 @@
 
   const BOUNTY_DURATIONS = Object.freeze([6, 12, 24]);
   const MIN_BOUNTY_CASH = 5000;
+  const MOBILE_BOUNTY_MEDIA_QUERY = "(max-width: 720px)";
   const DRUG_UNIT_VALUE = 350;
   const MATERIAL_UNIT_VALUE = 275;
   const NO_ALLIANCE_KEYS = new Set(["", "zadna", "žádná", "bez aliance", "none"]);
@@ -1288,7 +1289,27 @@
     if (elements.error) elements.error.textContent = "";
   }
 
+  function setModalScrollLock(locked) {
+    const body = document.body;
+    const html = document.documentElement;
+    if (!body || !html) return;
+
+    const isMobile = typeof window.matchMedia === "function"
+      ? window.matchMedia(MOBILE_BOUNTY_MEDIA_QUERY).matches
+      : false;
+
+    if (!isMobile) {
+      body.classList.remove("mobile-bounty-modal-open");
+      html.classList.remove("mobile-bounty-modal-open");
+      return;
+    }
+
+    body.classList.toggle("mobile-bounty-modal-open", Boolean(locked));
+    html.classList.toggle("mobile-bounty-modal-open", Boolean(locked));
+  }
+
   function closeModal() {
+    setModalScrollLock(false);
     const root = document.getElementById("empire-bounty-modal");
     if (!root) return;
     root.classList.add("hidden");
@@ -1378,12 +1399,16 @@
     syncModal();
     root.classList.remove("hidden");
     root.setAttribute("aria-hidden", "false");
+    setModalScrollLock(true);
   }
 
   function bindModalEvents() {
     const root = document.getElementById("empire-bounty-modal");
     if (!root || root.dataset.bound === "1") return;
     root.dataset.bound = "1";
+    const mobileMedia = typeof window.matchMedia === "function"
+      ? window.matchMedia(MOBILE_BOUNTY_MEDIA_QUERY)
+      : null;
 
     root.addEventListener("click", (event) => {
       const closeTrigger = event.target instanceof Element ? event.target.closest("[data-bounty-close='1']") : null;
@@ -1436,6 +1461,17 @@
         closeModal();
       }
     });
+
+    const handleViewportChange = () => {
+      setModalScrollLock(!root.classList.contains("hidden"));
+    };
+    if (mobileMedia) {
+      if (typeof mobileMedia.addEventListener === "function") {
+        mobileMedia.addEventListener("change", handleViewportChange);
+      } else if (typeof mobileMedia.addListener === "function") {
+        mobileMedia.addListener(handleViewportChange);
+      }
+    }
   }
 
   function renderIfModalOpen() {

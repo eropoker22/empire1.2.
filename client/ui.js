@@ -2964,8 +2964,18 @@ window.Empire.UI = (() => {
   function initMobileScenarioCardPlacement() {
     const scenarioCard = document.getElementById("scenario-card");
     const scenarioAnchor = document.getElementById("scenario-card-anchor");
+    const profileGangCard = document.getElementById("profile-gang-card");
     const main = document.querySelector(".main");
-    if (!scenarioCard || !scenarioAnchor || !main) return;
+    if (!scenarioCard || !scenarioAnchor || !profileGangCard || !main) return;
+
+    let profileAnchor = document.getElementById("profile-gang-card-anchor");
+    if (!profileAnchor) {
+      profileAnchor = document.createElement("div");
+      profileAnchor.id = "profile-gang-card-anchor";
+      profileAnchor.className = "hidden";
+      profileAnchor.setAttribute("aria-hidden", "true");
+      profileGangCard.insertAdjacentElement("beforebegin", profileAnchor);
+    }
 
     const media = window.matchMedia("(max-width: 720px)");
     const restoreToPanel = () => {
@@ -2975,18 +2985,34 @@ window.Empire.UI = (() => {
       scenarioAnchor.insertAdjacentElement("afterend", scenarioCard);
     };
 
-    const moveUnderResources = () => {
-      if (scenarioCard.parentElement === main && scenarioCard === main.firstElementChild) {
+    const restoreProfileToPanel = () => {
+      if (profileGangCard.parentElement === profileAnchor.parentElement && profileGangCard.previousElementSibling === profileAnchor) {
         return;
       }
-      main.insertAdjacentElement("afterbegin", scenarioCard);
+      profileAnchor.insertAdjacentElement("afterend", profileGangCard);
+    };
+
+    const moveProfileUnderResources = () => {
+      if (profileGangCard.parentElement === main && profileGangCard === main.firstElementChild) {
+        return;
+      }
+      main.insertAdjacentElement("afterbegin", profileGangCard);
+    };
+
+    const moveScenarioToProfileSlot = () => {
+      if (scenarioCard.parentElement === profileAnchor.parentElement && scenarioCard.previousElementSibling === profileAnchor) {
+        return;
+      }
+      profileAnchor.insertAdjacentElement("afterend", scenarioCard);
     };
 
     const applyPlacement = () => {
       if (media.matches) {
-        moveUnderResources();
+        moveProfileUnderResources();
+        moveScenarioToProfileSlot();
         return;
       }
+      restoreProfileToPanel();
       restoreToPanel();
     };
 
