@@ -294,33 +294,43 @@ window.Empire.Map = (() => {
     upgradePctPerLevel: 0.1
   });
 
-  const FITNESS_CLUB_NAME = "Fitness club";
+  const FITNESS_CLUB_NAME = "Fitness Club";
   const FITNESS_BUILDING_STORAGE_KEY = "empire_fitness_building_mechanics_v1";
   const FITNESS_BUILDING_CONFIG = Object.freeze({
-    maxLevel: 4,
-    baseCleanIncomePerHour: 360,
-    cleanIncomePerTenMembersPerHour: 0,
-    baseDirtyIncomePerHour: 30,
-    dirtyIncomePerTenMembersPerHour: 0,
-    baseHeatPerDay: 3,
-    premiumIncomeBoostPct: 50,
-    premiumHeatAdded: 2,
-    trainingCombatBoostPct: 10,
-    trainingIncomePenaltyPct: 20,
+    maxLevel: 5,
+    baseCleanIncomePerHour: 260,
+    baseDirtyIncomePerHour: 160,
+    baseHeatPerDay: 4.5,
+    baseInfluencePerHour: 26 / 24,
+    gangTrainingAttackBoostPct: 10,
+    gangTrainingDefenseBoostPct: 10,
+    talentRecruitmentInfluenceBoostPct: 10,
+    talentRecruitmentDistrictIncomeBoostPct: 2,
+    dopingRushAttackBoostPct: 35,
+    dopingCrashDefensePenaltyPct: 10,
+    actionHeatAdded: {
+      gangTraining: 5,
+      talentRecruitment: 4,
+      doping: 8
+    },
     actionCooldowns: {
-      premium: 4 * 60 * 60 * 1000,
-      training: 6 * 60 * 60 * 1000
+      gangTraining: 8 * 60 * 60 * 1000,
+      talentRecruitment: 10 * 60 * 60 * 1000,
+      doping: 12 * 60 * 60 * 1000
     },
     actionDurations: {
-      premium: 2 * 60 * 60 * 1000,
-      training: 2 * 60 * 60 * 1000
+      gangTraining: 2 * 60 * 60 * 1000,
+      talentRecruitmentInfluence: 2 * 60 * 60 * 1000,
+      talentRecruitmentIncome: 4 * 60 * 60 * 1000,
+      dopingRush: 1 * 60 * 60 * 1000,
+      dopingCrash: 1 * 60 * 60 * 1000
     },
     upgradeCosts: {
-      2: 5000,
-      3: 15000,
-      4: 40000
-    },
-    upgradePctPerLevel: 0.1
+      2: 9000,
+      3: 28000,
+      4: 65000,
+      5: 140000
+    }
   });
 
   const CASINO_BUILDING_NAME = "Kasino";
@@ -1749,14 +1759,17 @@ window.Empire.Map = (() => {
       lastIncomeAt: now,
       lastInfluenceAt: now,
       cooldowns: {
-        premium: 0,
-        training: 0
+        gangTraining: 0,
+        talentRecruitment: 0,
+        doping: 0
       },
       effects: {
-        premiumUntil: 0,
-        trainingUntil: 0
+        gangTrainingUntil: 0,
+        talentRecruitmentInfluenceUntil: 0,
+        talentRecruitmentIncomeUntil: 0,
+        dopingRushUntil: 0,
+        dopingCrashUntil: 0
       },
-      trainingBuffActive: false,
       extraHeat: 0
     };
   }
@@ -1783,14 +1796,23 @@ window.Empire.Map = (() => {
       lastIncomeAt: Number.isFinite(lastIncomeAt) ? Math.max(0, lastIncomeAt) : fallback.lastIncomeAt,
       lastInfluenceAt: Number.isFinite(lastInfluenceAt) ? Math.max(0, lastInfluenceAt) : fallback.lastInfluenceAt,
       cooldowns: {
-        premium: Math.max(0, Number(cooldownsRaw.premium || 0)),
-        training: Math.max(0, Number(cooldownsRaw.training || 0))
+        gangTraining: Math.max(0, Number(cooldownsRaw.gangTraining || cooldownsRaw.training || 0)),
+        talentRecruitment: Math.max(0, Number(cooldownsRaw.talentRecruitment || cooldownsRaw.premium || 0)),
+        doping: Math.max(0, Number(cooldownsRaw.doping || 0))
       },
       effects: {
-        premiumUntil: Math.max(0, Number(effectsRaw.premiumUntil || 0)),
-        trainingUntil: Math.max(0, Number(effectsRaw.trainingUntil || 0))
+        gangTrainingUntil: Math.max(0, Number(effectsRaw.gangTrainingUntil || effectsRaw.trainingUntil || 0)),
+        talentRecruitmentInfluenceUntil: Math.max(
+          0,
+          Number(effectsRaw.talentRecruitmentInfluenceUntil || effectsRaw.premiumUntil || 0)
+        ),
+        talentRecruitmentIncomeUntil: Math.max(
+          0,
+          Number(effectsRaw.talentRecruitmentIncomeUntil || effectsRaw.premiumUntil || 0)
+        ),
+        dopingRushUntil: Math.max(0, Number(effectsRaw.dopingRushUntil || 0)),
+        dopingCrashUntil: Math.max(0, Number(effectsRaw.dopingCrashUntil || 0))
       },
-      trainingBuffActive: Boolean(rawState?.trainingBuffActive),
       extraHeat: Math.max(0, Number(rawState?.extraHeat || 0))
     };
   }
@@ -3720,8 +3742,8 @@ window.Empire.Map = (() => {
       hourlyDirtyIncome: 60
     }),
     [FITNESS_CLUB_NAME]: Object.freeze({
-      hourlyCleanIncome: 360,
-      hourlyDirtyIncome: 30
+      hourlyCleanIncome: 260,
+      hourlyDirtyIncome: 160
     }),
     [CASINO_BUILDING_NAME]: Object.freeze({
       hourlyCleanIncome: 480,
@@ -4431,9 +4453,28 @@ window.Empire.Map = (() => {
     return 1 + (safeLevel - 1) * SCHOOL_BUILDING_CONFIG.upgradePctPerLevel;
   }
 
-  function getFitnessLevelMultiplier(level) {
-    const safeLevel = clamp(Math.floor(Number(level) || 1), 1, FITNESS_BUILDING_CONFIG.maxLevel);
-    return 1 + (safeLevel - 1) * FITNESS_BUILDING_CONFIG.upgradePctPerLevel;
+  function getFitnessLevelEffects(levelRaw) {
+    const level = clamp(Math.floor(Number(levelRaw) || 1), 1, FITNESS_BUILDING_CONFIG.maxLevel);
+    const incomeMultiplier =
+      1
+      + (level >= 2 ? 0.10 : 0)
+      + (level >= 4 ? 0.20 : 0);
+    const actionEffectMultiplier = level >= 3 ? 1.15 : 1;
+    const heatMultiplier = level >= 4 ? 1.05 : 1;
+    const permanentAttackPct = level >= 5 ? 10 : 0;
+    const permanentDefensePct = level >= 5 ? 5 : 0;
+    return {
+      level,
+      incomeMultiplier,
+      actionEffectMultiplier,
+      heatMultiplier,
+      permanentAttackPct,
+      permanentDefensePct
+    };
+  }
+
+  function getFitnessLevelMultiplier(levelRaw) {
+    return getFitnessLevelEffects(levelRaw).incomeMultiplier;
   }
 
   function getCasinoLevelMultiplier(level) {
@@ -4637,7 +4678,7 @@ window.Empire.Map = (() => {
 
   function isFitnessClubBaseName(value) {
     const normalized = normalizeBuildingTypeName(value);
-    return normalized === "fitness club" || normalized === "fitness centrum";
+    return normalized === "fitness club" || normalized === "fitnessclub" || normalized === "fitness centrum";
   }
 
   function isCasinoBaseName(value) {
@@ -5379,6 +5420,59 @@ window.Empire.Map = (() => {
     return normalizeBuildingKeyPart(districtId) || "unknown";
   }
 
+  function getOwnedFitnessGlobalBoostSnapshot(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    let attackBoostPct = 0;
+    let defenseBoostPct = 0;
+    let influenceBoostPct = 0;
+    let districtIncomeBoostPct = 0;
+
+    Object.entries(fitnessBuildingStore || {}).forEach(([instanceKey, rawState]) => {
+      const snapshot = sanitizeFitnessState(rawState, nowMs);
+      fitnessBuildingStore[instanceKey] = snapshot;
+      const levelEffects = getFitnessLevelEffects(snapshot.level);
+      const actionEffectMultiplier = Math.max(1, Number(levelEffects.actionEffectMultiplier || 1));
+      const effects = snapshot.effects || {};
+
+      attackBoostPct += Math.max(0, Number(levelEffects.permanentAttackPct || 0));
+      defenseBoostPct += Math.max(0, Number(levelEffects.permanentDefensePct || 0));
+
+      if (nowMs < Math.max(0, Number(effects.gangTrainingUntil || 0))) {
+        attackBoostPct += FITNESS_BUILDING_CONFIG.gangTrainingAttackBoostPct * actionEffectMultiplier;
+        defenseBoostPct += FITNESS_BUILDING_CONFIG.gangTrainingDefenseBoostPct * actionEffectMultiplier;
+      }
+      if (nowMs < Math.max(0, Number(effects.talentRecruitmentInfluenceUntil || 0))) {
+        influenceBoostPct += FITNESS_BUILDING_CONFIG.talentRecruitmentInfluenceBoostPct * actionEffectMultiplier;
+      }
+      if (nowMs < Math.max(0, Number(effects.talentRecruitmentIncomeUntil || 0))) {
+        districtIncomeBoostPct += FITNESS_BUILDING_CONFIG.talentRecruitmentDistrictIncomeBoostPct * actionEffectMultiplier;
+      }
+      if (nowMs < Math.max(0, Number(effects.dopingRushUntil || 0))) {
+        attackBoostPct += FITNESS_BUILDING_CONFIG.dopingRushAttackBoostPct * actionEffectMultiplier;
+      }
+      if (nowMs < Math.max(0, Number(effects.dopingCrashUntil || 0))) {
+        defenseBoostPct -= FITNESS_BUILDING_CONFIG.dopingCrashDefensePenaltyPct * actionEffectMultiplier;
+      }
+    });
+
+    return {
+      attackBoostPct,
+      defenseBoostPct,
+      influenceBoostPct,
+      districtIncomeBoostPct
+    };
+  }
+
+  function getFitnessCombatSnapshot(now = Date.now()) {
+    const snapshot = getOwnedFitnessGlobalBoostSnapshot(now);
+    return {
+      attackBoostPct: Number(snapshot.attackBoostPct || 0),
+      defenseBoostPct: Number(snapshot.defenseBoostPct || 0),
+      influenceBoostPct: Number(snapshot.influenceBoostPct || 0),
+      districtIncomeBoostPct: Number(snapshot.districtIncomeBoostPct || 0)
+    };
+  }
+
   function getDistrictCashIncomeBoostPct(districtOrId, now = Date.now()) {
     const districtRecord = resolveDistrictRecord(districtOrId);
     const districtKey = normalizeDistrictId(districtRecord?.id ?? districtOrId);
@@ -5394,6 +5488,8 @@ window.Empire.Map = (() => {
       if (nowMs >= Number(snapshot.effects.financialNetworkUntil || 0)) return;
       boostPct += EXCHANGE_BUILDING_CONFIG.actionBoosts.districtIncomeBonusPct * getExchangeLevelMultiplier(snapshot.level);
     });
+
+    boostPct += Math.max(0, Number(getOwnedFitnessGlobalBoostSnapshot(nowMs).districtIncomeBoostPct || 0));
 
     if (districtKey) {
       const policePenaltyPct = getPoliceRaidIncomePenaltyPctForDistrict(districtKey, nowMs);
@@ -6411,14 +6507,20 @@ window.Empire.Map = (() => {
   function syncFitnessIncome(instanceState, totalGangMembers, now = Date.now(), districtOrId = null) {
     const stateRef = instanceState;
     const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
-    const levelMultiplier = getFitnessLevelMultiplier(stateRef.level);
+    const levelEffects = getFitnessLevelEffects(stateRef.level);
     const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(districtOrId, nowMs);
     const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
-    const premiumUntil = Number(stateRef.effects.premiumUntil || 0);
-    const trainingUntil = Number(stateRef.effects.trainingUntil || 0);
-    const premiumActive = nowMs < premiumUntil;
-    const trainingActive = stateRef.trainingBuffActive && nowMs < trainingUntil;
-    stateRef.trainingBuffActive = trainingActive;
+    const talentRecruitmentIncomeActive = nowMs < Number(stateRef.effects.talentRecruitmentIncomeUntil || 0);
+    const talentRecruitmentInfluenceActive = nowMs < Number(stateRef.effects.talentRecruitmentInfluenceUntil || 0);
+    const actionEffectMultiplier = Math.max(1, Number(levelEffects.actionEffectMultiplier || 1));
+    const talentRecruitmentIncomeBoostPct = talentRecruitmentIncomeActive
+      ? FITNESS_BUILDING_CONFIG.talentRecruitmentDistrictIncomeBoostPct * actionEffectMultiplier
+      : 0;
+    const incomeMultiplier = Math.max(0, 1 + talentRecruitmentIncomeBoostPct / 100);
+    const talentRecruitmentInfluenceBoostPct = talentRecruitmentInfluenceActive
+      ? FITNESS_BUILDING_CONFIG.talentRecruitmentInfluenceBoostPct * actionEffectMultiplier
+      : 0;
+    const influenceMultiplier = Math.max(0, 1 + talentRecruitmentInfluenceBoostPct / 100);
 
     let incomeFrom = Number(stateRef.lastIncomeAt || nowMs);
     if (!Number.isFinite(incomeFrom) || incomeFrom > nowMs) {
@@ -6428,18 +6530,8 @@ window.Empire.Map = (() => {
     let cleanIncomeGained = 0;
     let dirtyIncomeGained = 0;
     if (incomeFrom < nowMs) {
-      const memberSteps = Math.max(0, Math.floor(Math.max(0, Number(totalGangMembers || 0)) / 10));
-      const baseHourlyCleanIncome =
-        (FITNESS_BUILDING_CONFIG.baseCleanIncomePerHour
-          + memberSteps * FITNESS_BUILDING_CONFIG.cleanIncomePerTenMembersPerHour)
-        * levelMultiplier;
-      const baseHourlyDirtyIncome =
-        (FITNESS_BUILDING_CONFIG.baseDirtyIncomePerHour
-          + memberSteps * FITNESS_BUILDING_CONFIG.dirtyIncomePerTenMembersPerHour)
-        * levelMultiplier;
-      const premiumBoostPct = premiumActive ? FITNESS_BUILDING_CONFIG.premiumIncomeBoostPct * levelMultiplier : 0;
-      const trainingPenaltyPct = trainingActive ? FITNESS_BUILDING_CONFIG.trainingIncomePenaltyPct * levelMultiplier : 0;
-      const incomeMultiplier = Math.max(0, 1 + premiumBoostPct / 100 - trainingPenaltyPct / 100);
+      const baseHourlyCleanIncome = FITNESS_BUILDING_CONFIG.baseCleanIncomePerHour * levelEffects.incomeMultiplier;
+      const baseHourlyDirtyIncome = FITNESS_BUILDING_CONFIG.baseDirtyIncomePerHour * levelEffects.incomeMultiplier;
       const hoursElapsed = (nowMs - incomeFrom) / 3600000;
       const cleanRaw =
         hoursElapsed * (baseHourlyCleanIncome * incomeMultiplier * districtIncomeMultiplier)
@@ -6458,7 +6550,8 @@ window.Empire.Map = (() => {
       payoutDirectBuildingIncome(cleanIncomeGained, dirtyIncomeGained);
     }
 
-    applyBuildingInfluenceTick(stateRef, nowMs, BUILDING_INFLUENCE_PER_HOUR);
+    const influencePerHour = FITNESS_BUILDING_CONFIG.baseInfluencePerHour * influenceMultiplier;
+    applyBuildingInfluenceTick(stateRef, nowMs, influencePerHour);
 
     return { cleanIncomeGained, dirtyIncomeGained };
   }
@@ -6471,50 +6564,71 @@ window.Empire.Map = (() => {
     syncFitnessIncome(snapshot, totalGangMembers, now, district || context?.districtId);
     persistFitnessState(key, snapshot);
 
-    const levelMultiplier = getFitnessLevelMultiplier(snapshot.level);
-    const premiumActive = now < Number(snapshot.effects.premiumUntil || 0);
-    const trainingActive = snapshot.trainingBuffActive && now < Number(snapshot.effects.trainingUntil || 0);
-    const memberSteps = Math.max(0, Math.floor(totalGangMembers / 10));
-    const baseHourlyCleanIncome =
-      (FITNESS_BUILDING_CONFIG.baseCleanIncomePerHour
-        + memberSteps * FITNESS_BUILDING_CONFIG.cleanIncomePerTenMembersPerHour)
-      * levelMultiplier;
-    const baseHourlyDirtyIncome =
-      (FITNESS_BUILDING_CONFIG.baseDirtyIncomePerHour
-        + memberSteps * FITNESS_BUILDING_CONFIG.dirtyIncomePerTenMembersPerHour)
-      * levelMultiplier;
-    const premiumIncomeBonusPct = FITNESS_BUILDING_CONFIG.premiumIncomeBoostPct * levelMultiplier;
-    const trainingIncomePenaltyPct = FITNESS_BUILDING_CONFIG.trainingIncomePenaltyPct * levelMultiplier;
-    const trainingCombatBoostPct = FITNESS_BUILDING_CONFIG.trainingCombatBoostPct * levelMultiplier;
-    const currentIncomeMultiplier = Math.max(
-      0,
-      1
-      + (premiumActive ? premiumIncomeBonusPct : 0) / 100
-      - (trainingActive ? trainingIncomePenaltyPct : 0) / 100
-    );
-    const hourlyCleanIncome = baseHourlyCleanIncome * currentIncomeMultiplier;
-    const hourlyDirtyIncome = baseHourlyDirtyIncome * currentIncomeMultiplier;
+    const levelEffects = getFitnessLevelEffects(snapshot.level);
+    const actionEffectMultiplier = Math.max(1, Number(levelEffects.actionEffectMultiplier || 1));
+    const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(district || context?.districtId, now);
+    const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
+    const gangTrainingActive = now < Number(snapshot.effects.gangTrainingUntil || 0);
+    const talentRecruitmentInfluenceActive = now < Number(snapshot.effects.talentRecruitmentInfluenceUntil || 0);
+    const talentRecruitmentIncomeActive = now < Number(snapshot.effects.talentRecruitmentIncomeUntil || 0);
+    const dopingRushActive = now < Number(snapshot.effects.dopingRushUntil || 0);
+    const dopingCrashActive = now < Number(snapshot.effects.dopingCrashUntil || 0);
+
+    const gangTrainingAttackBoostPct = FITNESS_BUILDING_CONFIG.gangTrainingAttackBoostPct * actionEffectMultiplier;
+    const gangTrainingDefenseBoostPct = FITNESS_BUILDING_CONFIG.gangTrainingDefenseBoostPct * actionEffectMultiplier;
+    const talentRecruitmentInfluenceBoostPct = FITNESS_BUILDING_CONFIG.talentRecruitmentInfluenceBoostPct * actionEffectMultiplier;
+    const talentRecruitmentIncomeBoostPct = FITNESS_BUILDING_CONFIG.talentRecruitmentDistrictIncomeBoostPct * actionEffectMultiplier;
+    const dopingRushAttackBoostPct = FITNESS_BUILDING_CONFIG.dopingRushAttackBoostPct * actionEffectMultiplier;
+    const dopingCrashDefensePenaltyPct = FITNESS_BUILDING_CONFIG.dopingCrashDefensePenaltyPct * actionEffectMultiplier;
+
+    const currentIncomeMultiplier = Math.max(0, 1 + (talentRecruitmentIncomeActive ? talentRecruitmentIncomeBoostPct : 0) / 100);
+    const baseHourlyCleanIncome = FITNESS_BUILDING_CONFIG.baseCleanIncomePerHour * levelEffects.incomeMultiplier;
+    const baseHourlyDirtyIncome = FITNESS_BUILDING_CONFIG.baseDirtyIncomePerHour * levelEffects.incomeMultiplier;
+    const hourlyCleanIncome = baseHourlyCleanIncome * currentIncomeMultiplier * districtIncomeMultiplier;
+    const hourlyDirtyIncome = baseHourlyDirtyIncome * currentIncomeMultiplier * districtIncomeMultiplier;
     const hourlyIncome = hourlyCleanIncome + hourlyDirtyIncome;
     const dailyIncome = hourlyIncome * 24;
     const nextLevel = snapshot.level < FITNESS_BUILDING_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? FITNESS_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0 : 0;
 
     const effects = [];
-    if (premiumActive) {
+    if (gangTrainingActive) {
       effects.push(
-        `Prémiové členství (+${formatDecimalValue(premiumIncomeBonusPct, 2)}% income, ${formatDurationLabel(
-          snapshot.effects.premiumUntil - now
+        `Trénink gangu (ATK +${formatDecimalValue(gangTrainingAttackBoostPct, 2)}%, DEF +${formatDecimalValue(gangTrainingDefenseBoostPct, 2)}%, ${formatDurationLabel(
+          snapshot.effects.gangTrainingUntil - now
         )})`
       );
     }
-    if (trainingActive) {
+    if (talentRecruitmentInfluenceActive || talentRecruitmentIncomeActive) {
+      const influencePart = talentRecruitmentInfluenceActive
+        ? `Vliv +${formatDecimalValue(talentRecruitmentInfluenceBoostPct, 2)}%`
+        : "Vliv bonus skončil";
+      const incomePart = talentRecruitmentIncomeActive
+        ? `district income +${formatDecimalValue(talentRecruitmentIncomeBoostPct, 2)}%`
+        : "district income bonus skončil";
+      const influenceLeft = Math.max(0, Number(snapshot.effects.talentRecruitmentInfluenceUntil || 0) - now);
+      const incomeLeft = Math.max(0, Number(snapshot.effects.talentRecruitmentIncomeUntil || 0) - now);
+      effects.push(`Nábor talentu (${influencePart}, ${incomePart}, ${formatDurationLabel(Math.max(influenceLeft, incomeLeft))})`);
+    }
+    if (dopingRushActive) {
       effects.push(
-        `Intenzivní trénink (+${formatDecimalValue(trainingCombatBoostPct, 2)}% ATK/DEF, -${formatDecimalValue(
-          trainingIncomePenaltyPct,
-          2
-        )}% income, ${formatDurationLabel(snapshot.effects.trainingUntil - now)})`
+        `Doping (+${formatDecimalValue(dopingRushAttackBoostPct, 2)}% ATK, ${formatDurationLabel(snapshot.effects.dopingRushUntil - now)})`
       );
     }
+    if (dopingCrashActive) {
+      effects.push(
+        `Doping crash (-${formatDecimalValue(dopingCrashDefensePenaltyPct, 2)}% DEF, ${formatDurationLabel(snapshot.effects.dopingCrashUntil - now)})`
+      );
+    }
+
+    const totalAttackBoostPct =
+      Math.max(0, Number(levelEffects.permanentAttackPct || 0))
+      + (gangTrainingActive ? gangTrainingAttackBoostPct : 0)
+      + (dopingRushActive ? dopingRushAttackBoostPct : 0);
+    const totalDefenseBoostPct =
+      Math.max(0, Number(levelEffects.permanentDefensePct || 0))
+      + (gangTrainingActive ? gangTrainingDefenseBoostPct : 0)
+      - (dopingCrashActive ? dopingCrashDefensePenaltyPct : 0);
 
     return {
       ...fallback,
@@ -6525,10 +6639,11 @@ window.Empire.Map = (() => {
       hourlyIncome,
       dailyIncome,
       info:
-        "Fitness centrum je ekonomická i bojová podpůrná budova. Generuje stabilní income podle velikosti gangu a přes akce umí krátkodobě zvednout výdělek nebo posílit bojovou sílu všech tvých districtů. Upgrady zvyšují income, heat i sílu pozitivních a negativních efektů akcí.",
+        "Síla, disciplína a respekt. Fitness Club je bojová utility budova s pevnými příjmy, tlakem na heat a taktickými buffy pro útok, obranu, vliv i district income.",
       specialActions: [
-        "Prémiové členství: Cooldown 4h, trvá 2h, zvýší income fitness centra o +50 % (škáluje s levelem) a přidá +2 heat (škáluje s levelem).",
-        "Intenzivní trénink: Cooldown 6h, trvá 2h, dá +10 % síly pro útok/obranu ve všech tvých districtech (škáluje s levelem), ale fitness centrum má během efektu o 20 % nižší income (škáluje s levelem)."
+        "Trénink gangu: Cooldown 8h, trvá 2h, +10% ATK a +10% DEF (na L3+ silnější), heat +5.",
+        "Nábor talentu: Cooldown 10h, vliv +10% na 2h, district income +2% na 4h (na L3+ silnější), heat +4.",
+        "Doping: Cooldown 12h, +35% ATK na 1h (na L3+ silnější), po skončení -10% DEF na 1h, heat +8."
       ],
       mechanics: {
         type: "fitness-club",
@@ -6537,20 +6652,34 @@ window.Empire.Map = (() => {
         nextLevel,
         nextUpgradeCost,
         heatPerDay:
-          FITNESS_BUILDING_CONFIG.baseHeatPerDay * levelMultiplier + Math.max(0, Number(snapshot.extraHeat || 0)),
+          FITNESS_BUILDING_CONFIG.baseHeatPerDay * levelEffects.heatMultiplier + Math.max(0, Number(snapshot.extraHeat || 0)),
         effectsLabel: effects.length ? effects.join(" • ") : "Žádné",
         cooldowns: {
-          premium: Math.max(0, Number(snapshot.cooldowns.premium || 0) - now),
-          training: Math.max(0, Number(snapshot.cooldowns.training || 0) - now)
+          gangTraining: Math.max(0, Number(snapshot.cooldowns.gangTraining || 0) - now),
+          talentRecruitment: Math.max(0, Number(snapshot.cooldowns.talentRecruitment || 0) - now),
+          doping: Math.max(0, Number(snapshot.cooldowns.doping || 0) - now)
         },
-        premiumIncomeBonusPct,
-        trainingIncomePenaltyPct,
-        trainingCombatBoostPct,
+        gangTrainingAttackBoostPct,
+        gangTrainingDefenseBoostPct,
+        talentRecruitmentInfluenceBoostPct,
+        talentRecruitmentIncomeBoostPct,
+        dopingRushAttackBoostPct,
+        dopingCrashDefensePenaltyPct,
         currentIncomeMultiplier,
         hourlyCleanIncome,
         hourlyDirtyIncome,
-        trainingActive,
-        premiumActive
+        districtIncomeBoostPct,
+        levelIncomeMultiplier: levelEffects.incomeMultiplier,
+        actionEffectMultiplier,
+        permanentAttackPct: levelEffects.permanentAttackPct,
+        permanentDefensePct: levelEffects.permanentDefensePct,
+        totalAttackBoostPct,
+        totalDefenseBoostPct,
+        gangTrainingActive,
+        talentRecruitmentInfluenceActive,
+        talentRecruitmentIncomeActive,
+        dopingRushActive,
+        dopingCrashActive
       }
     };
   }
@@ -6563,49 +6692,76 @@ window.Empire.Map = (() => {
     const totalGangMembers = Number(window.Empire.UI?.getCurrentGangMembers?.() || 0);
     syncFitnessIncome(snapshot, totalGangMembers, now, district || context?.districtId);
 
-    const levelMultiplier = getFitnessLevelMultiplier(snapshot.level);
+    const levelEffects = getFitnessLevelEffects(snapshot.level);
+    const actionEffectMultiplier = Math.max(1, Number(levelEffects.actionEffectMultiplier || 1));
+    const heatMultiplier = Math.max(0.01, Number(levelEffects.heatMultiplier || 1));
     const toCooldownLeft = (until) => Math.max(0, Math.floor(Number(until || 0) - now));
 
     if (actionId === "1") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.premium);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.gangTraining);
       if (cooldownLeft > 0) {
         persistFitnessState(key, snapshot);
-        return { ok: false, message: `Prémiové členství je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Trénink gangu je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      snapshot.effects.premiumUntil = now + FITNESS_BUILDING_CONFIG.actionDurations.premium;
-      snapshot.cooldowns.premium = now + FITNESS_BUILDING_CONFIG.actionCooldowns.premium;
-      const addedHeat = FITNESS_BUILDING_CONFIG.premiumHeatAdded * levelMultiplier;
+      snapshot.effects.gangTrainingUntil = now + FITNESS_BUILDING_CONFIG.actionDurations.gangTraining;
+      snapshot.cooldowns.gangTraining = now + FITNESS_BUILDING_CONFIG.actionCooldowns.gangTraining;
+      const addedHeat = FITNESS_BUILDING_CONFIG.actionHeatAdded.gangTraining * heatMultiplier;
       snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + addedHeat;
       persistFitnessState(key, snapshot);
       return {
         ok: true,
-        message: `Prémiové členství aktivní na 2h. Income +${formatDecimalValue(
-          FITNESS_BUILDING_CONFIG.premiumIncomeBoostPct * levelMultiplier,
-          2
-        )} %, heat +${formatDecimalValue(addedHeat, 2)}.`
+        message:
+          `Trénink gangu aktivní na 2h. `
+          + `ATK +${formatDecimalValue(FITNESS_BUILDING_CONFIG.gangTrainingAttackBoostPct * actionEffectMultiplier, 2)}%, `
+          + `DEF +${formatDecimalValue(FITNESS_BUILDING_CONFIG.gangTrainingDefenseBoostPct * actionEffectMultiplier, 2)}%, `
+          + `heat +${formatDecimalValue(addedHeat, 2)}.`
       };
     }
 
     if (actionId === "2") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.training);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.talentRecruitment);
       if (cooldownLeft > 0) {
         persistFitnessState(key, snapshot);
-        return { ok: false, message: `Intenzivní trénink je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Nábor talentu je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      snapshot.trainingBuffActive = true;
-      snapshot.effects.trainingUntil = now + FITNESS_BUILDING_CONFIG.actionDurations.training;
-      snapshot.cooldowns.training = now + FITNESS_BUILDING_CONFIG.actionCooldowns.training;
+      snapshot.effects.talentRecruitmentInfluenceUntil = now + FITNESS_BUILDING_CONFIG.actionDurations.talentRecruitmentInfluence;
+      snapshot.effects.talentRecruitmentIncomeUntil = now + FITNESS_BUILDING_CONFIG.actionDurations.talentRecruitmentIncome;
+      snapshot.cooldowns.talentRecruitment = now + FITNESS_BUILDING_CONFIG.actionCooldowns.talentRecruitment;
+      const addedHeat = FITNESS_BUILDING_CONFIG.actionHeatAdded.talentRecruitment * heatMultiplier;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + addedHeat;
       snapshot.lastIncomeAt = now;
+      snapshot.lastInfluenceAt = now;
       persistFitnessState(key, snapshot);
       return {
         ok: true,
-        message: `Intenzivní trénink aktivní na 2h. Síla +${formatDecimalValue(
-          FITNESS_BUILDING_CONFIG.trainingCombatBoostPct * levelMultiplier,
-          2
-        )}% (útok/obrana), income fitness -${formatDecimalValue(
-          FITNESS_BUILDING_CONFIG.trainingIncomePenaltyPct * levelMultiplier,
-          2
-        )}%.`
+        message:
+          `Nábor talentu aktivní: `
+          + `vliv +${formatDecimalValue(FITNESS_BUILDING_CONFIG.talentRecruitmentInfluenceBoostPct * actionEffectMultiplier, 2)}% na 2h, `
+          + `district income +${formatDecimalValue(FITNESS_BUILDING_CONFIG.talentRecruitmentDistrictIncomeBoostPct * actionEffectMultiplier, 2)}% na 4h, `
+          + `heat +${formatDecimalValue(addedHeat, 2)}.`
+      };
+    }
+
+    if (actionId === "3") {
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.doping);
+      if (cooldownLeft > 0) {
+        persistFitnessState(key, snapshot);
+        return { ok: false, message: `Doping je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+      }
+      const rushUntil = now + FITNESS_BUILDING_CONFIG.actionDurations.dopingRush;
+      snapshot.effects.dopingRushUntil = rushUntil;
+      snapshot.effects.dopingCrashUntil = rushUntil + FITNESS_BUILDING_CONFIG.actionDurations.dopingCrash;
+      snapshot.cooldowns.doping = now + FITNESS_BUILDING_CONFIG.actionCooldowns.doping;
+      const addedHeat = FITNESS_BUILDING_CONFIG.actionHeatAdded.doping * heatMultiplier;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + addedHeat;
+      persistFitnessState(key, snapshot);
+      return {
+        ok: true,
+        message:
+          `Doping aktivní na 1h. `
+          + `ATK +${formatDecimalValue(FITNESS_BUILDING_CONFIG.dopingRushAttackBoostPct * actionEffectMultiplier, 2)}%, `
+          + `poté 1h DEF -${formatDecimalValue(FITNESS_BUILDING_CONFIG.dopingCrashDefensePenaltyPct * actionEffectMultiplier, 2)}%, `
+          + `heat +${formatDecimalValue(addedHeat, 2)}.`
       };
     }
 
@@ -6613,7 +6769,7 @@ window.Empire.Map = (() => {
       const nextLevel = Math.floor(snapshot.level || 1) + 1;
       if (nextLevel > FITNESS_BUILDING_CONFIG.maxLevel) {
         persistFitnessState(key, snapshot);
-        return { ok: false, message: "Fitness centrum je na maximálním levelu." };
+        return { ok: false, message: "Fitness Club je na maximálním levelu." };
       }
       const cost = Math.max(0, Number(FITNESS_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
       const spend = window.Empire.UI?.trySpendCleanCash;
@@ -6628,7 +6784,7 @@ window.Empire.Map = (() => {
       }
       snapshot.level = nextLevel;
       persistFitnessState(key, snapshot);
-      return { ok: true, message: `Fitness centrum vylepšeno na level ${nextLevel} za $${cost}.` };
+      return { ok: true, message: `Fitness Club vylepšen na level ${nextLevel} za $${cost}.` };
     }
 
     persistFitnessState(key, snapshot);
@@ -14543,7 +14699,7 @@ window.Empire.Map = (() => {
       return;
     }
 
-    if (collectBtn && (mechanicsType === "apartment-block" || mechanicsType === "school")) {
+    if (collectBtn && mechanicsType === "school") {
       collectBtn.classList.remove("hidden");
       collectBtn.disabled = mechanics.storedMembers <= 0;
       collectBtn.title = mechanics.storedMembers <= 0 ? "Budova nemá nasbírané členy." : "";
@@ -14594,13 +14750,9 @@ window.Empire.Map = (() => {
       applyActionButtonState(action2Btn, "Zrychlený kurz chemie", mechanics.cooldowns?.chemistry);
       applyActionButtonState(action3Btn, "Večerní program", mechanics.cooldowns?.evening);
     } else if (mechanicsType === "fitness-club") {
-      applyActionButtonState(action1Btn, "Prémiové členství", mechanics.cooldowns?.premium);
-      applyActionButtonState(action2Btn, "Intenzivní trénink", mechanics.cooldowns?.training);
-      if (action3Btn) {
-        action3Btn.classList.add("hidden");
-        action3Btn.disabled = true;
-        action3Btn.title = "";
-      }
+      applyActionButtonState(action1Btn, "Trénink gangu", mechanics.cooldowns?.gangTraining);
+      applyActionButtonState(action2Btn, "Nábor talentu", mechanics.cooldowns?.talentRecruitment);
+      applyActionButtonState(action3Btn, "Doping", mechanics.cooldowns?.doping);
     } else if (mechanicsType === "casino") {
       applyActionButtonState(action1Btn, "VIP Turnaj", mechanics.cooldowns?.vip);
       applyActionButtonState(action2Btn, "Praní špinavých peněz", mechanics.cooldowns?.laundering);
@@ -14779,11 +14931,15 @@ window.Empire.Map = (() => {
     heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     if (mechanicsType === "fitness-club") {
       if (storedLabel) storedLabel.textContent = "Bojový bonus";
-      if (productionLabel) productionLabel.textContent = "Income multiplikátor";
-      stored.textContent = mechanics.trainingActive
-        ? `+${formatDecimalValue(mechanics.trainingCombatBoostPct, 2)}%`
-        : "0%";
-      production.textContent = `x${formatDecimalValue(mechanics.currentIncomeMultiplier, 2)}`;
+      if (productionLabel) productionLabel.textContent = "Income bonus";
+      const attackBoost = Number(mechanics.totalAttackBoostPct || 0);
+      const defenseBoost = Number(mechanics.totalDefenseBoostPct || 0);
+      const defensePrefix = defenseBoost >= 0 ? "+" : "";
+      stored.textContent = `ATK +${formatDecimalValue(attackBoost, 2)}% • DEF ${defensePrefix}${formatDecimalValue(defenseBoost, 2)}%`;
+      const districtBoost = Math.max(0, Number(mechanics.talentRecruitmentIncomeActive ? mechanics.talentRecruitmentIncomeBoostPct : 0));
+      production.textContent =
+        `x${formatDecimalValue(mechanics.currentIncomeMultiplier, 2)}`
+        + (districtBoost > 0 ? ` • district +${formatDecimalValue(districtBoost, 2)}%` : "");
     } else if (mechanicsType === "casino") {
       if (storedLabel) storedLabel.textContent = "Praní bonus";
       if (productionLabel) productionLabel.textContent = "Income multiplikátor";
@@ -15008,8 +15164,9 @@ window.Empire.Map = (() => {
     }
     if (mechanicsType === "fitness-club") {
       return [
-        "Prémiové členství: Cooldown 4h, trvá 2h, zvýší income fitness centra o +50 % (škáluje s levelem) a přidá +2 heat (škáluje s levelem).",
-        "Intenzivní trénink: Cooldown 6h, trvá 2h, dá +10 % síly pro útok/obranu ve všech tvých districtech (škáluje s levelem), ale fitness centrum má během efektu o 20 % nižší income (škáluje s levelem)."
+        "Trénink gangu: Cooldown 8h, trvá 2h, +10% útok a +10% obrana (na L3+ silnější), heat +5.",
+        "Nábor talentu: Cooldown 10h, +10% vliv na 2h a +2% district income na 4h (na L3+ silnější), heat +4.",
+        "Doping: Cooldown 12h, +35% útok na 1h (na L3+ silnější), potom -10% obrana na 1h, heat +8."
       ];
     }
     if (mechanicsType === "casino") {
@@ -15565,14 +15722,21 @@ window.Empire.Map = (() => {
         || mechanicsType === "factory";
       if (supportsTopTitleActions) {
         const supportsTopCollectAction =
-          mechanicsType === "armory"
+          mechanicsType === "apartment-block"
+          || mechanicsType === "school"
+          || mechanicsType === "armory"
           || mechanicsType === "pharmacy"
           || mechanicsType === "drug-lab"
           || mechanicsType === "factory";
-        const canCollect = supportsTopCollectAction && Math.max(0, Number(mechanics.storedTotal || 0)) > 0;
+        const collectStoredAmount =
+          mechanicsType === "apartment-block" || mechanicsType === "school"
+            ? Math.max(0, Number(mechanics.storedMembers || 0))
+            : Math.max(0, Number(mechanics.storedTotal || 0));
+        const canCollect = supportsTopCollectAction && collectStoredAmount > 0;
         const canUpgrade = Boolean(mechanics.nextLevel && Number(mechanics.nextUpgradeCost || 0) > 0);
         const collectVerb =
-          mechanicsType === "armory" ? "zbraně"
+          mechanicsType === "apartment-block" || mechanicsType === "school" ? "členy"
+          : mechanicsType === "armory" ? "zbraně"
           : mechanicsType === "pharmacy" ? "suroviny"
           : mechanicsType === "factory" ? "materiály"
           : "drogy";
@@ -15686,7 +15850,7 @@ window.Empire.Map = (() => {
       } else if (mechanicsType === "school") {
         subtitle = "Náborová a podpůrná budova, která zesiluje districtové mechaniky.";
       } else if (mechanicsType === "fitness-club") {
-        subtitle = "Ekonomicko-bojová podpora: krátkodobé income boosty a tréninkový buff pro tvoje districty.";
+        subtitle = "Combat podpora: trénink, nábor a rizikový doping pro tlak v útoku i obraně.";
       } else if (mechanicsType === "casino") {
         subtitle = "Finanční motor pro čisté i špinavé cashflow s VIP boostem a praním peněz.";
       } else if (mechanicsType === "arcade") {
@@ -18670,6 +18834,7 @@ window.Empire.Map = (() => {
     clearBountyDistrictMarkers,
     getPoliceActionSnapshot,
     getFactoryBoostSnapshot,
-    useFactoryBoost
+    useFactoryBoost,
+    getFitnessCombatSnapshot
   };
 })();

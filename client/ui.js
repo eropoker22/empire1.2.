@@ -154,6 +154,8 @@ window.Empire.UI = (() => {
   function resolveActivatedAttackSpecialEffects(selection, district) {
     const attackSpecial = getAttackSpecialModifiers(selection);
     const defenseSpecial = resolveDistrictDefenseSpecialModifiers(district?.id);
+    const fitnessSnapshot = window.Empire.Map?.getFitnessCombatSnapshot?.() || null;
+    const fitnessAttackBoostPct = Math.max(0, Number(fitnessSnapshot?.attackBoostPct || 0));
     const effects = [];
     if (Number(attackSpecial.grenadeDefenseIgnorePct || 0) > 0) {
       effects.push(`Granát ignoroval ${formatDecimalValue(attackSpecial.grenadeDefenseIgnorePct, 2)} % obrany`);
@@ -172,6 +174,9 @@ window.Empire.UI = (() => {
     }
     if (Number(defenseSpecial.defenderMemberLossReductionPct || 0) > 0) {
       effects.push(`Vesty snížily ztráty obránců o ${formatDecimalValue(defenseSpecial.defenderMemberLossReductionPct, 2)} %`);
+    }
+    if (fitnessAttackBoostPct > 0) {
+      effects.push(`Fitness Club boost přidal +${formatDecimalValue(fitnessAttackBoostPct, 2)} % síly útoku`);
     }
     return effects;
   }
@@ -201,13 +206,17 @@ window.Empire.UI = (() => {
   function calculateAttackPowerFromSelection(selection) {
     const safeSelection = selection && typeof selection === "object" ? selection : {};
     const special = getAttackSpecialModifiers(safeSelection);
-    const rawPower = attackWeaponStats.reduce((sum, item) => {
+    const basePower = attackWeaponStats.reduce((sum, item) => {
       const count = getSelectedAttackWeaponCount(safeSelection, item.name);
       return sum + (count * Number(item.power || 0));
     }, 0) + special.smgBonusPower;
+    const fitnessSnapshot = window.Empire.Map?.getFitnessCombatSnapshot?.() || null;
+    const fitnessAttackBoostPct = Math.max(0, Number(fitnessSnapshot?.attackBoostPct || 0));
+    const rawPower = basePower * Math.max(0, 1 + fitnessAttackBoostPct / 100);
     return {
       rawPower,
-      special
+      special,
+      fitnessAttackBoostPct
     };
   }
   const DEMO_WEAPON_STACK_SIZE = 10;
@@ -907,7 +916,7 @@ window.Empire.UI = (() => {
       "Lékárna",
       "Kasino",
       "Autosalon",
-      "Fitness club",
+      "Fitness Club",
       "Směnárna",
       "Kancelářský blok"
     ],
@@ -1417,7 +1426,7 @@ window.Empire.UI = (() => {
         key: "early-stable-1",
         tier: "early",
         title: "Stabilní provoz",
-        buildings: ["Restaurace", "Fitness club"]
+        buildings: ["Restaurace", "Fitness Club"]
       },
       {
         key: "early-stable-2",
@@ -1435,7 +1444,7 @@ window.Empire.UI = (() => {
         key: "early-safe-3",
         tier: "early",
         title: "Bezpečný mix",
-        buildings: ["Restaurace", "Lékárna", "Fitness club"]
+        buildings: ["Restaurace", "Lékárna", "Fitness Club"]
       },
       {
         key: "early-launder",
@@ -2386,7 +2395,7 @@ window.Empire.UI = (() => {
 
   const BLACKOUT_BUILDING_MINUTE_INCOME_RULES = Object.freeze({
     "Autosalon": Object.freeze({ clean: 5, dirty: 1 }),
-    "Fitness club": Object.freeze({ clean: 6, dirty: 0.5 }),
+    "Fitness Club": Object.freeze({ clean: 6, dirty: 0.5 }),
     "Herna": Object.freeze({ clean: 6, dirty: 1.2 }),
     "Kancelářský blok": Object.freeze({ clean: 6, dirty: 1 }),
     "Kasino": Object.freeze({ clean: 8, dirty: 2.2 }),
@@ -11819,7 +11828,7 @@ window.Empire.UI = (() => {
     const selfEntry = resolveDistrictDefenseEntryByKeys(districtStore, selfKeys);
     const allyEntry = resolveDistrictDefenseEntryByKeys(districtStore, allyKeys);
 
-    const mapEntry = (entry, fallbackLabel) => {
+    const mapEntry = (entry, fallbackLabel, options = {}) => {
       if (!entry || typeof entry !== "object") {
         return {
           label: fallbackLabel,
@@ -11833,7 +11842,9 @@ window.Empire.UI = (() => {
         ? Math.max(0, Math.floor(Number(entry.totalWeapons)))
         : countSelectedDefenseWeapons(entry.weaponCounts || {});
       const members = Math.max(0, Math.floor(Number(entry.members) || 0));
-      const power = Math.max(0, Math.floor(Number(entry.power) || 0));
+      const basePower = Math.max(0, Math.floor(Number(entry.power) || 0));
+      const defenseBoostPct = Math.max(0, Number(options?.defenseBoostPct || 0));
+      const power = Math.max(0, Math.floor(basePower * (1 + defenseBoostPct / 100)));
       return {
         label: fallbackLabel,
         weapons,
@@ -11843,8 +11854,11 @@ window.Empire.UI = (() => {
       };
     };
 
+    const fitnessSnapshot = window.Empire.Map?.getFitnessCombatSnapshot?.() || null;
+    const selfDefenseBoostPct = Math.max(0, Number(fitnessSnapshot?.defenseBoostPct || 0));
+
     return {
-      self: mapEntry(selfEntry, "Ty"),
+      self: mapEntry(selfEntry, "Ty", { defenseBoostPct: selfDefenseBoostPct }),
       ally: mapEntry(allyEntry, "Spojenec")
     };
   }
@@ -14107,7 +14121,7 @@ window.Empire.UI = (() => {
   }
 
   function assignCommercialFitnessClubNames(districts) {
-    assignNamedCommercialBuildings(districts, "Fitness club", namedCommercialFitnessClubs);
+    assignNamedCommercialBuildings(districts, "Fitness Club", namedCommercialFitnessClubs);
   }
 
   function assignCommercialOfficeBlockNames(districts) {
