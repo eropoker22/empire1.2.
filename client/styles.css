@@ -11119,6 +11119,71 @@ html:has(body.auth-body--faction) {
   min-height: 100%;
 }
 
+#attack-modal .attack-modal__launch-inline-btn[data-attack-launch] {
+  border-color: rgba(248, 113, 113, 0.42);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    linear-gradient(135deg, rgba(127, 29, 29, 0.88), rgba(24, 24, 27, 0.84));
+  color: #fff1f2;
+  backdrop-filter: blur(10px) saturate(125%);
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  box-shadow:
+    0 18px 36px rgba(127, 29, 29, 0.3),
+    0 0 20px rgba(248, 113, 113, 0.16),
+    inset 0 1px 0 rgba(254, 202, 202, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+#attack-modal .attack-modal__launch-inline-btn[data-attack-launch]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(254, 202, 202, 0.08), transparent 38%, transparent 72%, rgba(248, 113, 113, 0.12));
+  pointer-events: none;
+}
+
+#attack-modal .attack-modal__launch-inline-btn[data-attack-launch]:hover {
+  border-color: rgba(252, 165, 165, 0.62);
+  color: #ffffff;
+  transform: none !important;
+  box-shadow:
+    0 22px 42px rgba(127, 29, 29, 0.36),
+    0 0 24px rgba(248, 113, 113, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.06);
+}
+
+#district-defense-modal .attack-modal__launch-inline-btn[data-defense-launch] {
+  border-color: rgba(96, 165, 250, 0.42);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    linear-gradient(180deg, rgba(37, 99, 235, 0.86), rgba(29, 78, 216, 0.68));
+  backdrop-filter: blur(10px) saturate(125%);
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  box-shadow:
+    0 16px 34px rgba(37, 99, 235, 0.24),
+    inset 0 1px 0 rgba(191, 219, 254, 0.26),
+    inset 0 0 0 1px rgba(59, 130, 246, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+#district-defense-modal .attack-modal__launch-inline-btn[data-defense-launch]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(125, 211, 252, 0.18), transparent 36%, transparent 68%, rgba(191, 219, 254, 0.16));
+  pointer-events: none;
+}
+
+#district-defense-modal .attack-modal__launch-inline-btn[data-defense-launch]:hover {
+  transform: none !important;
+  box-shadow:
+    0 20px 38px rgba(37, 99, 235, 0.28),
+    inset 0 1px 0 rgba(219, 234, 254, 0.32),
+    inset 0 0 0 1px rgba(96, 165, 250, 0.18);
+}
+
 .attack-modal__step-btn {
   width: 42px;
   height: 42px;
@@ -22674,5 +22739,40 @@ body.mobile-storage-modal-open {
   #attack-modal .modal__actions,
   #district-defense-modal .modal__actions {
     display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  #attack-modal .modal__actions.attack-modal__actions {
+    display: none !important;
+  }
+
+  #district-defense-modal .modal__actions.defense-modal__actions {
+    display: none !important;
+  }
+
+  #attack-modal .attack-modal__weapon--launch,
+  #district-defense-modal .attack-modal__weapon--launch {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    align-content: center !important;
+  }
+
+  #attack-modal .attack-modal__weapon-stepper--launch,
+  #district-defense-modal .attack-modal__weapon-stepper--launch {
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-self: end !important;
+    width: auto !important;
+    min-width: 148px !important;
+    margin-left: auto !important;
+  }
+
+  #attack-modal .attack-modal__launch-inline-btn,
+  #district-defense-modal .attack-modal__launch-inline-btn {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+    align-items: center !important;
   }
 }
