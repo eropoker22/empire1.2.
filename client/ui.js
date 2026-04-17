@@ -20092,7 +20092,12 @@ window.Empire.UI = (() => {
       const ownedDistricts = Array.isArray(options.ownedDistricts) ? options.ownedDistricts : getOwnedDistricts();
       if (!ownedDistricts.length) return null;
       const targetBaseName = normalizeBuildingName(baseName);
-      const forceFirstOwnedMatch = targetBaseName === "drug lab" || targetBaseName === "druglab";
+      const forceFirstOwnedMatch =
+        targetBaseName === "drug lab"
+        || targetBaseName === "druglab"
+        || targetBaseName === "lekarna"
+        || targetBaseName === "tovarna"
+        || targetBaseName === "zbrojovka";
 
       const selectedRaw = window.Empire.selectedDistrict;
       const selected = selectedRaw?.id != null

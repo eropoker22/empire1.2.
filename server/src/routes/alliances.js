@@ -28,7 +28,7 @@ router.get("/mine", auth, async (req, res) => {
 });
 
 router.get("/", auth, async (req, res) => {
-  const alliances = await listAlliances(req.user.id, req.gameMode);
+  const alliances = await listAlliances(req.user.id, req.gameMode, req.serverKey);
   res.json({ alliances });
 });
 

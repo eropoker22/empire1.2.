@@ -1,6 +1,8 @@
 const { pool } = require("../config/db");
 const { MAX_INFLUENCE } = require("../config/constants");
-const { getGameModeConfig, normalizeGameMode } = require("../config/gameModes");
+const { getGameModeConfig, normalizeGameMode, normalizeServerKey } = require("../config/gameModes");
+const { getCombatWeaponTiers } = require("../config/gameplayRules");
+const { assertDatabaseSchema } = require("../db/schemaGuard");
 const { ensureMoneySchema, spendPlayerMoney } = require("./moneyService");
 const { HEAT_BALANCE } = require("../config/drugs");
 const { ensureDistrictDestructionSchema } = require("./districtService");
@@ -12,22 +14,6 @@ const {
 
 const DISTRICT_DESTROY_CHANCE = 0.08;
 const DISTRICT_RAID_LOCK_MS = 2 * 60 * 60 * 1000;
-const COMBAT_WEAPON_TIERS = Object.freeze({
-  attack: [
-    { name: "Baseballová pálka", requiredMembers: 50, power: 10 },
-    { name: "Pouliční pistole", requiredMembers: 100, power: 20 },
-    { name: "Granát", requiredMembers: 150, power: 30 },
-    { name: "Samopal", requiredMembers: 200, power: 40 },
-    { name: "Bazuka", requiredMembers: 250, power: 50 }
-  ],
-  defense: [
-    { name: "Neprůstřelná vesta", requiredMembers: 50, power: 10 },
-    { name: "Ocelové barikády", requiredMembers: 100, power: 20 },
-    { name: "Bezpečnostní kamery", requiredMembers: 150, power: 30 },
-    { name: "Automatické kulometné stanoviště", requiredMembers: 200, power: 40 },
-    { name: "Alarm", requiredMembers: 250, power: 50 }
-  ]
-});
 const DISTRICT_POPULATION_WEIGHTS = Object.freeze({
   downtown: 3600,
   commercial: 2600,
@@ -35,61 +21,22 @@ const DISTRICT_POPULATION_WEIGHTS = Object.freeze({
   industrial: 1900,
   park: 1300
 });
-let attackTargetCooldownSchemaEnsured = false;
-let raidSchemaEnsured = false;
-let raidMemberLossSchemaEnsured = false;
-
-async function ensureAttackTargetCooldownSchema(client) {
-  if (attackTargetCooldownSchemaEnsured) return;
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS attack_target_cooldowns (
-      attacker_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      next_attack_at TIMESTAMP NOT NULL,
-      PRIMARY KEY (attacker_player_id, target_player_id)
-    )
-  `);
-  attackTargetCooldownSchemaEnsured = true;
+async function ensureAttackTargetCooldownSchema() {
+  return assertDatabaseSchema();
 }
 
-async function ensureRaidMemberLossSchema(client) {
-  if (raidMemberLossSchemaEnsured) return;
-  await client.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS raid_member_losses INT NOT NULL DEFAULT 0
-  `);
-  raidMemberLossSchemaEnsured = true;
+async function ensureRaidMemberLossSchema() {
+  return assertDatabaseSchema();
 }
 
-async function ensureRaidSchema(client) {
-  if (raidSchemaEnsured) return;
-  await ensureRaidMemberLossSchema(client);
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS raid_player_cooldowns (
-      player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
-      next_raid_at TIMESTAMP NOT NULL
-    )
-  `);
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS district_raid_locks (
-      district_id UUID PRIMARY KEY REFERENCES districts(id) ON DELETE CASCADE,
-      locked_until TIMESTAMP NOT NULL
-    )
-  `);
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS district_raid_stashes (
-      district_id UUID PRIMARY KEY REFERENCES districts(id) ON DELETE CASCADE,
-      materials INT NOT NULL DEFAULT 0,
-      drugs INT NOT NULL DEFAULT 0,
-      weapons INT NOT NULL DEFAULT 0,
-      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-    )
-  `);
-  raidSchemaEnsured = true;
+async function ensureRaidSchema() {
+  return assertDatabaseSchema();
 }
 
-async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
+async function attackDistrict({ playerId, districtId, gameMode = "war", serverKey = "" }) {
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = normalizeServerKey(mode, serverKey);
+  const combatWeaponTiers = getCombatWeaponTiers({ gameMode: mode, serverKey: resolvedServerKey });
   const modeConfig = getGameModeConfig(mode);
   await ensureMoneySchema();
   await ensureDrugSchema();
@@ -98,8 +45,8 @@ async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
 
   try {
     await client.query("BEGIN");
-    await ensureRaidMemberLossSchema(client);
-    await ensureAttackTargetCooldownSchema(client);
+    await ensureRaidMemberLossSchema();
+    await ensureAttackTargetCooldownSchema();
 
     const districtRes = await client.query(
       `SELECT d.id, d.type, d.influence_level, d.owner_player_id, d.is_destroyed,
@@ -124,11 +71,12 @@ async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
               p.drug_ghost_serum_active_dose AS owner_drug_ghost_serum_active_dose,
               p.drug_overdrive_x_active_dose AS owner_drug_overdrive_x_active_dose
        FROM districts d
-       LEFT JOIN players p ON p.id = d.owner_player_id
+       LEFT JOIN players p ON p.id = d.owner_player_id AND p.game_mode = d.game_mode AND p.server_key = d.server_key
        WHERE d.id = $1
          AND d.game_mode = $2
+         AND d.server_key = $3
        FOR UPDATE`,
-      [districtId, mode]
+      [districtId, mode, resolvedServerKey]
     );
 
     if (districtRes.rowCount === 0) {
@@ -143,8 +91,10 @@ async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
               drug_neon_dust_active_dose, drug_pulse_shot_active_dose, drug_velvet_smoke_active_dose, drug_ghost_serum_active_dose, drug_overdrive_x_active_dose
          FROM players
         WHERE id = $1
+          AND game_mode = $2
+          AND server_key = $3
         FOR UPDATE`,
-      [playerId]
+      [playerId, mode, resolvedServerKey]
     );
 
     if (playerRes.rowCount === 0) {
@@ -162,14 +112,14 @@ async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
     const defenderDrugs = district.owner_player_id
       ? getDrugRuntimeFromRow(district, { prefix: "owner_" })
       : null;
-    const attackerGangMembers = await estimateGangMembers(client, playerId);
+    const attackerGangMembers = await estimateGangMembers(client, playerId, mode, resolvedServerKey);
     const defenderGangMembers = district.owner_player_id
-      ? await estimateGangMembers(client, district.owner_player_id)
+      ? await estimateGangMembers(client, district.owner_player_id, mode, resolvedServerKey)
       : 0;
-    const attackerWeaponTier = resolveCombatWeaponTier("attack", attackerGangMembers);
+    const attackerWeaponTier = resolveCombatWeaponTier("attack", attackerGangMembers, combatWeaponTiers);
     const defenderWeaponTier = district.owner_player_id
       && Number(district.owner_defense || 0) > 0
-      ? resolveCombatWeaponTier("defense", defenderGangMembers)
+      ? resolveCombatWeaponTier("defense", defenderGangMembers, combatWeaponTiers)
       : null;
 
     if (Number(player.weapons || 0) <= 0) {
@@ -217,8 +167,8 @@ async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
     }
 
     const mapRes = await client.query(
-      "SELECT id, owner_player_id, polygon FROM districts WHERE game_mode = $1",
-      [mode]
+      "SELECT id, owner_player_id, polygon FROM districts WHERE game_mode = $1 AND server_key = $2",
+      [mode, resolvedServerKey]
     );
 
     const sourceDistrictId = resolveOwnedAdjacentDistrictId({
@@ -301,20 +251,24 @@ async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
         `UPDATE players
             SET defense = GREATEST(0, FLOOR(defense * $1)::int),
                 updated_at = NOW()
-          WHERE id = $2`,
-        [defenseLossMultiplier, district.owner_player_id]
+          WHERE id = $2
+            AND game_mode = $3
+            AND server_key = $4`,
+        [defenseLossMultiplier, district.owner_player_id, mode, resolvedServerKey]
       );
     }
 
     await client.query(
-      `UPDATE districts
+        `UPDATE districts
           SET influence_level = $1,
               owner_player_id = $2,
               is_destroyed = $3,
               destroyed_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
               updated_at = NOW()
-        WHERE id = $4`,
-      [newInfluence, newOwner, destroyed, districtId]
+        WHERE id = $4
+          AND game_mode = $5
+          AND server_key = $6`,
+      [newInfluence, newOwner, destroyed, districtId, mode, resolvedServerKey]
     );
 
     const influenceChange = Math.floor((10 + Math.random() * 16) * typeInfluenceMultiplier(district.type));
@@ -327,8 +281,8 @@ async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
     );
     await spendPlayerMoney(client, { playerId, amount: attackCost, preferDirty: true });
     await client.query(
-      "UPDATE players SET influence_points = influence_points + $1 WHERE id = $2",
-      [influenceGain, playerId]
+      "UPDATE players SET influence_points = influence_points + $1 WHERE id = $2 AND game_mode = $3 AND server_key = $4",
+      [influenceGain, playerId, mode, resolvedServerKey]
     );
 
     const attackHeatBase = attackerDrugs.activeByKey.overdrive_x?.active
@@ -340,15 +294,17 @@ async function attackDistrict({ playerId, districtId, gameMode = "war" }) {
         `UPDATE players
             SET heat = heat + $1,
                 updated_at = NOW()
-          WHERE id = $2`,
-        [attackHeatGain, playerId]
+          WHERE id = $2
+            AND game_mode = $3
+            AND server_key = $4`,
+        [attackHeatGain, playerId, mode, resolvedServerKey]
       );
     }
 
     await client.query(
-      `INSERT INTO combat_logs (attacker_player_id, district_id, defender_player_id, success, attack_cost, influence_change)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [playerId, districtId, district.owner_player_id, outcomeKey === "total_success", attackCost, influenceChange]
+      `INSERT INTO combat_logs (attacker_player_id, district_id, defender_player_id, server_key, success, attack_cost, influence_change)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [playerId, districtId, district.owner_player_id, resolvedServerKey, outcomeKey === "total_success", attackCost, influenceChange]
     );
 
     if (targetPlayerId) {
@@ -524,8 +480,9 @@ async function ensureDistrictRaidStash(client, districtId) {
   return inserted.rows[0];
 }
 
-async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
+async function raidDistrict({ playerId, districtId, gameMode = "war", serverKey = "" }) {
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = normalizeServerKey(mode, serverKey);
   const modeConfig = getGameModeConfig(mode);
   await ensureMoneySchema();
   await ensureDistrictDestructionSchema();
@@ -533,7 +490,7 @@ async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
 
   try {
     await client.query("BEGIN");
-    await ensureRaidSchema(client);
+    await ensureRaidSchema();
 
     const districtRes = await client.query(
       `SELECT d.id, d.owner_player_id, d.is_destroyed,
@@ -542,11 +499,12 @@ async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
               p.drugs AS owner_drugs,
               p.weapons AS owner_weapons
          FROM districts d
-         LEFT JOIN players p ON p.id = d.owner_player_id AND p.game_mode = d.game_mode
+         LEFT JOIN players p ON p.id = d.owner_player_id AND p.game_mode = d.game_mode AND p.server_key = d.server_key
         WHERE d.id = $1
           AND d.game_mode = $2
+          AND d.server_key = $3
         FOR UPDATE`,
-      [districtId, mode]
+      [districtId, mode, resolvedServerKey]
     );
     if (districtRes.rowCount === 0) {
       await client.query("ROLLBACK");
@@ -557,8 +515,10 @@ async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
       `SELECT alliance_id, materials, drugs, weapons
          FROM players
         WHERE id = $1
+          AND game_mode = $2
+          AND server_key = $3
         FOR UPDATE`,
-      [playerId]
+      [playerId, mode, resolvedServerKey]
     );
     if (attackerRes.rowCount === 0) {
       await client.query("ROLLBACK");
@@ -619,9 +579,10 @@ async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
     const mapRes = await client.query(
       `SELECT d.id, d.owner_player_id, d.polygon, p.alliance_id AS owner_alliance_id
          FROM districts d
-         LEFT JOIN players p ON p.id = d.owner_player_id AND p.game_mode = d.game_mode
-        WHERE d.game_mode = $1`,
-      [mode]
+         LEFT JOIN players p ON p.id = d.owner_player_id AND p.game_mode = d.game_mode AND p.server_key = d.server_key
+        WHERE d.game_mode = $1
+          AND d.server_key = $2`,
+      [mode, resolvedServerKey]
     );
     const sourceDistrictId = resolveRaidSourceDistrictId({
       districts: mapRes.rows,
@@ -659,7 +620,7 @@ async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
 
     const outcomeKey = resolveRaidOutcomeByOwner(hasOwner);
     const gangLossPct = outcomeKey === "dirty_fail" ? 2.5 : (outcomeKey === "disaster" ? 5 : 0);
-    const currentGangMembers = await estimateGangMembers(client, playerId);
+    const currentGangMembers = await estimateGangMembers(client, playerId, mode, resolvedServerKey);
     const gangLoss = Math.max(0, Math.floor(currentGangMembers * gangLossPct / 100));
     const dirtyLootMultiplier = (20 + Math.floor(Math.random() * 11)) / 100;
     const gainedLoot = outcomeKey === "clean_success"
@@ -673,8 +634,10 @@ async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
                 drugs = GREATEST(0, drugs - $2),
                 weapons = GREATEST(0, weapons - $3),
                 updated_at = NOW()
-          WHERE id = $4`,
-        [baseLoot.materials, baseLoot.drugs, baseLoot.weapons, district.owner_player_id]
+          WHERE id = $4
+            AND game_mode = $5
+            AND server_key = $6`,
+        [baseLoot.materials, baseLoot.drugs, baseLoot.weapons, district.owner_player_id, mode, resolvedServerKey]
       );
     } else {
       await client.query(
@@ -695,8 +658,10 @@ async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
                 drugs = drugs + $2,
                 weapons = weapons + $3,
                 updated_at = NOW()
-          WHERE id = $4`,
-        [gainedLoot.materials, gainedLoot.drugs, gainedLoot.weapons, playerId]
+          WHERE id = $4
+            AND game_mode = $5
+            AND server_key = $6`,
+        [gainedLoot.materials, gainedLoot.drugs, gainedLoot.weapons, playerId, mode, resolvedServerKey]
       );
     }
 
@@ -705,8 +670,10 @@ async function raidDistrict({ playerId, districtId, gameMode = "war" }) {
         `UPDATE players
             SET raid_member_losses = GREATEST(0, raid_member_losses + $1),
                 updated_at = NOW()
-          WHERE id = $2`,
-        [gangLoss, playerId]
+          WHERE id = $2
+            AND game_mode = $3
+            AND server_key = $4`,
+        [gangLoss, playerId, mode, resolvedServerKey]
       );
     }
 
@@ -766,25 +733,25 @@ function formatAttackOutcomeMessage({ outcomeKey, destroyed }) {
   return "Totální průser. Vběhli jste tam jak idioti a nechali tam krev i výbavu. Oni taky něco ztratili, ale ty jsi ten, co dostal přes držku.";
 }
 
-async function estimateGangMembers(client, playerId) {
+async function estimateGangMembers(client, playerId, gameMode, serverKey) {
   const districtResult = await client.query(
-    "SELECT type FROM districts WHERE owner_player_id = $1",
-    [playerId]
+    "SELECT type FROM districts WHERE owner_player_id = $1 AND game_mode = $2 AND server_key = $3",
+    [playerId, gameMode, serverKey]
   );
   const baseMembers = districtResult.rows.reduce(
     (sum, row) => sum + (DISTRICT_POPULATION_WEIGHTS[String(row.type || "").trim().toLowerCase()] || 2200),
     0
   );
   const playerResult = await client.query(
-    "SELECT raid_member_losses FROM players WHERE id = $1",
-    [playerId]
+    "SELECT raid_member_losses FROM players WHERE id = $1 AND game_mode = $2 AND server_key = $3",
+    [playerId, gameMode, serverKey]
   );
   const persistentLosses = Math.max(0, Math.floor(Number(playerResult.rows[0]?.raid_member_losses || 0)));
   return Math.max(0, baseMembers - persistentLosses);
 }
 
-function resolveCombatWeaponTier(category, gangMembers) {
-  const tiers = COMBAT_WEAPON_TIERS[category] || [];
+function resolveCombatWeaponTier(category, gangMembers, combatWeaponTiers = {}) {
+  const tiers = Array.isArray(combatWeaponTiers?.[category]) ? combatWeaponTiers[category] : [];
   const eligible = tiers.filter((tier) => Number(gangMembers || 0) >= Number(tier.requiredMembers || 0));
   return eligible.length ? eligible[eligible.length - 1] : null;
 }

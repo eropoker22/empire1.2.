@@ -26,7 +26,7 @@ async function getEconomyStatus(playerId) {
   const balanceRes = await pool.query(
     `SELECT money, clean_money, dirty_money, influence_points, alliance_id, heat, drugs,
             weapons, defense, materials, data_shards,
-            game_mode,
+            game_mode, server_key,
             drug_neon_dust, drug_pulse_shot, drug_velvet_smoke, drug_ghost_serum, drug_overdrive_x,
             drug_neon_dust_active_until, drug_pulse_shot_active_until, drug_velvet_smoke_active_until, drug_ghost_serum_active_until, drug_overdrive_x_active_until,
             drug_neon_dust_active_dose, drug_pulse_shot_active_dose, drug_velvet_smoke_active_dose, drug_ghost_serum_active_dose, drug_overdrive_x_active_dose
@@ -54,8 +54,9 @@ async function getEconomyStatus(playerId) {
        FROM districts
       WHERE owner_player_id = $1
         AND COALESCE(is_destroyed, false) = false
-        AND game_mode = $2`,
-    [playerId, player.game_mode || "war"]
+        AND game_mode = $2
+        AND server_key = $3`,
+    [playerId, player.game_mode || "war", player.server_key || "war-alpha"]
   );
 
   let income = Number(districtRes.rows[0].income);

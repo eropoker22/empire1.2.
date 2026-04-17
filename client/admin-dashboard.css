@@ -28,10 +28,6 @@
   --war: #ef4444;
 }
 
-* {
-  box-sizing: border-box;
-}
-
 html,
 body {
   margin: 0;
@@ -1351,3 +1347,4 @@ select {
     grid-template-columns: 1fr;
   }
 }
+

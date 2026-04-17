@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { assertDatabaseSchema } = require("../db/schemaGuard");
 
 const GANG_COLOR_HEX_PATTERN = /^#[0-9a-f]{6}$/;
 
@@ -13,40 +14,7 @@ function normalizeGangColor(value) {
 }
 
 async function ensureGangColorSchema() {
-  await pool.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS gang_color TEXT NULL
-  `);
-
-  await pool.query(`
-    UPDATE players
-       SET gang_color = LOWER(gang_color)
-     WHERE gang_color IS NOT NULL
-  `);
-
-  await pool.query(`
-    WITH ranked AS (
-      SELECT
-        id,
-        LOWER(gang_color) AS normalized_color,
-        ROW_NUMBER() OVER (PARTITION BY LOWER(gang_color) ORDER BY created_at ASC, id ASC) AS rn
-      FROM players
-      WHERE gang_color IS NOT NULL
-    )
-    UPDATE players p
-       SET gang_color = CASE
-         WHEN ranked.rn = 1 THEN ranked.normalized_color
-         ELSE NULL
-       END
-      FROM ranked
-     WHERE p.id = ranked.id
-  `);
-
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_players_gang_color_unique
-      ON players (gang_color)
-      WHERE gang_color IS NOT NULL
-  `);
+  return assertDatabaseSchema();
 }
 
 async function claimGangColor({ playerId, color }) {

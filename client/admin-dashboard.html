@@ -25,6 +25,8 @@
             <h2>Empire Streets Admin</h2>
             <div class="status-line">
               <span class="chip chip--status" id="server-status-chip">UNKNOWN</span>
+              <span class="chip" id="dashboard-mode-chip">MODE --</span>
+              <span class="chip" id="dashboard-source-chip">Data --</span>
               <span class="chip" id="uptime-chip">Uptime --</span>
               <span class="chip" id="current-time-chip">--:--:--</span>
             </div>
@@ -37,10 +39,10 @@
             </label>
 
             <label class="control-field">
-              <span>Data source</span>
+              <span>Dashboard mode</span>
               <select id="data-source-switcher">
-                <option value="mock">Mock</option>
                 <option value="auto">Auto</option>
+                <option value="demo">Demo</option>
                 <option value="live">Live</option>
               </select>
             </label>
@@ -659,6 +661,12 @@
     <script src="./gen/noise.js" defer></script>
     <script src="./gen/voronoi.js" defer></script>
     <script src="./gen/city.js" defer></script>
+    <script src="./runtime-config.js" defer></script>
+    <script src="./game-mode-config.js" defer></script>
+    <script src="./game-modes.js" defer></script>
+    <script src="./admin-dashboard-mock-data.js" defer></script>
+    <script src="./admin-dashboard-mock-districts.js" defer></script>
+    <script src="./admin-dashboard-data.js" defer></script>
     <script src="./admin-dashboard.js" defer></script>
   </body>
 </html>

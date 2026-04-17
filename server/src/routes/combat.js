@@ -14,7 +14,7 @@ router.post("/attack", auth, async (req, res) => {
   if (!districtId) return res.status(400).json({ error: "missing_district" });
 
   try {
-    const result = await attackDistrict({ playerId: req.user.id, districtId, gameMode: req.gameMode });
+    const result = await attackDistrict({ playerId: req.user.id, districtId, gameMode: req.gameMode, serverKey: req.serverKey });
     if (!result.ok) {
       return res.status(400).json({
         error: result.error,
@@ -45,9 +45,10 @@ router.post("/attack", auth, async (req, res) => {
 
     void (async () => {
       try {
-        const districts = await listDistricts(req.gameMode);
+        const districts = await listDistricts(req.gameMode, req.serverKey);
         broadcastMapUpdate({
           rooms: getRoomRegistry(),
+          serverKey: req.serverKey,
           gameMode: req.gameMode,
           update: {
             districts,
@@ -74,7 +75,7 @@ router.post("/raid", auth, async (req, res) => {
   if (!districtId) return res.status(400).json({ error: "missing_district" });
 
   try {
-    const result = await raidDistrict({ playerId: req.user.id, districtId, gameMode: req.gameMode });
+    const result = await raidDistrict({ playerId: req.user.id, districtId, gameMode: req.gameMode, serverKey: req.serverKey });
     if (!result.ok) {
       return res.status(400).json({
         error: result.error,
@@ -98,9 +99,10 @@ router.post("/raid", auth, async (req, res) => {
 
     void (async () => {
       try {
-        const districts = await listDistricts(req.gameMode);
+        const districts = await listDistricts(req.gameMode, req.serverKey);
         broadcastMapUpdate({
           rooms: getRoomRegistry(),
+          serverKey: req.serverKey,
           gameMode: req.gameMode,
           update: {
             districts,

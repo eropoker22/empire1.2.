@@ -234,29 +234,29 @@ window.Empire.Map = (() => {
   const APARTMENT_BLOCK_NAME = "Bytový blok";
   const APARTMENT_BLOCK_STORAGE_KEY = "empire_apartment_block_mechanics_v1";
   const APARTMENT_BLOCK_CONFIG = Object.freeze({
-    maxLevel: 4,
+    maxLevel: 5,
     baseProductionPerCycle: 2,
-    productionCycleMs: 10 * 60 * 1000,
-    baseCapacity: 24,
-    baseCleanIncomePerHour: 90,
+    productionCycleMs: 60 * 1000,
+    baseCapacity: 60,
+    baseCleanIncomePerHour: 0,
     cleanIncomePerGangMemberPerHour: 0,
-    baseDirtyIncomePerHour: 30,
+    baseDirtyIncomePerHour: 0,
     dirtyIncomePerGangMemberPerHour: 0,
-    baseHeatPerDay: 5,
-    recruitRange: { min: 5, max: 15 },
+    baseHeatPerDay: 1,
     actionCooldowns: {
-      recruit: 3 * 60 * 60 * 1000,
-      motivation: 6 * 60 * 60 * 1000,
-      hiddenHousing: 8 * 60 * 60 * 1000
+      recruit: 25 * 60 * 1000,
+      motivation: 0,
+      hiddenHousing: 0
     },
     actionDurations: {
-      motivation: 2 * 60 * 60 * 1000,
-      hiddenHousing: 2 * 60 * 60 * 1000
+      motivation: 15 * 60 * 1000,
+      hiddenHousing: 15 * 60 * 1000
     },
     upgradeCosts: {
-      2: 5000,
-      3: 15000,
-      4: 40000
+      2: 3000,
+      3: 9000,
+      4: 20000,
+      5: 45000
     },
     upgradePctPerLevel: 0.1
   });
@@ -264,34 +264,61 @@ window.Empire.Map = (() => {
   const SCHOOL_BUILDING_NAME = "Škola";
   const SCHOOL_BUILDING_STORAGE_KEY = "empire_school_building_mechanics_v1";
   const SCHOOL_BUILDING_CONFIG = Object.freeze({
-    maxLevel: 4,
+    maxLevel: 5,
     baseProductionPerCycle: 1,
-    productionCycleMs: 10 * 60 * 1000,
-    baseCapacity: 12,
-    baseCleanIncomePerHour: 264,
+    productionCycleMs: 60 * 1000,
+    baseCapacity: 40,
+    baseCleanIncomePerHour: 0,
     cleanIncomePerTenMembersPerHour: 0,
-    baseDirtyIncomePerHour: 60,
+    baseDirtyIncomePerHour: 0,
     dirtyIncomePerTenMembersPerHour: 0,
-    baseHeatPerDay: 2,
-    baseDrugLabPassiveBonusPct: 10,
-    chemistryBoostPct: 25,
-    eveningHeatReductionPct: 20,
-    lectureRange: { min: 4, max: 10 },
+    baseHeatPerDay: 0.5,
+    baseDrugLabPassiveBonusPct: 0,
+    chemistryBoostPct: 40,
+    eveningHeatReductionPct: 0,
     actionCooldowns: {
-      lecture: 3 * 60 * 60 * 1000,
-      chemistry: 4 * 60 * 60 * 1000,
-      evening: 6 * 60 * 60 * 1000
+      lecture: 25 * 60 * 1000,
+      chemistry: 0,
+      evening: 0
     },
     actionDurations: {
-      chemistry: 2 * 60 * 60 * 1000,
-      evening: 2 * 60 * 60 * 1000
+      chemistry: 15 * 60 * 1000,
+      evening: 15 * 60 * 1000
     },
     upgradeCosts: {
-      2: 5000,
-      3: 15000,
-      4: 40000
+      2: 2500,
+      3: 7000,
+      4: 16000,
+      5: 36000
     },
     upgradePctPerLevel: 0.1
+  });
+
+  const CLINIC_BUILDING_NAME = "Klinika";
+  const CLINIC_BUILDING_STORAGE_KEY = "empire_clinic_building_mechanics_v1";
+  const CLINIC_INJURY_STORAGE_KEY = "empire_clinic_injured_queue_v1";
+  const CLINIC_BUILDING_CONFIG = Object.freeze({
+    maxLevel: 5,
+    baseHealPerMinute: 1.5,
+    baseCleanIncomePerHour: 160,
+    baseDirtyIncomePerHour: 80,
+    baseHeatPerDay: 2.8,
+    baseInfluencePerHour: 20,
+    emergencyReturnPct: 40,
+    stabilizationHealBoostPct: 50,
+    actionCooldowns: {
+      emergency: 25 * 60 * 1000,
+      stabilization: 30 * 60 * 1000
+    },
+    actionDurations: {
+      stabilization: 20 * 60 * 1000
+    },
+    upgradeCosts: {
+      2: 6000,
+      3: 15000,
+      4: 35000,
+      5: 80000
+    }
   });
 
   const FITNESS_CLUB_NAME = "Fitness Club";
@@ -336,39 +363,32 @@ window.Empire.Map = (() => {
   const CASINO_BUILDING_NAME = "Kasino";
   const CASINO_BUILDING_STORAGE_KEY = "empire_casino_building_mechanics_v1";
   const CASINO_BUILDING_CONFIG = Object.freeze({
-    maxLevel: 5,
-    baseCleanIncomePerHour: 300,
-    baseDirtyIncomePerHour: 240,
+    maxLevel: 4,
+    baseCleanIncomePerHour: 480,
+    baseDirtyIncomePerHour: 132,
     memberBonusPerTenMembersPerHour: 0,
     memberBonusCleanShare: 90 / 110,
     memberBonusDirtyShare: 20 / 110,
-    baseHeatPerDay: 7,
-    baseInfluencePerDay: 30,
-    highStakesCashBoostMinPct: 50,
-    highStakesCashBoostMaxPct: 150,
-    vipIncomeBoostPct: 40,
-    launderingPct: 20,
-    launderingBonusPctLevel5: 10,
-    cleanIncomeBonusPctLevel4: 20,
-    gossipIntervalMsLevel3: 2 * 60 * 60 * 1000,
+    baseHeatPerDay: 8,
+    vipIncomeBoostPct: 60,
+    launderingPct: 15,
+    launderingRaidRiskPct: 20,
     actionHeatAdded: {
-      highStakes: 10,
-      laundering: 6,
-      vipEvening: 7
+      vip: 4,
+      laundering: 6
     },
     actionCooldowns: {
-      highStakes: 6 * 60 * 60 * 1000,
-      laundering: 8 * 60 * 60 * 1000,
-      vipEvening: 10 * 60 * 60 * 1000
+      vip: 4 * 60 * 60 * 1000,
+      laundering: 6 * 60 * 60 * 1000
     },
     actionDurations: {
-      vipEvening: 2 * 60 * 60 * 1000
+      vip: 2 * 60 * 60 * 1000,
+      launderingRaidRisk: 3 * 60 * 60 * 1000
     },
     upgradeCosts: {
-      2: 15000,
+      2: 10000,
       3: 45000,
-      4: 100000,
-      5: 220000
+      4: 95000
     },
     upgradePctPerLevel: 0.1
   });
@@ -376,39 +396,41 @@ window.Empire.Map = (() => {
   const ARCADE_BUILDING_NAME = "Herna";
   const ARCADE_BUILDING_STORAGE_KEY = "empire_arcade_building_mechanics_v1";
   const ARCADE_BUILDING_CONFIG = Object.freeze({
-    maxLevel: 5,
-    baseCleanIncomePerHour: 180,
+    maxLevel: 4,
+    baseCleanIncomePerHour: 360,
     cleanIncomePerTenMembersPerHour: 0,
-    baseDirtyIncomePerHour: 180,
+    baseDirtyIncomePerHour: 72,
     dirtyIncomePerTenMembersPerHour: 0,
-    baseHeatPerDay: 5,
-    baseInfluencePerDay: 20,
+    baseHeatPerDay: 6,
     actionBoosts: {
-      tournamentIncomePct: 35,
-      launderingPct: 10,
-      nightRunDirtyIncomePct: 50,
-      level3DirtyIncomePct: 15,
-      level5PassiveLaunderingPct: 5
+      slotsCleanIncomePct: 50,
+      backroomDirtyIncomePct: 75,
+      dealDrugSalesPct: 25,
+      dealDirtyPerHour: 20
+    },
+    raidRiskPcts: {
+      backroom: 10,
+      deal: 15
     },
     actionHeatAdded: {
-      tournament: 5,
-      laundering: 4,
-      nightRun: 7
+      slots: 3,
+      backroom: 5,
+      deal: 6
     },
     actionCooldowns: {
-      tournament: 6 * 60 * 60 * 1000,
-      laundering: 7 * 60 * 60 * 1000,
-      nightRun: 8 * 60 * 60 * 1000
+      slots: 4 * 60 * 60 * 1000,
+      backroom: 6 * 60 * 60 * 1000,
+      deal: 5 * 60 * 60 * 1000
     },
     actionDurations: {
-      tournament: 2 * 60 * 60 * 1000,
-      nightRun: 1 * 60 * 60 * 1000
+      slots: 2 * 60 * 60 * 1000,
+      backroom: 2 * 60 * 60 * 1000,
+      deal: 2 * 60 * 60 * 1000
     },
     upgradeCosts: {
-      2: 10000,
-      3: 30000,
-      4: 70000,
-      5: 150000
+      2: 15000,
+      3: 35000,
+      4: 55000
     },
     upgradePctPerLevel: 0.1
   });
@@ -458,40 +480,40 @@ window.Empire.Map = (() => {
   const EXCHANGE_BUILDING_NAME = "Směnárna";
   const EXCHANGE_BUILDING_STORAGE_KEY = "empire_exchange_building_mechanics_v1";
   const EXCHANGE_BUILDING_CONFIG = Object.freeze({
-    maxLevel: 5,
-    baseCleanIncomePerHour: 200,
+    maxLevel: 4,
+    baseCleanIncomePerHour: 330,
     cleanIncomePerTenMembersPerHour: 0,
-    baseDirtyIncomePerHour: 100,
+    baseDirtyIncomePerHour: 78,
     dirtyIncomePerTenMembersPerHour: 0,
-    baseHeatPerDay: 3.5,
-    baseInfluencePerDay: 18,
+    baseHeatPerDay: 4,
+    baseInfluencePerHour: 1,
     actionBoosts: {
-      exchangeCashCost: 5000,
-      exchangeMaterialsGain: 5,
-      exchangeMaterialsCost: 5,
-      exchangeCashGain: 4000,
-      exchangeBetterConversionPctLevel3: 20,
-      hiddenTransferCleanCashPct: 15,
-      quickLiquidityCleanCash: 5000,
-      cleanIncomeBonusPctLevel4: 20,
-      heatReductionPctLevel5: 20,
-      districtIncomeBonusPct: 0
+      favorableRateCleanIncomePct: 40,
+      silentTransferPct: 12,
+      districtIncomeBonusPct: 15
+    },
+    raidRiskPcts: {
+      silentTransfer: 10
     },
     actionHeatAdded: {
-      exchange: 3,
-      hiddenTransfer: 4,
-      quickLiquidity: 5
+      favorableRate: 2,
+      silentTransfer: 5,
+      financialNetwork: 3
     },
     actionCooldowns: {
-      exchange: 6 * 60 * 60 * 1000,
-      hiddenTransfer: 8 * 60 * 60 * 1000,
-      quickLiquidity: 10 * 60 * 60 * 1000
+      favorableRate: 4 * 60 * 60 * 1000,
+      silentTransfer: 6 * 60 * 60 * 1000,
+      financialNetwork: 5 * 60 * 60 * 1000
+    },
+    actionDurations: {
+      favorableRate: 2 * 60 * 60 * 1000,
+      silentTransferRisk: 2 * 60 * 60 * 1000,
+      financialNetwork: 2 * 60 * 60 * 1000
     },
     upgradeCosts: {
-      2: 7000,
-      3: 20000,
-      4: 50000,
-      5: 110000
+      2: 5000,
+      3: 15000,
+      4: 40000
     },
     upgradePctPerLevel: 0.1
   });
@@ -499,43 +521,35 @@ window.Empire.Map = (() => {
   const RESTAURANT_BUILDING_NAME = "Restaurace";
   const RESTAURANT_BUILDING_STORAGE_KEY = "empire_restaurant_building_mechanics_v1";
   const RESTAURANT_BUILDING_CONFIG = Object.freeze({
-    maxLevel: 5,
-    baseCleanIncomePerHour: 180,
+    maxLevel: 4,
+    baseCleanIncomePerHour: 300,
     cleanIncomePerTenMembersPerHour: 0,
-    baseDirtyIncomePerHour: 120,
+    baseDirtyIncomePerHour: 30,
     dirtyIncomePerTenMembersPerHour: 0,
-    baseHeatPerDay: 3,
-    baseInfluencePerDay: 14,
+    baseHeatPerDay: 2,
+    baseInfluencePerHour: 0.5,
     actionBoosts: {
-      gangDinnerDistrictIncomePct: 15,
-      vipReservationCleanIncomePct: 30,
-      vipReservationInfluencePct: 5,
-      streetGossipRareChancePct: 30,
-      level3RareChanceBonusPct: 15,
-      level3AccuracyBonusPct: 25,
-      level5ExtraGossipCount: 1,
-      level5WeaknessRevealChancePct: 15,
-      level4HeatReductionPct: 5
+      happyHourCleanIncomePct: 35,
+      backTableInfluenceBoostPct: 100,
+      backTableCleanIncomePenaltyPct: 15,
+      birthdayPartyRumorCount: 2
     },
     actionHeatAdded: {
-      gangDinner: 4,
-      vipReservation: 5,
-      streetGossip: 3
+      happyHour: 1
     },
     actionCooldowns: {
-      gangDinner: 8 * 60 * 60 * 1000,
-      vipReservation: 8 * 60 * 60 * 1000,
-      streetGossip: 6 * 60 * 60 * 1000
+      happyHour: 4 * 60 * 60 * 1000,
+      backTable: 5 * 60 * 60 * 1000,
+      birthdayParty: 2 * 60 * 60 * 1000
     },
     actionDurations: {
-      gangDinner: 2 * 60 * 60 * 1000,
-      vipReservation: 2 * 60 * 60 * 1000
+      happyHour: 2 * 60 * 60 * 1000,
+      backTable: 2 * 60 * 60 * 1000
     },
     upgradeCosts: {
-      2: 6000,
-      3: 18000,
-      4: 40000,
-      5: 90000
+      2: 5000,
+      3: 15000,
+      4: 40000
     },
     upgradePctPerLevel: 0.1
   });
@@ -638,38 +652,6 @@ window.Empire.Map = (() => {
     heatMultiplierLevel4: 1.05,
     spyRewardAtLevel5: 1,
     baseInfluencePerDay: 3.5,
-    passiveHeatPerTick: 1,
-    passiveHeatIntervalMs: 5 * 60 * 1000,
-    sales: Object.freeze({
-      networkMaxCapacityPctPerExtraBuilding: 10,
-      networkSpeedPctPerExtraBuilding: 5,
-      slots: Object.freeze([
-        Object.freeze({
-          id: 1,
-          resourceKey: "neonDust",
-          label: "Neon Dust",
-          baseSlotCap: 120,
-          unitsPerHour: 600,
-          dirtyCashPerUnit: 0.45
-        }),
-        Object.freeze({
-          id: 2,
-          resourceKey: "pulseShot",
-          label: "Pulse Shot",
-          baseSlotCap: 120,
-          unitsPerHour: 600,
-          dirtyCashPerUnit: 0.65
-        }),
-        Object.freeze({
-          id: 3,
-          resourceKey: "velvetSmoke",
-          label: "Velvet Smoke",
-          baseSlotCap: 120,
-          unitsPerHour: 600,
-          dirtyCashPerUnit: 0.85
-        })
-      ])
-    }),
     actions: Object.freeze({
       salesBoost: Object.freeze({
         cooldownMs: 5 * 60 * 60 * 1000,
@@ -690,9 +672,6 @@ window.Empire.Map = (() => {
       })
     })
   });
-  const STREET_DEALERS_RESOURCE_KEYS = Object.freeze(
-    STREET_DEALERS_CONFIG.sales.slots.map((slot) => String(slot.resourceKey || "").trim()).filter(Boolean)
-  );
   const STRIP_CLUB_CONFIG = Object.freeze({
     maxLevel: 5,
     upgradeCosts: Object.freeze({
@@ -1277,163 +1256,6 @@ window.Empire.Map = (() => {
   const DISTRICT_GOSSIP_MAX_PER_DISTRICT = 40;
   const DISTRICT_GOSSIP_DEMO_SEED_KEY = "empire_district_gossip_demo_seed_v1";
   const DISTRICT_GOSSIP_DISABLED_INTEL_TYPES = new Set(["attack_success", "attack_failed", "raid_started"]);
-  const DISTRICT_GOSSIP_QUALITY_PRESETS = Object.freeze({
-    common: Object.freeze({ label: "Běžný", chance: 70, accuracyMin: 60, accuracyMax: 80 }),
-    quality: Object.freeze({ label: "Kvalitní", chance: 25, accuracyMin: 80, accuracyMax: 95 }),
-    rare: Object.freeze({ label: "Vzácný", chance: 5, accuracyMin: 90, accuracyMax: 100 })
-  });
-  const DISTRICT_GOSSIP_CATEGORY_LABELS = Object.freeze({
-    economy: "Ekonomický",
-    defense: "Obranný",
-    attack: "Útočný",
-    production: "Produkční",
-    heat: "Heat",
-    special: "Speciální"
-  });
-  const DISTRICT_GOSSIP_TEXT_LIBRARY = Object.freeze({
-    common: Object.freeze({
-      economy: Object.freeze([
-        "District {district} generuje nadprůměrný cash.",
-        "V districtu {district} teče stabilní tok čistých peněz.",
-        "District {district} má slabší income, než se tváří.",
-        "V districtu {district} se cash točí hlavně večer.",
-        "District {district} drží příjem přes malé provozy.",
-        "V districtu {district} někdo stahuje zisky bokem.",
-        "District {district} má nečekaně silný dirty cash tok.",
-        "V districtu {district} padá income po změně směn.",
-        "District {district} je finančně pod tlakem.",
-        "V districtu {district} se připravuje rychlá výměna hotovosti."
-      ]),
-      defense: Object.freeze([
-        "District {district} má roztažené hlídky.",
-        "V districtu {district} obrana nehlídá všechny vstupy.",
-        "District {district} je oslabený po přesunu lidí.",
-        "V districtu {district} chybí záložní obranná linka.",
-        "District {district} drží obranu jen na papíře.",
-        "V districtu {district} je slabý noční dohled.",
-        "District {district} má pomalou reakci obrany.",
-        "V districtu {district} je mezera v severní části.",
-        "District {district} je citlivý na rychlý tlak.",
-        "V districtu {district} obrana působí podstav."
-      ]),
-      attack: Object.freeze([
-        "Hráč {owner} v districtu {district} plánuje tlak.",
-        "V districtu {district} se chystá útočný přesun.",
-        "Hráč {owner} právě přesouvá útočné zbraně.",
-        "District {district} připravuje krátké okno útoku.",
-        "V districtu {district} roste aktivita bojových týmů.",
-        "Hráč {owner} z districtu {district} testuje obranu okolí.",
-        "District {district} má zvýšený pohyb před akcí.",
-        "V districtu {district} je slyšet příprava na nájezd.",
-        "Hráč {owner} může z districtu {district} udeřit brzy.",
-        "District {district} má napjatou útočnou logistiku."
-      ]),
-      production: Object.freeze([
-        "District {district} drží výrobní tempo bez pauz.",
-        "V districtu {district} jede produkce i mimo špičku.",
-        "District {district} navyšuje výstup v tichém režimu.",
-        "V districtu {district} běží zpracování zásob naplno.",
-        "District {district} má stabilní produkční linku.",
-        "V districtu {district} roste spotřeba materiálů.",
-        "District {district} přesměroval výrobu na klíčové položky.",
-        "V districtu {district} se připravuje větší výrobní dávka.",
-        "District {district} používá rychlé výrobní protokoly.",
-        "V districtu {district} chybí jen malý vstup pro max výkon."
-      ]),
-      heat: Object.freeze([
-        "District {district} má zvýšený heat.",
-        "V districtu {district} policie častěji patroluje.",
-        "District {district} je blízko policejního zájmu.",
-        "V districtu {district} roste tlak po poslední akci.",
-        "District {district} táhne pozornost médií i policie.",
-        "V districtu {district} je teplota operací nebezpečně vysoká.",
-        "District {district} má nestabilní heat křivku.",
-        "V districtu {district} jde heat nahoru každou hodinou.",
-        "District {district} je po sérii hlučných akcí pod dohledem.",
-        "V districtu {district} stačí málo a přijde zásah."
-      ]),
-      special: Object.freeze([
-        "District {district} má skrytou slabinu.",
-        "V districtu {district} je budova s podezřelým cooldownem.",
-        "District {district} může mít otevřený boční vstup.",
-        "V districtu {district} se objevila interní zrada.",
-        "District {district} má nestandardní rotaci hlídek.",
-        "V districtu {district} někdo manipuluje interní info.",
-        "District {district} skrývá krátké okno příležitosti.",
-        "V districtu {district} se dá čekat nečekaný obrat.",
-        "District {district} drží citlivou slabinu logistiky.",
-        "V districtu {district} někdo vědomě pouští falešné stopy."
-      ])
-    }),
-    quality: Object.freeze({
-      economy: Object.freeze([
-        "Kvalitní intel: District {district} přidává silný clean cash v pravidelných vlnách.",
-        "Kvalitní intel: V districtu {district} je citelný rozdíl mezi clean a dirty tokem.",
-        "Kvalitní intel: District {district} má slabý výnos mimo večerní hodiny.",
-        "Kvalitní intel: V districtu {district} někdo krátí příjmy vlastnímu týmu.",
-        "Kvalitní intel: District {district} drží vysoký cashflow přes dvě hlavní budovy."
-      ]),
-      defense: Object.freeze([
-        "Kvalitní intel: District {district} má slabý pravý flank obrany.",
-        "Kvalitní intel: V districtu {district} chybí zálohy při delším boji.",
-        "Kvalitní intel: District {district} má nízkou hloubku obrany.",
-        "Kvalitní intel: V districtu {district} rotace hlídek vytváří předvídatelné okno.",
-        "Kvalitní intel: District {district} je obranně nejzranitelnější v noci."
-      ]),
-      attack: Object.freeze([
-        "Kvalitní intel: Hráč {owner} přes district {district} chystá údernou akci.",
-        "Kvalitní intel: V districtu {district} je krátké okno pro protiútok.",
-        "Kvalitní intel: Hráč {owner} vyčerpal část armády při posledním tlaku.",
-        "Kvalitní intel: District {district} přesouvá útočné vybavení mimo sektor.",
-        "Kvalitní intel: District {district} bude útočně aktivní v dalších hodinách."
-      ]),
-      production: Object.freeze([
-        "Kvalitní intel: District {district} vyrábí klíčové zdroje bez přestávky.",
-        "Kvalitní intel: V districtu {district} běží produkce se zvýšenou efektivitou.",
-        "Kvalitní intel: District {district} drží zrychlený výrobní cyklus.",
-        "Kvalitní intel: V districtu {district} je produkce citlivá na sabotáže.",
-        "Kvalitní intel: District {district} má slabé krytí výrobních tras."
-      ]),
-      heat: Object.freeze([
-        "Kvalitní intel: District {district} je blízko cílené policejní kontrole.",
-        "Kvalitní intel: V districtu {district} heat roste kvůli opakovaným akcím.",
-        "Kvalitní intel: District {district} drží rizikový profil pro raid.",
-        "Kvalitní intel: V districtu {district} stačí jeden incident k zásahu.",
-        "Kvalitní intel: District {district} je sledovaný víc než okolní sektory."
-      ]),
-      special: Object.freeze([
-        "Kvalitní intel: District {district} má slabinu v koordinačním řetězci.",
-        "Kvalitní intel: V districtu {district} běží budova s dlouhým cooldownem.",
-        "Kvalitní intel: District {district} skrývá rizikový bod obrany.",
-        "Kvalitní intel: V districtu {district} unikají interní informace ven.",
-        "Kvalitní intel: District {district} je náchylný na přesný timing útoku."
-      ])
-    }),
-    rare: Object.freeze({
-      economy: Object.freeze([
-        "Potvrzený intel: District {district} drží přesný cashflow profil a je nadprůměrně výnosný.",
-        "Potvrzený intel: V districtu {district} je hlavní finanční uzel frakce."
-      ]),
-      defense: Object.freeze([
-        "Potvrzený intel: District {district} má low defense a minimum záloh.",
-        "Potvrzený intel: V districtu {district} je kritická mezera v obraně."
-      ]),
-      attack: Object.freeze([
-        "Potvrzený intel: Hráč {owner} po akci v districtu {district} vyčerpal útočné síly.",
-        "Potvrzený intel: District {district} má potvrzené přípravy na útok v krátkém čase."
-      ]),
-      production: Object.freeze([
-        "Potvrzený intel: District {district} vyrábí klíčový zdroj v maximálním režimu.",
-        "Potvrzený intel: V districtu {district} je produkční linka s nejvyšší prioritou."
-      ]),
-      heat: Object.freeze([
-        "Potvrzený intel: District {district} je těsně před policejním zásahem."
-      ]),
-      special: Object.freeze([
-        "Potvrzený intel: District {district} má skrytou slabinu, která mění výsledek boje."
-      ])
-    })
-  });
   const SIMPLE_CASH_BUILDING_STORAGE_KEY = "empire_simple_cash_building_mechanics_v1";
 
   const BUILDING_INCOME_CLEAN_RATIO = 0.9;
@@ -1442,6 +1264,8 @@ window.Empire.Map = (() => {
 
   let apartmentBlockStore = loadApartmentBlockStore();
   let schoolBuildingStore = loadSchoolBuildingStore();
+  let clinicBuildingStore = loadClinicBuildingStore();
+  let clinicInjuryState = loadClinicInjuryState();
   let fitnessBuildingStore = loadFitnessBuildingStore();
   let casinoBuildingStore = loadCasinoBuildingStore();
   let arcadeBuildingStore = loadArcadeBuildingStore();
@@ -1504,6 +1328,36 @@ window.Empire.Map = (() => {
 
   function saveSchoolBuildingStore() {
     localStorage.setItem(SCHOOL_BUILDING_STORAGE_KEY, JSON.stringify(schoolBuildingStore));
+  }
+
+  function loadClinicBuildingStore() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CLINIC_BUILDING_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function saveClinicBuildingStore() {
+    localStorage.setItem(CLINIC_BUILDING_STORAGE_KEY, JSON.stringify(clinicBuildingStore));
+  }
+
+  function loadClinicInjuryState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CLINIC_INJURY_STORAGE_KEY) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {}
+    return {};
+  }
+
+  function saveClinicInjuryState(nextState) {
+    try {
+      localStorage.setItem(CLINIC_INJURY_STORAGE_KEY, JSON.stringify(nextState));
+    } catch {}
   }
 
   function loadFitnessBuildingStore() {
@@ -1955,6 +1809,91 @@ window.Empire.Map = (() => {
     return schoolBuildingStore[instanceKey];
   }
 
+  function createClinicDefaultState(now = Date.now()) {
+    return {
+      level: 1,
+      incomeRemainderClean: 0,
+      incomeRemainderDirty: 0,
+      influenceRemainder: 0,
+      lastIncomeAt: now,
+      lastInfluenceAt: now,
+      cooldowns: {
+        emergency: 0,
+        stabilization: 0
+      },
+      effects: {
+        stabilizationUntil: 0
+      },
+      extraHeat: 0
+    };
+  }
+
+  function sanitizeClinicState(rawState, now = Date.now()) {
+    const fallback = createClinicDefaultState(now);
+    const levelRaw = Number(rawState?.level);
+    const level = Number.isFinite(levelRaw)
+      ? clamp(Math.floor(levelRaw), 1, CLINIC_BUILDING_CONFIG.maxLevel)
+      : 1;
+    const incomeRemainderClean = Number(rawState?.incomeRemainderClean ?? rawState?.incomeRemainder ?? 0);
+    const incomeRemainderDirty = Number(rawState?.incomeRemainderDirty || 0);
+    const influenceRemainder = Number(rawState?.influenceRemainder || 0);
+    const lastIncomeAt = Number(rawState?.lastIncomeAt || now);
+    const lastInfluenceAt = Number(rawState?.lastInfluenceAt || now);
+    const cooldownsRaw = rawState?.cooldowns || {};
+    const effectsRaw = rawState?.effects || {};
+    return {
+      level,
+      incomeRemainderClean: Number.isFinite(incomeRemainderClean) ? Math.max(0, incomeRemainderClean) : 0,
+      incomeRemainderDirty: Number.isFinite(incomeRemainderDirty) ? Math.max(0, incomeRemainderDirty) : 0,
+      influenceRemainder: Number.isFinite(influenceRemainder) ? Math.max(0, influenceRemainder) : 0,
+      lastIncomeAt: Number.isFinite(lastIncomeAt) ? Math.max(0, lastIncomeAt) : fallback.lastIncomeAt,
+      lastInfluenceAt: Number.isFinite(lastInfluenceAt) ? Math.max(0, lastInfluenceAt) : fallback.lastInfluenceAt,
+      cooldowns: {
+        emergency: Math.max(0, Number(cooldownsRaw.emergency || 0)),
+        stabilization: Math.max(0, Number(cooldownsRaw.stabilization || 0))
+      },
+      effects: {
+        stabilizationUntil: Math.max(0, Number(effectsRaw.stabilizationUntil || 0))
+      },
+      extraHeat: Math.max(0, Number(rawState?.extraHeat || 0))
+    };
+  }
+
+  function sanitizeClinicInjuryState(rawState, now = Date.now()) {
+    const injuredMembers = Math.max(0, Math.floor(Number(rawState?.injuredMembers || 0)));
+    const healRemainder = Number(rawState?.healRemainder || 0);
+    const lastHealAt = Number(rawState?.lastHealAt || now);
+    return {
+      injuredMembers,
+      healRemainder: Number.isFinite(healRemainder) ? Math.max(0, healRemainder) : 0,
+      lastHealAt: Number.isFinite(lastHealAt) ? Math.max(0, lastHealAt) : now
+    };
+  }
+
+  function getClinicStateByKey(instanceKey, now = Date.now()) {
+    const current = clinicBuildingStore[instanceKey];
+    const sanitized = sanitizeClinicState(current, now);
+    clinicBuildingStore[instanceKey] = sanitized;
+    return sanitized;
+  }
+
+  function persistClinicState(instanceKey, nextState) {
+    clinicBuildingStore[instanceKey] = sanitizeClinicState(nextState, Date.now());
+    saveClinicBuildingStore();
+    return clinicBuildingStore[instanceKey];
+  }
+
+  function getClinicInjuryState(now = Date.now()) {
+    clinicInjuryState = sanitizeClinicInjuryState(clinicInjuryState, now);
+    return clinicInjuryState;
+  }
+
+  function persistClinicInjuryState(nextState) {
+    clinicInjuryState = sanitizeClinicInjuryState(nextState, Date.now());
+    saveClinicInjuryState(clinicInjuryState);
+    return clinicInjuryState;
+  }
+
   function createFitnessDefaultState(now = Date.now()) {
     return {
       level: 1,
@@ -1990,7 +1929,6 @@ window.Empire.Map = (() => {
     const influenceRemainder = Number(rawState?.influenceRemainder || 0);
     const lastIncomeAt = Number(rawState?.lastIncomeAt || now);
     const lastInfluenceAt = Number(rawState?.lastInfluenceAt || now);
-    const lastGossipAt = Number(rawState?.lastGossipAt || 0);
     const cooldownsRaw = rawState?.cooldowns || {};
     const effectsRaw = rawState?.effects || {};
 
@@ -2044,14 +1982,13 @@ window.Empire.Map = (() => {
       influenceRemainder: 0,
       lastIncomeAt: now,
       lastInfluenceAt: now,
-      lastGossipAt: 0,
       cooldowns: {
-        highStakes: 0,
-        laundering: 0,
-        vipEvening: 0
+        vip: 0,
+        laundering: 0
       },
       effects: {
-        vipEveningUntil: 0
+        vipUntil: 0,
+        raidRiskUntil: 0
       },
       extraHeat: 0
     };
@@ -2078,14 +2015,13 @@ window.Empire.Map = (() => {
       influenceRemainder: Number.isFinite(influenceRemainder) ? Math.max(0, influenceRemainder) : 0,
       lastIncomeAt: Number.isFinite(lastIncomeAt) ? Math.max(0, lastIncomeAt) : fallback.lastIncomeAt,
       lastInfluenceAt: Number.isFinite(lastInfluenceAt) ? Math.max(0, lastInfluenceAt) : fallback.lastInfluenceAt,
-      lastGossipAt: Number.isFinite(lastGossipAt) ? Math.max(0, lastGossipAt) : 0,
       cooldowns: {
-        highStakes: Math.max(0, Number(cooldownsRaw.highStakes || cooldownsRaw.vip || 0)),
-        laundering: Math.max(0, Number(cooldownsRaw.laundering || 0)),
-        vipEvening: Math.max(0, Number(cooldownsRaw.vipEvening || 0))
+        vip: Math.max(0, Number(cooldownsRaw.vip || 0)),
+        laundering: Math.max(0, Number(cooldownsRaw.laundering || 0))
       },
       effects: {
-        vipEveningUntil: Math.max(0, Number(effectsRaw.vipEveningUntil || effectsRaw.vipUntil || 0))
+        vipUntil: Math.max(0, Number(effectsRaw.vipUntil || 0)),
+        raidRiskUntil: Math.max(0, Number(effectsRaw.raidRiskUntil || 0))
       },
       extraHeat: Math.max(0, Number(rawState?.extraHeat || 0))
     };
@@ -2113,13 +2049,14 @@ window.Empire.Map = (() => {
       lastIncomeAt: now,
       lastInfluenceAt: now,
       cooldowns: {
-        tournament: 0,
-        laundering: 0,
-        nightRun: 0
+        slots: 0,
+        backroom: 0,
+        deal: 0
       },
       effects: {
-        tournamentUntil: 0,
-        nightRunUntil: 0
+        slotsUntil: 0,
+        backroomUntil: 0,
+        dealUntil: 0
       },
       extraHeat: 0
     };
@@ -2147,13 +2084,14 @@ window.Empire.Map = (() => {
       lastIncomeAt: Number.isFinite(lastIncomeAt) ? Math.max(0, lastIncomeAt) : fallback.lastIncomeAt,
       lastInfluenceAt: Number.isFinite(lastInfluenceAt) ? Math.max(0, lastInfluenceAt) : fallback.lastInfluenceAt,
       cooldowns: {
-        tournament: Math.max(0, Number(cooldownsRaw.tournament || cooldownsRaw.slots || 0)),
-        laundering: Math.max(0, Number(cooldownsRaw.laundering || cooldownsRaw.backroom || 0)),
-        nightRun: Math.max(0, Number(cooldownsRaw.nightRun || cooldownsRaw.deal || 0))
+        slots: Math.max(0, Number(cooldownsRaw.slots || 0)),
+        backroom: Math.max(0, Number(cooldownsRaw.backroom || 0)),
+        deal: Math.max(0, Number(cooldownsRaw.deal || 0))
       },
       effects: {
-        tournamentUntil: Math.max(0, Number(effectsRaw.tournamentUntil || effectsRaw.slotsUntil || 0)),
-        nightRunUntil: Math.max(0, Number(effectsRaw.nightRunUntil || effectsRaw.dealUntil || 0))
+        slotsUntil: Math.max(0, Number(effectsRaw.slotsUntil || 0)),
+        backroomUntil: Math.max(0, Number(effectsRaw.backroomUntil || 0)),
+        dealUntil: Math.max(0, Number(effectsRaw.dealUntil || 0))
       },
       extraHeat: Math.max(0, Number(rawState?.extraHeat || 0))
     };
@@ -2251,12 +2189,14 @@ window.Empire.Map = (() => {
       lastIncomeAt: now,
       lastInfluenceAt: now,
       cooldowns: {
-        exchange: 0,
-        hiddenTransfer: 0,
-        quickLiquidity: 0
+        favorableRate: 0,
+        silentTransfer: 0,
+        financialNetwork: 0
       },
       effects: {
-        hiddenTransferUntil: 0
+        favorableRateUntil: 0,
+        silentTransferRiskUntil: 0,
+        financialNetworkUntil: 0
       },
       extraHeat: 0
     };
@@ -2284,12 +2224,14 @@ window.Empire.Map = (() => {
       lastIncomeAt: Number.isFinite(lastIncomeAt) ? Math.max(0, lastIncomeAt) : fallback.lastIncomeAt,
       lastInfluenceAt: Number.isFinite(lastInfluenceAt) ? Math.max(0, lastInfluenceAt) : fallback.lastInfluenceAt,
       cooldowns: {
-        exchange: Math.max(0, Number(cooldownsRaw.exchange || cooldownsRaw.silentTransfer || 0)),
-        hiddenTransfer: Math.max(0, Number(cooldownsRaw.hiddenTransfer || cooldownsRaw.favorableRate || 0)),
-        quickLiquidity: Math.max(0, Number(cooldownsRaw.quickLiquidity || cooldownsRaw.financialNetwork || 0))
+        favorableRate: Math.max(0, Number(cooldownsRaw.favorableRate || 0)),
+        silentTransfer: Math.max(0, Number(cooldownsRaw.silentTransfer || 0)),
+        financialNetwork: Math.max(0, Number(cooldownsRaw.financialNetwork || 0))
       },
       effects: {
-        hiddenTransferUntil: Math.max(0, Number(effectsRaw.hiddenTransferUntil || effectsRaw.favorableRateUntil || 0))
+        favorableRateUntil: Math.max(0, Number(effectsRaw.favorableRateUntil || 0)),
+        silentTransferRiskUntil: Math.max(0, Number(effectsRaw.silentTransferRiskUntil || 0)),
+        financialNetworkUntil: Math.max(0, Number(effectsRaw.financialNetworkUntil || 0))
       },
       extraHeat: Math.max(0, Number(rawState?.extraHeat || 0))
     };
@@ -2317,14 +2259,13 @@ window.Empire.Map = (() => {
       lastIncomeAt: now,
       lastInfluenceAt: now,
       cooldowns: {
-        gangDinner: 0,
-        vipReservation: 0,
-        streetGossip: 0
+        happyHour: 0,
+        backTable: 0,
+        birthdayParty: 0
       },
       effects: {
-        gangDinnerUntil: 0,
-        gangDinnerDistrictPart: "",
-        vipReservationUntil: 0
+        happyHourUntil: 0,
+        backTableUntil: 0
       },
       extraHeat: 0
     };
@@ -2352,14 +2293,13 @@ window.Empire.Map = (() => {
       lastIncomeAt: Number.isFinite(lastIncomeAt) ? Math.max(0, lastIncomeAt) : fallback.lastIncomeAt,
       lastInfluenceAt: Number.isFinite(lastInfluenceAt) ? Math.max(0, lastInfluenceAt) : fallback.lastInfluenceAt,
       cooldowns: {
-        gangDinner: Math.max(0, Number(cooldownsRaw.gangDinner || cooldownsRaw.happyHour || 0)),
-        vipReservation: Math.max(0, Number(cooldownsRaw.vipReservation || cooldownsRaw.backTable || 0)),
-        streetGossip: Math.max(0, Number(cooldownsRaw.streetGossip || cooldownsRaw.birthdayParty || 0))
+        happyHour: Math.max(0, Number(cooldownsRaw.happyHour || 0)),
+        backTable: Math.max(0, Number(cooldownsRaw.backTable || 0)),
+        birthdayParty: Math.max(0, Number(cooldownsRaw.birthdayParty || 0))
       },
       effects: {
-        gangDinnerUntil: Math.max(0, Number(effectsRaw.gangDinnerUntil || effectsRaw.happyHourUntil || 0)),
-        gangDinnerDistrictPart: String(effectsRaw.gangDinnerDistrictPart || "").trim(),
-        vipReservationUntil: Math.max(0, Number(effectsRaw.vipReservationUntil || effectsRaw.backTableUntil || 0))
+        happyHourUntil: Math.max(0, Number(effectsRaw.happyHourUntil || 0)),
+        backTableUntil: Math.max(0, Number(effectsRaw.backTableUntil || 0))
       },
       extraHeat: Math.max(0, Number(rawState?.extraHeat || 0))
     };
@@ -2453,48 +2393,6 @@ window.Empire.Map = (() => {
       acc[key] = floorValues ? Math.floor(safeValue) : safeValue;
       return acc;
     }, {});
-  }
-
-  function createStreetDealerDefaultSlot(slotConfig, now = Date.now()) {
-    const safeConfig = slotConfig || {};
-    return {
-      id: Math.max(1, Math.floor(Number(safeConfig.id) || 1)),
-      resourceKey: String(safeConfig.resourceKey || "").trim(),
-      queuedUnits: 10,
-      storedUnits: 0,
-      soldUnitsTotal: 0,
-      salesUnitRemainder: 0,
-      cashRemainder: 0,
-      lastTick: Math.max(0, Math.floor(Number(now) || Date.now()))
-    };
-  }
-
-  function createStreetDealerDefaultSlots(now = Date.now()) {
-    return STREET_DEALERS_CONFIG.sales.slots.map((slotConfig) => createStreetDealerDefaultSlot(slotConfig, now));
-  }
-
-  function sanitizeStreetDealerSlot(rawSlot, fallbackSlot, now = Date.now()) {
-    const fallback = fallbackSlot || createStreetDealerDefaultSlot({}, now);
-    const id = Math.max(1, Math.floor(Number(rawSlot?.id ?? fallback.id ?? 1) || 1));
-    const expectedResourceKey = String(fallback.resourceKey || "").trim();
-    const resourceKeyRaw = String(rawSlot?.resourceKey || expectedResourceKey).trim();
-    const resourceKey = STREET_DEALERS_RESOURCE_KEYS.includes(resourceKeyRaw) ? resourceKeyRaw : expectedResourceKey;
-    const queuedUnitsRaw = Number(rawSlot?.queuedUnits ?? 10);
-    const storedUnitsRaw = Number(rawSlot?.storedUnits ?? rawSlot?.producedAmount ?? 0);
-    const soldUnitsTotalRaw = Number(rawSlot?.soldUnitsTotal || 0);
-    const salesUnitRemainderRaw = Number(rawSlot?.salesUnitRemainder || 0);
-    const cashRemainderRaw = Number(rawSlot?.cashRemainder || 0);
-    const lastTickRaw = Number(rawSlot?.lastTick || now);
-    return {
-      id,
-      resourceKey,
-      queuedUnits: Number.isFinite(queuedUnitsRaw) ? clamp(Math.floor(queuedUnitsRaw), 1, 999) : 10,
-      storedUnits: Number.isFinite(storedUnitsRaw) ? Math.max(0, Math.floor(storedUnitsRaw)) : 0,
-      soldUnitsTotal: Number.isFinite(soldUnitsTotalRaw) ? Math.max(0, Math.floor(soldUnitsTotalRaw)) : 0,
-      salesUnitRemainder: Number.isFinite(salesUnitRemainderRaw) ? Math.max(0, salesUnitRemainderRaw) : 0,
-      cashRemainder: Number.isFinite(cashRemainderRaw) ? Math.max(0, cashRemainderRaw) : 0,
-      lastTick: Number.isFinite(lastTickRaw) ? Math.max(0, Math.floor(lastTickRaw)) : Math.max(0, Math.floor(Number(now) || Date.now()))
-    };
   }
 
   function createPharmacyDefaultSlot(slotId, resourceKey, now = Date.now()) {
@@ -2824,8 +2722,6 @@ window.Empire.Map = (() => {
       stacks: {
         dealerTerritory: 0
       },
-      streetDealerSlots: createStreetDealerDefaultSlots(now),
-      streetDealerLastHeatTickAt: now,
       dataCenterTrackingOwner: "",
       dataCenterHackTargetDistrictId: "",
       warehouseLastMaterialsSummary: "",
@@ -2842,16 +2738,9 @@ window.Empire.Map = (() => {
     const influenceRemainder = Number(rawState?.influenceRemainder || 0);
     const lastIncomeAt = Number(rawState?.lastIncomeAt || now);
     const lastInfluenceAt = Number(rawState?.lastInfluenceAt || now);
-    const lastGossipAt = Number(rawState?.lastGossipAt || 0);
     const cooldownsRaw = rawState?.cooldowns || {};
     const effectsRaw = rawState?.effects || {};
     const stacksRaw = rawState?.stacks || {};
-    const streetDealerSlotsRaw = Array.isArray(rawState?.streetDealerSlots) ? rawState.streetDealerSlots : [];
-    const fallbackStreetDealerSlots = createStreetDealerDefaultSlots(now);
-    const streetDealerSlots = fallbackStreetDealerSlots.map((fallbackSlot, index) =>
-      sanitizeStreetDealerSlot(streetDealerSlotsRaw[index], fallbackSlot, now)
-    );
-    const streetDealerLastHeatTickAtRaw = Number(rawState?.streetDealerLastHeatTickAt || now);
     return {
       level: Number.isFinite(levelRaw) ? Math.max(1, Math.floor(levelRaw)) : 1,
       incomeRemainderClean: Number.isFinite(incomeRemainderClean) ? Math.max(0, incomeRemainderClean) : 0,
@@ -2901,10 +2790,6 @@ window.Empire.Map = (() => {
       stacks: {
         dealerTerritory: Math.max(0, Math.floor(Number(stacksRaw.dealerTerritory || 0)))
       },
-      streetDealerSlots,
-      streetDealerLastHeatTickAt: Number.isFinite(streetDealerLastHeatTickAtRaw)
-        ? Math.max(0, Math.floor(streetDealerLastHeatTickAtRaw))
-        : fallback.streetDealerLastHeatTickAt,
       dataCenterTrackingOwner: String(rawState?.dataCenterTrackingOwner || "").trim(),
       dataCenterHackTargetDistrictId: String(rawState?.dataCenterHackTargetDistrictId || "").trim(),
       warehouseLastMaterialsSummary: String(rawState?.warehouseLastMaterialsSummary || "").trim(),
@@ -3954,8 +3839,8 @@ window.Empire.Map = (() => {
       hourlyDirtyIncome: 90
     }),
     Klinika: Object.freeze({
-      hourlyCleanIncome: 150,
-      hourlyDirtyIncome: 18
+      hourlyCleanIncome: 160,
+      hourlyDirtyIncome: 80
     }),
     "Rekrutační centrum": Object.freeze({
       hourlyCleanIncome: 120,
@@ -4704,12 +4589,42 @@ window.Empire.Map = (() => {
 
   function getApartmentLevelMultiplier(level) {
     const safeLevel = clamp(Math.floor(Number(level) || 1), 1, APARTMENT_BLOCK_CONFIG.maxLevel);
-    return 1 + (safeLevel - 1) * APARTMENT_BLOCK_CONFIG.upgradePctPerLevel;
+    return [1, 1.2, 1.45, 1.75, 2.1][safeLevel - 1] || 1;
   }
 
   function getSchoolLevelMultiplier(level) {
     const safeLevel = clamp(Math.floor(Number(level) || 1), 1, SCHOOL_BUILDING_CONFIG.maxLevel);
-    return 1 + (safeLevel - 1) * SCHOOL_BUILDING_CONFIG.upgradePctPerLevel;
+    return [1, 1.2, 1.45, 1.75, 2.1][safeLevel - 1] || 1;
+  }
+
+  function getApartmentCapacityByLevel(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 1, APARTMENT_BLOCK_CONFIG.maxLevel);
+    return [60, 100, 130, 170, 230][safeLevel - 1] || 60;
+  }
+
+  function getSchoolCapacityByLevel(level) {
+    const safeLevel = clamp(Math.floor(Number(level) || 1), 1, SCHOOL_BUILDING_CONFIG.maxLevel);
+    return [40, 65, 90, 120, 160][safeLevel - 1] || 40;
+  }
+
+  function getClinicLevelEffects(levelRaw) {
+    const level = clamp(Math.floor(Number(levelRaw) || 1), 1, CLINIC_BUILDING_CONFIG.maxLevel);
+    const healMultiplier =
+      1
+      + (level >= 2 ? 0.20 : 0)
+      + (level >= 4 ? 0.30 : 0)
+      + (level >= 5 ? 0.20 : 0);
+    const survivalChancePct =
+      35
+      + (level >= 3 ? 25 : 0)
+      + (level >= 5 ? 20 : 0);
+    const heatMultiplier = level >= 4 ? 1.05 : 1;
+    return {
+      level,
+      healMultiplier,
+      survivalChancePct,
+      heatMultiplier
+    };
   }
 
   function getFitnessLevelEffects(levelRaw) {
@@ -4743,9 +4658,7 @@ window.Empire.Map = (() => {
 
   function getArcadeLevelMultiplier(level) {
     const safeLevel = clamp(Math.floor(Number(level) || 1), 1, ARCADE_BUILDING_CONFIG.maxLevel);
-    if (safeLevel >= 4) return 1.2;
-    if (safeLevel >= 2) return 1.1;
-    return 1;
+    return 1 + (safeLevel - 1) * ARCADE_BUILDING_CONFIG.upgradePctPerLevel;
   }
 
   function getAutoSalonLevelMultiplier(level) {
@@ -4755,14 +4668,12 @@ window.Empire.Map = (() => {
 
   function getExchangeLevelMultiplier(level) {
     const safeLevel = clamp(Math.floor(Number(level) || 1), 1, EXCHANGE_BUILDING_CONFIG.maxLevel);
-    return safeLevel >= 2 ? 1.1 : 1;
+    return 1 + (safeLevel - 1) * EXCHANGE_BUILDING_CONFIG.upgradePctPerLevel;
   }
 
   function getRestaurantLevelMultiplier(level) {
     const safeLevel = clamp(Math.floor(Number(level) || 1), 1, RESTAURANT_BUILDING_CONFIG.maxLevel);
-    if (safeLevel >= 4) return 1.3;
-    if (safeLevel >= 2) return 1.1;
-    return 1;
+    return 1 + (safeLevel - 1) * RESTAURANT_BUILDING_CONFIG.upgradePctPerLevel;
   }
 
   function getConvenienceStoreLevelMultiplier(level) {
@@ -5056,7 +4967,9 @@ window.Empire.Map = (() => {
   }
 
   function collectOwnedPharmacyEntries() {
-    const districts = Array.isArray(state.districts) ? state.districts : [];
+    const districts = Array.isArray(state.districts) && state.districts.length
+      ? state.districts
+      : (Array.isArray(window.Empire?.districts) ? window.Empire.districts : []);
     const entries = [];
     districts.forEach((district) => {
       if (!isDistrictOwnedByPlayer(district)) return;
@@ -5107,7 +5020,9 @@ window.Empire.Map = (() => {
   }
 
   function collectOwnedFactoryEntries() {
-    const districts = Array.isArray(state.districts) ? state.districts : [];
+    const districts = Array.isArray(state.districts) && state.districts.length
+      ? state.districts
+      : (Array.isArray(window.Empire?.districts) ? window.Empire.districts : []);
     const entries = [];
     districts.forEach((district) => {
       if (!isDistrictOwnedByPlayer(district)) return;
@@ -5140,7 +5055,9 @@ window.Empire.Map = (() => {
   }
 
   function collectOwnedArmoryEntries() {
-    const districts = Array.isArray(state.districts) ? state.districts : [];
+    const districts = Array.isArray(state.districts) && state.districts.length
+      ? state.districts
+      : (Array.isArray(window.Empire?.districts) ? window.Empire.districts : []);
     const entries = [];
     districts.forEach((district) => {
       if (!isDistrictOwnedByPlayer(district)) return;
@@ -5173,6 +5090,29 @@ window.Empire.Map = (() => {
   }
 
   function resolvePrimaryOwnedPharmacyTarget(context, district) {
+    const districtRecord = resolveDistrictRecord(district || context?.districtId) || district || null;
+    const baseName = String(context?.baseName || "").trim();
+    if (districtRecord && baseName) {
+      const buildings = Array.isArray(districtRecord?.buildings) ? districtRecord.buildings : [];
+      const overrides = Array.isArray(districtRecord?.buildingNameOverrides) ? districtRecord.buildingNameOverrides : [];
+      for (let index = 0; index < buildings.length; index += 1) {
+        if (!isPharmacyBaseName(buildings[index])) continue;
+        const resolvedBaseName = String(buildings[index] || PHARMACY_BUILDING_NAME);
+        if (normalizeBuildingTypeName(resolvedBaseName) !== normalizeBuildingTypeName(baseName)) continue;
+        const variantRaw = String(overrides[index] || "").trim();
+        return {
+          entries: [],
+          primary: null,
+          context: {
+            baseName: resolvedBaseName,
+            variantName: variantRaw && variantRaw !== resolvedBaseName ? variantRaw : null,
+            districtId: districtRecord?.id ?? null,
+            buildingIndex: index
+          },
+          district: districtRecord
+        };
+      }
+    }
     const ownedEntries = collectOwnedPharmacyEntries();
     if (ownedEntries.length) {
       const primary = ownedEntries[0];
@@ -5193,6 +5133,29 @@ window.Empire.Map = (() => {
   }
 
   function resolvePrimaryOwnedFactoryTarget(context, district) {
+    const districtRecord = resolveDistrictRecord(district || context?.districtId) || district || null;
+    const baseName = String(context?.baseName || "").trim();
+    if (districtRecord && baseName) {
+      const buildings = Array.isArray(districtRecord?.buildings) ? districtRecord.buildings : [];
+      const overrides = Array.isArray(districtRecord?.buildingNameOverrides) ? districtRecord.buildingNameOverrides : [];
+      for (let index = 0; index < buildings.length; index += 1) {
+        if (!isFactoryBaseName(buildings[index])) continue;
+        const resolvedBaseName = String(buildings[index] || FACTORY_BUILDING_NAME);
+        if (normalizeBuildingTypeName(resolvedBaseName) !== normalizeBuildingTypeName(baseName)) continue;
+        const variantRaw = String(overrides[index] || "").trim();
+        return {
+          entries: [],
+          primary: null,
+          context: {
+            baseName: resolvedBaseName,
+            variantName: variantRaw && variantRaw !== resolvedBaseName ? variantRaw : null,
+            districtId: districtRecord?.id ?? null,
+            buildingIndex: index
+          },
+          district: districtRecord
+        };
+      }
+    }
     const ownedEntries = collectOwnedFactoryEntries();
     if (ownedEntries.length) {
       const primary = ownedEntries[0];
@@ -5213,6 +5176,29 @@ window.Empire.Map = (() => {
   }
 
   function resolvePrimaryOwnedArmoryTarget(context, district) {
+    const districtRecord = resolveDistrictRecord(district || context?.districtId) || district || null;
+    const baseName = String(context?.baseName || "").trim();
+    if (districtRecord && baseName) {
+      const buildings = Array.isArray(districtRecord?.buildings) ? districtRecord.buildings : [];
+      const overrides = Array.isArray(districtRecord?.buildingNameOverrides) ? districtRecord.buildingNameOverrides : [];
+      for (let index = 0; index < buildings.length; index += 1) {
+        if (!isArmoryBaseName(buildings[index])) continue;
+        const resolvedBaseName = String(buildings[index] || ARMORY_BUILDING_NAME);
+        if (normalizeBuildingTypeName(resolvedBaseName) !== normalizeBuildingTypeName(baseName)) continue;
+        const variantRaw = String(overrides[index] || "").trim();
+        return {
+          entries: [],
+          primary: null,
+          context: {
+            baseName: resolvedBaseName,
+            variantName: variantRaw && variantRaw !== resolvedBaseName ? variantRaw : null,
+            districtId: districtRecord?.id ?? null,
+            buildingIndex: index
+          },
+          district: districtRecord
+        };
+      }
+    }
     const ownedEntries = collectOwnedArmoryEntries();
     if (ownedEntries.length) {
       const primary = ownedEntries[0];
@@ -5233,7 +5219,9 @@ window.Empire.Map = (() => {
   }
 
   function collectOwnedDrugLabEntries() {
-    const districts = Array.isArray(state.districts) ? state.districts : [];
+    const districts = Array.isArray(state.districts) && state.districts.length
+      ? state.districts
+      : (Array.isArray(window.Empire?.districts) ? window.Empire.districts : []);
     const entries = [];
     districts.forEach((district) => {
       if (!isDistrictOwnedByPlayer(district)) return;
@@ -5271,6 +5259,29 @@ window.Empire.Map = (() => {
   }
 
   function resolvePrimaryOwnedDrugLabTarget(context, district) {
+    const districtRecord = resolveDistrictRecord(district || context?.districtId) || district || null;
+    const baseName = String(context?.baseName || "").trim();
+    if (districtRecord && baseName) {
+      const buildings = Array.isArray(districtRecord?.buildings) ? districtRecord.buildings : [];
+      const overrides = Array.isArray(districtRecord?.buildingNameOverrides) ? districtRecord.buildingNameOverrides : [];
+      for (let index = 0; index < buildings.length; index += 1) {
+        if (!isDrugLabBaseName(buildings[index])) continue;
+        const resolvedBaseName = String(buildings[index] || DRUG_LAB_BUILDING_NAME);
+        if (normalizeBuildingTypeName(resolvedBaseName) !== normalizeBuildingTypeName(baseName)) continue;
+        const variantRaw = String(overrides[index] || "").trim();
+        return {
+          entries: [],
+          primary: null,
+          context: {
+            baseName: resolvedBaseName,
+            variantName: variantRaw && variantRaw !== resolvedBaseName ? variantRaw : null,
+            districtId: districtRecord?.id ?? null,
+            buildingIndex: index
+          },
+          district: districtRecord
+        };
+      }
+    }
     const ownedEntries = collectOwnedDrugLabEntries();
     if (ownedEntries.length) {
       const primary = ownedEntries[0];
@@ -5752,19 +5763,6 @@ window.Empire.Map = (() => {
       boostPct += EXCHANGE_BUILDING_CONFIG.actionBoosts.districtIncomeBonusPct * getExchangeLevelMultiplier(snapshot.level);
     });
 
-    let restaurantDinnerBoostPct = 0;
-    Object.values(restaurantBuildingStore || {}).forEach((rawState) => {
-      const snapshot = sanitizeRestaurantState(rawState, nowMs);
-      if (nowMs >= Number(snapshot.effects.gangDinnerUntil || 0)) return;
-      const targetPart = String(snapshot.effects.gangDinnerDistrictPart || "").trim();
-      if (!targetPart || targetPart !== districtPart) return;
-      restaurantDinnerBoostPct = Math.max(
-        restaurantDinnerBoostPct,
-        Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.gangDinnerDistrictIncomePct || 0))
-      );
-    });
-    boostPct += restaurantDinnerBoostPct;
-
     boostPct += Math.max(0, Number(getOwnedFitnessGlobalBoostSnapshot(nowMs).districtIncomeBoostPct || 0));
 
     if (districtKey) {
@@ -5922,57 +5920,7 @@ window.Empire.Map = (() => {
     const intelLevelRaw = String(rawEntry?.intelLevel || "").trim().toLowerCase();
     const intelLevel = intelLevelRaw === "verified" ? "verified" : "rumor";
     const intelType = String(rawEntry?.intelType || "").trim() || "rumor";
-    const qualityKeyRaw = String(rawEntry?.gossipQuality || rawEntry?.quality || "").trim().toLowerCase();
-    const qualityKey = qualityKeyRaw === "rare" || qualityKeyRaw === "quality" ? qualityKeyRaw : "common";
-    const categoryRaw = String(rawEntry?.gossipCategory || rawEntry?.category || "").trim().toLowerCase();
-    const gossipCategory = Object.prototype.hasOwnProperty.call(DISTRICT_GOSSIP_CATEGORY_LABELS, categoryRaw)
-      ? categoryRaw
-      : "special";
-    const accuracyRaw = Number(rawEntry?.accuracyPct ?? rawEntry?.accuracy ?? rawEntry?.precisionPct ?? 0);
-    const accuracyPct = Number.isFinite(accuracyRaw) ? Math.max(0, Math.min(100, Math.floor(accuracyRaw))) : 0;
-    const truthStateRaw = String(rawEntry?.truthState || "").trim().toLowerCase();
-    const truthState = truthStateRaw === "true" || truthStateRaw === "partial" || truthStateRaw === "false"
-      ? truthStateRaw
-      : (accuracyPct >= 90 ? "true" : accuracyPct >= 75 ? "partial" : "false");
-    return {
-      id,
-      text,
-      createdAt,
-      sourceBuilding,
-      sourceDistrictId,
-      intelLevel,
-      intelType,
-      gossipQuality: qualityKey,
-      gossipCategory,
-      accuracyPct,
-      truthState
-    };
-  }
-
-  function getGossipQualityPreset(qualityKey) {
-    const key = String(qualityKey || "").trim().toLowerCase();
-    return DISTRICT_GOSSIP_QUALITY_PRESETS[key] || DISTRICT_GOSSIP_QUALITY_PRESETS.common;
-  }
-
-  function getGossipQualityLabel(entry) {
-    const preset = getGossipQualityPreset(entry?.gossipQuality);
-    return preset.label;
-  }
-
-  function getGossipCategoryLabel(entry) {
-    const key = String(entry?.gossipCategory || "").trim().toLowerCase();
-    return DISTRICT_GOSSIP_CATEGORY_LABELS[key] || "Speciální";
-  }
-
-  function getGossipTruthLabel(entry) {
-    const key = String(entry?.truthState || "").trim().toLowerCase();
-    if (key === "true") return "Pravdivý";
-    if (key === "partial") return "Částečný";
-    if (key === "false") return "Falešný";
-    const accuracy = Math.max(0, Math.min(100, Math.floor(Number(entry?.accuracyPct || 0))));
-    if (accuracy >= 90) return "Pravdivý";
-    if (accuracy >= 75) return "Částečný";
-    return "Falešný";
+    return { id, text, createdAt, sourceBuilding, sourceDistrictId, intelLevel, intelType };
   }
 
   function getDistrictGossipEntries(districtOrId, limit = 20) {
@@ -5991,18 +5939,6 @@ window.Empire.Map = (() => {
   function appendDistrictGossip(districtOrId, text, metadata = {}) {
     const districtPart = resolveDistrictIdentityPart(districtOrId);
     if (!districtPart) return null;
-    const qualityKey = String(metadata?.gossipQuality || metadata?.quality || "common").trim().toLowerCase();
-    const normalizedQuality = qualityKey === "rare" || qualityKey === "quality" ? qualityKey : "common";
-    const categoryKey = String(metadata?.gossipCategory || metadata?.category || "special").trim().toLowerCase();
-    const normalizedCategory = Object.prototype.hasOwnProperty.call(DISTRICT_GOSSIP_CATEGORY_LABELS, categoryKey)
-      ? categoryKey
-      : "special";
-    const accuracyRaw = Number(metadata?.accuracyPct ?? metadata?.accuracy ?? 0);
-    const normalizedAccuracy = Number.isFinite(accuracyRaw) ? Math.max(0, Math.min(100, Math.floor(accuracyRaw))) : 0;
-    const truthStateRaw = String(metadata?.truthState || "").trim().toLowerCase();
-    const normalizedTruthState = truthStateRaw === "true" || truthStateRaw === "partial" || truthStateRaw === "false"
-      ? truthStateRaw
-      : (normalizedAccuracy >= 90 ? "true" : normalizedAccuracy >= 75 ? "partial" : "false");
     const entry = sanitizeDistrictGossipEntry({
       id: `${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
       text,
@@ -6010,11 +5946,7 @@ window.Empire.Map = (() => {
       sourceBuilding: metadata?.sourceBuilding || null,
       sourceDistrictId: metadata?.sourceDistrictId ?? null,
       intelLevel: metadata?.intelLevel || "rumor",
-      intelType: metadata?.intelType || "rumor",
-      gossipQuality: normalizedQuality,
-      gossipCategory: normalizedCategory,
-      accuracyPct: normalizedAccuracy,
-      truthState: normalizedTruthState
+      intelType: metadata?.intelType || "rumor"
     });
     if (!entry) return null;
     const existing = Array.isArray(districtGossipStore[districtPart]) ? districtGossipStore[districtPart] : [];
@@ -6038,76 +5970,44 @@ window.Empire.Map = (() => {
         {
           intelLevel: "verified",
           intelType: "attack_success",
-          text: "Potvrzený intel: V districtu 94 proběhl noční útok na sklad zbraní.",
-          gossipQuality: "rare",
-          gossipCategory: "attack",
-          accuracyPct: 96,
-          truthState: "true"
+          text: "Potvrzený intel: V districtu 94 proběhl noční útok na sklad zbraní."
         },
         {
           intelLevel: "rumor",
           intelType: "rumor",
-          text: "Drb: V districtu 94 se mluví o novém dodavateli chemie z předměstí.",
-          gossipQuality: "common",
-          gossipCategory: "production",
-          accuracyPct: 71,
-          truthState: "partial"
+          text: "Drb: V districtu 94 se mluví o novém dodavateli chemie z předměstí."
         },
         {
           intelLevel: "verified",
           intelType: "market_order_created",
-          text: "Potvrzený intel: Přes district 94 šel velký nákupní příkaz na drogy.",
-          gossipQuality: "quality",
-          gossipCategory: "economy",
-          accuracyPct: 88,
-          truthState: "true"
+          text: "Potvrzený intel: Přes district 94 šel velký nákupní příkaz na drogy."
         },
         {
           intelLevel: "rumor",
           intelType: "rumor",
-          text: "Drb: V districtu 94 někdo uplácí personál v restauracích.",
-          gossipQuality: "common",
-          gossipCategory: "special",
-          accuracyPct: 67,
-          truthState: "false"
+          text: "Drb: V districtu 94 někdo uplácí personál v restauracích."
         }
       ],
       69: [
         {
           intelLevel: "verified",
           intelType: "raid_started",
-          text: "Potvrzený intel: V districtu 69 bylo potvrzeno vykrádání noční směny.",
-          gossipQuality: "rare",
-          gossipCategory: "heat",
-          accuracyPct: 97,
-          truthState: "true"
+          text: "Potvrzený intel: V districtu 69 bylo potvrzeno vykrádání noční směny."
         },
         {
           intelLevel: "rumor",
           intelType: "rumor",
-          text: "Drb: V districtu 69 se zvyšuje pohyb pouličních dealerů kolem herny.",
-          gossipQuality: "quality",
-          gossipCategory: "production",
-          accuracyPct: 83,
-          truthState: "partial"
+          text: "Drb: V districtu 69 se zvyšuje pohyb pouličních dealerů kolem herny."
         },
         {
           intelLevel: "verified",
           intelType: "spy_started",
-          text: "Potvrzený intel: V districtu 69 běží cizí špionážní síť.",
-          gossipQuality: "rare",
-          gossipCategory: "attack",
-          accuracyPct: 94,
-          truthState: "true"
+          text: "Potvrzený intel: V districtu 69 běží cizí špionážní síť."
         },
         {
           intelLevel: "rumor",
           intelType: "rumor",
-          text: "Drb: V districtu 69 se připravuje tichý přesun hotovosti přes taxislužby.",
-          gossipQuality: "common",
-          gossipCategory: "economy",
-          accuracyPct: 74,
-          truthState: "partial"
+          text: "Drb: V districtu 69 se připravuje tichý přesun hotovosti přes taxislužby."
         }
       ]
     };
@@ -6118,11 +6018,7 @@ window.Empire.Map = (() => {
         appendDistrictGossip(districtId, entry.text, {
           createdAt: now - (districtOffset * 10 + index) * 60000,
           intelLevel: entry.intelLevel,
-          intelType: entry.intelType,
-          gossipQuality: entry.gossipQuality,
-          gossipCategory: entry.gossipCategory,
-          accuracyPct: entry.accuracyPct,
-          truthState: entry.truthState
+          intelType: entry.intelType
         });
       });
     });
@@ -6300,12 +6196,10 @@ window.Empire.Map = (() => {
     const stateRef = instanceState;
     const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
     const levelMultiplier = getApartmentLevelMultiplier(stateRef.level);
-    const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(districtOrId, nowMs);
-    const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
-    const capacity = Math.max(1, Math.floor(APARTMENT_BLOCK_CONFIG.baseCapacity * levelMultiplier));
+    const recruitBoostActive = nowMs < Number(stateRef.effects.motivationUntil || 0);
+    const capacityBoostActive = nowMs < Number(stateRef.effects.hiddenHousingUntil || 0);
+    const capacity = getApartmentCapacityByLevel(stateRef.level) + (capacityBoostActive ? 20 : 0);
     const cycleMs = APARTMENT_BLOCK_CONFIG.productionCycleMs;
-
-    stateRef.hiddenHousingActive = stateRef.hiddenHousingActive && nowMs < Number(stateRef.effects.hiddenHousingUntil || 0);
 
     if (stateRef.storedMembers >= capacity) {
       stateRef.storedMembers = capacity;
@@ -6318,81 +6212,24 @@ window.Empire.Map = (() => {
       }
       const cycleCount = Math.max(0, Math.floor((nowMs - productionFrom) / cycleMs));
       if (cycleCount > 0) {
-        let reachedCapacity = false;
-        let appliedCycles = 0;
-        for (let i = 0; i < cycleCount; i += 1) {
-          const cycleTime = productionFrom + (i + 1) * cycleMs;
-          const motivationActive = cycleTime < Number(stateRef.effects.motivationUntil || 0);
-          const cycleMultiplier = motivationActive ? 2 : 1;
-          const producedRaw =
-            APARTMENT_BLOCK_CONFIG.baseProductionPerCycle * levelMultiplier * cycleMultiplier
-            + Number(stateRef.productionRemainder || 0);
-          const producedWhole = Math.floor(producedRaw);
-          stateRef.productionRemainder = Math.max(0, producedRaw - producedWhole);
-          if (producedWhole > 0) {
-            stateRef.storedMembers = Math.min(capacity, Number(stateRef.storedMembers || 0) + producedWhole);
-            if (stateRef.storedMembers >= capacity) {
-              stateRef.productionRemainder = 0;
-              reachedCapacity = true;
-              appliedCycles = i + 1;
-              break;
-            }
-          }
-          appliedCycles = i + 1;
-        }
-        if (reachedCapacity) {
-          stateRef.lastProductionAt = nowMs;
-        } else {
-          stateRef.lastProductionAt = productionFrom + appliedCycles * cycleMs;
+        const cycleMultiplier = recruitBoostActive ? 1.5 : 1;
+        const producedRaw =
+          cycleCount * APARTMENT_BLOCK_CONFIG.baseProductionPerCycle * levelMultiplier * cycleMultiplier
+          + Number(stateRef.productionRemainder || 0);
+        const producedWhole = Math.max(0, Math.floor(producedRaw));
+        stateRef.productionRemainder = Math.max(0, producedRaw - producedWhole);
+        stateRef.storedMembers = Math.min(capacity, Number(stateRef.storedMembers || 0) + producedWhole);
+        stateRef.lastProductionAt = stateRef.storedMembers >= capacity ? nowMs : productionFrom + cycleCount * cycleMs;
+        if (stateRef.storedMembers >= capacity) {
+          stateRef.productionRemainder = 0;
         }
       }
-    }
-
-    let cleanIncomeGained = 0;
-    let dirtyIncomeGained = 0;
-    let incomeFrom = Number(stateRef.lastIncomeAt || nowMs);
-    if (!Number.isFinite(incomeFrom) || incomeFrom > nowMs) {
-      incomeFrom = nowMs;
-    }
-
-    const hiddenUntil = Number(stateRef.effects.hiddenHousingUntil || 0);
-    const hiddenActive = stateRef.hiddenHousingActive && incomeFrom < hiddenUntil;
-    if (hiddenActive) {
-      const blockedUntil = Math.min(nowMs, hiddenUntil);
-      incomeFrom = blockedUntil;
-      if (nowMs >= hiddenUntil) {
-        stateRef.hiddenHousingActive = false;
-      }
-    }
-
-    if (incomeFrom < nowMs) {
-      const hoursElapsed = (nowMs - incomeFrom) / 3600000;
-      const hourlyCleanIncome =
-        (APARTMENT_BLOCK_CONFIG.baseCleanIncomePerHour
-          + Math.max(0, Number(totalGangMembers || 0)) * APARTMENT_BLOCK_CONFIG.cleanIncomePerGangMemberPerHour)
-        * levelMultiplier
-        * districtIncomeMultiplier;
-      const hourlyDirtyIncome =
-        (APARTMENT_BLOCK_CONFIG.baseDirtyIncomePerHour
-          + Math.max(0, Number(totalGangMembers || 0)) * APARTMENT_BLOCK_CONFIG.dirtyIncomePerGangMemberPerHour)
-        * levelMultiplier
-        * districtIncomeMultiplier;
-      const cleanRaw = hoursElapsed * hourlyCleanIncome + Number(stateRef.incomeRemainderClean || 0);
-      const dirtyRaw = hoursElapsed * hourlyDirtyIncome + Number(stateRef.incomeRemainderDirty || 0);
-      cleanIncomeGained = Math.max(0, Math.floor(cleanRaw));
-      dirtyIncomeGained = Math.max(0, Math.floor(dirtyRaw));
-      stateRef.incomeRemainderClean = Math.max(0, cleanRaw - cleanIncomeGained);
-      stateRef.incomeRemainderDirty = Math.max(0, dirtyRaw - dirtyIncomeGained);
     }
     stateRef.lastIncomeAt = nowMs;
 
-    if (cleanIncomeGained > 0 || dirtyIncomeGained > 0) {
-      payoutDirectBuildingIncome(cleanIncomeGained, dirtyIncomeGained);
-    }
-
     applyBuildingInfluenceTick(stateRef, nowMs, BUILDING_INFLUENCE_PER_HOUR);
 
-    return { cleanIncomeGained, dirtyIncomeGained };
+    return { cleanIncomeGained: 0, dirtyIncomeGained: 0 };
   }
 
   function resolveApartmentBuildingDetails(context, district, fallback) {
@@ -6404,34 +6241,27 @@ window.Empire.Map = (() => {
     persistApartmentState(key, snapshot);
 
     const levelMultiplier = getApartmentLevelMultiplier(snapshot.level);
-    const capacity = Math.max(1, Math.floor(APARTMENT_BLOCK_CONFIG.baseCapacity * levelMultiplier));
     const motivationActive = now < Number(snapshot.effects.motivationUntil || 0);
-    const hiddenHousingActive = snapshot.hiddenHousingActive && now < Number(snapshot.effects.hiddenHousingUntil || 0);
+    const hiddenHousingActive = now < Number(snapshot.effects.hiddenHousingUntil || 0);
+    const capacity = getApartmentCapacityByLevel(snapshot.level) + (hiddenHousingActive ? 20 : 0);
     const productionPerCycle =
       APARTMENT_BLOCK_CONFIG.baseProductionPerCycle
       * levelMultiplier
-      * (motivationActive ? 2 : 1);
-    const hourlyCleanIncome = hiddenHousingActive
-      ? 0
-      : (APARTMENT_BLOCK_CONFIG.baseCleanIncomePerHour
-        + totalGangMembers * APARTMENT_BLOCK_CONFIG.cleanIncomePerGangMemberPerHour)
-      * levelMultiplier;
-    const hourlyDirtyIncome = hiddenHousingActive
-      ? 0
-      : (APARTMENT_BLOCK_CONFIG.baseDirtyIncomePerHour
-        + totalGangMembers * APARTMENT_BLOCK_CONFIG.dirtyIncomePerGangMemberPerHour)
-      * levelMultiplier;
+      * (motivationActive ? 1.5 : 1);
+    const hourlyCleanIncome = 0;
+    const hourlyDirtyIncome = 0;
     const hourlyIncome = hourlyCleanIncome + hourlyDirtyIncome;
     const dailyIncome = hourlyIncome * 24;
     const nextLevel = snapshot.level < APARTMENT_BLOCK_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? APARTMENT_BLOCK_CONFIG.upgradeCosts[nextLevel] || 0 : 0;
+    const producedPerMinute = APARTMENT_BLOCK_CONFIG.baseProductionPerCycle * levelMultiplier * (motivationActive ? 1.5 : 1);
 
     const effects = [];
     if (motivationActive) {
-      effects.push(`Motivační večer (${formatDurationLabel(snapshot.effects.motivationUntil - now)})`);
+      effects.push(`Nábor v baráku +50% produkce (${formatDurationLabel(snapshot.effects.motivationUntil - now)})`);
     }
     if (hiddenHousingActive) {
-      effects.push(`Skryté ubytování (${formatDurationLabel(snapshot.effects.hiddenHousingUntil - now)})`);
+      effects.push(`Bonus kapacita +20 (${formatDurationLabel(snapshot.effects.hiddenHousingUntil - now)})`);
     }
 
     return {
@@ -6443,11 +6273,9 @@ window.Empire.Map = (() => {
       hourlyIncome,
       dailyIncome,
       info:
-        "Bytový blok je personální centrum gangu: každých 10 minut produkuje členy do kapacity, kterou musíš pravidelně vybírat tlačítkem Vybrat členy. Pokud je kapacita plná, produkce se zastaví. Budova generuje clean a dirty cash, Nábor z ulice okamžitě doplní část kapacity, Motivační večer na 2h zdvojnásobí produkci a Skryté ubytování na 2h vypne income, ale aktivuje ochranný režim. Každý upgrade zvyšuje produkci, kapacitu i income o 10 %.",
+        "Ošuntělý panelák plný lidí, co chtějí přežít, vydělat nebo se přidat k tomu, kdo má v ulici sílu. Tady se nabírá maso do války. Produkuje 2 obyvatele za minutu a když je kapacita plná, produkce se zastaví.",
       specialActions: [
-        "Nábor z ulice: Cooldown 3h, okamžitě přidá náhodně 5 až 15 členů do kapacity budovy a přidá +5 heat.",
-        "Motivační večer: Cooldown 6h, na 2h zdvojnásobí produkci členů v budově.",
-        "Skryté ubytování: Cooldown 8h, na 2h nastaví income budovy na 0 a aktivuje ochranný režim proti razii."
+        "Nábor v baráku: Cooldown 25 min, +50% produkce na 15 min, +20 kapacita, +3 heat."
       ],
       mechanics: {
         type: "apartment-block",
@@ -6459,11 +6287,15 @@ window.Empire.Map = (() => {
         capacity,
         productionPerCycle,
         heatPerDay: APARTMENT_BLOCK_CONFIG.baseHeatPerDay + Math.max(0, Number(snapshot.extraHeat || 0)),
-        effectsLabel: effects.length ? effects.join(" • ") : "Žádné",
+        effectsLabel: effects.length ? effects.join(" • ") : `K dispozici ${Math.max(0, Math.floor(snapshot.storedMembers || 0))}/${capacity} obyvatel`,
+        hourlyCleanIncome,
+        hourlyDirtyIncome,
+        producedPerMinute,
+        producedPerHour: producedPerMinute * 60,
         cooldowns: {
           recruit: Math.max(0, Number(snapshot.cooldowns.recruit || 0) - now),
-          motivation: Math.max(0, Number(snapshot.cooldowns.motivation || 0) - now),
-          hiddenHousing: Math.max(0, Number(snapshot.cooldowns.hiddenHousing || 0) - now)
+          motivation: 0,
+          hiddenHousing: 0
         },
         hiddenHousingActive,
         loyaltyPenalty: Number(snapshot.loyaltyPenalty || 0)
@@ -6488,8 +6320,7 @@ window.Empire.Map = (() => {
     const totalGangMembers = Number(window.Empire.UI?.getCurrentGangMembers?.() || 0);
     syncApartmentProductionAndIncome(snapshot, totalGangMembers, now, district || context?.districtId);
 
-    const levelMultiplier = getApartmentLevelMultiplier(snapshot.level);
-    const capacity = Math.max(1, Math.floor(APARTMENT_BLOCK_CONFIG.baseCapacity * levelMultiplier));
+    const capacity = getApartmentCapacityByLevel(snapshot.level) + (now < Number(snapshot.effects.hiddenHousingUntil || 0) ? 20 : 0);
     const toCooldownLeft = (until) => Math.max(0, Math.floor(Number(until || 0) - now));
 
     if (actionId === "collect") {
@@ -6512,54 +6343,27 @@ window.Empire.Map = (() => {
       const cooldownLeft = toCooldownLeft(snapshot.cooldowns.recruit);
       if (cooldownLeft > 0) {
         persistApartmentState(key, snapshot);
-        return { ok: false, message: `Nábor z ulice je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Nábor v baráku je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const randomAdded =
-        APARTMENT_BLOCK_CONFIG.recruitRange.min
-        + Math.floor(Math.random() * (APARTMENT_BLOCK_CONFIG.recruitRange.max - APARTMENT_BLOCK_CONFIG.recruitRange.min + 1));
-      const freeSpace = Math.max(0, capacity - Math.floor(snapshot.storedMembers || 0));
-      const added = Math.max(0, Math.min(freeSpace, randomAdded));
-      snapshot.storedMembers = Math.min(capacity, Math.floor(snapshot.storedMembers || 0) + added);
+      snapshot.effects.motivationUntil = now + APARTMENT_BLOCK_CONFIG.actionDurations.motivation;
+      snapshot.effects.hiddenHousingUntil = now + APARTMENT_BLOCK_CONFIG.actionDurations.hiddenHousing;
       snapshot.cooldowns.recruit = now + APARTMENT_BLOCK_CONFIG.actionCooldowns.recruit;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + 5;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + 3;
       persistApartmentState(key, snapshot);
       return {
         ok: true,
-        message: `Nábor z ulice: +${added} členů (${snapshot.storedMembers}/${capacity}), heat +5.`
+        message: `Nábor v baráku aktivní na 15 min. Produkce +50 %, kapacita ${capacity} → ${capacity + 20}, heat +3.`
       };
     }
 
     if (actionId === "2") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.motivation);
-      if (cooldownLeft > 0) {
-        persistApartmentState(key, snapshot);
-        return { ok: false, message: `Motivační večer je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
-      }
-      snapshot.effects.motivationUntil = now + APARTMENT_BLOCK_CONFIG.actionDurations.motivation;
-      snapshot.cooldowns.motivation = now + APARTMENT_BLOCK_CONFIG.actionCooldowns.motivation;
-      snapshot.loyaltyPenalty = Number(snapshot.loyaltyPenalty || 0);
       persistApartmentState(key, snapshot);
-      return {
-        ok: true,
-        message: "Motivační večer aktivní na 2h. Produkce členů je nyní x2."
-      };
+      return { ok: false, message: "Bytový blok má jen jednu speciální akci." };
     }
 
     if (actionId === "3") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.hiddenHousing);
-      if (cooldownLeft > 0) {
-        persistApartmentState(key, snapshot);
-        return { ok: false, message: `Skryté ubytování je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
-      }
-      snapshot.hiddenHousingActive = true;
-      snapshot.effects.hiddenHousingUntil = now + APARTMENT_BLOCK_CONFIG.actionDurations.hiddenHousing;
-      snapshot.cooldowns.hiddenHousing = now + APARTMENT_BLOCK_CONFIG.actionCooldowns.hiddenHousing;
-      snapshot.lastIncomeAt = now;
       persistApartmentState(key, snapshot);
-      return {
-        ok: true,
-        message: "Skryté ubytování aktivní na 2h. Budova má během efektu 0 income."
-      };
+      return { ok: false, message: "Bytový blok má jen jednu speciální akci." };
     }
 
     if (actionId === "upgrade") {
@@ -6593,14 +6397,10 @@ window.Empire.Map = (() => {
     const stateRef = instanceState;
     const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
     const levelMultiplier = getSchoolLevelMultiplier(stateRef.level);
-    const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(districtOrId, nowMs);
-    const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
-    const capacity = Math.max(1, Math.floor(SCHOOL_BUILDING_CONFIG.baseCapacity * levelMultiplier));
+    const chemistryActive = nowMs < Number(stateRef.effects.chemistryUntil || 0);
+    const eveningActive = nowMs < Number(stateRef.effects.eveningUntil || 0);
+    const capacity = getSchoolCapacityByLevel(stateRef.level) + (eveningActive ? 15 : 0);
     const cycleMs = SCHOOL_BUILDING_CONFIG.productionCycleMs;
-
-    stateRef.eveningProgramActive = stateRef.eveningProgramActive && nowMs < Number(stateRef.effects.eveningUntil || 0);
-    stateRef.districtHeatReductionActive =
-      stateRef.districtHeatReductionActive && nowMs < Number(stateRef.effects.eveningUntil || 0);
 
     if (stateRef.storedMembers >= capacity) {
       stateRef.storedMembers = capacity;
@@ -6614,7 +6414,7 @@ window.Empire.Map = (() => {
       const cycleCount = Math.max(0, Math.floor((nowMs - productionFrom) / cycleMs));
       if (cycleCount > 0) {
         const producedRaw =
-          cycleCount * SCHOOL_BUILDING_CONFIG.baseProductionPerCycle * levelMultiplier
+          cycleCount * SCHOOL_BUILDING_CONFIG.baseProductionPerCycle * levelMultiplier * (chemistryActive ? 1.4 : 1)
           + Number(stateRef.productionRemainder || 0);
         const producedWhole = Math.max(0, Math.floor(producedRaw));
         stateRef.productionRemainder = Math.max(0, producedRaw - producedWhole);
@@ -6627,54 +6427,11 @@ window.Empire.Map = (() => {
         }
       }
     }
-
-    let cleanIncomeGained = 0;
-    let dirtyIncomeGained = 0;
-    let incomeFrom = Number(stateRef.lastIncomeAt || nowMs);
-    if (!Number.isFinite(incomeFrom) || incomeFrom > nowMs) {
-      incomeFrom = nowMs;
-    }
-
-    const eveningUntil = Number(stateRef.effects.eveningUntil || 0);
-    const eveningActive = stateRef.eveningProgramActive && incomeFrom < eveningUntil;
-    if (eveningActive) {
-      const blockedUntil = Math.min(nowMs, eveningUntil);
-      incomeFrom = blockedUntil;
-      if (nowMs >= eveningUntil) {
-        stateRef.eveningProgramActive = false;
-        stateRef.districtHeatReductionActive = false;
-      }
-    }
-
-    if (incomeFrom < nowMs) {
-      const hoursElapsed = (nowMs - incomeFrom) / 3600000;
-      const memberSteps = Math.max(0, Math.floor(Math.max(0, Number(totalGangMembers || 0)) / 10));
-      const hourlyCleanIncome =
-        (SCHOOL_BUILDING_CONFIG.baseCleanIncomePerHour
-          + memberSteps * SCHOOL_BUILDING_CONFIG.cleanIncomePerTenMembersPerHour)
-        * levelMultiplier
-        * districtIncomeMultiplier;
-      const hourlyDirtyIncome =
-        (SCHOOL_BUILDING_CONFIG.baseDirtyIncomePerHour
-          + memberSteps * SCHOOL_BUILDING_CONFIG.dirtyIncomePerTenMembersPerHour)
-        * levelMultiplier
-        * districtIncomeMultiplier;
-      const cleanRaw = hoursElapsed * hourlyCleanIncome + Number(stateRef.incomeRemainderClean || 0);
-      const dirtyRaw = hoursElapsed * hourlyDirtyIncome + Number(stateRef.incomeRemainderDirty || 0);
-      cleanIncomeGained = Math.max(0, Math.floor(cleanRaw));
-      dirtyIncomeGained = Math.max(0, Math.floor(dirtyRaw));
-      stateRef.incomeRemainderClean = Math.max(0, cleanRaw - cleanIncomeGained);
-      stateRef.incomeRemainderDirty = Math.max(0, dirtyRaw - dirtyIncomeGained);
-    }
     stateRef.lastIncomeAt = nowMs;
-
-    if (cleanIncomeGained > 0 || dirtyIncomeGained > 0) {
-      payoutDirectBuildingIncome(cleanIncomeGained, dirtyIncomeGained);
-    }
 
     applyBuildingInfluenceTick(stateRef, nowMs, BUILDING_INFLUENCE_PER_HOUR);
 
-    return { cleanIncomeGained, dirtyIncomeGained };
+    return { cleanIncomeGained: 0, dirtyIncomeGained: 0 };
   }
 
   function resolveSchoolBuildingDetails(context, district, fallback) {
@@ -6686,47 +6443,27 @@ window.Empire.Map = (() => {
     persistSchoolState(key, snapshot);
 
     const levelMultiplier = getSchoolLevelMultiplier(snapshot.level);
-    const capacity = Math.max(1, Math.floor(SCHOOL_BUILDING_CONFIG.baseCapacity * levelMultiplier));
     const chemistryActive = now < Number(snapshot.effects.chemistryUntil || 0);
-    const eveningActive = snapshot.eveningProgramActive && now < Number(snapshot.effects.eveningUntil || 0);
-    const hasDrugLab = districtHasDrugLab(district || context?.districtId);
-    const passiveDrugLabBonusPct = hasDrugLab
-      ? SCHOOL_BUILDING_CONFIG.baseDrugLabPassiveBonusPct * levelMultiplier
-      : 0;
-    const chemistryBoostPct = hasDrugLab && chemistryActive ? SCHOOL_BUILDING_CONFIG.chemistryBoostPct : 0;
-    const totalDrugLabBoostPct = passiveDrugLabBonusPct + chemistryBoostPct;
-    const productionPerCycle = SCHOOL_BUILDING_CONFIG.baseProductionPerCycle * levelMultiplier;
-    const memberSteps = Math.max(0, Math.floor(totalGangMembers / 10));
-    const hourlyCleanIncome = eveningActive
-      ? 0
-      : (SCHOOL_BUILDING_CONFIG.baseCleanIncomePerHour
-        + memberSteps * SCHOOL_BUILDING_CONFIG.cleanIncomePerTenMembersPerHour)
-      * levelMultiplier;
-    const hourlyDirtyIncome = eveningActive
-      ? 0
-      : (SCHOOL_BUILDING_CONFIG.baseDirtyIncomePerHour
-        + memberSteps * SCHOOL_BUILDING_CONFIG.dirtyIncomePerTenMembersPerHour)
-      * levelMultiplier;
+    const eveningActive = now < Number(snapshot.effects.eveningUntil || 0);
+    const capacity = getSchoolCapacityByLevel(snapshot.level) + (eveningActive ? 15 : 0);
+    const passiveDrugLabBonusPct = 0;
+    const chemistryBoostPct = chemistryActive ? SCHOOL_BUILDING_CONFIG.chemistryBoostPct : 0;
+    const totalDrugLabBoostPct = chemistryBoostPct;
+    const productionPerCycle = SCHOOL_BUILDING_CONFIG.baseProductionPerCycle * levelMultiplier * (chemistryActive ? 1.4 : 1);
+    const hourlyCleanIncome = 0;
+    const hourlyDirtyIncome = 0;
     const hourlyIncome = hourlyCleanIncome + hourlyDirtyIncome;
     const dailyIncome = hourlyIncome * 24;
     const nextLevel = snapshot.level < SCHOOL_BUILDING_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? SCHOOL_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0 : 0;
+    const producedPerMinute = SCHOOL_BUILDING_CONFIG.baseProductionPerCycle * levelMultiplier * (chemistryActive ? 1.4 : 1);
 
     const effects = [];
-    effects.push(hasDrugLab
-      ? `Pasivní bonus Drug Lab +${formatDecimalValue(passiveDrugLabBonusPct, 2)}%`
-      : "Pasivní bonus Drug Lab: není aktivní (v districtu není Drug Lab)");
     if (chemistryActive) {
-      effects.push(`Zrychlený kurz chemie (${formatDurationLabel(snapshot.effects.chemistryUntil - now)})`);
-    }
-    if (hasDrugLab && totalDrugLabBoostPct > 0) {
-      effects.push(`Celkový boost Drug Lab +${formatDecimalValue(totalDrugLabBoostPct, 2)}%`);
+      effects.push(`Nábor ve škole (${formatDurationLabel(snapshot.effects.chemistryUntil - now)})`);
     }
     if (eveningActive) {
-      effects.push(`Večerní program (${formatDurationLabel(snapshot.effects.eveningUntil - now)})`);
-    }
-    if (snapshot.districtHeatReductionActive && eveningActive) {
-      effects.push(`Heat districtu -${SCHOOL_BUILDING_CONFIG.eveningHeatReductionPct}%`);
+      effects.push(`Bonus kapacita +15 (${formatDurationLabel(snapshot.effects.eveningUntil - now)})`);
     }
 
     return {
@@ -6738,11 +6475,9 @@ window.Empire.Map = (() => {
       hourlyIncome,
       dailyIncome,
       info:
-        "Škola produkuje 1 člena každých 10 minut do kapacity 12 (škáluje s levelem) a přes Vybrat členy je převádí do gangu. Budova generuje clean a dirty cash, heat 2/24h. Akce: Náborová přednáška (CD 3h, +4 až +10 členů, +2 heat), Zrychlený kurz chemie (CD 4h, 2h, Drug Lab +25 %, +3 heat), Večerní program (CD 6h, 2h, heat districtu -20 %, income školy 0). Upgrady L2/L3/L4 za $5000/$15000/$40000 dávají +10 % produkce, income, kapacity a síly pasivního bonusu Drug Lab.",
+        "Škola produkuje 1 obyvatele za minutu a při plné kapacitě se zastaví. Slouží čistě jako další zdroj lidí do gangu a vybíráš ji jen přes horní plus tlačítko.",
       specialActions: [
-        "Náborová přednáška: Cooldown 3h, okamžitě přidá náhodně 4 až 10 členů do kapacity školy a přidá +2 heat.",
-        "Zrychlený kurz chemie: Cooldown 4h, trvá 2h a pokud je v districtu Drug Lab, zvýší jeho rychlost o +25 % (+3 heat).",
-        "Večerní program: Cooldown 6h, trvá 2h, snižuje heat districtu o 20 %, ale income školy je během efektu 0."
+        "Nábor ve škole: Cooldown 25 min, +40% produkce na 15 min, +15 kapacita, +2 heat."
       ],
       mechanics: {
         type: "school",
@@ -6754,18 +6489,22 @@ window.Empire.Map = (() => {
         capacity,
         productionPerCycle,
         heatPerDay: SCHOOL_BUILDING_CONFIG.baseHeatPerDay + Math.max(0, Number(snapshot.extraHeat || 0)),
-        effectsLabel: effects.join(" • "),
+        effectsLabel: effects.length ? effects.join(" • ") : `K dispozici ${Math.max(0, Math.floor(snapshot.storedMembers || 0))}/${capacity} obyvatel`,
+        hourlyCleanIncome,
+        hourlyDirtyIncome,
+        producedPerMinute,
+        producedPerHour: producedPerMinute * 60,
         cooldowns: {
           lecture: Math.max(0, Number(snapshot.cooldowns.lecture || 0) - now),
-          chemistry: Math.max(0, Number(snapshot.cooldowns.chemistry || 0) - now),
-          evening: Math.max(0, Number(snapshot.cooldowns.evening || 0) - now)
+          chemistry: 0,
+          evening: 0
         },
-        hasDrugLab,
+        hasDrugLab: false,
         passiveDrugLabBonusPct,
         chemistryBoostPct,
         totalDrugLabBoostPct,
-        districtHeatReductionPct: eveningActive ? SCHOOL_BUILDING_CONFIG.eveningHeatReductionPct : 0,
-        eveningProgramActive: eveningActive
+        districtHeatReductionPct: 0,
+        eveningProgramActive: false
       }
     };
   }
@@ -6778,10 +6517,8 @@ window.Empire.Map = (() => {
     const totalGangMembers = Number(window.Empire.UI?.getCurrentGangMembers?.() || 0);
     syncSchoolProductionAndIncome(snapshot, totalGangMembers, now, district || context?.districtId);
 
-    const levelMultiplier = getSchoolLevelMultiplier(snapshot.level);
-    const capacity = Math.max(1, Math.floor(SCHOOL_BUILDING_CONFIG.baseCapacity * levelMultiplier));
+    const capacity = getSchoolCapacityByLevel(snapshot.level) + (now < Number(snapshot.effects.eveningUntil || 0) ? 15 : 0);
     const toCooldownLeft = (until) => Math.max(0, Math.floor(Number(until || 0) - now));
-    const hasDrugLab = districtHasDrugLab(district || context?.districtId);
 
     if (actionId === "collect") {
       const collected = Math.max(0, Math.floor(Number(snapshot.storedMembers || 0)));
@@ -6803,57 +6540,27 @@ window.Empire.Map = (() => {
       const cooldownLeft = toCooldownLeft(snapshot.cooldowns.lecture);
       if (cooldownLeft > 0) {
         persistSchoolState(key, snapshot);
-        return { ok: false, message: `Náborová přednáška je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Nábor ve škole je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const randomAdded =
-        SCHOOL_BUILDING_CONFIG.lectureRange.min
-        + Math.floor(Math.random() * (SCHOOL_BUILDING_CONFIG.lectureRange.max - SCHOOL_BUILDING_CONFIG.lectureRange.min + 1));
-      const freeSpace = Math.max(0, capacity - Math.floor(snapshot.storedMembers || 0));
-      const added = Math.max(0, Math.min(freeSpace, randomAdded));
-      snapshot.storedMembers = Math.min(capacity, Math.floor(snapshot.storedMembers || 0) + added);
+      snapshot.effects.chemistryUntil = now + SCHOOL_BUILDING_CONFIG.actionDurations.chemistry;
+      snapshot.effects.eveningUntil = now + SCHOOL_BUILDING_CONFIG.actionDurations.evening;
       snapshot.cooldowns.lecture = now + SCHOOL_BUILDING_CONFIG.actionCooldowns.lecture;
       snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + 2;
       persistSchoolState(key, snapshot);
       return {
         ok: true,
-        message: `Náborová přednáška: +${added} členů (${snapshot.storedMembers}/${capacity}), heat +2.`
+        message: `Nábor ve škole aktivní na 15 min. Produkce +40 %, kapacita ${capacity} → ${capacity + 15}, heat +2.`
       };
     }
 
     if (actionId === "2") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.chemistry);
-      if (cooldownLeft > 0) {
-        persistSchoolState(key, snapshot);
-        return { ok: false, message: `Zrychlený kurz chemie je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
-      }
-      snapshot.effects.chemistryUntil = now + SCHOOL_BUILDING_CONFIG.actionDurations.chemistry;
-      snapshot.cooldowns.chemistry = now + SCHOOL_BUILDING_CONFIG.actionCooldowns.chemistry;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + 3;
       persistSchoolState(key, snapshot);
-      return {
-        ok: true,
-        message: hasDrugLab
-          ? "Zrychlený kurz chemie aktivní na 2h. Drug Lab v districtu má +25 % rychlost."
-          : "Zrychlený kurz chemie aktivní na 2h. V districtu ale chybí Drug Lab, bonus se teď neaplikuje."
-      };
+      return { ok: false, message: "Škola má jen jednu speciální akci." };
     }
 
     if (actionId === "3") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.evening);
-      if (cooldownLeft > 0) {
-        persistSchoolState(key, snapshot);
-        return { ok: false, message: `Večerní program je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
-      }
-      snapshot.eveningProgramActive = true;
-      snapshot.districtHeatReductionActive = true;
-      snapshot.effects.eveningUntil = now + SCHOOL_BUILDING_CONFIG.actionDurations.evening;
-      snapshot.cooldowns.evening = now + SCHOOL_BUILDING_CONFIG.actionCooldowns.evening;
-      snapshot.lastIncomeAt = now;
       persistSchoolState(key, snapshot);
-      return {
-        ok: true,
-        message: "Večerní program aktivní na 2h. Heat districtu -20 %, income školy během efektu = 0."
-      };
+      return { ok: false, message: "Škola má jen jednu speciální akci." };
     }
 
     if (actionId === "upgrade") {
@@ -6879,6 +6586,255 @@ window.Empire.Map = (() => {
     }
 
     persistSchoolState(key, snapshot);
+    return null;
+  }
+
+  function getClinicHealingSnapshot(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    let healPerMinute = 0;
+    let survivalChancePct = 35;
+    let activeClinics = 0;
+    Object.entries(clinicBuildingStore || {}).forEach(([instanceKey, rawState]) => {
+      const snapshot = sanitizeClinicState(rawState, nowMs);
+      clinicBuildingStore[instanceKey] = snapshot;
+      const levelEffects = getClinicLevelEffects(snapshot.level);
+      const stabilizationActive = nowMs < Math.max(0, Number(snapshot.effects?.stabilizationUntil || 0));
+      const stabilizationMultiplier = stabilizationActive
+        ? 1 + CLINIC_BUILDING_CONFIG.stabilizationHealBoostPct / 100
+        : 1;
+      healPerMinute += CLINIC_BUILDING_CONFIG.baseHealPerMinute * levelEffects.healMultiplier * stabilizationMultiplier;
+      survivalChancePct += Math.max(0, Number(levelEffects.survivalChancePct || 0) - 35);
+      activeClinics += 1;
+    });
+    return {
+      activeClinics,
+      healPerMinute: Math.max(0, healPerMinute),
+      survivalChancePct: Math.max(35, survivalChancePct)
+    };
+  }
+
+  function syncClinicRecoveryState(now = Date.now()) {
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const injuryState = getClinicInjuryState(nowMs);
+    const healing = getClinicHealingSnapshot(nowMs);
+    let healFrom = Number(injuryState.lastHealAt || nowMs);
+    if (!Number.isFinite(healFrom) || healFrom > nowMs) {
+      healFrom = nowMs;
+    }
+    let healedMembers = 0;
+    if (healFrom < nowMs && healing.healPerMinute > 0 && injuryState.injuredMembers > 0) {
+      const minutesElapsed = (nowMs - healFrom) / 60000;
+      const healedRaw = minutesElapsed * healing.healPerMinute + Number(injuryState.healRemainder || 0);
+      healedMembers = Math.min(injuryState.injuredMembers, Math.max(0, Math.floor(healedRaw)));
+      injuryState.healRemainder = Math.max(0, healedRaw - healedMembers);
+      injuryState.injuredMembers = Math.max(0, injuryState.injuredMembers - healedMembers);
+      if (injuryState.injuredMembers <= 0) {
+        injuryState.healRemainder = 0;
+      }
+    }
+    injuryState.lastHealAt = nowMs;
+    persistClinicInjuryState(injuryState);
+    if (healedMembers > 0) {
+      const addMembers = window.Empire.UI?.addGangMembers;
+      if (typeof addMembers === "function") {
+        addMembers(healedMembers);
+      }
+    }
+    return {
+      ...healing,
+      healedMembers,
+      injuredMembers: Math.max(0, injuryState.injuredMembers)
+    };
+  }
+
+  function addClinicInjuredMembers(amount, now = Date.now()) {
+    const gained = Math.max(0, Math.floor(Number(amount) || 0));
+    syncClinicRecoveryState(now);
+    const injuryState = getClinicInjuryState(now);
+    injuryState.injuredMembers = Math.max(0, Number(injuryState.injuredMembers || 0) + gained);
+    persistClinicInjuryState(injuryState);
+    const healing = getClinicHealingSnapshot(now);
+    return {
+      injuredMembers: Math.max(0, injuryState.injuredMembers),
+      healPerMinute: healing.healPerMinute,
+      survivalChancePct: healing.survivalChancePct
+    };
+  }
+
+  function syncClinicBuildingIncome(instanceState, now = Date.now(), districtOrId = null) {
+    const stateRef = instanceState;
+    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
+    const levelEffects = getClinicLevelEffects(stateRef.level);
+    const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(districtOrId, nowMs);
+    const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
+    const hourlyCleanIncome = CLINIC_BUILDING_CONFIG.baseCleanIncomePerHour * districtIncomeMultiplier;
+    const hourlyDirtyIncome = CLINIC_BUILDING_CONFIG.baseDirtyIncomePerHour * districtIncomeMultiplier;
+
+    let incomeFrom = Number(stateRef.lastIncomeAt || nowMs);
+    if (!Number.isFinite(incomeFrom) || incomeFrom > nowMs) {
+      incomeFrom = nowMs;
+    }
+
+    let cleanIncomeGained = 0;
+    let dirtyIncomeGained = 0;
+    if (incomeFrom < nowMs) {
+      const hoursElapsed = (nowMs - incomeFrom) / 3600000;
+      const cleanRaw = hoursElapsed * hourlyCleanIncome + Number(stateRef.incomeRemainderClean || 0);
+      const dirtyRaw = hoursElapsed * hourlyDirtyIncome + Number(stateRef.incomeRemainderDirty || 0);
+      cleanIncomeGained = Math.max(0, Math.floor(cleanRaw));
+      dirtyIncomeGained = Math.max(0, Math.floor(dirtyRaw));
+      stateRef.incomeRemainderClean = Math.max(0, cleanRaw - cleanIncomeGained);
+      stateRef.incomeRemainderDirty = Math.max(0, dirtyRaw - dirtyIncomeGained);
+    }
+    stateRef.lastIncomeAt = nowMs;
+
+    if (cleanIncomeGained > 0 || dirtyIncomeGained > 0) {
+      payoutDirectBuildingIncome(cleanIncomeGained, dirtyIncomeGained);
+    }
+
+    applyBuildingInfluenceTick(stateRef, nowMs, CLINIC_BUILDING_CONFIG.baseInfluencePerHour);
+
+    return {
+      hourlyCleanIncome,
+      hourlyDirtyIncome,
+      heatPerDay: CLINIC_BUILDING_CONFIG.baseHeatPerDay * levelEffects.heatMultiplier
+    };
+  }
+
+  function resolveClinicBuildingDetails(context, district, fallback) {
+    const now = Date.now();
+    const key = resolveBuildingInstanceKey(context, district);
+    const snapshot = getClinicStateByKey(key, now);
+    const rates = syncClinicBuildingIncome(snapshot, now, district || context?.districtId);
+    const healing = syncClinicRecoveryState(now);
+    persistClinicState(key, snapshot);
+
+    const levelEffects = getClinicLevelEffects(snapshot.level);
+    const stabilizationActive = now < Math.max(0, Number(snapshot.effects?.stabilizationUntil || 0));
+    const localHealPerMinute =
+      CLINIC_BUILDING_CONFIG.baseHealPerMinute
+      * levelEffects.healMultiplier
+      * (stabilizationActive ? 1 + CLINIC_BUILDING_CONFIG.stabilizationHealBoostPct / 100 : 1);
+    const nextLevel = snapshot.level < CLINIC_BUILDING_CONFIG.maxLevel ? snapshot.level + 1 : null;
+    const nextUpgradeCost = nextLevel ? Number(CLINIC_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0) : 0;
+    const effects = [];
+    if (stabilizationActive) {
+      effects.push(`Stabilizace +50% léčení (${formatDurationLabel(snapshot.effects.stabilizationUntil - now)})`);
+    }
+    if (healing.injuredMembers > 0) {
+      effects.push(`Ve frontě ${Math.max(0, Math.floor(healing.injuredMembers))} zraněných`);
+    }
+
+    return {
+      ...fallback,
+      baseName: context.baseName,
+      displayName: context.variantName || context.baseName,
+      hourlyCleanIncome: rates.hourlyCleanIncome,
+      hourlyDirtyIncome: rates.hourlyDirtyIncome,
+      hourlyIncome: rates.hourlyCleanIncome + rates.hourlyDirtyIncome,
+      dailyIncome: (rates.hourlyCleanIncome + rates.hourlyDirtyIncome) * 24,
+      info:
+        "Zranění, předávkovaní, rozbití lidi z ulice. Tady se neptají, co se stalo. Tady tě dají dohromady… nebo z tebe vytáhnou poslední hodnotu.",
+      mechanics: {
+        type: "clinic",
+        instanceKey: key,
+        level: snapshot.level,
+        nextLevel,
+        nextUpgradeCost,
+        injuredMembers: healing.injuredMembers,
+        localHealPerMinute,
+        healedPerMinute: healing.healPerMinute,
+        returnChancePct: healing.survivalChancePct,
+        heatPerDay: rates.heatPerDay + Math.max(0, Number(snapshot.extraHeat || 0)),
+        influencePerHour: CLINIC_BUILDING_CONFIG.baseInfluencePerHour,
+        hourlyCleanIncome: rates.hourlyCleanIncome,
+        hourlyDirtyIncome: rates.hourlyDirtyIncome,
+        cooldowns: {
+          emergency: Math.max(0, Number(snapshot.cooldowns?.emergency || 0) - now),
+          stabilization: Math.max(0, Number(snapshot.cooldowns?.stabilization || 0) - now)
+        },
+        effectsLabel: effects.join(" • ") || "Klinika drží frontu zraněných připravenou na návrat."
+      },
+      specialActions: []
+    };
+  }
+
+  function handleClinicBuildingAction(actionId, activeContext) {
+    const { district, context } = activeContext;
+    const now = Date.now();
+    const key = resolveBuildingInstanceKey(context, district);
+    const snapshot = getClinicStateByKey(key, now);
+    const injuryState = getClinicInjuryState(now);
+
+    if (actionId === "1") {
+      const cooldownLeft = Math.max(0, Math.floor(Number(snapshot.cooldowns?.emergency || 0) - now));
+      if (cooldownLeft > 0) {
+        persistClinicState(key, snapshot);
+        return { ok: false, message: `Nouzová operace je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+      }
+      if (Math.max(0, Math.floor(Number(injuryState.injuredMembers || 0))) <= 0) {
+        persistClinicState(key, snapshot);
+        return { ok: false, message: "Ve frontě zraněných nikdo není." };
+      }
+      const returned = Math.max(
+        0,
+        Math.floor(Number(injuryState.injuredMembers || 0) * CLINIC_BUILDING_CONFIG.emergencyReturnPct / 100)
+      );
+      injuryState.injuredMembers = Math.max(0, Math.floor(Number(injuryState.injuredMembers || 0)) - returned);
+      injuryState.healRemainder = 0;
+      injuryState.lastHealAt = now;
+      persistClinicInjuryState(injuryState);
+      snapshot.cooldowns.emergency = now + CLINIC_BUILDING_CONFIG.actionCooldowns.emergency;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + 8;
+      persistClinicState(key, snapshot);
+      const addMembers = window.Empire.UI?.addGangMembers;
+      if (returned > 0 && typeof addMembers === "function") {
+        addMembers(returned);
+      }
+      return { ok: true, message: `Nouzová operace vrátila ${returned} zraněných. Heat +8.` };
+    }
+
+    if (actionId === "2") {
+      const cooldownLeft = Math.max(0, Math.floor(Number(snapshot.cooldowns?.stabilization || 0) - now));
+      if (cooldownLeft > 0) {
+        persistClinicState(key, snapshot);
+        return { ok: false, message: `Stabilizace je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+      }
+      snapshot.effects.stabilizationUntil = now + CLINIC_BUILDING_CONFIG.actionDurations.stabilization;
+      snapshot.cooldowns.stabilization = now + CLINIC_BUILDING_CONFIG.actionCooldowns.stabilization;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + 3;
+      persistClinicState(key, snapshot);
+      return { ok: true, message: "Stabilizace aktivní: +50% rychlost léčení na 20 min. Heat +3." };
+    }
+
+    if (actionId === "3") {
+      persistClinicState(key, snapshot);
+      return { ok: false, message: "Klinika má jen dvě speciální akce." };
+    }
+
+    if (actionId === "upgrade") {
+      const nextLevel = Math.floor(snapshot.level || 1) + 1;
+      if (nextLevel > CLINIC_BUILDING_CONFIG.maxLevel) {
+        persistClinicState(key, snapshot);
+        return { ok: false, message: "Klinika je na maximálním levelu." };
+      }
+      const cost = Math.max(0, Number(CLINIC_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0));
+      const spend = window.Empire.UI?.trySpendCleanCash;
+      if (typeof spend !== "function") {
+        persistClinicState(key, snapshot);
+        return { ok: false, message: "Upgrade nelze provést: chybí ekonomický modul." };
+      }
+      const result = spend(cost);
+      if (!result?.ok) {
+        persistClinicState(key, snapshot);
+        return { ok: false, message: `Nedostatek cash na upgrade (potřeba $${cost}).` };
+      }
+      snapshot.level = nextLevel;
+      persistClinicState(key, snapshot);
+      return { ok: true, message: `Klinika vylepšena na level ${nextLevel} za $${cost}.` };
+    }
+
+    persistClinicState(key, snapshot);
     return null;
   }
 
@@ -7169,7 +7125,7 @@ window.Empire.Map = (() => {
     return null;
   }
 
-  function calculateCasinoHourlyRates(totalGangMembers, levelMultiplier, vipBoostPct = 0, cleanBonusPct = 0) {
+  function calculateCasinoHourlyRates(totalGangMembers, levelMultiplier, vipBoostPct = 0) {
     const memberSteps = Math.max(0, Math.floor(Math.max(0, Number(totalGangMembers || 0)) / 10));
     const memberBonusTotal =
       memberSteps * CASINO_BUILDING_CONFIG.memberBonusPerTenMembersPerHour * Math.max(0, Number(levelMultiplier || 1));
@@ -7178,8 +7134,7 @@ window.Empire.Map = (() => {
     const bonusCleanIncome = memberBonusTotal * CASINO_BUILDING_CONFIG.memberBonusCleanShare;
     const bonusDirtyIncome = memberBonusTotal * CASINO_BUILDING_CONFIG.memberBonusDirtyShare;
     const incomeMultiplier = Math.max(0, 1 + Math.max(0, Number(vipBoostPct || 0)) / 100);
-    const cleanMultiplier = Math.max(0, 1 + Math.max(0, Number(cleanBonusPct || 0)) / 100);
-    const hourlyCleanIncome = (baseCleanIncome + bonusCleanIncome) * incomeMultiplier * cleanMultiplier;
+    const hourlyCleanIncome = (baseCleanIncome + bonusCleanIncome) * incomeMultiplier;
     const hourlyDirtyIncome = (baseDirtyIncome + bonusDirtyIncome) * incomeMultiplier;
     return {
       memberSteps,
@@ -7197,10 +7152,10 @@ window.Empire.Map = (() => {
     const levelMultiplier = getCasinoLevelMultiplier(stateRef.level);
     const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(districtOrId, nowMs);
     const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
-    const vipEveningActive = nowMs < Number(stateRef.effects.vipEveningUntil || 0);
-    const vipEveningBoostPct = vipEveningActive ? CASINO_BUILDING_CONFIG.vipIncomeBoostPct * levelMultiplier : 0;
-    const cleanBonusPct = Number(stateRef.level || 1) >= 4 ? CASINO_BUILDING_CONFIG.cleanIncomeBonusPctLevel4 : 0;
-    const rates = calculateCasinoHourlyRates(totalGangMembers, levelMultiplier, vipEveningBoostPct, cleanBonusPct);
+    const vipActive = nowMs < Number(stateRef.effects.vipUntil || 0);
+    const raidRiskActive = nowMs < Number(stateRef.effects.raidRiskUntil || 0);
+    const vipBoostPct = vipActive ? CASINO_BUILDING_CONFIG.vipIncomeBoostPct * levelMultiplier : 0;
+    const rates = calculateCasinoHourlyRates(totalGangMembers, levelMultiplier, vipBoostPct);
 
     let incomeFrom = Number(stateRef.lastIncomeAt || nowMs);
     if (!Number.isFinite(incomeFrom) || incomeFrom > nowMs) {
@@ -7235,30 +7190,14 @@ window.Empire.Map = (() => {
       }
     }
 
-    const baseInfluencePerHour = Math.max(0, Number(CASINO_BUILDING_CONFIG.baseInfluencePerDay || 0)) / 24;
-    applyBuildingInfluenceTick(stateRef, nowMs, baseInfluencePerHour);
-
-    let gossipGenerated = 0;
-    if (Number(stateRef.level || 1) >= 3) {
-      const intervalMs = Math.max(60 * 1000, Number(CASINO_BUILDING_CONFIG.gossipIntervalMsLevel3 || 0));
-      const nextGossipAt = Number(stateRef.lastGossipAt || 0) + intervalMs;
-      if (nextGossipAt > 0 && nowMs >= nextGossipAt) {
-        const rumors = generateRestaurantDistrictGossips(districtOrId, 1, nowMs);
-        gossipGenerated = Math.max(0, rumors.length);
-        stateRef.lastGossipAt = nowMs;
-      } else if (Number(stateRef.lastGossipAt || 0) <= 0) {
-        stateRef.lastGossipAt = nowMs;
-      }
-    } else if (Number(stateRef.lastGossipAt || 0) > 0) {
-      stateRef.lastGossipAt = 0;
-    }
+    applyBuildingInfluenceTick(stateRef, nowMs, BUILDING_INFLUENCE_PER_HOUR);
 
     return {
       cleanIncomeGained,
       dirtyIncomeGained,
-      vipEveningActive,
-      vipEveningBoostPct,
-      gossipGenerated,
+      vipActive,
+      raidRiskActive,
+      vipBoostPct,
       rates: {
         ...rates,
         hourlyCleanIncome: rates.hourlyCleanIncome * districtIncomeMultiplier,
@@ -7280,29 +7219,25 @@ window.Empire.Map = (() => {
     const levelMultiplier = getCasinoLevelMultiplier(snapshot.level);
     const nextLevel = snapshot.level < CASINO_BUILDING_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? CASINO_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0 : 0;
-    const vipEveningBoostPct = CASINO_BUILDING_CONFIG.vipIncomeBoostPct * levelMultiplier;
-    const launderingPct =
-      CASINO_BUILDING_CONFIG.launderingPct * levelMultiplier
-      + (snapshot.level >= 5 ? CASINO_BUILDING_CONFIG.launderingBonusPctLevel5 : 0);
-    const cleanBonusPct = Number(snapshot.level || 1) >= 4 ? CASINO_BUILDING_CONFIG.cleanIncomeBonusPctLevel4 : 0;
-    const rates = syncResult.rates || calculateCasinoHourlyRates(totalGangMembers, levelMultiplier, 0, cleanBonusPct);
+    const vipBoostPct = CASINO_BUILDING_CONFIG.vipIncomeBoostPct * levelMultiplier;
+    const launderingPct = CASINO_BUILDING_CONFIG.launderingPct * levelMultiplier;
+    const launderingRaidRiskPct = CASINO_BUILDING_CONFIG.launderingRaidRiskPct * levelMultiplier;
+    const rates = syncResult.rates || calculateCasinoHourlyRates(totalGangMembers, levelMultiplier, 0);
     const hourlyIncome = rates.hourlyTotalIncome;
     const dailyIncome = hourlyIncome * 24;
 
     const effects = [
       `Income C:$${formatDecimalValue(rates.hourlyCleanIncome, 2)} / D:$${formatDecimalValue(rates.hourlyDirtyIncome, 2)}`
     ];
-    if (syncResult.vipEveningActive) {
-      effects.push(`VIP večer (+${formatDecimalValue(vipEveningBoostPct, 2)}% income, ${formatDurationLabel(snapshot.effects.vipEveningUntil - now)})`);
+    if (syncResult.vipActive) {
+      effects.push(`VIP Turnaj (+${formatDecimalValue(vipBoostPct, 2)}% income, ${formatDurationLabel(snapshot.effects.vipUntil - now)})`);
     }
-    if (Number(snapshot.level || 1) >= 4) {
-      effects.push(`L4 bonus clean cash +${formatDecimalValue(CASINO_BUILDING_CONFIG.cleanIncomeBonusPctLevel4, 2)}%`);
-    }
-    if (Number(snapshot.level || 1) >= 5) {
-      effects.push(`L5 bonus praní +${formatDecimalValue(CASINO_BUILDING_CONFIG.launderingBonusPctLevel5, 2)}%`);
-    }
-    if (Number(syncResult.gossipGenerated || 0) > 0) {
-      effects.push(`Vygenerováno drbů: ${Math.max(0, Math.floor(Number(syncResult.gossipGenerated || 0)))}`);
+    if (syncResult.raidRiskActive) {
+      effects.push(
+        `Riziko razie +${formatDecimalValue(launderingRaidRiskPct, 2)}% (${formatDurationLabel(
+          snapshot.effects.raidRiskUntil - now
+        )})`
+      );
     }
 
     return {
@@ -7314,11 +7249,10 @@ window.Empire.Map = (() => {
       hourlyIncome,
       dailyIncome,
       info:
-        "Velké prachy, velké risky. Kasino tlačí vysoký cashflow, čistí dirty cash, generuje vliv a od L3 dodává pravidelné drby.",
+        "Kasino je vysokorychlostní finanční budova. Generuje čisté i špinavé peníze, reaguje na velikost gangu a přes akce umí krátkodobě akcelerovat výnos nebo převádět špinavé peníze na čisté. Upgrady zvyšují celkový income i sílu VIP a praní.",
       specialActions: [
-        "High Stakes: Cooldown 6h, okamžitě přidá náhodně +50 až +150 % z hodinového income kasina a přidá +10 heat.",
-        "Praní peněz: Cooldown 8h, převede 20 % dirty cash na clean (škáluje s levelem), přidá +6 heat.",
-        "VIP večer: Cooldown 10h, na 2h zvýší income kasina o +40 % (škáluje s levelem) a přidá +7 heat."
+        "VIP Turnaj: Cooldown 4h, trvá 2h, zvýší income kasina o +60 % (škáluje s levelem) a přidá +4 heat.",
+        "Praní špinavých peněz: Cooldown 6h, vypere 15 % špinavých peněz (škáluje s levelem), přidá +6 heat a na 3h zvýší šanci policejní razie v districtu o 20 % (škáluje s levelem)."
       ],
       mechanics: {
         type: "casino",
@@ -7329,16 +7263,17 @@ window.Empire.Map = (() => {
         heatPerDay: CASINO_BUILDING_CONFIG.baseHeatPerDay * levelMultiplier + Math.max(0, Number(snapshot.extraHeat || 0)),
         effectsLabel: effects.join(" • "),
         cooldowns: {
-          highStakes: Math.max(0, Number(snapshot.cooldowns.highStakes || 0) - now),
-          laundering: Math.max(0, Number(snapshot.cooldowns.laundering || 0) - now),
-          vipEvening: Math.max(0, Number(snapshot.cooldowns.vipEvening || 0) - now)
+          vip: Math.max(0, Number(snapshot.cooldowns.vip || 0) - now),
+          laundering: Math.max(0, Number(snapshot.cooldowns.laundering || 0) - now)
         },
-        vipEveningBoostPct,
+        vipBoostPct,
         launderingPct,
+        launderingRaidRiskPct,
         currentIncomeMultiplier: rates.incomeMultiplier,
         hourlyCleanIncome: rates.hourlyCleanIncome,
         hourlyDirtyIncome: rates.hourlyDirtyIncome,
-        vipEveningActive: syncResult.vipEveningActive
+        vipActive: syncResult.vipActive,
+        raidRiskActive: syncResult.raidRiskActive
       }
     };
   }
@@ -7349,32 +7284,27 @@ window.Empire.Map = (() => {
     const key = resolveBuildingInstanceKey(context, district);
     const snapshot = getCasinoStateByKey(key, now);
     const totalGangMembers = Number(window.Empire.UI?.getCurrentGangMembers?.() || 0);
-    const syncAtStart = syncCasinoIncome(snapshot, totalGangMembers, now, district || context?.districtId);
+    syncCasinoIncome(snapshot, totalGangMembers, now, district || context?.districtId);
 
     const levelMultiplier = getCasinoLevelMultiplier(snapshot.level);
     const toCooldownLeft = (until) => Math.max(0, Math.floor(Number(until || 0) - now));
 
     if (actionId === "1") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.highStakes);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.vip);
       if (cooldownLeft > 0) {
         persistCasinoState(key, snapshot);
-        return { ok: false, message: `High Stakes je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `VIP Turnaj je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const rates = syncAtStart?.rates
-        || calculateCasinoHourlyRates(totalGangMembers, levelMultiplier, 0, snapshot.level >= 4 ? CASINO_BUILDING_CONFIG.cleanIncomeBonusPctLevel4 : 0);
-      const hourlyBase = Math.max(0, Number(rates.hourlyTotalIncome || 0));
-      const bonusPct = CASINO_BUILDING_CONFIG.highStakesCashBoostMinPct
-        + Math.random() * (CASINO_BUILDING_CONFIG.highStakesCashBoostMaxPct - CASINO_BUILDING_CONFIG.highStakesCashBoostMinPct);
-      const reward = Math.max(0, Math.floor(hourlyBase * (bonusPct / 100)));
-      if (reward > 0) {
-        window.Empire.UI?.addCleanCash?.(reward);
-      }
-      snapshot.cooldowns.highStakes = now + CASINO_BUILDING_CONFIG.actionCooldowns.highStakes;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + CASINO_BUILDING_CONFIG.actionHeatAdded.highStakes;
+      snapshot.effects.vipUntil = now + CASINO_BUILDING_CONFIG.actionDurations.vip;
+      snapshot.cooldowns.vip = now + CASINO_BUILDING_CONFIG.actionCooldowns.vip;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + CASINO_BUILDING_CONFIG.actionHeatAdded.vip;
       persistCasinoState(key, snapshot);
       return {
         ok: true,
-        message: `High Stakes: +${formatDecimalValue(bonusPct, 1)}% cash (zisk $${reward}). Heat +${CASINO_BUILDING_CONFIG.actionHeatAdded.highStakes}.`
+        message: `VIP Turnaj aktivní na 2h. Income kasina +${formatDecimalValue(
+          CASINO_BUILDING_CONFIG.vipIncomeBoostPct * levelMultiplier,
+          2
+        )}% a heat +${CASINO_BUILDING_CONFIG.actionHeatAdded.vip}.`
       };
     }
 
@@ -7382,39 +7312,23 @@ window.Empire.Map = (() => {
       const cooldownLeft = toCooldownLeft(snapshot.cooldowns.laundering);
       if (cooldownLeft > 0) {
         persistCasinoState(key, snapshot);
-        return { ok: false, message: `Praní peněz je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Praní špinavých peněz je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
 
-      const launderingPct =
-        CASINO_BUILDING_CONFIG.launderingPct * levelMultiplier
-        + (snapshot.level >= 5 ? CASINO_BUILDING_CONFIG.launderingBonusPctLevel5 : 0);
+      const launderingPct = CASINO_BUILDING_CONFIG.launderingPct * levelMultiplier;
+      const launderingRaidRiskPct = CASINO_BUILDING_CONFIG.launderingRaidRiskPct * levelMultiplier;
       const launderDirty = window.Empire.UI?.launderDirtyCash;
       const launderedAmount = typeof launderDirty === "function" ? launderDirty(launderingPct / 100) : 0;
 
+      snapshot.effects.raidRiskUntil = now + CASINO_BUILDING_CONFIG.actionDurations.launderingRaidRisk;
       snapshot.cooldowns.laundering = now + CASINO_BUILDING_CONFIG.actionCooldowns.laundering;
       snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + CASINO_BUILDING_CONFIG.actionHeatAdded.laundering;
       persistCasinoState(key, snapshot);
       return {
         ok: true,
         message:
-          `Praní peněz: převedeno $${Math.max(0, Math.floor(launderedAmount))} do čistých. `
-          + `Převod ${formatDecimalValue(launderingPct, 2)}% dirty -> clean, heat +${CASINO_BUILDING_CONFIG.actionHeatAdded.laundering}.`
-      };
-    }
-
-    if (actionId === "3") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.vipEvening);
-      if (cooldownLeft > 0) {
-        persistCasinoState(key, snapshot);
-        return { ok: false, message: `VIP večer je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
-      }
-      snapshot.effects.vipEveningUntil = now + CASINO_BUILDING_CONFIG.actionDurations.vipEvening;
-      snapshot.cooldowns.vipEvening = now + CASINO_BUILDING_CONFIG.actionCooldowns.vipEvening;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + CASINO_BUILDING_CONFIG.actionHeatAdded.vipEvening;
-      persistCasinoState(key, snapshot);
-      return {
-        ok: true,
-        message: `VIP večer aktivní na 2h. Income kasina +${formatDecimalValue(CASINO_BUILDING_CONFIG.vipIncomeBoostPct * levelMultiplier, 2)}%, heat +${CASINO_BUILDING_CONFIG.actionHeatAdded.vipEvening}.`
+          `Praní špinavých peněz: převedeno $${Math.max(0, Math.floor(launderedAmount))} do čistých. `
+          + `Riziko razie +${formatDecimalValue(launderingRaidRiskPct, 2)}% na 3h, heat +${CASINO_BUILDING_CONFIG.actionHeatAdded.laundering}.`
       };
     }
 
@@ -7447,7 +7361,7 @@ window.Empire.Map = (() => {
   function calculateArcadeHourlyRates(
     totalGangMembers,
     levelMultiplier,
-    { incomeBoostPct = 0, dirtyBoostPct = 0, dirtyUpgradePct = 0 } = {}
+    { cleanBoostPct = 0, dirtyBoostPct = 0, dealDirtyBonusPerHour = 0 } = {}
   ) {
     const memberSteps = Math.max(0, Math.floor(Math.max(0, Number(totalGangMembers || 0)) / 10));
     const baseCleanIncome =
@@ -7457,18 +7371,17 @@ window.Empire.Map = (() => {
     const baseDirtyIncome =
       (ARCADE_BUILDING_CONFIG.baseDirtyIncomePerHour
         + memberSteps * ARCADE_BUILDING_CONFIG.dirtyIncomePerTenMembersPerHour)
-      * levelMultiplier
-      * Math.max(0, 1 + Math.max(0, Number(dirtyUpgradePct || 0)) / 100);
-    const currentIncomeMultiplier = Math.max(0, 1 + Math.max(0, Number(incomeBoostPct || 0)) / 100);
+      * levelMultiplier;
+    const currentCleanIncomeMultiplier = Math.max(0, 1 + Math.max(0, Number(cleanBoostPct || 0)) / 100);
     const currentDirtyIncomeMultiplier = Math.max(0, 1 + Math.max(0, Number(dirtyBoostPct || 0)) / 100);
-    const hourlyCleanIncome = baseCleanIncome * currentIncomeMultiplier;
-    const hourlyDirtyIncome = baseDirtyIncome * currentIncomeMultiplier * currentDirtyIncomeMultiplier;
+    const hourlyCleanIncome = baseCleanIncome * currentCleanIncomeMultiplier;
+    const hourlyDirtyIncome = baseDirtyIncome * currentDirtyIncomeMultiplier + Math.max(0, Number(dealDirtyBonusPerHour || 0));
 
     return {
       memberSteps,
       baseCleanIncome,
       baseDirtyIncome,
-      currentIncomeMultiplier,
+      currentCleanIncomeMultiplier,
       currentDirtyIncomeMultiplier,
       hourlyCleanIncome,
       hourlyDirtyIncome,
@@ -7482,15 +7395,16 @@ window.Empire.Map = (() => {
     const levelMultiplier = getArcadeLevelMultiplier(stateRef.level);
     const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(districtOrId, nowMs);
     const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
-    const tournamentActive = nowMs < Number(stateRef.effects.tournamentUntil || 0);
-    const nightRunActive = nowMs < Number(stateRef.effects.nightRunUntil || 0);
-    const incomeBoostPct = tournamentActive ? ARCADE_BUILDING_CONFIG.actionBoosts.tournamentIncomePct : 0;
-    const dirtyBoostPct = nightRunActive ? ARCADE_BUILDING_CONFIG.actionBoosts.nightRunDirtyIncomePct : 0;
-    const dirtyUpgradePct = stateRef.level >= 3 ? ARCADE_BUILDING_CONFIG.actionBoosts.level3DirtyIncomePct : 0;
+    const slotsActive = nowMs < Number(stateRef.effects.slotsUntil || 0);
+    const backroomActive = nowMs < Number(stateRef.effects.backroomUntil || 0);
+    const dealActive = nowMs < Number(stateRef.effects.dealUntil || 0);
+    const cleanBoostPct = slotsActive ? ARCADE_BUILDING_CONFIG.actionBoosts.slotsCleanIncomePct * levelMultiplier : 0;
+    const dirtyBoostPct = backroomActive ? ARCADE_BUILDING_CONFIG.actionBoosts.backroomDirtyIncomePct * levelMultiplier : 0;
+    const dealDirtyBonusPerHour = dealActive ? ARCADE_BUILDING_CONFIG.actionBoosts.dealDirtyPerHour * levelMultiplier : 0;
     const rates = calculateArcadeHourlyRates(totalGangMembers, levelMultiplier, {
-      incomeBoostPct,
+      cleanBoostPct,
       dirtyBoostPct,
-      dirtyUpgradePct
+      dealDirtyBonusPerHour
     });
 
     let incomeFrom = Number(stateRef.lastIncomeAt || nowMs);
@@ -7500,7 +7414,6 @@ window.Empire.Map = (() => {
 
     let cleanIncomeGained = 0;
     let dirtyIncomeGained = 0;
-    let passiveLaunderedAmount = 0;
     if (incomeFrom < nowMs) {
       const hoursElapsed = (nowMs - incomeFrom) / 3600000;
       const cleanRaw =
@@ -7509,16 +7422,6 @@ window.Empire.Map = (() => {
         hoursElapsed * (rates.hourlyDirtyIncome * districtIncomeMultiplier) + Number(stateRef.incomeRemainderDirty || 0);
       cleanIncomeGained = Math.max(0, Math.floor(cleanRaw));
       dirtyIncomeGained = Math.max(0, Math.floor(dirtyRaw));
-      if (stateRef.level >= 5) {
-        passiveLaunderedAmount = Math.max(
-          0,
-          Math.floor(dirtyIncomeGained * (Math.max(0, Number(ARCADE_BUILDING_CONFIG.actionBoosts.level5PassiveLaunderingPct || 0)) / 100))
-        );
-        if (passiveLaunderedAmount > 0) {
-          cleanIncomeGained += passiveLaunderedAmount;
-          dirtyIncomeGained = Math.max(0, dirtyIncomeGained - passiveLaunderedAmount);
-        }
-      }
       stateRef.incomeRemainderClean = Math.max(0, cleanRaw - cleanIncomeGained);
       stateRef.incomeRemainderDirty = Math.max(0, dirtyRaw - dirtyIncomeGained);
     }
@@ -7537,18 +7440,17 @@ window.Empire.Map = (() => {
       }
     }
 
-    const influencePerHour = Math.max(0, Number(ARCADE_BUILDING_CONFIG.baseInfluencePerDay || 0)) / 24;
-    applyBuildingInfluenceTick(stateRef, nowMs, influencePerHour);
+    applyBuildingInfluenceTick(stateRef, nowMs, BUILDING_INFLUENCE_PER_HOUR);
 
     return {
       cleanIncomeGained,
       dirtyIncomeGained,
-      passiveLaunderedAmount,
-      tournamentActive,
-      nightRunActive,
-      incomeBoostPct,
+      slotsActive,
+      backroomActive,
+      dealActive,
+      cleanBoostPct,
       dirtyBoostPct,
-      dirtyUpgradePct,
+      dealDirtyBonusPerHour,
       rates: {
         ...rates,
         hourlyCleanIncome: rates.hourlyCleanIncome * districtIncomeMultiplier,
@@ -7570,33 +7472,47 @@ window.Empire.Map = (() => {
     const levelMultiplier = getArcadeLevelMultiplier(snapshot.level);
     const nextLevel = snapshot.level < ARCADE_BUILDING_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? ARCADE_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0 : 0;
+    const dealDrugSalesPct = ARCADE_BUILDING_CONFIG.actionBoosts.dealDrugSalesPct * levelMultiplier;
+    const backroomRaidRiskPct = ARCADE_BUILDING_CONFIG.raidRiskPcts.backroom * levelMultiplier;
+    const dealRaidRiskPct = ARCADE_BUILDING_CONFIG.raidRiskPcts.deal * levelMultiplier;
     const rates = syncResult.rates || calculateArcadeHourlyRates(totalGangMembers, levelMultiplier);
     const hourlyIncome = rates.hourlyTotalIncome;
     const dailyIncome = hourlyIncome * 24;
-    const passiveLaunderingPct = snapshot.level >= 5 ? ARCADE_BUILDING_CONFIG.actionBoosts.level5PassiveLaunderingPct : 0;
+    const hasDrugSalesTargets = playerOwnsDrugLabOrStreetDealers();
+    const activeDrugSalesBoostPct = syncResult.dealActive && hasDrugSalesTargets ? dealDrugSalesPct : 0;
+    const activeRaidRiskPct =
+      (syncResult.backroomActive ? backroomRaidRiskPct : 0)
+      + (syncResult.dealActive ? dealRaidRiskPct : 0);
 
     const effects = [
       `Income C:$${formatDecimalValue(rates.hourlyCleanIncome, 2)} / D:$${formatDecimalValue(rates.hourlyDirtyIncome, 2)}`
     ];
-    if (syncResult.tournamentActive) {
+    if (syncResult.slotsActive) {
       effects.push(
-        `Turnaj (+${formatDecimalValue(syncResult.incomeBoostPct, 2)}% income, ${formatDurationLabel(
-          snapshot.effects.tournamentUntil - now
+        `Rozjet automaty (+${formatDecimalValue(syncResult.cleanBoostPct, 2)}% clean income, ${formatDurationLabel(
+          snapshot.effects.slotsUntil - now
         )})`
       );
     }
-    if (syncResult.nightRunActive) {
+    if (syncResult.backroomActive) {
       effects.push(
-        `Noční tah (+${formatDecimalValue(syncResult.dirtyBoostPct, 2)}% dirty cash, ${formatDurationLabel(
-          snapshot.effects.nightRunUntil - now
-        )})`
+        `Zadní místnost (+${formatDecimalValue(syncResult.dirtyBoostPct, 2)}% dirty income, +${formatDecimalValue(
+          backroomRaidRiskPct,
+          2
+        )}% riziko razie, ${formatDurationLabel(snapshot.effects.backroomUntil - now)})`
       );
     }
-    if (syncResult.dirtyUpgradePct > 0) {
-      effects.push(`L3 bonus (+${formatDecimalValue(syncResult.dirtyUpgradePct, 2)}% dirty cash)`);
+    if (syncResult.dealActive) {
+      const drugBonusLabel = hasDrugSalesTargets
+        ? `Drug Lab/Pouliční dealeři +${formatDecimalValue(dealDrugSalesPct, 2)}%`
+        : "Drug Lab/Pouliční dealeři: bonus se neaplikuje (nevlastníš je)";
+      effects.push(
+        `Deal přes automaty (+$${formatDecimalValue(syncResult.dealDirtyBonusPerHour, 2)} dirty/h, ${drugBonusLabel}, `
+          + `+${formatDecimalValue(dealRaidRiskPct, 2)}% riziko razie, ${formatDurationLabel(snapshot.effects.dealUntil - now)})`
+      );
     }
-    if (passiveLaunderingPct > 0) {
-      effects.push(`L5 pasivní praní (${formatDecimalValue(passiveLaunderingPct, 2)}% dirty -> clean)`);
+    if (activeRaidRiskPct > 0) {
+      effects.push(`Celkové riziko razie +${formatDecimalValue(activeRaidRiskPct, 2)}%`);
     }
 
     return {
@@ -7606,11 +7522,11 @@ window.Empire.Map = (() => {
       hourlyIncome,
       dailyIncome,
       info:
-        "Menší než kasino, ale pořád jede. Automaty, hry a rychlý cash. Herna generuje čisté i špinavé peníze a přes akce umí krátkodobě zvednout příjmy nebo prát dirty cash.",
+        "Herna je hybridní ekonomická budova: dává legální i dirty cash, profituje z velikosti gangu a přes akce umí krátkodobě tlačit clean/dirty income nebo napojit automatovou síť na drogový byznys. Upgrady škálují oba příjmy i sílu všech akcí.",
       specialActions: [
-        "Turnaj: Cooldown 6h, trvá 2h, zvýší income herny o +35 % a přidá +5 heat.",
-        "Praní peněz: Cooldown 7h, okamžitě převede 10 % dirty cash na clean cash a přidá +4 heat.",
-        "Noční tah: Cooldown 8h, trvá 1h, zvýší dirty cash herny o +50 % a přidá +7 heat."
+        "Rozjet automaty: Cooldown 4h, trvá 2h, zvýší legální income herny o +50 % (škáluje s levelem) a přidá +3 heat.",
+        "Zadní místnost: Cooldown 6h, trvá 2h, zvýší dirty income herny o +75 % (škáluje s levelem), přidá +5 heat a na 2h zvýší riziko policejní razie v districtu o +10 % (škáluje s levelem).",
+        "Deal přes automaty: Cooldown 5h, trvá 2h, přidá herně +20 dirty cash/h (škáluje s levelem), a pokud vlastníš Drug Lab nebo Pouliční dealery, zvýší jejich prodej drog o +25 % (škáluje s levelem); zároveň přidá +6 heat a +15 % riziko razie na 2h (škáluje s levelem)."
       ],
       mechanics: {
         type: "arcade",
@@ -7621,18 +7537,20 @@ window.Empire.Map = (() => {
         heatPerDay: ARCADE_BUILDING_CONFIG.baseHeatPerDay * levelMultiplier + Math.max(0, Number(snapshot.extraHeat || 0)),
         effectsLabel: effects.join(" • "),
         cooldowns: {
-          tournament: Math.max(0, Number(snapshot.cooldowns.tournament || 0) - now),
-          laundering: Math.max(0, Number(snapshot.cooldowns.laundering || 0) - now),
-          nightRun: Math.max(0, Number(snapshot.cooldowns.nightRun || 0) - now)
+          slots: Math.max(0, Number(snapshot.cooldowns.slots || 0) - now),
+          backroom: Math.max(0, Number(snapshot.cooldowns.backroom || 0) - now),
+          deal: Math.max(0, Number(snapshot.cooldowns.deal || 0) - now)
         },
-        launderingPct: ARCADE_BUILDING_CONFIG.actionBoosts.launderingPct,
-        passiveLaunderingPct,
-        passiveLaunderedAmount: syncResult.passiveLaunderedAmount,
-        currentIncomeMultiplier: rates.currentIncomeMultiplier,
+        dealDrugSalesPct,
+        activeDrugSalesBoostPct,
+        hasDrugSalesTargets,
+        currentCleanIncomeMultiplier: rates.currentCleanIncomeMultiplier,
         currentDirtyIncomeMultiplier: rates.currentDirtyIncomeMultiplier,
-        tournamentActive: syncResult.tournamentActive,
-        nightRunActive: syncResult.nightRunActive,
-        dirtyUpgradePct: syncResult.dirtyUpgradePct
+        dealDirtyBonusPerHour: syncResult.dealDirtyBonusPerHour,
+        activeRaidRiskPct,
+        slotsActive: syncResult.slotsActive,
+        backroomActive: syncResult.backroomActive,
+        dealActive: syncResult.dealActive
       }
     };
   }
@@ -7645,63 +7563,67 @@ window.Empire.Map = (() => {
     const totalGangMembers = Number(window.Empire.UI?.getCurrentGangMembers?.() || 0);
     syncArcadeIncome(snapshot, totalGangMembers, now, district || context?.districtId);
 
+    const levelMultiplier = getArcadeLevelMultiplier(snapshot.level);
     const toCooldownLeft = (until) => Math.max(0, Math.floor(Number(until || 0) - now));
 
     if (actionId === "1") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.tournament);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.slots);
       if (cooldownLeft > 0) {
         persistArcadeState(key, snapshot);
-        return { ok: false, message: `Turnaj je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Rozjet automaty je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      snapshot.effects.tournamentUntil = now + ARCADE_BUILDING_CONFIG.actionDurations.tournament;
-      snapshot.cooldowns.tournament = now + ARCADE_BUILDING_CONFIG.actionCooldowns.tournament;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + ARCADE_BUILDING_CONFIG.actionHeatAdded.tournament;
+      const cleanBoostPct = ARCADE_BUILDING_CONFIG.actionBoosts.slotsCleanIncomePct * levelMultiplier;
+      snapshot.effects.slotsUntil = now + ARCADE_BUILDING_CONFIG.actionDurations.slots;
+      snapshot.cooldowns.slots = now + ARCADE_BUILDING_CONFIG.actionCooldowns.slots;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + ARCADE_BUILDING_CONFIG.actionHeatAdded.slots;
       persistArcadeState(key, snapshot);
       return {
         ok: true,
-        message:
-          `Turnaj aktivní na ${formatDurationLabel(ARCADE_BUILDING_CONFIG.actionDurations.tournament)}. `
-          + `Income herny +${formatDecimalValue(ARCADE_BUILDING_CONFIG.actionBoosts.tournamentIncomePct, 2)}%, `
-          + `heat +${ARCADE_BUILDING_CONFIG.actionHeatAdded.tournament}.`
+        message: `Rozjet automaty aktivní na 2h. Clean income herny +${formatDecimalValue(cleanBoostPct, 2)}%, heat +${ARCADE_BUILDING_CONFIG.actionHeatAdded.slots}.`
       };
     }
 
     if (actionId === "2") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.laundering);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.backroom);
       if (cooldownLeft > 0) {
         persistArcadeState(key, snapshot);
-        return { ok: false, message: `Praní peněz je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Zadní místnost je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const launderingPct = Math.max(0, Number(ARCADE_BUILDING_CONFIG.actionBoosts.launderingPct || 0));
-      const launderDirty = window.Empire.UI?.launderDirtyCash;
-      const launderedAmount = typeof launderDirty === "function" ? launderDirty(launderingPct / 100) : 0;
-      snapshot.cooldowns.laundering = now + ARCADE_BUILDING_CONFIG.actionCooldowns.laundering;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + ARCADE_BUILDING_CONFIG.actionHeatAdded.laundering;
+      const dirtyBoostPct = ARCADE_BUILDING_CONFIG.actionBoosts.backroomDirtyIncomePct * levelMultiplier;
+      const raidRiskPct = ARCADE_BUILDING_CONFIG.raidRiskPcts.backroom * levelMultiplier;
+      snapshot.effects.backroomUntil = now + ARCADE_BUILDING_CONFIG.actionDurations.backroom;
+      snapshot.cooldowns.backroom = now + ARCADE_BUILDING_CONFIG.actionCooldowns.backroom;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + ARCADE_BUILDING_CONFIG.actionHeatAdded.backroom;
       persistArcadeState(key, snapshot);
       return {
         ok: true,
-        message:
-          `Praní peněz: převedeno $${Math.max(0, Math.floor(launderedAmount))} do čistých. `
-          + `Převod ${formatDecimalValue(launderingPct, 2)}% dirty -> clean, heat +${ARCADE_BUILDING_CONFIG.actionHeatAdded.laundering}.`
+        message: `Zadní místnost aktivní na 2h. Dirty income +${formatDecimalValue(dirtyBoostPct, 2)}%, riziko razie +${formatDecimalValue(
+          raidRiskPct,
+          2
+        )}%, heat +${ARCADE_BUILDING_CONFIG.actionHeatAdded.backroom}.`
       };
     }
 
     if (actionId === "3") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.nightRun);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.deal);
       if (cooldownLeft > 0) {
         persistArcadeState(key, snapshot);
-        return { ok: false, message: `Noční tah je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Deal přes automaty je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      snapshot.effects.nightRunUntil = now + ARCADE_BUILDING_CONFIG.actionDurations.nightRun;
-      snapshot.cooldowns.nightRun = now + ARCADE_BUILDING_CONFIG.actionCooldowns.nightRun;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + ARCADE_BUILDING_CONFIG.actionHeatAdded.nightRun;
+      const dealDirtyBonus = ARCADE_BUILDING_CONFIG.actionBoosts.dealDirtyPerHour * levelMultiplier;
+      const dealDrugSalesPct = ARCADE_BUILDING_CONFIG.actionBoosts.dealDrugSalesPct * levelMultiplier;
+      const raidRiskPct = ARCADE_BUILDING_CONFIG.raidRiskPcts.deal * levelMultiplier;
+      const hasTargets = playerOwnsDrugLabOrStreetDealers();
+      snapshot.effects.dealUntil = now + ARCADE_BUILDING_CONFIG.actionDurations.deal;
+      snapshot.cooldowns.deal = now + ARCADE_BUILDING_CONFIG.actionCooldowns.deal;
+      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0)) + ARCADE_BUILDING_CONFIG.actionHeatAdded.deal;
       persistArcadeState(key, snapshot);
       return {
         ok: true,
         message:
-          `Noční tah aktivní na ${formatDurationLabel(ARCADE_BUILDING_CONFIG.actionDurations.nightRun)}. `
-          + `Dirty cash +${formatDecimalValue(ARCADE_BUILDING_CONFIG.actionBoosts.nightRunDirtyIncomePct, 2)}%, `
-          + `heat +${ARCADE_BUILDING_CONFIG.actionHeatAdded.nightRun}.`
+          `Deal přes automaty aktivní na 2h. Herna +$${formatDecimalValue(dealDirtyBonus, 2)} dirty/h, `
+          + `${hasTargets ? `Drug Lab/Pouliční dealeři +${formatDecimalValue(dealDrugSalesPct, 2)}% prodej drog, ` : "bonus prodeje drog se neaplikuje (nevlastníš Drug Lab ani Pouliční dealery), "}`
+          + `riziko razie +${formatDecimalValue(raidRiskPct, 2)}%, heat +${ARCADE_BUILDING_CONFIG.actionHeatAdded.deal}.`
       };
     }
 
@@ -8037,19 +7959,18 @@ window.Empire.Map = (() => {
   function calculateExchangeHourlyRates(
     totalGangMembers,
     levelMultiplier,
-    { cleanBoostPct = 0, cleanBonusPct = 0 } = {}
+    { favorableRateBoostPct = 0 } = {}
   ) {
     const memberSteps = Math.max(0, Math.floor(Math.max(0, Number(totalGangMembers || 0)) / 10));
     const baseCleanIncome =
       (EXCHANGE_BUILDING_CONFIG.baseCleanIncomePerHour
         + memberSteps * EXCHANGE_BUILDING_CONFIG.cleanIncomePerTenMembersPerHour)
-      * levelMultiplier
-      * Math.max(0, 1 + Math.max(0, Number(cleanBonusPct || 0)) / 100);
+      * levelMultiplier;
     const baseDirtyIncome =
       (EXCHANGE_BUILDING_CONFIG.baseDirtyIncomePerHour
         + memberSteps * EXCHANGE_BUILDING_CONFIG.dirtyIncomePerTenMembersPerHour)
       * levelMultiplier;
-    const currentCleanIncomeMultiplier = Math.max(0, 1 + Math.max(0, Number(cleanBoostPct || 0)) / 100);
+    const currentCleanIncomeMultiplier = Math.max(0, 1 + Math.max(0, Number(favorableRateBoostPct || 0)) / 100);
     const hourlyCleanIncome = baseCleanIncome * currentCleanIncomeMultiplier;
     const hourlyDirtyIncome = baseDirtyIncome;
 
@@ -8069,13 +7990,15 @@ window.Empire.Map = (() => {
     const stateRef = instanceState;
     const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
     const levelMultiplier = getExchangeLevelMultiplier(stateRef.level);
-    const cleanBonusPct = stateRef.level >= 4 ? EXCHANGE_BUILDING_CONFIG.actionBoosts.cleanIncomeBonusPctLevel4 : 0;
+    const favorableRateActive = nowMs < Number(stateRef.effects.favorableRateUntil || 0);
+    const silentTransferRiskActive = nowMs < Number(stateRef.effects.silentTransferRiskUntil || 0);
+    const financialNetworkActive = nowMs < Number(stateRef.effects.financialNetworkUntil || 0);
+    const favorableRateBoostPct = favorableRateActive
+      ? EXCHANGE_BUILDING_CONFIG.actionBoosts.favorableRateCleanIncomePct * levelMultiplier
+      : 0;
     const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(districtOrId, nowMs);
     const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
-    const rates = calculateExchangeHourlyRates(totalGangMembers, levelMultiplier, {
-      cleanBoostPct: 0,
-      cleanBonusPct
-    });
+    const rates = calculateExchangeHourlyRates(totalGangMembers, levelMultiplier, { favorableRateBoostPct });
 
     let incomeFrom = Number(stateRef.lastIncomeAt || nowMs);
     if (!Number.isFinite(incomeFrom) || incomeFrom > nowMs) {
@@ -8110,13 +8033,15 @@ window.Empire.Map = (() => {
       }
     }
 
-    const influencePerHour = Math.max(0, Number(EXCHANGE_BUILDING_CONFIG.baseInfluencePerDay || 0)) / 24;
-    applyBuildingInfluenceTick(stateRef, nowMs, influencePerHour);
+    applyBuildingInfluenceTick(stateRef, nowMs, EXCHANGE_BUILDING_CONFIG.baseInfluencePerHour);
 
     return {
       cleanIncomeGained,
       dirtyIncomeGained,
-      cleanBonusPct,
+      favorableRateActive,
+      silentTransferRiskActive,
+      financialNetworkActive,
+      favorableRateBoostPct,
       districtIncomeBoostPct,
       rates: {
         ...rates,
@@ -8138,22 +8063,37 @@ window.Empire.Map = (() => {
     const levelMultiplier = getExchangeLevelMultiplier(snapshot.level);
     const nextLevel = snapshot.level < EXCHANGE_BUILDING_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? EXCHANGE_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0 : 0;
+    const silentTransferPct = EXCHANGE_BUILDING_CONFIG.actionBoosts.silentTransferPct * levelMultiplier;
+    const districtIncomeBonusPct = EXCHANGE_BUILDING_CONFIG.actionBoosts.districtIncomeBonusPct * levelMultiplier;
+    const silentTransferRaidRiskPct = EXCHANGE_BUILDING_CONFIG.raidRiskPcts.silentTransfer * levelMultiplier;
     const rates = syncResult.rates || calculateExchangeHourlyRates(totalGangMembers, levelMultiplier);
     const hourlyIncome = rates.hourlyTotalIncome;
     const dailyIncome = hourlyIncome * 24;
-    const conversionBonusPct = snapshot.level >= 3 ? EXCHANGE_BUILDING_CONFIG.actionBoosts.exchangeBetterConversionPctLevel3 : 0;
-    const heatReductionPct = snapshot.level >= 5 ? EXCHANGE_BUILDING_CONFIG.actionBoosts.heatReductionPctLevel5 : 0;
-    const baseHeatPerDay = Math.max(0, Number(EXCHANGE_BUILDING_CONFIG.baseHeatPerDay || 0));
-    const reducedBaseHeatPerDay = heatReductionPct > 0
-      ? baseHeatPerDay * Math.max(0, 1 - heatReductionPct / 100)
-      : baseHeatPerDay;
 
     const effects = [
       `Income C:$${formatDecimalValue(rates.hourlyCleanIncome, 2)} / D:$${formatDecimalValue(rates.hourlyDirtyIncome, 2)}`
     ];
-    if (conversionBonusPct > 0) effects.push(`L3 lepší konverze (+${formatDecimalValue(conversionBonusPct, 2)}%)`);
-    if (syncResult.cleanBonusPct > 0) effects.push(`L4 bonus (+${formatDecimalValue(syncResult.cleanBonusPct, 2)}% clean income)`);
-    if (heatReductionPct > 0) effects.push(`L5 menší heat (-${formatDecimalValue(heatReductionPct, 2)}%)`);
+    if (syncResult.favorableRateActive) {
+      effects.push(
+        `Výhodný kurz (+${formatDecimalValue(syncResult.favorableRateBoostPct, 2)}% clean income, ${formatDurationLabel(
+          snapshot.effects.favorableRateUntil - now
+        )})`
+      );
+    }
+    if (syncResult.silentTransferRiskActive) {
+      effects.push(
+        `Tichý převod (+${formatDecimalValue(silentTransferRaidRiskPct, 2)}% riziko razie, ${formatDurationLabel(
+          snapshot.effects.silentTransferRiskUntil - now
+        )})`
+      );
+    }
+    if (syncResult.financialNetworkActive) {
+      effects.push(
+        `Finanční síť (+${formatDecimalValue(districtIncomeBonusPct, 2)}% district income, ${formatDurationLabel(
+          snapshot.effects.financialNetworkUntil - now
+        )})`
+      );
+    }
     if (syncResult.districtIncomeBoostPct > 0) {
       effects.push(`Celkový district income boost +${formatDecimalValue(syncResult.districtIncomeBoostPct, 2)}%`);
     }
@@ -8165,11 +8105,11 @@ window.Empire.Map = (() => {
       hourlyIncome,
       dailyIncome,
       info:
-        "Peníze mění podobu. Hotovost, crypto i špinavé prachy projdou přes správné ruce. Směnárna drží stabilní clean/dirty příjem, vliv a rychlé finanční akce.",
+        "Směnárna je finanční utility budova pro převody cashflow. Dává stabilní clean/dirty příjem, průběžně přidává vliv a přes akce umí krátkodobě zesílit clean příjem, provést konverzi dirty cash a vytvořit districtový cash boost pro všechny income budovy.",
       specialActions: [
-        "Směna: Cooldown 6h, převede cash ↔ materiály, přidá +3 heat.",
-        "Skrytý převod: Cooldown 8h, okamžitě přidá +15 % clean cash a přidá +4 heat.",
-        "Rychlá likvidita: Cooldown 10h, okamžitě přidá +5000 clean cash a přidá +5 heat."
+        "Výhodný kurz: Cooldown 4h, trvá 2h, zvýší legální income směnárny o +40 % (škáluje s levelem) a přidá +2 heat.",
+        "Tichý převod: Cooldown 6h, okamžitě převede 12 % dirty cash na clean cash (škáluje s levelem), přidá +5 heat a na 2h zvýší riziko razie v districtu o +10 % (škáluje s levelem).",
+        "Finanční síť: Cooldown 5h, trvá 2h, zvýší cash income všech income budov v districtu o +15 % (škáluje s levelem) a přidá +3 heat."
       ],
       mechanics: {
         type: "exchange",
@@ -8177,18 +8117,21 @@ window.Empire.Map = (() => {
         level: snapshot.level,
         nextLevel,
         nextUpgradeCost,
-        heatPerDay: reducedBaseHeatPerDay + Math.max(0, Number(snapshot.extraHeat || 0)),
+        heatPerDay: EXCHANGE_BUILDING_CONFIG.baseHeatPerDay + Math.max(0, Number(snapshot.extraHeat || 0)),
         effectsLabel: effects.join(" • "),
         cooldowns: {
-          exchange: Math.max(0, Number(snapshot.cooldowns.exchange || 0) - now),
-          hiddenTransfer: Math.max(0, Number(snapshot.cooldowns.hiddenTransfer || 0) - now),
-          quickLiquidity: Math.max(0, Number(snapshot.cooldowns.quickLiquidity || 0) - now)
+          favorableRate: Math.max(0, Number(snapshot.cooldowns.favorableRate || 0) - now),
+          silentTransfer: Math.max(0, Number(snapshot.cooldowns.silentTransfer || 0) - now),
+          financialNetwork: Math.max(0, Number(snapshot.cooldowns.financialNetwork || 0) - now)
         },
-        conversionBonusPct,
-        heatReductionPct,
+        silentTransferPct,
+        districtIncomeBonusPct,
         currentCleanIncomeMultiplier: rates.currentCleanIncomeMultiplier,
         currentDirtyIncomeMultiplier: rates.currentDirtyIncomeMultiplier,
-        districtIncomeBoostPct: syncResult.districtIncomeBoostPct
+        districtIncomeBoostPct: syncResult.districtIncomeBoostPct,
+        favorableRateActive: syncResult.favorableRateActive,
+        silentTransferRiskActive: syncResult.silentTransferRiskActive,
+        financialNetworkActive: syncResult.financialNetworkActive
       }
     };
   }
@@ -8201,97 +8144,65 @@ window.Empire.Map = (() => {
     const totalGangMembers = Number(window.Empire.UI?.getCurrentGangMembers?.() || 0);
     syncExchangeIncome(snapshot, totalGangMembers, now, district || context?.districtId);
 
+    const levelMultiplier = getExchangeLevelMultiplier(snapshot.level);
     const toCooldownLeft = (until) => Math.max(0, Math.floor(Number(until || 0) - now));
 
     if (actionId === "1") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.exchange);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.favorableRate);
       if (cooldownLeft > 0) {
         persistExchangeState(key, snapshot);
-        return { ok: false, message: `Směna je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Výhodný kurz je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const conversionBonusMultiplier = snapshot.level >= 3
-        ? 1 + (Math.max(0, Number(EXCHANGE_BUILDING_CONFIG.actionBoosts.exchangeBetterConversionPctLevel3 || 0)) / 100)
-        : 1;
-      const cashCostBase = Math.max(0, Math.floor(Number(EXCHANGE_BUILDING_CONFIG.actionBoosts.exchangeCashCost || 0)));
-      const materialsGainBase = Math.max(0, Math.floor(Number(EXCHANGE_BUILDING_CONFIG.actionBoosts.exchangeMaterialsGain || 0)));
-      const materialsCost = Math.max(0, Math.floor(Number(EXCHANGE_BUILDING_CONFIG.actionBoosts.exchangeMaterialsCost || 0)));
-      const cashGainBase = Math.max(0, Math.floor(Number(EXCHANGE_BUILDING_CONFIG.actionBoosts.exchangeCashGain || 0)));
-      const cashCost = Math.max(1, Math.floor(cashCostBase / conversionBonusMultiplier));
-      const materialsGain = Math.max(1, Math.floor(materialsGainBase * conversionBonusMultiplier));
-      const cashGain = Math.max(1, Math.floor(cashGainBase * conversionBonusMultiplier));
-      const spendClean = window.Empire.UI?.trySpendCleanCash;
-      const addMaterials = window.Empire.UI?.addMaterials;
-      const spendMaterials = window.Empire.UI?.trySpendMaterials;
-      const addClean = window.Empire.UI?.addCleanCash;
-      let convertedLabel = "";
-
-      if (typeof spendClean === "function" && typeof addMaterials === "function") {
-        const spendResult = spendClean(cashCost);
-        if (spendResult?.ok) {
-          addMaterials(materialsGain);
-          convertedLabel = `cash -> materiály ($${cashCost} -> ${materialsGain} MAT)`;
-        }
-      }
-      if (!convertedLabel && typeof spendMaterials === "function" && typeof addClean === "function") {
-        const spendResult = spendMaterials(materialsCost);
-        if (spendResult?.ok) {
-          addClean(cashGain);
-          convertedLabel = `materiály -> cash (${materialsCost} MAT -> $${cashGain})`;
-        }
-      }
-      if (!convertedLabel) {
-        persistExchangeState(key, snapshot);
-        return { ok: false, message: "Směna selhala: nedostatek cash i materiálů pro konverzi." };
-      }
-      snapshot.cooldowns.exchange = now + EXCHANGE_BUILDING_CONFIG.actionCooldowns.exchange;
+      const cleanBoostPct = EXCHANGE_BUILDING_CONFIG.actionBoosts.favorableRateCleanIncomePct * levelMultiplier;
+      snapshot.effects.favorableRateUntil = now + EXCHANGE_BUILDING_CONFIG.actionDurations.favorableRate;
+      snapshot.cooldowns.favorableRate = now + EXCHANGE_BUILDING_CONFIG.actionCooldowns.favorableRate;
       snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0))
-        + EXCHANGE_BUILDING_CONFIG.actionHeatAdded.exchange;
+        + EXCHANGE_BUILDING_CONFIG.actionHeatAdded.favorableRate;
       persistExchangeState(key, snapshot);
       return {
         ok: true,
-        message: `Směna provedena (${convertedLabel}). Heat +${EXCHANGE_BUILDING_CONFIG.actionHeatAdded.exchange}.`
+        message: `Výhodný kurz aktivní na 2h. Clean income směnárny +${formatDecimalValue(cleanBoostPct, 2)}%, heat +${EXCHANGE_BUILDING_CONFIG.actionHeatAdded.favorableRate}.`
       };
     }
 
     if (actionId === "2") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.hiddenTransfer);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.silentTransfer);
       if (cooldownLeft > 0) {
         persistExchangeState(key, snapshot);
-        return { ok: false, message: `Skrytý převod je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Tichý převod je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const currentCleanCash = Math.max(0, Math.floor(Number(window.Empire.UI?.getEconomySnapshot?.()?.cleanMoney || 0)));
-      const gainPct = Math.max(0, Number(EXCHANGE_BUILDING_CONFIG.actionBoosts.hiddenTransferCleanCashPct || 0));
-      const gainAmount = Math.max(0, Math.floor(currentCleanCash * (gainPct / 100)));
-      if (gainAmount > 0) {
-        window.Empire.UI?.addCleanCash?.(gainAmount);
-      }
-      snapshot.cooldowns.hiddenTransfer = now + EXCHANGE_BUILDING_CONFIG.actionCooldowns.hiddenTransfer;
+      const silentTransferPct = EXCHANGE_BUILDING_CONFIG.actionBoosts.silentTransferPct * levelMultiplier;
+      const raidRiskPct = EXCHANGE_BUILDING_CONFIG.raidRiskPcts.silentTransfer * levelMultiplier;
+      const launderDirty = window.Empire.UI?.launderDirtyCash;
+      const convertedAmount = typeof launderDirty === "function" ? launderDirty(silentTransferPct / 100) : 0;
+      snapshot.effects.silentTransferRiskUntil = now + EXCHANGE_BUILDING_CONFIG.actionDurations.silentTransferRisk;
+      snapshot.cooldowns.silentTransfer = now + EXCHANGE_BUILDING_CONFIG.actionCooldowns.silentTransfer;
       snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0))
-        + EXCHANGE_BUILDING_CONFIG.actionHeatAdded.hiddenTransfer;
+        + EXCHANGE_BUILDING_CONFIG.actionHeatAdded.silentTransfer;
       persistExchangeState(key, snapshot);
       return {
         ok: true,
-        message: `Skrytý převod: +$${gainAmount} clean cash (${formatDecimalValue(gainPct, 2)}%). Heat +${EXCHANGE_BUILDING_CONFIG.actionHeatAdded.hiddenTransfer}.`
+        message:
+          `Tichý převod: převedeno $${Math.max(0, Math.floor(convertedAmount))} do čistých. `
+          + `Riziko razie +${formatDecimalValue(raidRiskPct, 2)}% na 2h, heat +${EXCHANGE_BUILDING_CONFIG.actionHeatAdded.silentTransfer}.`
       };
     }
 
     if (actionId === "3") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.quickLiquidity);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.financialNetwork);
       if (cooldownLeft > 0) {
         persistExchangeState(key, snapshot);
-        return { ok: false, message: `Rychlá likvidita je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Finanční síť je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const quickCash = Math.max(0, Math.floor(Number(EXCHANGE_BUILDING_CONFIG.actionBoosts.quickLiquidityCleanCash || 0)));
-      if (quickCash > 0) {
-        window.Empire.UI?.addCleanCash?.(quickCash);
-      }
-      snapshot.cooldowns.quickLiquidity = now + EXCHANGE_BUILDING_CONFIG.actionCooldowns.quickLiquidity;
+      const districtIncomeBonusPct = EXCHANGE_BUILDING_CONFIG.actionBoosts.districtIncomeBonusPct * levelMultiplier;
+      snapshot.effects.financialNetworkUntil = now + EXCHANGE_BUILDING_CONFIG.actionDurations.financialNetwork;
+      snapshot.cooldowns.financialNetwork = now + EXCHANGE_BUILDING_CONFIG.actionCooldowns.financialNetwork;
       snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0))
-        + EXCHANGE_BUILDING_CONFIG.actionHeatAdded.quickLiquidity;
+        + EXCHANGE_BUILDING_CONFIG.actionHeatAdded.financialNetwork;
       persistExchangeState(key, snapshot);
       return {
         ok: true,
-        message: `Rychlá likvidita: +$${quickCash} clean cash. Heat +${EXCHANGE_BUILDING_CONFIG.actionHeatAdded.quickLiquidity}.`
+        message: `Finanční síť aktivní na 2h. District income budov +${formatDecimalValue(districtIncomeBonusPct, 2)}%, heat +${EXCHANGE_BUILDING_CONFIG.actionHeatAdded.financialNetwork}.`
       };
     }
 
@@ -8324,7 +8235,7 @@ window.Empire.Map = (() => {
   function calculateRestaurantHourlyRates(
     totalGangMembers,
     levelMultiplier,
-    { cleanBoostPct = 0 } = {}
+    { happyHourBoostPct = 0, backTableCleanPenaltyPct = 0 } = {}
   ) {
     const memberSteps = Math.max(0, Math.floor(Math.max(0, Number(totalGangMembers || 0)) / 10));
     const baseCleanIncome =
@@ -8335,7 +8246,9 @@ window.Empire.Map = (() => {
       (RESTAURANT_BUILDING_CONFIG.baseDirtyIncomePerHour
         + memberSteps * RESTAURANT_BUILDING_CONFIG.dirtyIncomePerTenMembersPerHour)
       * levelMultiplier;
-    const currentCleanIncomeMultiplier = Math.max(0, 1 + Math.max(0, Number(cleanBoostPct || 0)) / 100);
+    const cleanBoostMultiplier = Math.max(0, 1 + Math.max(0, Number(happyHourBoostPct || 0)) / 100);
+    const cleanPenaltyMultiplier = Math.max(0, 1 - Math.max(0, Number(backTableCleanPenaltyPct || 0)) / 100);
+    const currentCleanIncomeMultiplier = cleanBoostMultiplier * cleanPenaltyMultiplier;
     const hourlyCleanIncome = baseCleanIncome * currentCleanIncomeMultiplier;
     const hourlyDirtyIncome = baseDirtyIncome;
 
@@ -8351,102 +8264,27 @@ window.Empire.Map = (() => {
     };
   }
 
-  function applyGossipTemplateContext(template, context = {}) {
-    const districtLabel = String(context?.districtLabel || "?");
-    const ownerLabel = String(context?.ownerLabel || "Neznámý");
-    const districtType = String(context?.districtType || "district");
-    return String(template || "")
-      .replaceAll("{district}", districtLabel)
-      .replaceAll("{owner}", ownerLabel)
-      .replaceAll("{type}", districtType);
-  }
-
-  function pickGossipTemplate(templates, context = {}) {
-    if (!Array.isArray(templates) || !templates.length) return "";
-    const index = Math.max(0, Math.floor(Math.random() * templates.length)) % templates.length;
-    const picked = templates[index];
-    if (typeof picked === "function") {
-      return String(picked(String(context?.districtLabel || "?")));
-    }
-    return applyGossipTemplateContext(picked, context);
-  }
-
-  function buildDistrictGossipText(targetDistrict, spec = {}) {
+  function buildDistrictGossipText(targetDistrict) {
     const districtLabel = resolveDistrictNumberLabel(targetDistrict);
-    const category = String(spec?.category || "").trim().toLowerCase();
-    const truthState = String(spec?.truthState || "").trim().toLowerCase();
-    const quality = String(spec?.quality || "").trim().toLowerCase();
-    const districtType = String(targetDistrict?.type || "").trim().toLowerCase() || "district";
-    const districtIncome = Math.max(0, Math.floor(Number(targetDistrict?.income || 0)));
-    const districtBuildings = Array.isArray(targetDistrict?.buildings) ? targetDistrict.buildings : [];
-    const hasDrugLab = districtBuildings.some((building) => String(building || "").trim().toLowerCase() === "drug lab");
-    const hasFactory = districtBuildings.some((building) => String(building || "").trim().toLowerCase() === "továrna");
-    const hasArmory = districtBuildings.some((building) => String(building || "").trim().toLowerCase() === "zbrojovka");
-    const defenseSnapshot = window.Empire.UI?.getDistrictDefenseSnapshot?.(targetDistrict?.id) || null;
-    const defensePower = Math.max(
-      0,
-      Math.floor(Number(defenseSnapshot?.self?.power ?? defenseSnapshot?.ally?.power ?? 0))
-    );
-    const lowDefense = defensePower > 0 && defensePower <= 30;
-    const highHeat = Math.max(0, Number(targetDistrict?.heat || 0)) >= 10;
-    const ownerLabel = String(targetDistrict?.ownerNick || targetDistrict?.owner || "").trim() || `District ${districtLabel}`;
-
-    const categoryKey = Object.prototype.hasOwnProperty.call(DISTRICT_GOSSIP_TEXT_LIBRARY.common, category)
-      ? category
-      : "special";
-    const tierKey = quality === "rare" || spec?.rare || truthState === "true"
-      ? "rare"
-      : quality === "quality" || truthState === "partial"
-        ? "quality"
-        : "common";
-    const tierPool = DISTRICT_GOSSIP_TEXT_LIBRARY[tierKey] || DISTRICT_GOSSIP_TEXT_LIBRARY.common;
-    const baseText = pickGossipTemplate(tierPool[categoryKey], {
-      districtLabel,
-      ownerLabel,
-      districtType
-    });
-    if (categoryKey === "defense" && lowDefense) {
-      return `Potvrzený intel: District ${districtLabel} má low defense a obrana je momentálně slabá.`;
-    }
-    if (categoryKey === "heat" && highHeat) {
-      return `Potvrzený intel: District ${districtLabel} má vysoký heat a policejní zájem.`;
-    }
-    if (categoryKey === "production") {
-      if (hasDrugLab) return `Potvrzený intel: District ${districtLabel} produkuje drogy přes vlastní infrastrukturu.`;
-      if (hasFactory) return `Potvrzený intel: District ${districtLabel} jede na výrobních linkách naplno.`;
-      if (hasArmory) return `Potvrzený intel: District ${districtLabel} drží zbrojní výrobu v chodu.`;
-    }
-    if (categoryKey === "economy" && districtIncome > 0) {
-      return `Potvrzený intel: District ${districtLabel} generuje zhruba $${districtIncome}/hod.`;
-    }
-    if (categoryKey === "attack") {
-      return pickGossipTemplate([
-        (label) => `Hráč v districtu ${label} plánuje útok.`,
-        (label) => `Hráč v districtu ${label} právě přesouvá síly.`,
-        (label) => `Hráč v districtu ${label} je po akci oslabený.`
-      ], { districtLabel });
-    }
-    if (categoryKey === "special" && spec?.truthState === "false") {
-      return pickGossipTemplate([
-        (label) => `Falešný drb: District ${label} má skrytou slabinu.`,
-        (label) => `Falešný drb: District ${label} je téměř bez obrany.`,
-        (label) => `Falešný drb: District ${label} je připravený k pádu.`
-      ], { districtLabel });
-    }
-    return baseText || pickGossipTemplate(DISTRICT_GOSSIP_TEXT_LIBRARY.common.special, { districtLabel, ownerLabel, districtType });
+    const templates = [
+      (label) => `V districtu ${label} došlo ke krádeži zásob ve skladu.`,
+      (label) => `V districtu ${label} se v noci objevilo více pouličních dealerů.`,
+      (label) => `V districtu ${label} proběhla policejní kontrola u herny.`,
+      (label) => `V districtu ${label} někdo rozšiřuje vliv přes restaurace a lobby kluby.`,
+      (label) => `V districtu ${label} byl zaznamenán zvýšený pohyb dodávek z drug labu.`,
+      (label) => `V districtu ${label} se mluví o přesunu hotovosti přes noční podniky.`,
+      (label) => `V districtu ${label} se objevily nové kontakty na černý trh.`,
+      (label) => `V districtu ${label} se řeší tichá válka o zásobovací trasy.`
+    ];
+    const index = Math.max(0, Math.floor(Math.random() * templates.length)) % templates.length;
+    return templates[index](districtLabel);
   }
 
   function generateRestaurantDistrictGossips(
     sourceDistrict,
     rumorCount,
     now = Date.now(),
-    sourceBuildingName = RESTAURANT_BUILDING_NAME,
-    {
-      targetDistrict = null,
-      rareChancePct = 30,
-      accuracyMultiplier = 1,
-      weaknessRevealChancePct = 0
-    } = {}
+    sourceBuildingName = RESTAURANT_BUILDING_NAME
   ) {
     const safeCount = Math.max(0, Math.floor(Number(rumorCount) || 0));
     if (safeCount <= 0) return [];
@@ -8456,10 +8294,7 @@ window.Empire.Map = (() => {
     const sourceId = sourceDistrict && typeof sourceDistrict === "object"
       ? sourceDistrict.id
       : sourceDistrict ?? null;
-    const explicitTarget = resolveDistrictRecord(targetDistrict);
-    const candidateDistricts = explicitTarget
-      ? [explicitTarget]
-      : districts.filter((district) => String(district?.id) !== String(sourceId));
+    const candidateDistricts = districts.filter((district) => String(district?.id) !== String(sourceId));
     const pool = candidateDistricts.length ? candidateDistricts : districts;
     const shuffled = [...pool];
     for (let i = shuffled.length - 1; i > 0; i -= 1) {
@@ -8470,57 +8305,14 @@ window.Empire.Map = (() => {
     }
 
     const created = [];
-    const safeRareChancePct = Math.max(0, Math.min(100, Number(rareChancePct) || 0));
-    const safeWeaknessChancePct = Math.max(0, Math.min(100, Number(weaknessRevealChancePct) || 0));
-    const safeAccuracyMultiplier = Math.max(0.5, Math.min(2, Number(accuracyMultiplier) || 1));
     for (let i = 0; i < safeCount; i += 1) {
       const district = shuffled[i % shuffled.length];
       if (!district) continue;
-      const qualityRoll = Math.random() * 100;
-      const forcedRare = qualityRoll < safeRareChancePct;
-      const tierRoll = Math.random() * 100;
-      const qualityKey = forcedRare || tierRoll >= 95 ? "rare" : tierRoll >= 70 ? "quality" : "common";
-      const qualityPreset = getGossipQualityPreset(qualityKey);
-      const accuracyMin = Math.max(0, Math.floor(qualityPreset.accuracyMin * safeAccuracyMultiplier));
-      const accuracyMax = Math.max(accuracyMin, Math.floor(qualityPreset.accuracyMax * safeAccuracyMultiplier));
-      const weaknessRoll = Math.random() * 100;
-      const rare = qualityKey === "rare" || weaknessRoll < safeRareChancePct;
-      const chosenCategory = (() => {
-        const categories = ["economy", "defense", "attack", "production", "heat", "special"];
-        if (rare && Math.random() < 0.5) return "special";
-        if (qualityKey === "rare") return categories[Math.floor(Math.random() * categories.length)];
-        const weights = rare
-          ? [2, 2, 2, 2, 2, 4]
-          : [3, 3, 2, 2, 2, 2];
-        const total = weights.reduce((sum, value) => sum + value, 0);
-        let cursor = Math.random() * total;
-        for (let index = 0; index < categories.length; index += 1) {
-          cursor -= weights[index];
-          if (cursor <= 0) return categories[index];
-        }
-        return "special";
-      })();
-      const weakness = chosenCategory === "special" && weaknessRoll < safeWeaknessChancePct;
-      const rawAccuracy = Math.max(60, Math.min(100, Math.floor(accuracyMin + Math.random() * (accuracyMax - accuracyMin + 1))));
-      const truthState = rawAccuracy >= 90 ? "true" : rawAccuracy >= 75 ? "partial" : "false";
-      const text = buildDistrictGossipText(district, {
-        category: chosenCategory,
-        truthState,
-        quality: qualityKey,
-        rare
-      });
-      const intelLevel = truthState === "true" || rare ? "verified" : "rumor";
-      const intelType = weakness ? "restaurant_weakness" : rare ? "restaurant_rare" : `restaurant_${chosenCategory}`;
+      const text = buildDistrictGossipText(district);
       const entry = appendDistrictGossip(district, text, {
         createdAt: now + i,
         sourceBuilding: String(sourceBuildingName || RESTAURANT_BUILDING_NAME),
-        sourceDistrictId: sourceId,
-        intelLevel,
-        intelType,
-        gossipQuality: qualityKey,
-        gossipCategory: chosenCategory,
-        accuracyPct: rawAccuracy,
-        truthState
+        sourceDistrictId: sourceId
       });
       if (entry) {
         created.push({
@@ -8570,15 +8362,20 @@ window.Empire.Map = (() => {
     const levelMultiplier = getRestaurantLevelMultiplier(stateRef.level);
     const districtIncomeBoostPct = getDistrictCashIncomeBoostPct(districtOrId, nowMs);
     const districtIncomeMultiplier = Math.max(0, 1 + districtIncomeBoostPct / 100);
-    const vipReservationActive = nowMs < Number(stateRef.effects.vipReservationUntil || 0);
-    const vipReservationCleanBoostPct = vipReservationActive
-      ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.vipReservationCleanIncomePct || 0))
+    const happyHourActive = nowMs < Number(stateRef.effects.happyHourUntil || 0);
+    const backTableActive = nowMs < Number(stateRef.effects.backTableUntil || 0);
+    const happyHourBoostPct = happyHourActive
+      ? RESTAURANT_BUILDING_CONFIG.actionBoosts.happyHourCleanIncomePct * levelMultiplier
       : 0;
-    const vipReservationInfluenceBoostPct = vipReservationActive
-      ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.vipReservationInfluencePct || 0))
+    const backTableInfluenceBoostPct = backTableActive
+      ? RESTAURANT_BUILDING_CONFIG.actionBoosts.backTableInfluenceBoostPct * levelMultiplier
+      : 0;
+    const backTableCleanPenaltyPct = backTableActive
+      ? RESTAURANT_BUILDING_CONFIG.actionBoosts.backTableCleanIncomePenaltyPct * levelMultiplier
       : 0;
     const rates = calculateRestaurantHourlyRates(totalGangMembers, levelMultiplier, {
-      cleanBoostPct: vipReservationCleanBoostPct
+      happyHourBoostPct,
+      backTableCleanPenaltyPct
     });
 
     let incomeFrom = Number(stateRef.lastIncomeAt || nowMs);
@@ -8614,18 +8411,19 @@ window.Empire.Map = (() => {
       }
     }
 
-    const baseInfluencePerHour = Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.baseInfluencePerDay || 0)) / 24;
-    const currentInfluencePerHour = baseInfluencePerHour
-      * Math.max(1, levelMultiplier)
-      * (1 + Math.max(0, vipReservationInfluenceBoostPct) / 100);
+    const currentInfluencePerHour = RESTAURANT_BUILDING_CONFIG.baseInfluencePerHour
+      * levelMultiplier
+      * (1 + Math.max(0, backTableInfluenceBoostPct) / 100);
     applyBuildingInfluenceTick(stateRef, nowMs, currentInfluencePerHour);
 
     return {
       cleanIncomeGained,
       dirtyIncomeGained,
-      vipReservationActive,
-      vipReservationCleanBoostPct,
-      vipReservationInfluenceBoostPct,
+      happyHourActive,
+      backTableActive,
+      happyHourBoostPct,
+      backTableInfluenceBoostPct,
+      backTableCleanPenaltyPct,
       currentInfluencePerHour,
       districtIncomeBoostPct,
       rates: {
@@ -8648,57 +8446,41 @@ window.Empire.Map = (() => {
     const levelMultiplier = getRestaurantLevelMultiplier(snapshot.level);
     const nextLevel = snapshot.level < RESTAURANT_BUILDING_CONFIG.maxLevel ? snapshot.level + 1 : null;
     const nextUpgradeCost = nextLevel ? RESTAURANT_BUILDING_CONFIG.upgradeCosts[nextLevel] || 0 : 0;
-    const dinnerDistrictIncomeBoostPct = Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.gangDinnerDistrictIncomePct || 0));
-    const vipCleanBoostPct = Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.vipReservationCleanIncomePct || 0));
-    const vipInfluenceBoostPct = Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.vipReservationInfluencePct || 0));
-    const rareChancePct =
-      Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.streetGossipRareChancePct || 0))
-      + (snapshot.level >= 3 ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level3RareChanceBonusPct || 0)) : 0);
-    const accuracyBonusPct = snapshot.level >= 3
-      ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level3AccuracyBonusPct || 0))
-      : 0;
-    const extraGossipCount = snapshot.level >= 5 ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level5ExtraGossipCount || 0)) : 0;
-    const weaknessRevealChancePct = snapshot.level >= 5
-      ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level5WeaknessRevealChancePct || 0))
-      : 0;
-    const heatReductionPct = snapshot.level >= 4
-      ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level4HeatReductionPct || 0))
-      : 0;
+    const happyHourBoostPct = RESTAURANT_BUILDING_CONFIG.actionBoosts.happyHourCleanIncomePct * levelMultiplier;
+    const backTableInfluenceBoostPct =
+      RESTAURANT_BUILDING_CONFIG.actionBoosts.backTableInfluenceBoostPct * levelMultiplier;
+    const backTableCleanPenaltyPct =
+      RESTAURANT_BUILDING_CONFIG.actionBoosts.backTableCleanIncomePenaltyPct * levelMultiplier;
+    const birthdayPartyRumorCount = Math.max(
+      2,
+      Math.round(RESTAURANT_BUILDING_CONFIG.actionBoosts.birthdayPartyRumorCount * levelMultiplier)
+    );
     const rates = syncResult.rates || calculateRestaurantHourlyRates(totalGangMembers, levelMultiplier);
     const hourlyIncome = rates.hourlyTotalIncome;
     const dailyIncome = hourlyIncome * 24;
-    const dinnerDistrictLabel = resolveDistrictNumberLabel(resolveDistrictRecord(snapshot.effects.gangDinnerDistrictPart));
-    const baseHeatPerDay = Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.baseHeatPerDay || 0));
-    const reducedHeatPerDay = heatReductionPct > 0
-      ? baseHeatPerDay * Math.max(0, 1 - heatReductionPct / 100)
-      : baseHeatPerDay;
 
     const effects = [
       `Income C:$${formatDecimalValue(rates.hourlyCleanIncome, 2)} / D:$${formatDecimalValue(rates.hourlyDirtyIncome, 2)}`
     ];
     effects.push(`Vliv +${formatDecimalValue(syncResult.currentInfluencePerHour, 2)} / h`);
-    if (now < Number(snapshot.effects.gangDinnerUntil || 0)) {
+    if (syncResult.happyHourActive) {
       effects.push(
-        `Večeře pro gang (district #${dinnerDistrictLabel}, +${formatDecimalValue(dinnerDistrictIncomeBoostPct, 2)}% income, ${formatDurationLabel(
-          snapshot.effects.gangDinnerUntil - now
+        `Happy Hour (+${formatDecimalValue(syncResult.happyHourBoostPct, 2)}% clean income, ${formatDurationLabel(
+          snapshot.effects.happyHourUntil - now
         )})`
       );
     }
-    if (syncResult.vipReservationActive) {
+    if (syncResult.backTableActive) {
       effects.push(
-        `VIP rezervace (+${formatDecimalValue(syncResult.vipReservationCleanBoostPct, 2)}% clean income, +${formatDecimalValue(
-          syncResult.vipReservationInfluenceBoostPct,
+        `Zadní stůl (+${formatDecimalValue(syncResult.backTableInfluenceBoostPct, 2)}% vliv, -${formatDecimalValue(
+          syncResult.backTableCleanPenaltyPct,
           2
-        )}% vliv, ${formatDurationLabel(snapshot.effects.vipReservationUntil - now)})`
+        )}% clean income, ${formatDurationLabel(snapshot.effects.backTableUntil - now)})`
       );
     }
     if (syncResult.districtIncomeBoostPct > 0) {
       effects.push(`Celkový district income boost +${formatDecimalValue(syncResult.districtIncomeBoostPct, 2)}%`);
     }
-    if (accuracyBonusPct > 0) effects.push(`L3 přesnost drbů +${formatDecimalValue(accuracyBonusPct, 2)}%`);
-    if (heatReductionPct > 0) effects.push(`L4 menší heat -${formatDecimalValue(heatReductionPct, 2)}%`);
-    if (extraGossipCount > 0) effects.push(`L5 extra drb +${Math.floor(extraGossipCount)}`);
-    if (weaknessRevealChancePct > 0) effects.push(`L5 šance odhalit slabinu +${formatDecimalValue(weaknessRevealChancePct, 2)}%`);
 
     return {
       ...fallback,
@@ -8707,11 +8489,11 @@ window.Empire.Map = (() => {
       hourlyIncome,
       dailyIncome,
       info:
-        "Jídlo, alkohol, kontakty. Tady se řeší kšefty a rodí drby. Restaurace je safe sociální budova se stabilním clean/dirty cashflow, menším vlivem a cílenými district akcemi.",
+        "Restaurace je nízko-heat hybridní budova pro stabilní clean i dirty cashflow a postupný růst vlivu. Akce Happy Hour krátkodobě posílí legální příjem, Zadní stůl přesune provoz na intenzivní vliv a Narozeninová párty dodává drby z podsvětí napříč městem.",
       specialActions: [
-        "Večeře pro gang: Cooldown 8h, vybereš vlastní district a na 2h zvýší income všech budov v tomto districtu o +15 %, +4 heat.",
-        "VIP rezervace: Cooldown 8h, na 2h dá restauraci +30 % clean income a +5 % vliv, +5 heat.",
-        "Drby z ulice: Cooldown 6h, vybereš district a získáš 1-2 drby (L5 +1 extra), 30% šance na vzácný drb (L3 vyšší), +3 heat."
+        "Happy Hour: Cooldown 4h, trvá 2h, zvýší legální income restaurace o +35 % (škáluje s levelem) a přidá +1 heat.",
+        "Zadní stůl: Cooldown 5h, trvá 2h, zvýší produkci vlivu restaurace o +100 % (škáluje s levelem), ale během efektu má restaurace o 15 % nižší legální income (škáluje s levelem).",
+        "Narozeninová párty: Cooldown 2h, okamžitě vygeneruje 2 drby (škáluje s levelem), drby se hned zobrazí hráči a uloží se do historie příslušných districtů."
       ],
       mechanics: {
         type: "restaurant",
@@ -8719,26 +8501,23 @@ window.Empire.Map = (() => {
         level: snapshot.level,
         nextLevel,
         nextUpgradeCost,
-        heatPerDay: reducedHeatPerDay + Math.max(0, Number(snapshot.extraHeat || 0)),
+        heatPerDay: RESTAURANT_BUILDING_CONFIG.baseHeatPerDay + Math.max(0, Number(snapshot.extraHeat || 0)),
         effectsLabel: effects.join(" • "),
         cooldowns: {
-          gangDinner: Math.max(0, Number(snapshot.cooldowns.gangDinner || 0) - now),
-          vipReservation: Math.max(0, Number(snapshot.cooldowns.vipReservation || 0) - now),
-          streetGossip: Math.max(0, Number(snapshot.cooldowns.streetGossip || 0) - now)
+          happyHour: Math.max(0, Number(snapshot.cooldowns.happyHour || 0) - now),
+          backTable: Math.max(0, Number(snapshot.cooldowns.backTable || 0) - now),
+          birthdayParty: Math.max(0, Number(snapshot.cooldowns.birthdayParty || 0) - now)
         },
-        dinnerDistrictIncomeBoostPct,
-        vipCleanBoostPct,
-        vipInfluenceBoostPct,
-        rareChancePct,
-        accuracyBonusPct,
-        extraGossipCount,
-        weaknessRevealChancePct,
-        heatReductionPct,
+        happyHourBoostPct,
+        backTableInfluenceBoostPct,
+        backTableCleanPenaltyPct,
+        birthdayPartyRumorCount,
         currentCleanIncomeMultiplier: rates.currentCleanIncomeMultiplier,
         currentDirtyIncomeMultiplier: rates.currentDirtyIncomeMultiplier,
-        currentInfluencePerHour: syncResult.currentInfluencePerHour,
+        currentInfluenceMultiplier: Math.max(0, 1 + backTableInfluenceBoostPct / 100),
         districtIncomeBoostPct: syncResult.districtIncomeBoostPct,
-        vipReservationActive: syncResult.vipReservationActive
+        happyHourActive: syncResult.happyHourActive,
+        backTableActive: syncResult.backTableActive
       }
     };
   }
@@ -8751,110 +8530,58 @@ window.Empire.Map = (() => {
     const totalGangMembers = Number(window.Empire.UI?.getCurrentGangMembers?.() || 0);
     syncRestaurantIncome(snapshot, totalGangMembers, now, district || context?.districtId);
 
+    const levelMultiplier = getRestaurantLevelMultiplier(snapshot.level);
     const toCooldownLeft = (until) => Math.max(0, Math.floor(Number(until || 0) - now));
 
     if (actionId === "1") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.gangDinner);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.happyHour);
       if (cooldownLeft > 0) {
         persistRestaurantState(key, snapshot);
-        return { ok: false, message: `Večeře pro gang je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Happy Hour je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const rawDistrictId = window.prompt("Zadej číslo vlastního districtu pro Večeři pro gang:");
-      if (rawDistrictId == null) {
-        persistRestaurantState(key, snapshot);
-        return { ok: false, message: "Večeře pro gang zrušena." };
-      }
-      const districtId = String(rawDistrictId || "").trim();
-      const targetDistrict = resolveDistrictRecord(districtId);
-      if (!targetDistrict) {
-        persistRestaurantState(key, snapshot);
-        return { ok: false, message: `District ${districtId || "?"} nebyl nalezen.` };
-      }
-      if (!isDistrictOwnedByPlayer(targetDistrict)) {
-        persistRestaurantState(key, snapshot);
-        return { ok: false, message: `District #${resolveDistrictNumberLabel(targetDistrict)} není tvůj.` };
-      }
-      snapshot.effects.gangDinnerUntil = now + RESTAURANT_BUILDING_CONFIG.actionDurations.gangDinner;
-      snapshot.effects.gangDinnerDistrictPart = resolveDistrictIdentityPart(targetDistrict);
-      snapshot.cooldowns.gangDinner = now + RESTAURANT_BUILDING_CONFIG.actionCooldowns.gangDinner;
+      const cleanBoostPct = RESTAURANT_BUILDING_CONFIG.actionBoosts.happyHourCleanIncomePct * levelMultiplier;
+      snapshot.effects.happyHourUntil = now + RESTAURANT_BUILDING_CONFIG.actionDurations.happyHour;
+      snapshot.cooldowns.happyHour = now + RESTAURANT_BUILDING_CONFIG.actionCooldowns.happyHour;
       snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0))
-        + RESTAURANT_BUILDING_CONFIG.actionHeatAdded.gangDinner;
+        + RESTAURANT_BUILDING_CONFIG.actionHeatAdded.happyHour;
       persistRestaurantState(key, snapshot);
       return {
         ok: true,
-        message:
-          `Večeře pro gang aktivní v districtu #${resolveDistrictNumberLabel(targetDistrict)} na 2h. `
-          + `Income všech tvých budov v cíli +${RESTAURANT_BUILDING_CONFIG.actionBoosts.gangDinnerDistrictIncomePct}%, `
-          + `heat +${RESTAURANT_BUILDING_CONFIG.actionHeatAdded.gangDinner}.`
+        message: `Happy Hour aktivní na 2h. Clean income restaurace +${formatDecimalValue(cleanBoostPct, 2)}%, heat +${RESTAURANT_BUILDING_CONFIG.actionHeatAdded.happyHour}.`
       };
     }
 
     if (actionId === "2") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.vipReservation);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.backTable);
       if (cooldownLeft > 0) {
         persistRestaurantState(key, snapshot);
-        return { ok: false, message: `VIP rezervace je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Zadní stůl je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      snapshot.effects.vipReservationUntil = now + RESTAURANT_BUILDING_CONFIG.actionDurations.vipReservation;
-      snapshot.cooldowns.vipReservation = now + RESTAURANT_BUILDING_CONFIG.actionCooldowns.vipReservation;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0))
-        + RESTAURANT_BUILDING_CONFIG.actionHeatAdded.vipReservation;
+      const influenceBoostPct = RESTAURANT_BUILDING_CONFIG.actionBoosts.backTableInfluenceBoostPct * levelMultiplier;
+      const cleanPenaltyPct = RESTAURANT_BUILDING_CONFIG.actionBoosts.backTableCleanIncomePenaltyPct * levelMultiplier;
+      snapshot.effects.backTableUntil = now + RESTAURANT_BUILDING_CONFIG.actionDurations.backTable;
+      snapshot.cooldowns.backTable = now + RESTAURANT_BUILDING_CONFIG.actionCooldowns.backTable;
       persistRestaurantState(key, snapshot);
       return {
         ok: true,
         message:
-          `VIP rezervace aktivní na 2h. Clean income restaurace +${RESTAURANT_BUILDING_CONFIG.actionBoosts.vipReservationCleanIncomePct}%, `
-          + `vliv +${RESTAURANT_BUILDING_CONFIG.actionBoosts.vipReservationInfluencePct}%, `
-          + `heat +${RESTAURANT_BUILDING_CONFIG.actionHeatAdded.vipReservation}.`
+          `Zadní stůl aktivní na 2h. Vliv restaurace +${formatDecimalValue(influenceBoostPct, 2)}%, `
+          + `clean income -${formatDecimalValue(cleanPenaltyPct, 2)}%.`
       };
     }
 
     if (actionId === "3") {
-      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.streetGossip);
+      const cooldownLeft = toCooldownLeft(snapshot.cooldowns.birthdayParty);
       if (cooldownLeft > 0) {
         persistRestaurantState(key, snapshot);
-        return { ok: false, message: `Drby z ulice jsou na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
+        return { ok: false, message: `Narozeninová párty je na cooldownu (${formatDurationLabel(cooldownLeft)}).` };
       }
-      const rawDistrictId = window.prompt("Zadej číslo districtu, o kterém chceš drby:");
-      if (rawDistrictId == null) {
-        persistRestaurantState(key, snapshot);
-        return { ok: false, message: "Drby z ulice zrušeny." };
-      }
-      const districtId = String(rawDistrictId || "").trim();
-      const targetDistrict = resolveDistrictRecord(districtId);
-      if (!targetDistrict) {
-        persistRestaurantState(key, snapshot);
-        return { ok: false, message: `District ${districtId || "?"} nebyl nalezen.` };
-      }
-      const baseRumorCount = 1 + Math.floor(Math.random() * 2);
-      const extraRumorCount = snapshot.level >= 5 ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level5ExtraGossipCount || 0)) : 0;
-      const rumorCount = Math.max(1, Math.floor(baseRumorCount + extraRumorCount));
-      const rareChancePct =
-        Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.streetGossipRareChancePct || 0))
-        + (snapshot.level >= 3 ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level3RareChanceBonusPct || 0)) : 0);
-      const accuracyMultiplier = 1 + (
-        snapshot.level >= 3
-          ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level3AccuracyBonusPct || 0)) / 100
-          : 0
+      const rumorCount = Math.max(
+        2,
+        Math.round(RESTAURANT_BUILDING_CONFIG.actionBoosts.birthdayPartyRumorCount * levelMultiplier)
       );
-      const weaknessRevealChancePct = snapshot.level >= 5
-        ? Math.max(0, Number(RESTAURANT_BUILDING_CONFIG.actionBoosts.level5WeaknessRevealChancePct || 0))
-        : 0;
-      const rumors = generateRestaurantDistrictGossips(
-        district || context?.districtId || null,
-        rumorCount,
-        now,
-        RESTAURANT_BUILDING_NAME,
-        {
-          targetDistrict,
-          rareChancePct,
-          accuracyMultiplier,
-          weaknessRevealChancePct
-        }
-      );
-      snapshot.cooldowns.streetGossip = now + RESTAURANT_BUILDING_CONFIG.actionCooldowns.streetGossip;
-      snapshot.extraHeat = Math.max(0, Number(snapshot.extraHeat || 0))
-        + RESTAURANT_BUILDING_CONFIG.actionHeatAdded.streetGossip;
+      const rumors = generateRestaurantDistrictGossips(district || context?.districtId || null, rumorCount, now);
+      snapshot.cooldowns.birthdayParty = now + RESTAURANT_BUILDING_CONFIG.actionCooldowns.birthdayParty;
       persistRestaurantState(key, snapshot);
 
       const pushEvent = window.Empire.UI?.pushEvent;
@@ -8867,8 +8594,8 @@ window.Empire.Map = (() => {
       return {
         ok: true,
         message: rumors.length
-          ? `Drby z ulice: district #${resolveDistrictNumberLabel(targetDistrict)} → získal jsi ${rumors.length} drby. Heat +${RESTAURANT_BUILDING_CONFIG.actionHeatAdded.streetGossip}.`
-          : `Drby z ulice: pro district #${resolveDistrictNumberLabel(targetDistrict)} se nepodařilo získat žádný drb.`
+          ? `Narozeninová párty proběhla. Získal jsi ${rumors.length} drby, které se uložily do historie districtů.`
+          : "Narozeninová párty proběhla, ale nebyly dostupné žádné districtové drby."
       };
     }
 
@@ -9858,20 +9585,15 @@ window.Empire.Map = (() => {
         producedSinceLastTick: createPharmacyResourceMap(syncResult.produced),
         globalBoost: boostSnapshot.effective,
         drugLabSupplies: createDrugLabSupplyMap(boostSnapshot.supplies || {}),
-        boostActiveCount: Math.max(0, Number(boostSnapshot.activeCount || 0))
+        boostActiveCount: Math.max(0, Number(boostSnapshot.activeCount || 0)),
+        primaryContext: activeContext,
+        primaryDistrictId: activeDistrict?.id ?? null
       }
     };
   }
 
   function handlePharmacyBuildingAction(actionId, activeContext) {
-    const inputDistrict = activeContext?.district || null;
-    const inputContext = activeContext?.context || null;
-    if (!inputContext) {
-      return { ok: false, message: "Lékárna: není aktivní detail budovy." };
-    }
-    const primaryTarget = resolvePrimaryOwnedPharmacyTarget(inputContext, inputDistrict);
-    const context = primaryTarget.context || inputContext;
-    const district = primaryTarget.district || inputDistrict;
+    const { district, context } = activeContext;
     const now = Date.now();
     if (isPoliceRaidAllActionsBlocked(now)) {
       return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané." };
@@ -10331,110 +10053,27 @@ window.Empire.Map = (() => {
       if (normalized.includes("metal part")) return { tone: "steel", icon: "gear" };
       return { tone: "neutral", icon: "dot" };
     };
-    if (
-      mechanicsType !== "drug-lab"
-      && mechanicsType !== "pharmacy"
-      && mechanicsType !== "factory"
-      && mechanicsType !== "armory"
-      && mechanicsType !== "street-dealers"
-    ) {
+    if (mechanicsType !== "drug-lab" && mechanicsType !== "pharmacy" && mechanicsType !== "factory" && mechanicsType !== "armory") {
       root.innerHTML = "";
       root.classList.add("hidden");
+      root.style.display = "";
+      root.style.visibility = "";
+      root.style.opacity = "";
       return;
     }
-
-    if (mechanicsType === "street-dealers") {
-      const slotRows = (Array.isArray(mechanics.streetDealerSlots) ? mechanics.streetDealerSlots : [])
-        .map((slot) => {
-          const resourceLabel = String(slot.resourceLabel || slot.resourceKey || "Slot");
-          const productBadge = getProductBadge(resourceLabel);
-          const queuedUnits = Math.max(1, Math.floor(Number(slot.queuedUnits || 1)));
-          const storedUnits = Math.max(0, Math.floor(Number(slot.storedUnits || 0)));
-          const slotCap = Math.max(0, Math.floor(Number(slot.slotCap || 0)));
-          const unitsPerHour = Math.max(0, Number(slot.unitsPerHour || 0));
-          const unitsPerMinute = unitsPerHour / 60;
-          const dirtyCashPerUnit = Math.max(0, Number(slot.dirtyCashPerUnit || 0));
-          const dirtyPerHour = Math.max(0, Number(slot.dirtyPerHour || 0));
-          const atCap = slotCap > 0 && storedUnits >= slotCap;
-          return `
-            <article class="pharmacy-slot pharmacy-slot--${productBadge.tone}${storedUnits > 0 ? " pharmacy-slot--active" : " pharmacy-slot--idle"}">
-              <div class="pharmacy-slot__head">
-                <div class="pharmacy-slot__title-wrap">
-                  <div class="pharmacy-slot__title-line">
-                    <span class="pharmacy-slot__icon pharmacy-slot__icon--${productBadge.tone} pharmacy-slot__icon--${productBadge.icon}" aria-hidden="true"></span>
-                    <strong class="pharmacy-slot__title">${resourceLabel}</strong>
-                  </div>
-                </div>
-                <span class="pharmacy-slot__state">${storedUnits > 0 ? "Prodává" : "Prázdný"}</span>
-              </div>
-              <div class="pharmacy-slot__metrics">
-                <div class="pharmacy-slot__metric">
-                  <span class="pharmacy-slot__metric-label">Ve slotu</span>
-                  <strong class="pharmacy-slot__metric-value">${storedUnits}/${slotCap}</strong>
-                </div>
-                <div class="pharmacy-slot__metric">
-                  <span class="pharmacy-slot__metric-label">Rychlost</span>
-                  <strong class="pharmacy-slot__metric-value">${formatDecimalValue(unitsPerMinute, 2)} ks/min</strong>
-                </div>
-                <div class="pharmacy-slot__metric">
-                  <span class="pharmacy-slot__metric-label">Výnos</span>
-                  <strong class="pharmacy-slot__metric-value">$${formatDecimalValue(dirtyPerHour, 2)} D/h</strong>
-                </div>
-                <div class="pharmacy-slot__metric">
-                  <span class="pharmacy-slot__metric-label">Cena</span>
-                  <strong class="pharmacy-slot__metric-value">$${formatDecimalValue(dirtyCashPerUnit, 2)} / ks</strong>
-                </div>
-              </div>
-              <div class="drug-lab-stepper">
-                <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-street-dealer-slot-id="${slot.id}" data-street-dealer-slot-adjust="-1">-</button>
-                <strong class="drug-lab-stepper__value">${queuedUnits}</strong>
-                <button class="drug-lab-mini-btn drug-lab-mini-btn--step" type="button" data-street-dealer-slot-id="${slot.id}" data-street-dealer-slot-adjust="1">+</button>
-              </div>
-              <div class="pharmacy-slot__actions">
-                <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--start" type="button" data-street-dealer-slot-load="${slot.id}" ${atCap ? "disabled" : ""}>
-                  Vložit
-                </button>
-                <button class="drug-lab-mini-btn pharmacy-slot__btn pharmacy-slot__btn--stop" type="button" data-street-dealer-slot-unload="${slot.id}" ${storedUnits <= 0 ? "disabled" : ""}>
-                  Vyjmout
-                </button>
-              </div>
-            </article>
-          `;
-        })
-        .join("");
-      const supplies = mechanics.playerDrugInventory || {};
-      const ownedStreetDealersCount = Math.max(1, Math.floor(Number(mechanics.ownedStreetDealersCount || 1)));
-      root.innerHTML = `
-        <section class="drug-lab-card pharmacy-card">
-          <div class="pharmacy-stock-grid">
-            <div class="pharmacy-stock-card">
-              <span class="pharmacy-stock-card__label">Drogy hráče</span>
-              <div class="pharmacy-stock-card__values">
-                <span>Neon ${Math.max(0, Math.floor(Number(supplies.neonDust || 0)))}</span>
-                <span>Pulse ${Math.max(0, Math.floor(Number(supplies.pulseShot || 0)))}</span>
-                <span>Velvet ${Math.max(0, Math.floor(Number(supplies.velvetSmoke || 0)))}</span>
-              </div>
-            </div>
-            <div class="pharmacy-stock-card pharmacy-stock-card--accent">
-              <span class="pharmacy-stock-card__label">Síť dealerů</span>
-              <div class="pharmacy-stock-card__values">
-                <span>${ownedStreetDealersCount} budov</span>
-                <span>Max +${formatDecimalValue(mechanics.networkMaxCapacityBonusPct || 0, 2)}%</span>
-                <span>Rychlost +${formatDecimalValue(mechanics.networkSpeedBonusPct || 0, 2)}%</span>
-              </div>
-            </div>
-          </div>
-          <div class="pharmacy-slot-grid street-dealers-slot-grid">
-            ${slotRows}
-          </div>
-        </section>
-      `;
-      root.classList.remove("hidden");
-      return;
-    }
+    root.style.display = "grid";
+    root.style.visibility = "visible";
+    root.style.opacity = "1";
 
     if (mechanicsType === "pharmacy") {
-      const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
+      const sourceSlots = (Array.isArray(mechanics.slots) && mechanics.slots.length)
+        ? mechanics.slots
+        : [
+          { id: 1, resourceKey: "chemicals", resourceLabel: "Chemicals", isProducing: false, queuedUnits: 1, queueRemaining: 0, producedAmount: 0, slotCap: 20, cleanCostPerUnit: 20, perHour: Number(mechanics?.ratesPerHour?.chemicals || 0) },
+          { id: 2, resourceKey: "biomass", resourceLabel: "Biomass", isProducing: false, queuedUnits: 1, queueRemaining: 0, producedAmount: 0, slotCap: 30, cleanCostPerUnit: 30, perHour: Number(mechanics?.ratesPerHour?.biomass || 0) },
+          { id: 3, resourceKey: "stimPack", resourceLabel: "Stim Pack", isProducing: false, queuedUnits: 1, queueRemaining: 0, producedAmount: 0, slotCap: 30, cleanCostPerUnit: 45, perHour: Number(mechanics?.ratesPerHour?.stimPack || 0) }
+        ];
+      const slotRows = sourceSlots
         .map((slot) => {
           const producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
           const queuedUnits = Math.max(1, Math.floor(Number(slot.queuedUnits || 1)));
@@ -10534,7 +10173,14 @@ window.Empire.Map = (() => {
     }
 
     if (mechanicsType === "factory") {
-      const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
+      const sourceSlots = (Array.isArray(mechanics.slots) && mechanics.slots.length)
+        ? mechanics.slots
+        : [
+          { id: 1, resourceKey: "metalParts", resourceLabel: "Metal Parts", mode: "produce", isProducing: false, producedAmount: 0, slotCap: 40, perHour: Number(mechanics?.ratesPerHour?.metalParts || 0) },
+          { id: 2, resourceKey: "techCore", resourceLabel: "Tech Core", mode: "produce", isProducing: false, producedAmount: 0, slotCap: 30, perHour: Number(mechanics?.ratesPerHour?.techCore || 0) },
+          { id: 3, resourceKey: "combatModule", resourceLabel: "Combat Module", mode: "craft", isProducing: false, producedAmount: 0, slotCap: 20, perHour: Number(mechanics?.ratesPerHour?.combatModule || 0), effectiveDurationMs: 15 * 60 * 1000 }
+        ];
+      const slotRows = sourceSlots
         .map((slot) => {
           const isCraftSlot = String(slot.mode || "").trim() === "craft";
           const producedAmount = Math.max(0, Math.floor(Number(slot.producedAmount || 0)));
@@ -10618,13 +10264,21 @@ window.Empire.Map = (() => {
     }
 
     if (mechanicsType === "armory") {
-      const sourceSlots = Array.isArray(mechanics.slots) ? mechanics.slots : [];
+      const sourceSlots = (Array.isArray(mechanics.slots) && mechanics.slots.length) ? mechanics.slots : [];
       const attackSlots = Array.isArray(mechanics.attackSlots)
         ? mechanics.attackSlots
         : sourceSlots.filter((slot) => String(slot.category || "").trim() !== "defense");
       const defenseSlots = Array.isArray(mechanics.defenseSlots)
         ? mechanics.defenseSlots
         : sourceSlots.filter((slot) => String(slot.category || "").trim() === "defense");
+      const safeAttackSlots = attackSlots.length ? attackSlots : [
+        { id: 1, category: "attack", weaponName: "Baseballová pálka", isProducing: false, queuedUnits: 1, remainingUnits: 0, producedAmount: 0, durationMs: 8000, effectiveDurationMs: 8000, metalPartsCost: 2, techCoreCost: 0, canAffordQueue: true, batchAtMax: false },
+        { id: 2, category: "attack", weaponName: "Pouliční pistole", isProducing: false, queuedUnits: 1, remainingUnits: 0, producedAmount: 0, durationMs: 10000, effectiveDurationMs: 10000, metalPartsCost: 3, techCoreCost: 1, canAffordQueue: true, batchAtMax: false }
+      ];
+      const safeDefenseSlots = defenseSlots.length ? defenseSlots : [
+        { id: 6, category: "defense", weaponName: "Neprůstřelná vesta", isProducing: false, queuedUnits: 1, remainingUnits: 0, producedAmount: 0, durationMs: 8000, effectiveDurationMs: 8000, metalPartsCost: 2, techCoreCost: 0, canAffordQueue: true, batchAtMax: false },
+        { id: 7, category: "defense", weaponName: "Ocelové barikády", isProducing: false, queuedUnits: 1, remainingUnits: 0, producedAmount: 0, durationMs: 15000, effectiveDurationMs: 15000, metalPartsCost: 4, techCoreCost: 1, canAffordQueue: true, batchAtMax: false }
+      ];
       const playerMaterials = mechanics.playerMaterials || {};
       const renderSlotRows = (slots) => slots
         .map((slot) => {
@@ -10690,8 +10344,8 @@ window.Empire.Map = (() => {
         `;
         })
         .join("");
-      const attackRows = renderSlotRows(attackSlots);
-      const defenseRows = renderSlotRows(defenseSlots);
+      const attackRows = renderSlotRows(safeAttackSlots);
+      const defenseRows = renderSlotRows(safeDefenseSlots);
       const storedWeapons = mechanics.storedWeapons || {};
       const attackStoredLabel = ARMORY_ATTACK_WEAPON_KEYS
         .map((weaponKey) => {
@@ -10764,7 +10418,19 @@ window.Empire.Map = (() => {
       return;
     }
 
-    const slotRows = (Array.isArray(mechanics.slots) ? mechanics.slots : [])
+    const sourceSlots = (Array.isArray(mechanics.slots) && mechanics.slots.length)
+      ? mechanics.slots
+      : Array.from({ length: Math.max(1, Math.floor(Number(mechanics.unlockedSlots || 1))) }, (_, index) => ({
+        id: index + 1,
+        unlocked: index + 1 <= Math.max(1, Math.floor(Number(mechanics.unlockedSlots || 1))),
+        activeDrugType: "neonDust",
+        isProducing: false,
+        queuedUnits: 1,
+        queueRemaining: 0,
+        producedAmount: 0,
+        supplyCost: getDrugLabSupplyCost("neonDust", 1)
+      }));
+    const slotRows = sourceSlots
       .map((slot) => {
         const options = DRUG_LAB_DRUG_KEYS
           .map((key) =>
@@ -10989,12 +10655,9 @@ window.Empire.Map = (() => {
 
   function handlePharmacyInlineControl(target, activeContext) {
     const now = Date.now();
-    const inputContext = activeContext?.context || null;
-    const inputDistrict = activeContext?.district || null;
-    if (!inputContext) return null;
-    const primaryTarget = resolvePrimaryOwnedPharmacyTarget(inputContext, inputDistrict);
-    const context = primaryTarget.context || inputContext;
-    const district = primaryTarget.district || inputDistrict;
+    const context = activeContext?.context || null;
+    const district = activeContext?.district || null;
+    if (!context) return null;
     if (isPoliceRaidAllActionsBlocked(now)) {
       return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané.", silentUiEvent: true };
     }
@@ -11042,7 +10705,9 @@ window.Empire.Map = (() => {
         const unitCost = resourceKey ? Math.max(0, Math.floor(Number(PHARMACY_UNIT_CLEAN_COST[resourceKey] || 0))) : 0;
         const cap = hasCap ? Math.max(0, Math.floor(capRaw)) : Number.POSITIVE_INFINITY;
         const queuedCurrent = Math.max(0, Math.floor(Number(slot.queueRemaining || 0)));
-        const currentUnits = Math.max(1, Math.floor(Number(slot.queuedUnits || 1)));
+        const currentUnits = slot.isProducing
+          ? queuedCurrent
+          : Math.max(1, Math.floor(Number(slot.queuedUnits || 1)));
         const freeSpace = Math.max(0, cap - producedAmount - queuedCurrent);
         const requestedUnits = Math.max(0, Math.min(currentUnits, freeSpace));
         if (requestedUnits <= 0) {
@@ -11117,124 +10782,6 @@ window.Empire.Map = (() => {
       const slotId = Number(stopBtn.dataset.pharmacySlotStop || 0);
       return setSlotState(slotId, false);
     }
-    return null;
-  }
-
-  function handleStreetDealersInlineControl(target, activeContext) {
-    const now = Date.now();
-    const context = activeContext?.context || null;
-    const district = activeContext?.district || null;
-    if (!context) return null;
-    if (isPoliceRaidAllActionsBlocked(now)) {
-      return { ok: false, message: "Během policejní razie jsou všechny akce v budovách dočasně zakázané.", silentUiEvent: true };
-    }
-    const instanceKey = resolveBuildingInstanceKey(context, district);
-    const snapshot = getSimpleCashBuildingStateByKey(instanceKey, now);
-    const ownedStreetDealersCount = getOwnedStreetDealersCount();
-    syncStreetDealerSales(snapshot, now, { ownedStreetDealersCount });
-    applyStreetDealerPassiveHeatTick(snapshot, now);
-    const networkEffects = getStreetDealerNetworkEffects(ownedStreetDealersCount);
-    const fallbackSlots = createStreetDealerDefaultSlots(now);
-    const currentSlots = Array.isArray(snapshot.streetDealerSlots) ? snapshot.streetDealerSlots : [];
-    snapshot.streetDealerSlots = fallbackSlots.map((fallbackSlot, index) =>
-      sanitizeStreetDealerSlot(currentSlots[index], fallbackSlot, now)
-    );
-
-    const adjustBtn = target.closest("[data-street-dealer-slot-adjust][data-street-dealer-slot-id]");
-    if (adjustBtn instanceof HTMLElement) {
-      const slotId = Math.max(1, Math.floor(Number(adjustBtn.dataset.streetDealerSlotId) || 0));
-      const delta = Math.floor(Number(adjustBtn.dataset.streetDealerSlotAdjust) || 0);
-      const slot = snapshot.streetDealerSlots.find((entry) => Number(entry.id) === slotId) || null;
-      if (!slot || !delta) {
-        persistSimpleCashBuildingState(instanceKey, snapshot);
-        return { ok: false, message: "Slot dealerů neexistuje.", silentUiEvent: true };
-      }
-      const nextUnits = clamp(Math.max(1, Math.floor(Number(slot.queuedUnits || 1))) + delta, 1, 999);
-      slot.queuedUnits = nextUnits;
-      persistSimpleCashBuildingState(instanceKey, snapshot);
-      return { ok: true, message: `Pouliční dealeři slot ${slotId}: nastaveno ${nextUnits} ks.`, silentUiEvent: true };
-    }
-
-    const loadBtn = target.closest("[data-street-dealer-slot-load]");
-    if (loadBtn instanceof HTMLElement) {
-      const slotId = Math.max(1, Math.floor(Number(loadBtn.dataset.streetDealerSlotLoad) || 0));
-      const slot = snapshot.streetDealerSlots.find((entry) => Number(entry.id) === slotId) || null;
-      if (!slot) {
-        persistSimpleCashBuildingState(instanceKey, snapshot);
-        return { ok: false, message: "Slot dealerů neexistuje." };
-      }
-      const slotConfig = getStreetDealerSlotConfigByResourceKey(slot.resourceKey);
-      if (!slotConfig) {
-        persistSimpleCashBuildingState(instanceKey, snapshot);
-        return { ok: false, message: "Neznámý typ slotu dealerů." };
-      }
-      const slotCap = getStreetDealerSlotCapacity(slotConfig, networkEffects);
-      const storedUnits = Math.max(0, Math.floor(Number(slot.storedUnits || 0)));
-      const freeSpace = Math.max(0, slotCap - storedUnits);
-      if (freeSpace <= 0) {
-        persistSimpleCashBuildingState(instanceKey, snapshot);
-        return { ok: false, message: `Slot ${slotId} je plný.` };
-      }
-      const economy = getSafeDrugLabEconomySnapshot();
-      const inventory = createDrugLabAmountMap(normalizeDrugLabInventoryFromEconomy(economy));
-      const resourceKey = String(slot.resourceKey || "").trim();
-      const availableSupply = Math.max(0, Math.floor(Number(inventory[resourceKey] || 0)));
-      const desiredUnits = Math.max(1, Math.floor(Number(slot.queuedUnits || 1)));
-      const loadUnits = Math.max(0, Math.min(desiredUnits, availableSupply, freeSpace));
-      if (loadUnits <= 0) {
-        persistSimpleCashBuildingState(instanceKey, snapshot);
-        return { ok: false, message: `Nedostatek drog ${slotConfig.label} v inventáři.` };
-      }
-      slot.storedUnits = storedUnits + loadUnits;
-      inventory[resourceKey] = Math.max(0, availableSupply - loadUnits);
-      persistSimpleCashBuildingState(instanceKey, snapshot);
-      applyDrugLabEconomySnapshot(economy, inventory, getDrugLabPlayerSnapshot(now), now);
-      return {
-        ok: true,
-        message:
-          `Pouliční dealeři slot ${slotId}: vloženo ${loadUnits} ${slotConfig.label}. `
-          + `Ve slotu ${slot.storedUnits}/${slotCap} • hráč má ${Math.max(0, Math.floor(Number(inventory[resourceKey] || 0)))} ks.`
-      };
-    }
-
-    const unloadBtn = target.closest("[data-street-dealer-slot-unload]");
-    if (unloadBtn instanceof HTMLElement) {
-      const slotId = Math.max(1, Math.floor(Number(unloadBtn.dataset.streetDealerSlotUnload) || 0));
-      const slot = snapshot.streetDealerSlots.find((entry) => Number(entry.id) === slotId) || null;
-      if (!slot) {
-        persistSimpleCashBuildingState(instanceKey, snapshot);
-        return { ok: false, message: "Slot dealerů neexistuje." };
-      }
-      const slotConfig = getStreetDealerSlotConfigByResourceKey(slot.resourceKey);
-      if (!slotConfig) {
-        persistSimpleCashBuildingState(instanceKey, snapshot);
-        return { ok: false, message: "Neznámý typ slotu dealerů." };
-      }
-      const storedUnits = Math.max(0, Math.floor(Number(slot.storedUnits || 0)));
-      if (storedUnits <= 0) {
-        persistSimpleCashBuildingState(instanceKey, snapshot);
-        return { ok: false, message: `Slot ${slotId} je prázdný.` };
-      }
-      const desiredUnits = Math.max(1, Math.floor(Number(slot.queuedUnits || 1)));
-      const unloadUnits = Math.max(1, Math.min(desiredUnits, storedUnits));
-      const economy = getSafeDrugLabEconomySnapshot();
-      const inventory = createDrugLabAmountMap(normalizeDrugLabInventoryFromEconomy(economy));
-      const resourceKey = String(slot.resourceKey || "").trim();
-      slot.storedUnits = Math.max(0, storedUnits - unloadUnits);
-      inventory[resourceKey] = Math.max(
-        0,
-        Math.floor(Number(inventory[resourceKey] || 0) + unloadUnits)
-      );
-      persistSimpleCashBuildingState(instanceKey, snapshot);
-      applyDrugLabEconomySnapshot(economy, inventory, getDrugLabPlayerSnapshot(now), now);
-      return {
-        ok: true,
-        message:
-          `Pouliční dealeři slot ${slotId}: vráceno ${unloadUnits} ${slotConfig.label} do inventáře hráče.`
-      };
-    }
-
-    persistSimpleCashBuildingState(instanceKey, snapshot);
     return null;
   }
 
@@ -11940,6 +11487,7 @@ window.Empire.Map = (() => {
 
     state.districts.forEach((district) => {
       const fill = districtFill(district);
+      const renderedFill = resolveDistrictRenderedFill(district, fill);
       const destroyed = isDistrictDestroyed(district);
       const hiddenByMode = shouldHideDistrictByVisibilityMode(district);
       const districtKey = normalizeDistrictId(district?.id);
@@ -11948,11 +11496,11 @@ window.Empire.Map = (() => {
       const spyAction = districtKey ? state.spyDistrictActions.get(districtKey) : null;
       const raidAction = districtKey ? state.raidDistrictActions.get(districtKey) : null;
       const bountyMarker = districtKey ? state.bountyDistrictMarkers.get(districtKey) : null;
-      ctx.fillStyle = fill;
+      ctx.fillStyle = renderedFill;
       ctx.strokeStyle = destroyed || hiddenByMode || !shouldDrawDistrictBorders()
         ? "rgba(0,0,0,0)"
-        : borderStroke;
-      ctx.lineWidth = 1;
+        : resolveDistrictRenderedBorderStroke(district, borderStroke, fill);
+      ctx.lineWidth = isDistrictClaimedByAnyPlayer(district) ? 2.4 : 1;
 
       ctx.beginPath();
       district.polygon.forEach(([x, y], index) => {
@@ -11961,12 +11509,35 @@ window.Empire.Map = (() => {
       });
       ctx.closePath();
       ctx.save();
-      ctx.strokeStyle = fill;
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = resolveDistrictRenderedInnerStroke(district, fill);
+      ctx.lineWidth = isDistrictClaimedByAnyPlayer(district) ? 2.8 : 2;
+      if (isDistrictOwnedByPlayer(district)) {
+        ctx.shadowColor = resolvePlayerOwnedFill();
+        ctx.shadowBlur = 20;
+      } else if (isDowntownDistrict(district)) {
+        ctx.shadowColor = "rgba(255, 56, 182, 0.95)";
+        ctx.shadowBlur = 18;
+      }
       ctx.stroke();
       ctx.restore();
       ctx.fill();
       if (!hiddenByMode && shouldDrawDistrictBorders()) {
+        if (isDistrictOwnedByPlayer(district)) {
+          ctx.save();
+          ctx.shadowColor = resolvePlayerOwnedFill();
+          ctx.shadowBlur = 28;
+          ctx.lineWidth = 3.2;
+          ctx.stroke();
+          ctx.restore();
+        } else if (isDowntownDistrict(district)) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(255, 92, 208, 0.96)";
+          ctx.shadowColor = "rgba(255, 56, 182, 0.98)";
+          ctx.shadowBlur = 24;
+          ctx.lineWidth = 2.8;
+          ctx.stroke();
+          ctx.restore();
+        }
         ctx.stroke();
       }
       if (isHackIncomeTargeting && isDistrictValidForPendingDataCenterTarget(district, pendingDataCenterTarget)) {
@@ -12638,11 +12209,8 @@ window.Empire.Map = (() => {
       seed: markerSeed,
       flameAnchors: null
     });
-    const deferRender = Boolean(options?.deferRender || options?.silent);
-    if (!deferRender) {
-      syncAttackAnimationTicker();
-      render();
-    }
+    syncAttackAnimationTicker();
+    render();
 
     return { ok: true };
   }
@@ -12659,12 +12227,13 @@ window.Empire.Map = (() => {
       markDistrictUnderAttack(districtId, {
         attackerDistrictId: item?.attackerDistrictId,
         durationMs: item?.durationMs,
-        source: item?.source,
-        deferRender: true
+        source: item?.source
       });
     });
-    syncAttackAnimationTicker();
-    render();
+    if (!safeMarkers.length && replace) {
+      syncAttackAnimationTicker();
+      render();
+    }
   }
 
   function markDistrictPoliceAction(districtId, options = {}) {
@@ -12702,11 +12271,8 @@ window.Empire.Map = (() => {
         startedAt: now
       }
     }));
-    const deferRender = Boolean(options?.deferRender || options?.silent);
-    if (!deferRender) {
-      syncAttackAnimationTicker();
-      render();
-    }
+    syncAttackAnimationTicker();
+    render();
 
     return { ok: true };
   }
@@ -12722,12 +12288,13 @@ window.Empire.Map = (() => {
       if (districtId == null) return;
       markDistrictPoliceAction(districtId, {
         durationMs: item?.durationMs,
-        source: item?.source,
-        deferRender: true
+        source: item?.source
       });
     });
-    syncAttackAnimationTicker();
-    render();
+    if (!safeMarkers.length && replace) {
+      syncAttackAnimationTicker();
+      render();
+    }
   }
 
   function markDistrictSpyAction(districtId, options = {}) {
@@ -13601,39 +13168,12 @@ window.Empire.Map = (() => {
     const bounds = polygonBounds(district.polygon);
     const baseRadius = Math.max(16, Math.min(46, Math.min(bounds.width || 16, bounds.height || 16) * 0.36));
     const safeSeed = Number.isFinite(Number(marker?.seed)) ? Number(marker.seed) : 0;
-    const concurrentAttacks = Math.max(0, Number(state.attackedDistricts.size || 0));
-    const highLoadMode = concurrentAttacks > 8;
     const pulse = 0.86 + Math.sin(now / 170 + safeSeed * 0.0017) * 0.18;
     const lifeRatio = marker?.startedAt && marker?.expiresAt && marker.expiresAt > marker.startedAt
       ? clampUnit((now - marker.startedAt) / (marker.expiresAt - marker.startedAt))
       : 0;
     const alpha = Math.max(0.32, 0.86 - lifeRatio * 0.42);
     const flameAnchors = getAttackFlameAnchors(district, marker, bounds);
-
-    if (highLoadMode) {
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = Math.max(0.24, alpha * 0.62);
-      const liteGlowRadius = baseRadius * (0.94 + pulse * 0.14);
-      const liteGlow = ctx.createRadialGradient(cx, cy, baseRadius * 0.14, cx, cy, liteGlowRadius);
-      liteGlow.addColorStop(0, "rgba(255, 239, 160, 0.74)");
-      liteGlow.addColorStop(0.5, "rgba(255, 96, 0, 0.46)");
-      liteGlow.addColorStop(1, "rgba(255, 60, 0, 0)");
-      ctx.fillStyle = liteGlow;
-      ctx.beginPath();
-      ctx.arc(cx, cy, liteGlowRadius, 0, Math.PI * 2);
-      ctx.fill();
-      if (drawDistrictPolygonPath(ctx, district.polygon)) {
-        ctx.strokeStyle = `rgba(255, 108, 18, ${Math.min(0.72, 0.42 + pulse * 0.18)})`;
-        ctx.lineWidth = 0.95 + pulse * 0.42;
-        ctx.setLineDash([5, 6]);
-        ctx.lineDashOffset = -((now / 58 + safeSeed) % 120);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      ctx.restore();
-      return;
-    }
 
     drawAttackAmbientSmokeAroundDistrict(ctx, marker, now, cx, cy, bounds, pulse, lifeRatio);
     drawAttackSmokeInDistrict(ctx, district, marker, now, cx, cy, bounds, pulse, lifeRatio);
@@ -14039,6 +13579,10 @@ window.Empire.Map = (() => {
     const fontSize = Math.max(14, Math.min(36, minDimension * 0.44));
     const [cx, cy] = polygonCentroid(district.polygon);
     const iconY = cy + Math.min(maxDimension * 0.05, 5);
+    const [accentR, accentG, accentB] = resolveDistrictAccentChannels(district);
+    const neonFill = `rgba(${accentR}, ${accentG}, ${accentB}, 0.98)`;
+    const neonGlow = `rgba(${accentR}, ${accentG}, ${accentB}, 0.95)`;
+    const neonHalo = `rgba(${accentR}, ${accentG}, ${accentB}, 0.42)`;
 
     ctx.save();
     ctx.font = `900 ${fontSize}px "Segoe UI Symbol", "Arial Unicode MS", sans-serif`;
@@ -14046,12 +13590,15 @@ window.Empire.Map = (() => {
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
     ctx.lineWidth = Math.max(2.5, fontSize * 0.14);
-    ctx.strokeStyle = "rgba(255,255,255,0.86)";
-    ctx.shadowColor = "rgba(255,255,255,0.28)";
-    ctx.shadowBlur = Math.max(4, fontSize * 0.18);
+    ctx.globalCompositeOperation = "screen";
+    ctx.strokeStyle = "rgba(255,255,255,0.92)";
+    ctx.shadowColor = neonGlow;
+    ctx.shadowBlur = Math.max(12, fontSize * 0.72);
     ctx.strokeText(symbol, cx, iconY);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "rgba(5, 7, 11, 0.96)";
+    ctx.fillStyle = neonFill;
+    ctx.fillText(symbol, cx, iconY);
+    ctx.shadowColor = neonHalo;
+    ctx.shadowBlur = Math.max(18, fontSize * 1.05);
     ctx.fillText(symbol, cx, iconY);
     ctx.restore();
   }
@@ -14282,6 +13829,33 @@ window.Empire.Map = (() => {
           return "rgba(253,186,116,0.24)";
       }
     }
+
+  function resolveDistrictRenderedFill(district, fill) {
+    if (isDistrictClaimedByAnyPlayer(district)) return "rgba(0,0,0,0)";
+    if (isDowntownDistrict(district)) return "rgba(255, 42, 170, 0.18)";
+    return fill;
+  }
+
+  function resolveDistrictRenderedBorderStroke(district, fallbackStroke, fill) {
+    if (isDistrictClaimedByAnyPlayer(district)) return fill || fallbackStroke || "rgba(34,211,238,0.78)";
+    if (isDowntownDistrict(district)) return "rgba(255, 92, 208, 0.92)";
+    return fallbackStroke || fill || "rgba(34,211,238,0.78)";
+  }
+
+  function resolveDistrictRenderedInnerStroke(district, fill) {
+    if (isDistrictClaimedByAnyPlayer(district)) return fill || "rgba(34,211,238,0.78)";
+    if (isDowntownDistrict(district)) return "rgba(255, 120, 224, 0.98)";
+    return fill;
+  }
+
+  function isDistrictClaimedByAnyPlayer(district) {
+    if (isDistrictDestroyed(district)) return false;
+    return Boolean(String(district?.owner || "").trim());
+  }
+
+  function isDowntownDistrict(district) {
+    return String(district?.type || "").trim().toLowerCase() === "downtown";
+  }
 
   function ownerFill(owner) {
     if (state.vision.uniqueOwnerColors) {
@@ -14682,6 +14256,9 @@ window.Empire.Map = (() => {
     const items = entries
       .map((entry) => `
         <div class="map-tooltip__gossip-item">
+          <span class="map-tooltip__gossip-badge map-tooltip__gossip-badge--${entry.intelLevel === "verified" ? "verified" : "rumor"}">
+            ${entry.intelLevel === "verified" ? "OVĚŘENO" : "DRB"}
+          </span>
           <span>${escapeHtml(entry.text)}</span>
         </div>
       `)
@@ -14935,18 +14512,6 @@ window.Empire.Map = (() => {
 
   function buildDistrictTypeOverrides(districts) {
     const safeDistricts = Array.isArray(districts) ? districts : [];
-    const shouldApplyLegacyOverrides = (() => {
-      if (safeDistricts.length < 150) return false;
-      let hasMapId161 = false;
-      let legacyCount = 0;
-      for (let i = 0; i < safeDistricts.length; i += 1) {
-        const legacyId = resolveLegacyDistrictId(safeDistricts[i]);
-        if (!Number.isFinite(legacyId)) continue;
-        legacyCount += 1;
-        if (legacyId === 161) hasMapId161 = true;
-      }
-      return hasMapId161 && legacyCount >= 150;
-    })();
     const incomingTypeById = new Map(
       safeDistricts.map((district) => [
         normalizeDistrictId(district?.id),
@@ -14964,63 +14529,17 @@ window.Empire.Map = (() => {
     }
     const byId = new Map(state.baseDistrictTypeById);
     const swapTypeByDistrictIds = (a, b) => {
-      const firstId = resolveDistrictKeyByLegacyId(safeDistricts, a);
-      const secondId = resolveDistrictKeyByLegacyId(safeDistricts, b);
+      const firstId = normalizeDistrictId(a);
+      const secondId = normalizeDistrictId(b);
       if (!byId.has(firstId) || !byId.has(secondId)) return;
       const firstType = byId.get(firstId);
       const secondType = byId.get(secondId);
       byId.set(firstId, secondType);
       byId.set(secondId, firstType);
     };
-    if (shouldApplyLegacyOverrides) {
-      swapTypeByDistrictIds(114, 68);
-      swapTypeByDistrictIds(95, 20);
-    }
-    const forceTypeByLegacyId = (legacyId, nextType) => {
-      const districtKey = resolveDistrictKeyByLegacyId(safeDistricts, legacyId);
-      if (!districtKey || !byId.has(districtKey)) return;
-      byId.set(districtKey, String(nextType || "").trim().toLowerCase() || "residential");
-    };
-    forceTypeByLegacyId(3, "downtown");
-    forceTypeByLegacyId(26, "downtown");
+    swapTypeByDistrictIds(114, 68);
+    swapTypeByDistrictIds(95, 20);
     return byId;
-  }
-
-  function resolveLegacyDistrictId(district) {
-    const directMapId = Number(district?.mapId ?? district?.map_id);
-    if (Number.isFinite(directMapId)) return Math.max(1, Math.floor(directMapId));
-    const numericId = Number(district?.id);
-    if (Number.isFinite(numericId)) return Math.max(1, Math.floor(numericId));
-    const name = String(district?.name || "").trim();
-    if (!name) return NaN;
-    const match = name.match(/(\d+)\s*$/);
-    if (!match) return NaN;
-    const parsed = Number(match[1]);
-    return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : NaN;
-  }
-
-  function resolveDistrictKeyByLegacyId(districts, legacyId) {
-    const safeLegacyId = Number(legacyId);
-    if (!Number.isFinite(safeLegacyId)) return "";
-    const target = Math.max(1, Math.floor(safeLegacyId));
-    for (let i = 0; i < districts.length; i += 1) {
-      const district = districts[i];
-      if (resolveLegacyDistrictId(district) !== target) continue;
-      return normalizeDistrictId(district?.id);
-    }
-    return "";
-  }
-
-  function resolveDistrictNumberForLabel(district, fallbackIndex = 0) {
-    const directMapId = Number(district?.mapId ?? district?.map_id);
-    if (Number.isFinite(directMapId) && directMapId > 0) {
-      return Math.floor(directMapId);
-    }
-    const legacyId = resolveLegacyDistrictId(district);
-    if (Number.isFinite(legacyId) && legacyId > 0) {
-      return Math.floor(legacyId);
-    }
-    return Math.max(1, Math.floor(Number(fallbackIndex) + 1));
   }
 
   function setDistricts(districts) {
@@ -15030,13 +14549,9 @@ window.Empire.Map = (() => {
       const districtId = normalizeDistrictId(district?.id);
       const districtType = districtTypeOverrides.get(districtId) || district.type || "residential";
       const basePolygon = resolveDistrictBasePolygon(district);
-      const districtNumber = resolveDistrictNumberForLabel(district, index);
       return {
         id: district.id,
-        mapId: Number.isFinite(Number(district?.mapId ?? district?.map_id))
-          ? Math.max(1, Math.floor(Number(district?.mapId ?? district?.map_id)))
-          : null,
-        name: `District č. ${districtNumber}`,
+        name: district.name || `${districtType} #${index + 1}`,
         type: districtType,
         owner: district.owner || null,
         ownerPlayerId: district.ownerPlayerId || district.owner_player_id || null,
@@ -15316,6 +14831,15 @@ window.Empire.Map = (() => {
           return;
         }
 
+        if (baseName === CLINIC_BUILDING_NAME) {
+          const result = handleClinicBuildingAction(actionId, activeContext);
+          if (result?.message) {
+            window.Empire.UI?.pushEvent?.(result.message);
+          }
+          refreshActiveBuildingDetailModal();
+          return;
+        }
+
         if (isFitnessClubBaseName(baseName)) {
           const result = handleFitnessBuildingAction(actionId, activeContext);
           if (result?.message) {
@@ -15483,18 +15007,15 @@ window.Empire.Map = (() => {
       const activeContext = resolveActiveBuildingContext();
       const context = activeContext?.context || null;
       const baseName = String(context?.baseName || "").trim();
-      const currentMechanicsType = String(root.dataset.buildingMechanicsType || "").trim();
       let result = null;
-      if (currentMechanicsType === "drug-lab" || baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
+      if (baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
         result = handleDrugLabInlineControl(target, activeContext);
-      } else if (currentMechanicsType === "armory" || baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
+      } else if (baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
         result = handleArmoryInlineControl(target, activeContext);
-      } else if (currentMechanicsType === "factory" || baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
+      } else if (baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
         result = handleFactoryInlineControl(target, activeContext);
-      } else if (currentMechanicsType === "pharmacy" || baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
+      } else if (baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
         result = handlePharmacyInlineControl(target, activeContext);
-      } else if (currentMechanicsType === "street-dealers" || baseName === STREET_DEALERS_BUILDING_NAME || isStreetDealersBaseName(baseName)) {
-        result = handleStreetDealersInlineControl(target, activeContext);
       } else {
         return;
       }
@@ -15527,18 +15048,15 @@ window.Empire.Map = (() => {
       const activeContext = resolveActiveBuildingContext();
       const context = activeContext?.context || null;
       const baseName = String(context?.baseName || "").trim();
-      const currentMechanicsType = String(root.dataset.buildingMechanicsType || "").trim();
       let result = null;
-      if (currentMechanicsType === "drug-lab" || baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
+      if (baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
         result = handleDrugLabInlineControl(target, activeContext);
-      } else if (currentMechanicsType === "armory" || baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
+      } else if (baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
         result = handleArmoryInlineControl(target, activeContext);
-      } else if (currentMechanicsType === "factory" || baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
+      } else if (baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
         result = handleFactoryInlineControl(target, activeContext);
-      } else if (currentMechanicsType === "pharmacy" || baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
+      } else if (baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
         result = handlePharmacyInlineControl(target, activeContext);
-      } else if (currentMechanicsType === "street-dealers" || baseName === STREET_DEALERS_BUILDING_NAME || isStreetDealersBaseName(baseName)) {
-        result = handleStreetDealersInlineControl(target, activeContext);
       } else {
         return;
       }
@@ -15561,21 +15079,8 @@ window.Empire.Map = (() => {
       }
       const active = resolveActiveBuildingContext();
       const baseName = String(active?.context?.baseName || "").trim();
-      const currentMechanicsType = String(root.dataset.buildingMechanicsType || "").trim();
       if (
         !(
-          currentMechanicsType === "drug-lab"
-          || currentMechanicsType === "armory"
-          || currentMechanicsType === "factory"
-          || currentMechanicsType === "pharmacy"
-          || currentMechanicsType === "smuggling-tunnel"
-          || currentMechanicsType === "street-dealers"
-          || currentMechanicsType === "strip-club"
-          || currentMechanicsType === "data-center"
-          || currentMechanicsType === "warehouse"
-          || currentMechanicsType === "research-center"
-          || currentMechanicsType === "recycling-center"
-          || 
           baseName === DRUG_LAB_BUILDING_NAME
           || isDrugLabBaseName(baseName)
           || baseName === ARMORY_BUILDING_NAME
@@ -15648,6 +15153,7 @@ window.Empire.Map = (() => {
     const supportsCustomActions =
       mechanicsType === "apartment-block"
       || mechanicsType === "school"
+      || mechanicsType === "clinic"
       || mechanicsType === "fitness-club"
       || mechanicsType === "casino"
       || mechanicsType === "arcade"
@@ -15670,10 +15176,10 @@ window.Empire.Map = (() => {
       return;
     }
 
-    if (collectBtn && mechanicsType === "school") {
-      collectBtn.classList.remove("hidden");
-      collectBtn.disabled = mechanics.storedMembers <= 0;
-      collectBtn.title = mechanics.storedMembers <= 0 ? "Budova nemá nasbírané členy." : "";
+    if (collectBtn && (mechanicsType === "school" || mechanicsType === "apartment-block" || mechanicsType === "clinic")) {
+      collectBtn.classList.add("hidden");
+      collectBtn.disabled = false;
+      collectBtn.title = "";
     } else if (collectBtn && mechanicsType === "drug-lab") {
       collectBtn.classList.remove("hidden");
       collectBtn.textContent = "Vybrat drogy";
@@ -15713,37 +15219,49 @@ window.Empire.Map = (() => {
     };
 
     if (mechanicsType === "apartment-block") {
-      applyActionButtonState(action1Btn, "Nábor z ulice", mechanics.cooldowns?.recruit);
-      applyActionButtonState(action2Btn, "Motivační večer", mechanics.cooldowns?.motivation);
-      applyActionButtonState(action3Btn, "Skryté ubytování", mechanics.cooldowns?.hiddenHousing);
+      applyActionButtonState(action1Btn, "Nábor v baráku", mechanics.cooldowns?.recruit);
+      if (action2Btn) action2Btn.classList.add("hidden");
+      if (action3Btn) action3Btn.classList.add("hidden");
     } else if (mechanicsType === "school") {
-      applyActionButtonState(action1Btn, "Náborová přednáška", mechanics.cooldowns?.lecture);
-      applyActionButtonState(action2Btn, "Zrychlený kurz chemie", mechanics.cooldowns?.chemistry);
-      applyActionButtonState(action3Btn, "Večerní program", mechanics.cooldowns?.evening);
+      applyActionButtonState(action1Btn, "Nábor ve škole", mechanics.cooldowns?.lecture);
+      if (action2Btn) action2Btn.classList.add("hidden");
+      if (action3Btn) action3Btn.classList.add("hidden");
+    } else if (mechanicsType === "clinic") {
+      applyActionButtonState(action1Btn, "Nouzová operace", mechanics.cooldowns?.emergency);
+      applyActionButtonState(action2Btn, "Stabilizace", mechanics.cooldowns?.stabilization);
+      if (action3Btn) {
+        action3Btn.classList.add("hidden");
+        action3Btn.disabled = true;
+        action3Btn.title = "";
+      }
     } else if (mechanicsType === "fitness-club") {
       applyActionButtonState(action1Btn, "Trénink gangu", mechanics.cooldowns?.gangTraining);
       applyActionButtonState(action2Btn, "Nábor talentu", mechanics.cooldowns?.talentRecruitment);
       applyActionButtonState(action3Btn, "Doping", mechanics.cooldowns?.doping);
     } else if (mechanicsType === "casino") {
-      applyActionButtonState(action1Btn, "High Stakes", mechanics.cooldowns?.highStakes);
-      applyActionButtonState(action2Btn, "Praní peněz", mechanics.cooldowns?.laundering);
-      applyActionButtonState(action3Btn, "VIP večer", mechanics.cooldowns?.vipEvening);
+      applyActionButtonState(action1Btn, "VIP Turnaj", mechanics.cooldowns?.vip);
+      applyActionButtonState(action2Btn, "Praní špinavých peněz", mechanics.cooldowns?.laundering);
+      if (action3Btn) {
+        action3Btn.classList.add("hidden");
+        action3Btn.disabled = true;
+        action3Btn.title = "";
+      }
     } else if (mechanicsType === "arcade") {
-      applyActionButtonState(action1Btn, "Turnaj", mechanics.cooldowns?.tournament);
-      applyActionButtonState(action2Btn, "Praní peněz", mechanics.cooldowns?.laundering);
-      applyActionButtonState(action3Btn, "Noční tah", mechanics.cooldowns?.nightRun);
+      applyActionButtonState(action1Btn, "Rozjet automaty", mechanics.cooldowns?.slots);
+      applyActionButtonState(action2Btn, "Zadní místnost", mechanics.cooldowns?.backroom);
+      applyActionButtonState(action3Btn, "Deal přes automaty", mechanics.cooldowns?.deal);
     } else if (mechanicsType === "auto-salon") {
       applyActionButtonState(action1Btn, "Prémiová nabídka", mechanics.cooldowns?.premiumOffer);
       applyActionButtonState(action2Btn, "Šedý dovoz", mechanics.cooldowns?.grayImport);
       applyActionButtonState(action3Btn, "Rychlá flotila", mechanics.cooldowns?.fleet);
     } else if (mechanicsType === "exchange") {
-      applyActionButtonState(action1Btn, "Směna", mechanics.cooldowns?.exchange);
-      applyActionButtonState(action2Btn, "Skrytý převod", mechanics.cooldowns?.hiddenTransfer);
-      applyActionButtonState(action3Btn, "Rychlá likvidita", mechanics.cooldowns?.quickLiquidity);
+      applyActionButtonState(action1Btn, "Výhodný kurz", mechanics.cooldowns?.favorableRate);
+      applyActionButtonState(action2Btn, "Tichý převod", mechanics.cooldowns?.silentTransfer);
+      applyActionButtonState(action3Btn, "Finanční síť", mechanics.cooldowns?.financialNetwork);
     } else if (mechanicsType === "restaurant") {
-      applyActionButtonState(action1Btn, "Večeře pro gang", mechanics.cooldowns?.gangDinner);
-      applyActionButtonState(action2Btn, "VIP rezervace", mechanics.cooldowns?.vipReservation);
-      applyActionButtonState(action3Btn, "Drby z ulice", mechanics.cooldowns?.streetGossip);
+      applyActionButtonState(action1Btn, "Happy Hour", mechanics.cooldowns?.happyHour);
+      applyActionButtonState(action2Btn, "Zadní stůl", mechanics.cooldowns?.backTable);
+      applyActionButtonState(action3Btn, "Narozeninová párty", mechanics.cooldowns?.birthdayParty);
     } else if (mechanicsType === "convenience-store") {
       applyActionButtonState(action1Btn, "Noční prodej", mechanics.cooldowns?.nightSale);
       applyActionButtonState(action2Btn, "Malý deal", mechanics.cooldowns?.smallDeal);
@@ -15851,10 +15369,8 @@ window.Empire.Map = (() => {
     const infoEffects = document.getElementById("building-info-effects");
     const effectsRow = effects?.closest(".modal__row") || null;
     const productionRow = production?.closest(".modal__row") || null;
-    const storedRow = stored?.closest(".modal__row") || null;
-    const heatRow = heat?.closest(".modal__row") || null;
     const levelRow = level?.closest(".modal__row") || null;
-    if (!root || !stored || !production || !heat || !effects) return;
+    if (!root || !level || !stored || !production || !heat || !effects) return;
 
     const mechanics = details?.mechanics;
     const mechanicsType = String(mechanics?.type || "").trim();
@@ -15863,6 +15379,7 @@ window.Empire.Map = (() => {
       || (
         mechanicsType !== "apartment-block"
         && mechanicsType !== "school"
+        && mechanicsType !== "clinic"
         && mechanicsType !== "fitness-club"
         && mechanicsType !== "casino"
         && mechanicsType !== "arcade"
@@ -15895,24 +15412,8 @@ window.Empire.Map = (() => {
     if (effectsLabel) effectsLabel.textContent = "Aktivní efekty";
     if (effectsRow) effectsRow.classList.remove("hidden");
     if (productionRow) productionRow.classList.remove("hidden");
-    if (storedRow) storedRow.classList.remove("hidden");
     if (levelRow) levelRow.classList.remove("hidden");
-    if (storedRow) storedRow.classList.remove("building-detail-pharmacy-row--stored");
-    if (productionRow) productionRow.classList.remove("building-detail-pharmacy-row--production");
-    if (heatRow) heatRow.classList.remove("building-detail-pharmacy-row--heat");
-    root.style.removeProperty("display");
-    root.style.removeProperty("grid-template-columns");
-    root.style.removeProperty("gap");
-    [storedRow, productionRow, heatRow].forEach((row) => {
-      if (!(row instanceof HTMLElement)) return;
-      row.style.removeProperty("display");
-      row.style.removeProperty("grid-template-columns");
-      row.style.removeProperty("align-items");
-      row.style.removeProperty("gap");
-      row.style.removeProperty("grid-column");
-      row.style.removeProperty("order");
-    });
-    if (level) level.textContent = `L${mechanics.level}`;
+    level.textContent = `L${mechanics.level}`;
     heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     if (mechanicsType === "fitness-club") {
       if (storedLabel) storedLabel.textContent = "Bojový bonus";
@@ -15931,15 +15432,17 @@ window.Empire.Map = (() => {
       stored.textContent = `+${formatDecimalValue(mechanics.launderingPct, 2)}%`;
       production.textContent = `x${formatDecimalValue(mechanics.currentIncomeMultiplier, 2)}`;
     } else if (mechanicsType === "arcade") {
-      if (storedLabel) storedLabel.textContent = "Praní bonus";
+      if (storedLabel) storedLabel.textContent = "Bonus prodeje drog";
       if (productionLabel) productionLabel.textContent = "Income multiplikátor";
-      const passiveLabel = Number(mechanics.passiveLaunderingPct || 0) > 0
-        ? ` • pasivně +${formatDecimalValue(mechanics.passiveLaunderedAmount || 0, 0)} C/tick`
+      stored.textContent = mechanics.dealActive && mechanics.hasDrugSalesTargets
+        ? `+${formatDecimalValue(mechanics.dealDrugSalesPct, 2)}%`
+        : "0%";
+      const dirtyBonusLabel = mechanics.dealDirtyBonusPerHour > 0
+        ? ` (+$${formatDecimalValue(mechanics.dealDirtyBonusPerHour, 2)} D/h)`
         : "";
-      stored.textContent = `+${formatDecimalValue(mechanics.launderingPct || 0, 2)}%${passiveLabel}`;
       production.textContent =
-        `C x${formatDecimalValue(mechanics.currentIncomeMultiplier, 2)} • `
-        + `D x${formatDecimalValue(mechanics.currentDirtyIncomeMultiplier, 2)}`;
+        `C x${formatDecimalValue(mechanics.currentCleanIncomeMultiplier, 2)} • `
+        + `D x${formatDecimalValue(mechanics.currentDirtyIncomeMultiplier, 2)}${dirtyBonusLabel}`;
     } else if (mechanicsType === "auto-salon") {
       if (storedLabel) storedLabel.textContent = "Logistický bonus";
       if (productionLabel) productionLabel.textContent = "Income multiplikátor";
@@ -15953,29 +15456,28 @@ window.Empire.Map = (() => {
         `C x${formatDecimalValue(mechanics.currentCleanIncomeMultiplier, 2)} • `
         + `D x${formatDecimalValue(mechanics.currentDirtyIncomeMultiplier, 2)}${fleetBonusLabel}`;
     } else if (mechanicsType === "exchange") {
-      if (storedLabel) storedLabel.textContent = "Konverzní bonus";
-      if (productionLabel) productionLabel.textContent = "Clean income multiplikátor";
-      const heatReductionLabel = Number(mechanics.heatReductionPct || 0) > 0
-        ? ` • heat -${formatDecimalValue(mechanics.heatReductionPct, 2)}%`
-        : "";
-      stored.textContent = `+${formatDecimalValue(mechanics.conversionBonusPct || 0, 2)}%${heatReductionLabel}`;
-      production.textContent =
-        `C x${formatDecimalValue(mechanics.currentCleanIncomeMultiplier, 2)}`
-        + ` • D x${formatDecimalValue(mechanics.currentDirtyIncomeMultiplier, 2)}`;
-    } else if (mechanicsType === "restaurant") {
-      if (storedLabel) storedLabel.textContent = "Drby / přesnost";
+      if (storedLabel) storedLabel.textContent = "Převod dirty cash";
       if (productionLabel) productionLabel.textContent = "Income multiplikátor";
-      stored.textContent =
-        `rare ${formatDecimalValue(mechanics.rareChancePct || 0, 2)}%`
-        + ` • +${formatDecimalValue(mechanics.accuracyBonusPct || 0, 2)}%`
-        + (Number(mechanics.extraGossipCount || 0) > 0 ? ` • +${Math.floor(Number(mechanics.extraGossipCount || 0))} drb` : "");
+      stored.textContent = `+${formatDecimalValue(mechanics.silentTransferPct, 2)}%`;
+      const districtBoostLabel = mechanics.districtIncomeBoostPct > 0
+        ? ` • District +${formatDecimalValue(mechanics.districtIncomeBoostPct, 2)}%`
+        : "";
+      production.textContent =
+        `C x${formatDecimalValue(mechanics.currentCleanIncomeMultiplier, 2)} • `
+        + `D x${formatDecimalValue(mechanics.currentDirtyIncomeMultiplier, 2)}${districtBoostLabel}`;
+    } else if (mechanicsType === "restaurant") {
+      if (storedLabel) storedLabel.textContent = "Bonus vlivu";
+      if (productionLabel) productionLabel.textContent = "Income multiplikátor";
+      stored.textContent = mechanics.backTableActive
+        ? `+${formatDecimalValue(mechanics.backTableInfluenceBoostPct, 2)}%`
+        : "0%";
       const districtBoostLabel = mechanics.districtIncomeBoostPct > 0
         ? ` • District +${formatDecimalValue(mechanics.districtIncomeBoostPct, 2)}%`
         : "";
       production.textContent =
         `C x${formatDecimalValue(mechanics.currentCleanIncomeMultiplier, 2)} • `
         + `D x${formatDecimalValue(mechanics.currentDirtyIncomeMultiplier, 2)} • `
-        + `V +${formatDecimalValue(mechanics.currentInfluencePerHour, 2)}/h${districtBoostLabel}`;
+        + `V x${formatDecimalValue(mechanics.currentInfluenceMultiplier, 2)}${districtBoostLabel}`;
     } else if (mechanicsType === "convenience-store") {
       if (storedLabel) storedLabel.textContent = "Krytí operací";
       if (productionLabel) productionLabel.textContent = "Income multiplikátor";
@@ -16001,23 +15503,13 @@ window.Empire.Map = (() => {
       heat.textContent = `${formatDecimalValue(mechanics.heatPerDay || 0, 2)} / 24h`;
     } else if (mechanicsType === "street-dealers") {
       if (levelRow) levelRow.classList.add("hidden");
-      if (storedLabel) storedLabel.textContent = "Stacky / sloty";
-      if (productionLabel) productionLabel.textContent = "Prodej / síť";
+      if (storedLabel) storedLabel.textContent = "Stacky rajónu";
+      if (productionLabel) productionLabel.textContent = "Trvalý bonus";
       const stacksCount = Math.max(0, Math.floor(Number(mechanics.stacks?.dealerTerritory || 0)));
       const stackPct = stacksCount * STREET_DEALERS_CONFIG.actions.territoryExpansion.incomeStackPct;
-      const slots = Array.isArray(mechanics.streetDealerSlots) ? mechanics.streetDealerSlots : [];
-      const filledSlots = slots.filter((slot) => Math.max(0, Math.floor(Number(slot?.storedUnits || 0))) > 0).length;
-      stored.textContent = `${stacksCount} • ${filledSlots}/${Math.max(1, slots.length)} sloty`;
-      production.textContent =
-        `+${formatDecimalValue(stackPct, 2)}% income • `
-        + `D +${formatDecimalValue(mechanics.slotSalesDirtyPerHour || 0, 2)}/h • `
-        + `max +${formatDecimalValue(mechanics.networkMaxCapacityBonusPct || 0, 2)}% • `
-        + `rychlost +${formatDecimalValue(mechanics.networkSpeedBonusPct || 0, 2)}%`;
-      const passiveHeatPerTick = Math.max(0, Number(mechanics.passiveHeatPerTick || 0));
-      const passiveHeatIntervalMs = Math.max(1, Number(mechanics.passiveHeatIntervalMs || (5 * 60 * 1000)));
-      heat.textContent =
-        `${formatDecimalValue(mechanics.heatPerDay || 0, 2)} / 24h `
-        + `(pasivně +${formatDecimalValue(passiveHeatPerTick, 1)} / ${formatDurationLabel(passiveHeatIntervalMs)})`;
+      stored.textContent = `${stacksCount}`;
+      production.textContent = `+${formatDecimalValue(stackPct, 2)}% income`;
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerDay || 0, 2)} / 24h`;
     } else if (mechanicsType === "strip-club") {
       if (levelRow) levelRow.classList.add("hidden");
       if (storedLabel) storedLabel.textContent = "Soukromé služby";
@@ -16062,24 +15554,6 @@ window.Empire.Map = (() => {
       if (levelRow) levelRow.classList.add("hidden");
       if (productionRow) productionRow.classList.add("hidden");
       if (effectsRow) effectsRow.classList.add("hidden");
-      root.style.display = "grid";
-      root.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
-      root.style.gap = "8px";
-      [storedRow, heatRow].forEach((row) => {
-        if (!(row instanceof HTMLElement)) return;
-        row.style.display = "grid";
-        row.style.gridTemplateColumns = "minmax(0, 1fr) auto";
-        row.style.alignItems = "center";
-        row.style.gap = "10px";
-      });
-      if (storedRow instanceof HTMLElement) {
-        storedRow.style.gridColumn = "1";
-        storedRow.style.order = "1";
-      }
-      if (heatRow instanceof HTMLElement) {
-        heatRow.style.gridColumn = "2";
-        heatRow.style.order = "2";
-      }
       const activeAttackSlots = Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0)));
       const totalAttackSlots = Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0)));
       const activeDefenseSlots = Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)));
@@ -16091,7 +15565,7 @@ window.Empire.Map = (() => {
       heat.textContent = `${formatDecimalValue(mechanics.heatPerHour || 0, 2)} / h`;
     } else if (mechanicsType === "factory") {
       if (levelRow) levelRow.classList.add("hidden");
-      if (storedRow) storedRow.classList.add("hidden");
+      if (storedLabel) storedLabel.textContent = "Suroviny MP/TC/CM";
       if (productionLabel) productionLabel.textContent = "Síť aktivních továren";
       if (heatLabel) heatLabel.textContent = "Heat";
       if (productionRow) productionRow.classList.add("hidden");
@@ -16111,39 +15585,14 @@ window.Empire.Map = (() => {
       if (storedLabel) storedLabel.textContent = "Suroviny C/B/S";
       if (productionLabel) productionLabel.textContent = "Síťové bonusy";
       if (effectsRow) effectsRow.classList.add("hidden");
-      if (storedRow) storedRow.classList.add("building-detail-pharmacy-row--stored");
-      if (productionRow) productionRow.classList.add("building-detail-pharmacy-row--production");
-      if (heatRow) heatRow.classList.add("building-detail-pharmacy-row--heat");
-      root.style.display = "grid";
-      root.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
-      root.style.gap = "8px";
-      [storedRow, heatRow, productionRow].forEach((row) => {
-        if (!(row instanceof HTMLElement)) return;
-        row.style.display = "grid";
-        row.style.gridTemplateColumns = "minmax(0, 1fr) auto";
-        row.style.alignItems = "center";
-        row.style.gap = "10px";
-      });
-      if (storedRow instanceof HTMLElement) {
-        storedRow.style.gridColumn = "1";
-        storedRow.style.order = "1";
-      }
-      if (heatRow instanceof HTMLElement) {
-        heatRow.style.gridColumn = "2";
-        heatRow.style.order = "2";
-      }
-      if (productionRow instanceof HTMLElement) {
-        productionRow.style.gridColumn = "1 / -1";
-        productionRow.style.order = "3";
-      }
       const resources = mechanics.resources || {};
       stored.textContent =
         `${Math.max(0, Math.floor(Number(resources.chemicals || 0)))}/`
         + `${Math.max(0, Math.floor(Number(resources.biomass || 0)))}/`
         + `${Math.max(0, Math.floor(Number(resources.stimPack || 0)))}`;
       production.textContent =
-        `Sklad(+${formatDecimalValue(mechanics.pharmacyStorageCapBonusPct || 0, 2)}%)\n`
-        + `Síť lékáren(+${formatDecimalValue(mechanics.pharmacyProductionBonusPct || 0, 2)}% rychlost)`;
+        `Sklad(+${formatDecimalValue(mechanics.pharmacyStorageCapBonusPct || 0, 2)}%) • `
+        + `Lékárna(+${formatDecimalValue(mechanics.pharmacyProductionBonusPct || 0, 2)}% rychlost)`;
       heat.textContent = `${formatDecimalValue(mechanics.heatPerDay || PHARMACY_CONFIG.baseHeatPerDay, 2)} / 24h`;
     } else if (mechanicsType === "drug-lab") {
       if (levelRow) levelRow.classList.add("hidden");
@@ -16157,21 +15606,37 @@ window.Empire.Map = (() => {
         `${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number(mechanics.unlockedSlots || 0)))} • `
         + `x${formatDecimalValue(mechanics.currentProductionMultiplier || 1, 2)}`;
       heat.textContent = `${formatDecimalValue(mechanics.heatPerHour || 0, 2)} / h`;
+    } else if (mechanicsType === "apartment-block") {
+      if (storedLabel) storedLabel.textContent = "K vybrání";
+      if (productionLabel) productionLabel.textContent = "Produkce";
+      stored.textContent = `${Math.max(0, Math.floor(Number(mechanics.storedMembers || 0)))} / ${Math.max(1, Math.floor(Number(mechanics.capacity || 0)))}`;
+      production.textContent =
+        `${formatDecimalValue(Number(mechanics.producedPerMinute || 0), 2)} / min • `
+        + `${formatDecimalValue(Number(mechanics.producedPerHour || 0), 2)} / hod`;
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / session`;
+    } else if (mechanicsType === "school") {
+      if (storedLabel) storedLabel.textContent = "K vybrání";
+      if (productionLabel) productionLabel.textContent = "Produkce";
+      stored.textContent = `${Math.max(0, Math.floor(Number(mechanics.storedMembers || 0)))} / ${Math.max(1, Math.floor(Number(mechanics.capacity || 0)))}`;
+      production.textContent =
+        `${formatDecimalValue(Number(mechanics.producedPerMinute || 0), 2)} / min • `
+        + `${formatDecimalValue(Number(mechanics.producedPerHour || 0), 2)} / hod`;
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / session`;
+    } else if (mechanicsType === "clinic") {
+      if (storedLabel) storedLabel.textContent = "Fronta zraněných";
+      if (productionLabel) productionLabel.textContent = "Léčení / návrat";
+      stored.textContent = `${Math.max(0, Math.floor(Number(mechanics.injuredMembers || 0)))}`;
+      production.textContent =
+        `${formatDecimalValue(Number(mechanics.healedPerMinute || 0), 2)} / min • `
+        + `${formatDecimalValue(Number(mechanics.returnChancePct || 0), 2)}% přežití`;
+      heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     } else {
       stored.textContent = `${mechanics.storedMembers} / ${mechanics.capacity}`;
       production.textContent = `${formatDecimalValue(mechanics.productionPerCycle, 2)} / 10 min`;
       heat.textContent = `${formatDecimalValue(mechanics.heatPerDay, 2)} / 24h`;
     }
-    const rawEffectsLabel = String(mechanics.effectsLabel || "").trim();
-    const effectsMultilineLabel = rawEffectsLabel
-      ? rawEffectsLabel.replace(/\s*•\s*/g, "\n")
-      : "Žádné";
-    effects.textContent = effectsMultilineLabel;
-    if (infoEffects) {
-      infoEffects.textContent = rawEffectsLabel
-        ? rawEffectsLabel.replace(/\s*•\s*/g, "\n")
-        : "Žádné aktivní mechaniky.";
-    }
+    effects.textContent = mechanics.effectsLabel || "Žádné";
+    if (infoEffects) infoEffects.textContent = mechanics.effectsLabel || "Žádné aktivní mechaniky.";
     renderDrugLabDetailPanel(details);
     root.classList.remove("hidden");
   }
@@ -16195,16 +15660,18 @@ window.Empire.Map = (() => {
     const mechanicsType = String(details?.mechanics?.type || "").trim();
     if (mechanicsType === "apartment-block") {
       return [
-        "Nábor z ulice: Cooldown 3h, okamžitě přidá náhodně 5 až 15 členů do kapacity budovy a přidá +5 heat.",
-        "Motivační večer: Cooldown 6h, na 2h zdvojnásobí produkci členů v budově.",
-        "Skryté ubytování: Cooldown 8h, na 2h nastaví income budovy na 0 a aktivuje ochranný režim proti razii."
+        "Nábor v baráku: Cooldown 25 min, +50% produkce na 15 min, +20 kapacita, +3 heat."
       ];
     }
     if (mechanicsType === "school") {
       return [
-        "Náborová přednáška: Cooldown 3h, okamžitě přidá náhodně 4 až 10 členů do kapacity školy a přidá +2 heat.",
-        "Zrychlený kurz chemie: Cooldown 4h, trvá 2h a pokud je v districtu Drug Lab, zvýší jeho rychlost o +25 % (+3 heat).",
-        "Večerní program: Cooldown 6h, trvá 2h, snižuje heat districtu o 20 %, ale income školy je během efektu 0."
+        "Nábor ve škole: Cooldown 25 min, +40% produkce na 15 min, +15 kapacita, +2 heat."
+      ];
+    }
+    if (mechanicsType === "clinic") {
+      return [
+        "Nouzová operace: Cooldown 25 min, okamžitě vrátí 40 % aktuálně zraněných a přidá +8 heat.",
+        "Stabilizace: Cooldown 30 min, +50 % rychlost léčení na 20 min a +3 heat."
       ];
     }
     if (mechanicsType === "fitness-club") {
@@ -16216,16 +15683,15 @@ window.Empire.Map = (() => {
     }
     if (mechanicsType === "casino") {
       return [
-        "High Stakes: Cooldown 6h, okamžitě přidá +50 až +150 % cash (z hodinového income kasina) a +10 heat.",
-        "Praní peněz: Cooldown 8h, převede 20 % dirty cash na clean (škáluje s levelem), +6 heat.",
-        "VIP večer: Cooldown 10h, trvá 2h, +40 % income kasina (škáluje s levelem), +7 heat."
+        "VIP Turnaj: Cooldown 4h, trvá 2h, zvýší income kasina o +60 % (škáluje s levelem) a přidá +4 heat.",
+        "Praní špinavých peněz: Cooldown 6h, vypere 15 % špinavých peněz (škáluje s levelem), přidá +6 heat a na 3h zvýší riziko policejní razie v districtu o 20 % (škáluje s levelem)."
       ];
     }
     if (mechanicsType === "arcade") {
       return [
-        "Turnaj: Cooldown 6h, trvá 2h, zvýší income herny o +35 % a přidá +5 heat.",
-        "Praní peněz: Cooldown 7h, okamžitě převede 10 % dirty cash na clean cash a přidá +4 heat.",
-        "Noční tah: Cooldown 8h, trvá 1h, zvýší dirty cash herny o +50 % a přidá +7 heat."
+        "Rozjet automaty: Cooldown 4h, trvá 2h, zvýší legální income herny o +50 % (škáluje s levelem) a přidá +3 heat.",
+        "Zadní místnost: Cooldown 6h, trvá 2h, zvýší dirty income herny o +75 % (škáluje s levelem), přidá +5 heat a na 2h zvýší riziko policejní razie v districtu o +10 % (škáluje s levelem).",
+        "Deal přes automaty: Cooldown 5h, trvá 2h, přidá herně +20 dirty cash/h (škáluje s levelem), a pokud vlastníš Drug Lab nebo Pouliční dealery, zvýší jejich prodej drog o +25 % (škáluje s levelem); zároveň přidá +6 heat a +15 % riziko razie na 2h (škáluje s levelem)."
       ];
     }
     if (mechanicsType === "auto-salon") {
@@ -16237,16 +15703,16 @@ window.Empire.Map = (() => {
     }
     if (mechanicsType === "exchange") {
       return [
-        "Směna: Cooldown 6h, převede cash ↔ materiály a přidá +3 heat.",
-        "Skrytý převod: Cooldown 8h, okamžitě přidá +15 % clean cash a přidá +4 heat.",
-        "Rychlá likvidita: Cooldown 10h, okamžitě přidá +5000 clean cash a přidá +5 heat."
+        "Výhodný kurz: Cooldown 4h, trvá 2h, zvýší legální income směnárny o +40 % (škáluje s levelem) a přidá +2 heat.",
+        "Tichý převod: Cooldown 6h, okamžitě převede 12 % dirty cash na clean cash (škáluje s levelem), přidá +5 heat a na 2h zvýší riziko razie v districtu o +10 % (škáluje s levelem).",
+        "Finanční síť: Cooldown 5h, trvá 2h, zvýší cash income všech income budov v districtu o +15 % (škáluje s levelem) a přidá +3 heat."
       ];
     }
     if (mechanicsType === "restaurant") {
       return [
-        "Večeře pro gang: Cooldown 8h, vybereš vlastní district a na 2h zvýší income všech budov v tom districtu o +15 %, +4 heat.",
-        "VIP rezervace: Cooldown 8h, na 2h dá restauraci +30 % clean income a +5 % vliv, +5 heat.",
-        "Drby z ulice: Cooldown 6h, vybereš district, získáš 1-2 drby (L5 +1), 30% šance na vzácný drb (L3 vyšší), +3 heat."
+        "Happy Hour: Cooldown 4h, trvá 2h, zvýší legální income restaurace o +35 % (škáluje s levelem) a přidá +1 heat.",
+        "Zadní stůl: Cooldown 5h, trvá 2h, zvýší produkci vlivu restaurace o +100 % (škáluje s levelem), ale během efektu má restaurace o 15 % nižší legální income (škáluje s levelem).",
+        "Narozeninová párty: Cooldown 2h, není časový buff, po spuštění vygeneruje drby o dění ve městě (škáluje s levelem), hned je zobrazí hráči a uloží do historie příslušných districtů."
       ];
     }
     if (mechanicsType === "convenience-store") {
@@ -16364,6 +15830,48 @@ window.Empire.Map = (() => {
     return `${hours} h / ${minutes} min / ${seconds} s`;
   }
 
+  function buildBuildingUpgradeInfoRows(details) {
+    const mechanics = details?.mechanics || null;
+    const mechanicsType = String(mechanics?.type || "").trim();
+    if (!mechanicsType) return [];
+    const currentLevel = Math.max(1, Math.floor(Number(mechanics.level || 1)));
+    const nextLevel = Number(mechanics.nextLevel || 0);
+    const nextUpgradeCost = Math.max(0, Number(mechanics.nextUpgradeCost || 0));
+    const rows = [
+      {
+        title: `Aktuální level L${currentLevel}`,
+        description: nextLevel > 0 && nextUpgradeCost > 0
+          ? `Další upgrade: L${nextLevel} za ${formatUpgradeCostLabel(mechanicsType, nextUpgradeCost)}.`
+          : "Budova je na maximálním levelu."
+      }
+    ];
+
+    if (mechanicsType === "pharmacy") {
+      rows.push({
+        title: "Produkční sloty",
+        description: `${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))} aktivních slotů • Chemicals / Biomass / Stim Pack`
+      });
+    } else if (mechanicsType === "factory") {
+      rows.push({
+        title: "Produkční sloty",
+        description: `${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.slots || []).length || 0)))} aktivních slotů • Metal Parts / Tech Core / Combat Module`
+      });
+    } else if (mechanicsType === "drug-lab") {
+      rows.push({
+        title: "Výrobní linky",
+        description: `${Math.max(0, Math.floor(Number(mechanics.activeSlots || 0)))}/${Math.max(1, Math.floor(Number(mechanics.unlockedSlots || 0)))} aktivních slotů • sklad ${Math.max(0, Math.floor(Number(mechanics.storedTotal || 0)))}/${Math.max(1, Math.floor(Number(mechanics.storageCapacity || 0)))}`
+      });
+    } else if (mechanicsType === "armory") {
+      rows.push({
+        title: "Výrobní sloty",
+        description:
+          `Útok ${Math.max(0, Math.floor(Number(mechanics.activeAttackSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.attackSlots || []).length || 0)))}`
+          + ` • Obrana ${Math.max(0, Math.floor(Number(mechanics.activeDefenseSlots || 0)))}/${Math.max(1, Math.floor(Number((mechanics.defenseSlots || []).length || 0)))}`
+      });
+    }
+    return rows;
+  }
+
   function resolveInfoActionCooldownMs(mechanicsType, actionTitle, mechanics) {
     const title = normalizeBuildingTypeName(actionTitle);
     const cooldowns = mechanics?.cooldowns || {};
@@ -16418,69 +15926,29 @@ window.Empire.Map = (() => {
     return null;
   }
 
-  function resolveUpgradeEffectSummary(mechanicsType) {
-    const defaultSummary = "zvýší levelové bonusy budovy podle jejího typu (income/produkce/kapacita).";
-    if (mechanicsType === "apartment-block") return "+10 % produkce členů, +10 % kapacita, +10 % income.";
-    if (mechanicsType === "school") return "+10 % produkce členů, +10 % kapacita, +10 % income.";
-    if (mechanicsType === "fitness-club") return "+10 % síla bonusů a škálování income dle levelu.";
-    if (mechanicsType === "casino") return "+10 % škálování income a síly akcí dle levelu.";
-    if (mechanicsType === "arcade") return "+10 % škálování income a bonusů praní dle levelu.";
-    if (mechanicsType === "auto-salon") return "+10 % škálování clean/dirty income a síly akcí.";
-    if (mechanicsType === "exchange") return "+10 % škálování income a konverzních bonusů.";
-    if (mechanicsType === "restaurant") return "+10 % škálování income a síly efektů akcí.";
-    if (mechanicsType === "convenience-store") return "+10 % škálování income a efektů podpůrných akcí.";
-    if (mechanicsType === "smuggling-tunnel") return "zvýší levelové multiplikátory tunelu a sílu jeho akcí.";
-    if (mechanicsType === "street-dealers") return "zvýší levelové multiplikátory dealerů a sílu jejich akcí.";
-    if (mechanicsType === "strip-club") return "zvýší levelové multiplikátory income a sílu akcí klubu.";
-    if (mechanicsType === "data-center") return "zvýší kvalitu intel výstupů a škálování akcí datového centra.";
-    if (mechanicsType === "warehouse") return "zvýší levelové bonusy logistiky a efektivitu skladových akcí.";
-    if (mechanicsType === "research-center") return "zvýší levelové bonusy výzkumu a sílu technologických akcí.";
-    if (mechanicsType === "recycling-center") return "zvýší levelové bonusy recyklace a efektivitu obnovy zdrojů.";
-    if (mechanicsType === "armory") return "+10 % rychlost výroby slotů a škálování produkce zbraní.";
-    if (mechanicsType === "factory") return "+10 % rychlost výroby slotů a škálování produkce materiálů.";
-    if (mechanicsType === "pharmacy") return "+10 % rychlost výroby slotů a škálování outputu surovin.";
-    if (mechanicsType === "drug-lab") return "+10 % rychlost výroby a škálování výkonu slotů Drug Labu.";
-    return defaultSummary;
-  }
-
-  function appendBuildingUpgradeInfoRow(list, details, mechanicsType) {
-    if (!(list instanceof HTMLElement)) return;
-    const mechanics = details?.mechanics || {};
-    const nextLevel = Math.max(0, Math.floor(Number(mechanics.nextLevel || 0)));
-    const nextUpgradeCost = Math.max(0, Math.floor(Number(mechanics.nextUpgradeCost || 0)));
-    const li = document.createElement("li");
-    li.className = "building-info-action-row building-info-action-row--upgrade";
-    const title = document.createElement("strong");
-    title.className = "building-info-action-row__title";
-    if (nextLevel > 0 && nextUpgradeCost > 0) {
-      const upgradeCostLabel = formatUpgradeCostLabel(mechanicsType, nextUpgradeCost);
-      title.textContent = `Upgrade na L${nextLevel}`;
-      const description = document.createElement("span");
-      description.className = "building-info-action-row__desc";
-      description.textContent = `Cena: ${upgradeCostLabel} • Efekt: ${resolveUpgradeEffectSummary(mechanicsType)}`;
-      li.append(title, description);
-    } else {
-      title.textContent = "Upgrade";
-      const description = document.createElement("span");
-      description.className = "building-info-action-row__desc";
-      description.textContent = "Budova je na maximálním levelu.";
-      li.append(title, description);
-    }
-    list.appendChild(li);
-  }
-
   function renderBuildingInfoActions(details) {
     const list = document.getElementById("building-info-actions");
     if (!list) return;
     list.innerHTML = "";
     const mechanicsType = String(details?.mechanics?.type || "").trim();
-    const useLabGridLayout =
-      mechanicsType === "drug-lab"
-      || mechanicsType === "pharmacy"
-      || mechanicsType === "factory";
     list.classList.toggle("building-info-card__actions--armory", mechanicsType === "armory");
-    list.classList.toggle("building-info-card__actions--drug-lab", useLabGridLayout);
-    appendBuildingUpgradeInfoRow(list, details, mechanicsType);
+    list.classList.toggle("building-info-card__actions--drug-lab", mechanicsType === "drug-lab");
+    const upgradeRows = buildBuildingUpgradeInfoRows(details);
+    upgradeRows.forEach((item) => {
+      const li = document.createElement("li");
+      li.className = "building-info-action-row";
+      const title = document.createElement("strong");
+      title.className = "building-info-action-row__title";
+      title.textContent = item.title;
+      li.appendChild(title);
+      if (item.description) {
+        const description = document.createElement("span");
+        description.className = "building-info-action-row__desc";
+        description.textContent = item.description;
+        li.appendChild(description);
+      }
+      list.appendChild(li);
+    });
     if (mechanicsType === "armory") {
       const attackRows = [
         ["Baseballová pálka", "AP 5 • 8s", "Rychlý low-tier tlak"],
@@ -16688,8 +16156,55 @@ window.Empire.Map = (() => {
 
     const context = resolveBuildingDetailContext(buildingName);
     let details;
+    const baseName = String(context?.baseName || "").trim();
     try {
-      details = resolveBuildingDetails(context, district);
+      if (baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
+        details = resolvePharmacyBuildingDetails(context, district, {
+          baseName,
+          displayName: context.variantName || baseName,
+          hourlyIncome: 0,
+          dailyIncome: 0,
+          hourlyCleanIncome: 0,
+          hourlyDirtyIncome: 0,
+          info: "",
+          specialActions: []
+        });
+      } else if (baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
+        details = resolveFactoryBuildingDetails(context, district, {
+          baseName,
+          displayName: context.variantName || baseName,
+          hourlyIncome: 0,
+          dailyIncome: 0,
+          hourlyCleanIncome: 0,
+          hourlyDirtyIncome: 0,
+          info: "",
+          specialActions: []
+        });
+      } else if (baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
+        details = resolveArmoryBuildingDetails(context, district, {
+          baseName,
+          displayName: context.variantName || baseName,
+          hourlyIncome: 0,
+          dailyIncome: 0,
+          hourlyCleanIncome: 0,
+          hourlyDirtyIncome: 0,
+          info: "",
+          specialActions: []
+        });
+      } else if (baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
+        details = resolveDrugLabBuildingDetails(context, district, {
+          baseName,
+          displayName: context.variantName || baseName,
+          hourlyIncome: 0,
+          dailyIncome: 0,
+          hourlyCleanIncome: 0,
+          hourlyDirtyIncome: 0,
+          info: "",
+          specialActions: []
+        });
+      } else {
+        details = resolveBuildingDetails(context, district);
+      }
     } catch (error) {
       console.error("Building detail open failed", {
         buildingName,
@@ -16706,6 +16221,29 @@ window.Empire.Map = (() => {
         mechanics: null,
         specialActions: []
       };
+    }
+    if (!details?.mechanics) {
+      const fallbackDetails = {
+        baseName: context.baseName,
+        displayName: context.variantName || context.baseName,
+        hourlyIncome: 0,
+        dailyIncome: 0,
+        hourlyCleanIncome: 0,
+        hourlyDirtyIncome: 0,
+        info: "Detail budovy se nepodařilo načíst. Zkus to znovu.",
+        specialActions: []
+      };
+      try {
+        if (baseName === PHARMACY_BUILDING_NAME || isPharmacyBaseName(baseName)) {
+          details = resolvePharmacyBuildingDetails(context, district, fallbackDetails);
+        } else if (baseName === FACTORY_BUILDING_NAME || isFactoryBaseName(baseName)) {
+          details = resolveFactoryBuildingDetails(context, district, fallbackDetails);
+        } else if (baseName === ARMORY_BUILDING_NAME || isArmoryBaseName(baseName)) {
+          details = resolveArmoryBuildingDetails(context, district, fallbackDetails);
+        } else if (baseName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(baseName)) {
+          details = resolveDrugLabBuildingDetails(context, district, fallbackDetails);
+        }
+      } catch {}
     }
     details = applyConfiguredBuildingCashFallback(details, context);
     const mechanics = details?.mechanics || null;
@@ -16891,24 +16429,14 @@ window.Empire.Map = (() => {
       }
     }
     if (name) name.textContent = details.displayName;
-    const sameTypeOwnedCount = (() => {
-      if (!mechanics || typeof mechanics !== "object") return 0;
-      if (mechanicsType === "pharmacy") return Math.max(0, Math.floor(Number(mechanics.ownedPharmacyCount || 0)));
-      if (mechanicsType === "factory") return Math.max(0, Math.floor(Number(mechanics.ownedFactoryCount || 0)));
-      if (mechanicsType === "armory") return Math.max(0, Math.floor(Number(mechanics.ownedArmoryCount || 0)));
-      if (mechanicsType === "drug-lab") return Math.max(0, Math.floor(Number(mechanics.ownedLabCount || 0)));
-      return 0;
-    })();
-    root.classList.toggle("building-detail-many-owned", sameTypeOwnedCount > 3);
     const hourlyLabel = formatBuildingIncomeLabel(details);
     const dailyLabel = `$${formatDecimalValue(details.dailyIncome, 2)} / den`;
     const cashBreakdown = resolveBuildingCashBreakdown(details);
     const cleanHourlyValue = cashBreakdown.hourlyCleanIncome || 0;
     const dirtyHourlyValue = cashBreakdown.hourlyDirtyIncome || 0;
     const totalHourlyValue = Math.max(0, Number(details?.hourlyIncome || 0));
-    const hideIncomeRowsForMechanics = mechanicsType === "street-dealers";
-    const hasCashBreakdown = (cleanHourlyValue > 0 || dirtyHourlyValue > 0) && !hideIncomeRowsForMechanics;
-    const showBaseIncomeRows = totalHourlyValue > 0 && !hideIncomeRowsForMechanics;
+    const hasCashBreakdown = cleanHourlyValue > 0 || dirtyHourlyValue > 0;
+    const showBaseIncomeRows = totalHourlyValue > 0;
     if (hourlyRow) hourlyRow.classList.toggle("hidden", !showBaseIncomeRows);
     if (dailyRow) dailyRow.classList.toggle("hidden", !showBaseIncomeRows);
     if (infoHourlyRow) infoHourlyRow.classList.toggle("hidden", !showBaseIncomeRows);
@@ -16958,21 +16486,23 @@ window.Empire.Map = (() => {
     if (infoSubtitle) {
       let subtitle = "Přehled role budovy v districtu a ekonomice gangu.";
       if (mechanicsType === "apartment-block") {
-        subtitle = "Personální budova zaměřená na růst členů, kapacitu a stabilní cashflow.";
+        subtitle = `Produkce ${formatDecimalValue(Number(details?.mechanics?.producedPerMinute || 0), 2)}/min • k vybrání ${Math.max(0, Math.floor(Number(details?.mechanics?.storedMembers || 0)))}/${Math.max(1, Math.floor(Number(details?.mechanics?.capacity || 0)))}`;
       } else if (mechanicsType === "school") {
-        subtitle = "Náborová a podpůrná budova, která zesiluje districtové mechaniky.";
+        subtitle = `Produkce ${formatDecimalValue(Number(details?.mechanics?.producedPerMinute || 0), 2)}/min • k vybrání ${Math.max(0, Math.floor(Number(details?.mechanics?.storedMembers || 0)))}/${Math.max(1, Math.floor(Number(details?.mechanics?.capacity || 0)))}`;
+      } else if (mechanicsType === "clinic") {
+        subtitle = `Léčení ${formatDecimalValue(Number(details?.mechanics?.healedPerMinute || 0), 2)}/min • zranění ${Math.max(0, Math.floor(Number(details?.mechanics?.injuredMembers || 0)))}`;
       } else if (mechanicsType === "fitness-club") {
         subtitle = "Combat podpora: trénink, nábor a rizikový doping pro tlak v útoku i obraně.";
       } else if (mechanicsType === "casino") {
-        subtitle = "Velké prachy i risk: cashflow, High Stakes, praní peněz a VIP večer.";
+        subtitle = "Finanční motor pro čisté i špinavé cashflow s VIP boostem a praním peněz.";
       } else if (mechanicsType === "arcade") {
         subtitle = "Hybrid clean/dirty budova s automatovými akcemi a napojením na drogový byznys.";
       } else if (mechanicsType === "auto-salon") {
         subtitle = "Logisticko-ekonomická budova s čistým i dirty income a bonusy pro mobilitu.";
       } else if (mechanicsType === "exchange") {
-        subtitle = "Finanční uzel pro směnu cash a materiálů, skryté převody a okamžitou likviditu.";
+        subtitle = "Finanční uzel pro konverzi dirty cash, district boost příjmů a postupné zvyšování vlivu.";
       } else if (mechanicsType === "restaurant") {
-        subtitle = "Sociální safe budova: stabilní cashflow, cílené district buffy a zpravodajské drby.";
+        subtitle = "Nízkoprofilová ekonomická budova s vlivovým růstem a zpravodajskými drby z districtů.";
       } else if (mechanicsType === "convenience-store") {
         subtitle = "Nonstop obchod: stabilní clean/dirty cashflow, lokální vliv a krytí operací pro další budovy.";
       } else if (mechanicsType === "data-center") {
@@ -16984,17 +16514,22 @@ window.Empire.Map = (() => {
       } else if (mechanicsType === "recycling-center") {
         subtitle = "Recyklační uzel pro návrat zásob, chemie a částečnou obnovu ztrát po raziích.";
       } else if (mechanicsType === "armory") {
-        subtitle = "Výrobní zbrojní uzel pro útok i obranu districtů: recepty, časování a zásobování z Továrny.";
+        subtitle = `Útok ${Math.max(0, Math.floor(Number(details?.mechanics?.activeAttackSlots || 0)))}/${Math.max(1, Math.floor(Number((details?.mechanics?.attackSlots || []).length || 0)))} • Obrana ${Math.max(0, Math.floor(Number(details?.mechanics?.activeDefenseSlots || 0)))}/${Math.max(1, Math.floor(Number((details?.mechanics?.defenseSlots || []).length || 0)))}`;
       } else if (mechanicsType === "factory") {
-        subtitle = "Produkční jádro pro výrobu zbraňových materiálů a Combat Module.";
+        subtitle = `Sloty ${Math.max(0, Math.floor(Number(details?.mechanics?.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((details?.mechanics?.slots || []).length || 0)))} • sklad MP/TC/CM`;
       } else if (mechanicsType === "pharmacy") {
-        subtitle = "Support budova pro výrobu surovin a taktických boostů akcí napříč gangem.";
+        subtitle = `Sloty ${Math.max(0, Math.floor(Number(details?.mechanics?.activeSlots || 0)))}/${Math.max(1, Math.floor(Number((details?.mechanics?.slots || []).length || 0)))} • Chemicals / Biomass / Stim Pack`;
       } else if (mechanicsType === "drug-lab") {
-        subtitle = "Produkční laboratoř pro drogy: sloty, heat risk management, buffy a skladová logistika.";
+        subtitle = `Linky ${Math.max(0, Math.floor(Number(details?.mechanics?.activeSlots || 0)))}/${Math.max(1, Math.floor(Number(details?.mechanics?.unlockedSlots || 0)))} • sklad ${Math.max(0, Math.floor(Number(details?.mechanics?.storedTotal || 0)))}/${Math.max(1, Math.floor(Number(details?.mechanics?.storageCapacity || 0)))}`;
       }
       infoSubtitle.textContent = subtitle;
     }
-    const preserveInfoTab = !root.classList.contains("hidden") && state.activeBuildingDetailTab === "info";
+    const forceStatsTab =
+      mechanicsType === "armory"
+      || mechanicsType === "drug-lab"
+      || mechanicsType === "pharmacy"
+      || mechanicsType === "factory";
+    const preserveInfoTab = !forceStatsTab && !root.classList.contains("hidden") && state.activeBuildingDetailTab === "info";
     const activeTab = preserveInfoTab ? "info" : "stats";
     if (!preserveInfoTab) {
       state.activeBuildingDetailTab = "stats";
@@ -17044,6 +16579,10 @@ window.Empire.Map = (() => {
   }
 
   function applyConfiguredBuildingCashFallback(details, buildingInput) {
+    const mechanicsType = String(details?.mechanics?.type || "").trim();
+    if (mechanicsType === "apartment-block" || mechanicsType === "school") {
+      return details;
+    }
     const configuredRates = resolveConfiguredBuildingCashProfile(buildingInput);
     if (!configuredRates) return details;
     const currentHourlyIncome = Number(details?.hourlyIncome);
@@ -17167,151 +16706,6 @@ window.Empire.Map = (() => {
       dirtyIncomeBoostPct,
       heatMultiplier,
       spyReward
-    };
-  }
-
-  function getOwnedStreetDealersCount() {
-    const entries = collectOwnedSimpleCashEntriesByMatcher(isStreetDealersBaseName);
-    return Math.max(1, entries.length || 1);
-  }
-
-  function getStreetDealerNetworkEffects(ownedStreetDealersCountRaw) {
-    const ownedStreetDealersCount = Math.max(1, Math.floor(Number(ownedStreetDealersCountRaw) || 1));
-    const extraBuildings = Math.max(0, ownedStreetDealersCount - 1);
-    const maxCapacityBonusPct =
-      extraBuildings * Math.max(0, Number(STREET_DEALERS_CONFIG.sales.networkMaxCapacityPctPerExtraBuilding || 0));
-    const speedBonusPct =
-      extraBuildings * Math.max(0, Number(STREET_DEALERS_CONFIG.sales.networkSpeedPctPerExtraBuilding || 0));
-    return {
-      ownedStreetDealersCount,
-      extraBuildings,
-      maxCapacityBonusPct,
-      speedBonusPct,
-      maxCapacityMultiplier: Math.max(1, 1 + maxCapacityBonusPct / 100),
-      speedMultiplier: Math.max(1, 1 + speedBonusPct / 100)
-    };
-  }
-
-  function getStreetDealerSlotConfigByResourceKey(resourceKey) {
-    const safeKey = String(resourceKey || "").trim();
-    return STREET_DEALERS_CONFIG.sales.slots.find((slot) => String(slot.resourceKey || "").trim() === safeKey) || null;
-  }
-
-  function createStreetDealerDrugInventory(rawInventory = {}) {
-    const source = rawInventory && typeof rawInventory === "object" ? rawInventory : {};
-    return {
-      neonDust: Math.max(0, Math.floor(Number(source.neonDust || 0))),
-      pulseShot: Math.max(0, Math.floor(Number(source.pulseShot || 0))),
-      velvetSmoke: Math.max(0, Math.floor(Number(source.velvetSmoke || 0)))
-    };
-  }
-
-  function getStreetDealerSlotCapacity(slotConfig, networkEffects) {
-    const baseSlotCap = Math.max(0, Math.floor(Number(slotConfig?.baseSlotCap || 0)));
-    const multiplier = Math.max(1, Number(networkEffects?.maxCapacityMultiplier || 1));
-    return Math.max(0, Math.floor(baseSlotCap * multiplier));
-  }
-
-  function syncStreetDealerSales(instanceState, now = Date.now(), options = {}) {
-    const stateRef = instanceState;
-    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
-    const ownedStreetDealersCountRaw = Number(options?.ownedStreetDealersCount);
-    const networkEffects = getStreetDealerNetworkEffects(
-      Number.isFinite(ownedStreetDealersCountRaw) ? ownedStreetDealersCountRaw : getOwnedStreetDealersCount()
-    );
-    const slots = Array.isArray(stateRef.streetDealerSlots) && stateRef.streetDealerSlots.length
-      ? stateRef.streetDealerSlots
-      : createStreetDealerDefaultSlots(nowMs);
-    const fallbackSlots = createStreetDealerDefaultSlots(nowMs);
-    stateRef.streetDealerSlots = fallbackSlots.map((fallbackSlot, index) =>
-      sanitizeStreetDealerSlot(slots[index], fallbackSlot, nowMs)
-    );
-
-    let dirtyIncomeGained = 0;
-    const slotSummaries = stateRef.streetDealerSlots.map((slot) => {
-      const slotConfig = getStreetDealerSlotConfigByResourceKey(slot.resourceKey) || {};
-      const slotCap = getStreetDealerSlotCapacity(slotConfig, networkEffects);
-      if (slotCap >= 0) {
-        slot.storedUnits = Math.min(Math.max(0, Math.floor(Number(slot.storedUnits || 0))), slotCap);
-      }
-      let from = Number(slot.lastTick || nowMs);
-      if (!Number.isFinite(from) || from > nowMs) from = nowMs;
-      const elapsedMs = Math.max(0, nowMs - from);
-      const unitsPerHour = Math.max(0, Number(slotConfig.unitsPerHour || 0)) * networkEffects.speedMultiplier;
-      const dirtyCashPerUnit = Math.max(0, Number(slotConfig.dirtyCashPerUnit || 0));
-      let soldUnits = 0;
-      if (elapsedMs > 0 && unitsPerHour > 0 && dirtyCashPerUnit > 0) {
-        const rawToSell = (elapsedMs / 3600000) * unitsPerHour + Math.max(0, Number(slot.salesUnitRemainder || 0));
-        const desiredToSell = Math.max(0, Math.floor(rawToSell));
-        slot.salesUnitRemainder = Math.max(0, rawToSell - desiredToSell);
-        const available = Math.max(0, Math.floor(Number(slot.storedUnits || 0)));
-        soldUnits = Math.max(0, Math.min(available, desiredToSell));
-        if (soldUnits > 0) {
-          slot.storedUnits = Math.max(0, available - soldUnits);
-          slot.soldUnitsTotal = Math.max(0, Math.floor(Number(slot.soldUnitsTotal || 0) + soldUnits));
-          const rawDirty = soldUnits * dirtyCashPerUnit + Math.max(0, Number(slot.cashRemainder || 0));
-          const dirty = Math.max(0, Math.floor(rawDirty));
-          slot.cashRemainder = Math.max(0, rawDirty - dirty);
-          dirtyIncomeGained += dirty;
-        } else {
-          slot.cashRemainder = Math.max(0, Number(slot.cashRemainder || 0));
-        }
-        if (Math.max(0, Math.floor(Number(slot.storedUnits || 0))) <= 0) {
-          slot.salesUnitRemainder = 0;
-        }
-      }
-      slot.lastTick = nowMs;
-      const storedUnits = Math.max(0, Math.floor(Number(slot.storedUnits || 0)));
-      return {
-        id: slot.id,
-        resourceKey: slot.resourceKey,
-        resourceLabel: String(slotConfig.label || slot.resourceKey || "").trim() || "Slot",
-        queuedUnits: Math.max(1, Math.floor(Number(slot.queuedUnits || 1))),
-        storedUnits,
-        soldUnitsTotal: Math.max(0, Math.floor(Number(slot.soldUnitsTotal || 0))),
-        slotCap,
-        unitsPerHour,
-        dirtyCashPerUnit,
-        dirtyPerHour: unitsPerHour * dirtyCashPerUnit,
-        soldUnitsTick: soldUnits
-      };
-    });
-
-    if (dirtyIncomeGained > 0) {
-      payoutDirectBuildingIncome(0, dirtyIncomeGained);
-    }
-
-    return {
-      dirtyIncomeGained,
-      networkEffects,
-      slots: slotSummaries
-    };
-  }
-
-  function applyStreetDealerPassiveHeatTick(instanceState, now = Date.now()) {
-    const stateRef = instanceState;
-    const nowMs = Math.max(0, Math.floor(Number(now) || Date.now()));
-    const intervalMs = Math.max(1, Math.floor(Number(STREET_DEALERS_CONFIG.passiveHeatIntervalMs || (5 * 60 * 1000))));
-    const heatPerTick = Math.max(0, Number(STREET_DEALERS_CONFIG.passiveHeatPerTick || 0));
-    let from = Number(stateRef.streetDealerLastHeatTickAt || nowMs);
-    if (!Number.isFinite(from) || from > nowMs) from = nowMs;
-    const elapsedMs = Math.max(0, nowMs - from);
-    const ticks = Math.max(0, Math.floor(elapsedMs / intervalMs));
-    if (ticks <= 0 || heatPerTick <= 0) {
-      stateRef.streetDealerLastHeatTickAt = from;
-      return {
-        ticks: 0,
-        heatAdded: 0,
-        nextHeat: readCurrentPlayerHeatValue()
-      };
-    }
-    const heatAdded = ticks * heatPerTick;
-    const nextHeat = addPlayerHeatFromBuilding(heatAdded, "Pouliční dealeři: pasivní provoz");
-    stateRef.streetDealerLastHeatTickAt = from + ticks * intervalMs;
-    return {
-      ticks,
-      heatAdded,
-      nextHeat
     };
   }
 
@@ -17888,6 +17282,7 @@ window.Empire.Map = (() => {
     const stores = [
       [apartmentBlockStore, saveApartmentBlockStore],
       [schoolBuildingStore, saveSchoolBuildingStore],
+      [clinicBuildingStore, saveClinicBuildingStore],
       [fitnessBuildingStore, saveFitnessBuildingStore],
       [casinoBuildingStore, saveCasinoBuildingStore],
       [arcadeBuildingStore, saveArcadeBuildingStore],
@@ -17985,10 +17380,6 @@ window.Empire.Map = (() => {
     let mechanicsType = "";
     let info = fallback.info;
     let specialActions = [];
-    let streetDealerNetworkEffects = null;
-    let streetDealerSalesSync = null;
-    let streetDealerHeatSync = null;
-    let streetDealerSalesDirtyPerHour = 0;
 
     if (type === "smuggling-tunnel") {
       mechanicsType = "smuggling-tunnel";
@@ -18016,17 +17407,11 @@ window.Empire.Map = (() => {
       mechanicsType = "street-dealers";
       const levelEffects = getStreetDealersLevelEffects(buildingLevel);
       const stackIncomePct = Math.max(0, Math.floor(Number(stacks.dealerTerritory || 0))) * STREET_DEALERS_CONFIG.actions.territoryExpansion.incomeStackPct;
-      const ownedStreetDealersCount = getOwnedStreetDealersCount();
-      const networkEffects = getStreetDealerNetworkEffects(ownedStreetDealersCount);
-      const salesSync = syncStreetDealerSales(snapshot, now, { ownedStreetDealersCount });
-      const heatSync = applyStreetDealerPassiveHeatTick(snapshot, now);
-      const salesDirtyPerHour = (Array.isArray(salesSync.slots) ? salesSync.slots : [])
-        .reduce((sum, slot) => sum + Math.max(0, Number(slot?.dirtyPerHour || 0)), 0);
       influencePerHour = Math.max(0, Number(STREET_DEALERS_CONFIG.baseInfluencePerDay || 0)) / 24;
       extraIncomePct += levelEffects.incomeBoostPct;
       extraIncomePct += getOwnedStripClubTargetBoostPct(now, context?.baseName);
       extraDirtyIncomePct += levelEffects.dirtyIncomeBoostPct;
-      heatPerDay = (24 * 60 / 5) * Math.max(0, Number(STREET_DEALERS_CONFIG.passiveHeatPerTick || 0));
+      heatPerDay *= Math.max(0, Number(levelEffects.heatMultiplier || 1));
       if (now < Number(effects.salesBoostUntil || 0)) {
         extraIncomePct += STREET_DEALERS_CONFIG.actions.salesBoost.incomeBoostPct * warehouseActionBoostMultiplier;
       }
@@ -18035,17 +17420,12 @@ window.Empire.Map = (() => {
       }
       extraIncomePct += stackIncomePct;
       info =
-        "Pouliční dealeři drží síť menších rajónů. Do slotů vkládáš Neon Dust, Pulse Shot a Velvet Smoke "
-        + "z inventáře hráče a ty se průběžně prodávají za dirty cash.";
+        "Pouliční dealeři drží síť menších rajónů. Čím víc stacků rozšíření, tím stabilnější dlouhodobý income.";
       specialActions = [
         "Boost prodeje: +30% income na 3h • heat +4 • cooldown 5h.",
         "Agresivní push: +70% dirty cash na 1h • heat +8 • cooldown 6h.",
         "Rozšíření rajónu: +1 stack (+5% income trvale) • heat +5 • cooldown 10h."
       ];
-      streetDealerNetworkEffects = networkEffects;
-      streetDealerSalesSync = salesSync;
-      streetDealerHeatSync = heatSync;
-      streetDealerSalesDirtyPerHour = salesDirtyPerHour;
     } else if (type === "strip-club") {
       mechanicsType = "strip-club";
       const levelEffects = getStripClubLevelEffects(buildingLevel);
@@ -18155,24 +17535,8 @@ window.Empire.Map = (() => {
       if (buildingLevel >= 5) effectsLabel.push(`Upgrade income +${SMUGGLING_TUNNEL_CONFIG.incomeBoostPctLevel5}% • 10% ignorace heat z akcí`);
     } else if (type === "street-dealers") {
       const stacksCount = Math.max(0, Math.floor(Number(stacks.dealerTerritory || 0)));
-      const networkEffects = streetDealerNetworkEffects || getStreetDealerNetworkEffects(1);
-      const salesSync = streetDealerSalesSync || { slots: [] };
-      const salesDirtyPerHour = Math.max(0, Number(streetDealerSalesDirtyPerHour || 0));
-      const heatSync = streetDealerHeatSync || { heatAdded: 0 };
       if (stacksCount > 0) {
         effectsLabel.push(`Stacky rajónu: ${stacksCount} (+${stacksCount * STREET_DEALERS_CONFIG.actions.territoryExpansion.incomeStackPct}% income)`);
-      }
-      if (networkEffects.extraBuildings > 0) {
-        effectsLabel.push(
-          `Síť dealerů: ${networkEffects.ownedStreetDealersCount} budov `
-          + `(max +${formatDecimalValue(networkEffects.maxCapacityBonusPct, 2)}%, rychlost +${formatDecimalValue(networkEffects.speedBonusPct, 2)}%)`
-        );
-      }
-      if (salesDirtyPerHour > 0) {
-        effectsLabel.push(`Slotový prodej: +${formatDecimalValue(salesDirtyPerHour, 2)} dirty/h`);
-      }
-      if (Number(heatSync.heatAdded || 0) > 0) {
-        effectsLabel.push(`Pasivní heat tick: +${formatDecimalValue(heatSync.heatAdded, 1)}`);
       }
       if (buildingLevel >= 2) effectsLabel.push(`Upgrade income +${STREET_DEALERS_CONFIG.incomeBoostPctLevel2}%`);
       if (buildingLevel >= 3) effectsLabel.push(`Upgrade dirty +${STREET_DEALERS_CONFIG.dirtyIncomeBoostPctLevel3}%`);
@@ -18299,16 +17663,6 @@ window.Empire.Map = (() => {
         stacks: {
           dealerTerritory: Math.max(0, Math.floor(Number(stacks.dealerTerritory || 0)))
         },
-        ownedStreetDealersCount: Math.max(1, Math.floor(Number(streetDealerNetworkEffects?.ownedStreetDealersCount || getOwnedStreetDealersCount()))),
-        networkMaxCapacityBonusPct: Math.max(0, Number(streetDealerNetworkEffects?.maxCapacityBonusPct || 0)),
-        networkSpeedBonusPct: Math.max(0, Number(streetDealerNetworkEffects?.speedBonusPct || 0)),
-        streetDealerSlots: Array.isArray(streetDealerSalesSync?.slots)
-          ? streetDealerSalesSync.slots
-          : [],
-        playerDrugInventory: createStreetDealerDrugInventory(normalizeDrugLabInventoryFromEconomy(getSafeDrugLabEconomySnapshot())),
-        slotSalesDirtyPerHour: Math.max(0, Number(streetDealerSalesDirtyPerHour || 0)),
-        passiveHeatPerTick: Math.max(0, Number(STREET_DEALERS_CONFIG.passiveHeatPerTick || 0)),
-        passiveHeatIntervalMs: Math.max(1, Number(STREET_DEALERS_CONFIG.passiveHeatIntervalMs || (5 * 60 * 1000))),
         activeIncomeBonusPct: extraIncomePct,
         activeDirtyBonusPct: extraDirtyIncomePct
       }
@@ -19184,14 +18538,14 @@ window.Empire.Map = (() => {
       info,
       specialActions: []
     };
-    if (simpleCashProfile) {
-      return resolveSimpleCashBuildingDetails(context, district, fallbackDetails, simpleCashProfile);
-    }
     if (safeName === APARTMENT_BLOCK_NAME) {
       return resolveApartmentBuildingDetails(context, district, fallbackDetails);
     }
     if (safeName === SCHOOL_BUILDING_NAME) {
       return resolveSchoolBuildingDetails(context, district, fallbackDetails);
+    }
+    if (safeName === CLINIC_BUILDING_NAME) {
+      return resolveClinicBuildingDetails(context, district, fallbackDetails);
     }
     if (isFitnessClubBaseName(safeName)) {
       return resolveFitnessBuildingDetails(context, district, fallbackDetails);
@@ -19225,6 +18579,9 @@ window.Empire.Map = (() => {
     }
     if (safeName === DRUG_LAB_BUILDING_NAME || isDrugLabBaseName(safeName)) {
       return resolveDrugLabBuildingDetails(context, district, fallbackDetails);
+    }
+    if (simpleCashProfile) {
+      return resolveSimpleCashBuildingDetails(context, district, fallbackDetails, simpleCashProfile);
     }
     return fallbackDetails;
   }
@@ -19967,6 +19324,9 @@ window.Empire.Map = (() => {
         <div class="district-gossip__item">
           <div class="district-gossip__text">${escapeHtml(entry.text)}</div>
           <div class="district-gossip__meta-row">
+            <span class="district-gossip__badge district-gossip__badge--${entry.intelLevel === "verified" ? "verified" : "rumor"}">
+              ${entry.intelLevel === "verified" ? "OVĚŘENO" : "DRB"}
+            </span>
             <div class="district-gossip__meta">${formatDistrictGossipTimestamp(entry.createdAt)}</div>
           </div>
         </div>
@@ -20223,6 +19583,8 @@ window.Empire.Map = (() => {
     getPoliceActionSnapshot,
     getFactoryBoostSnapshot,
     useFactoryBoost,
-    getFitnessCombatSnapshot
+    getFitnessCombatSnapshot,
+    addClinicInjuredMembers,
+    getClinicHealingSnapshot
   };
 })();

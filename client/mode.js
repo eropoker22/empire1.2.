@@ -1,9 +1,10 @@
 window.Empire = window.Empire || {};
 
 (function initEmpireMode() {
-  const MODE_KEY = "mode";
-  const storagePrefixToken = "empire";
-  const LAST_MODE_KEY = "empire:last_mode";
+  const runtimeConfig = window.Empire?.RuntimeConfig || null;
+  const MODE_KEY = runtimeConfig?.queryKeys?.mode || "mode";
+  const storagePrefixToken = runtimeConfig?.storageKeys?.prefix || "empire";
+  const LAST_MODE_KEY = runtimeConfig?.storageKeys?.lastMode || "empire:last_mode";
   const query = new URLSearchParams(window.location.search);
   const path = window.location.pathname.toLowerCase();
   const fromPath = path.includes("/free") ? "free" : (path.includes("/war") ? "war" : "");

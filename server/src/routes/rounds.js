@@ -4,7 +4,7 @@ const { getRoundStatus } = require("../services/roundService");
 const router = express.Router();
 
 router.get("/status", async (req, res) => {
-  const status = await getRoundStatus(req.gameMode);
+  const status = await getRoundStatus(req.gameMode, req.serverKey);
   res.json(status);
 });
 

@@ -9,4 +9,15 @@ function verifySocketToken(token) {
   }
 }
 
-module.exports = { verifySocketToken };
+function authenticateSocket(socket, token) {
+  const user = verifySocketToken(token);
+  if (!user) {
+    return { ok: false, error: "auth_failed" };
+  }
+
+  socket.user = user;
+  socket.isAuthenticated = true;
+  return { ok: true, user };
+}
+
+module.exports = { verifySocketToken, authenticateSocket };

@@ -1,197 +1,29 @@
 (function () {
-  const mockData = {
-    servers: [
-      { id: "free-neon-rift-1", name: "Neon Rift #1", type: "free", status: "live", players: 18, maxPlayers: 20, districtCount: 161, sessionLength: "01h 34m", dominance: 48, leader: "Chrome Saints", uptime: "6d 04h 19m", tickRate: "60s", matchRules: "Free rush / 1-2h session / Raid on / Spying on", allianceCap: 8, dominanceThreshold: "55%", policeAggression: "Elastic", cleanCashPerHour: 182000, dirtyCashPerHour: 96000, globalHeat: 64, activeRaids: 9 },
-      { id: "free-black-grid-2", name: "Black Grid #2", type: "free", status: "live", players: 16, maxPlayers: 20, districtCount: 161, sessionLength: "01h 12m", dominance: 44, leader: "Ghost Ledger", uptime: "4d 11h 52m", tickRate: "60s", matchRules: "Free rush / 1-2h session / Fast takeover / Trap on", allianceCap: 8, dominanceThreshold: "55%", policeAggression: "Elastic", cleanCashPerHour: 168000, dirtyCashPerHour: 88000, globalHeat: 58, activeRaids: 8 },
-      { id: "free-spark-yard-3", name: "Spark Yard #3", type: "free", status: "maintenance", players: 0, maxPlayers: 20, districtCount: 161, sessionLength: "00h 00m", dominance: 0, leader: "-", uptime: "0d 00h 00m", tickRate: "60s", matchRules: "Free rush / Warmup off", allianceCap: 8, dominanceThreshold: "55%", policeAggression: "Standby", cleanCashPerHour: 0, dirtyCashPerHour: 0, globalHeat: 0, activeRaids: 0 },
-      { id: "hra-alliance-ten-blackout", name: "HRA", type: "war", status: "live", players: 8, maxPlayers: 20, districtCount: 161, sessionLength: "NOC-BLACKOUT / Den 3", dominance: 6, leader: "Zabijáci", uptime: "0d 03h 12m", tickRate: "60s", matchRules: "HRA scenario / alliance-ten-blackout / NOC-BLACKOUT 20:30 / Police incident 143 + 38", allianceCap: 4, dominanceThreshold: "10%", policeAggression: "Blackout crackdown", cleanCashPerHour: 62000, dirtyCashPerHour: 41000, globalHeat: 97, activeRaids: 3 },
-      { id: "war-district-war-alpha", name: "District War Alpha", type: "war", status: "live", players: 27, maxPlayers: 28, districtCount: 186, sessionLength: "7d 14h", dominance: 71, leader: "Black Circuit", uptime: "18d 01h 10m", tickRate: "60s", matchRules: "War mode / 10d season / Dominance on / Bounty on / Spying on", allianceCap: 10, dominanceThreshold: "70%", policeAggression: "Tiered crackdown", cleanCashPerHour: 296000, dirtyCashPerHour: 184000, globalHeat: 214, activeRaids: 17 },
-      { id: "war-sector-prime", name: "War Sector Prime", type: "war", status: "locked", players: 25, maxPlayers: 28, districtCount: 194, sessionLength: "5d 09h", dominance: 78, leader: "Neon Wolves", uptime: "14d 17h 43m", tickRate: "60s", matchRules: "War mode / 10d season / Lockdown escalation / Police pressure high", allianceCap: 10, dominanceThreshold: "70%", policeAggression: "High escalation", cleanCashPerHour: 274000, dirtyCashPerHour: 171000, globalHeat: 237, activeRaids: 14 },
-      { id: "war-iron-clash-3", name: "Iron Clash #3", type: "war", status: "live", players: 23, maxPlayers: 28, districtCount: 188, sessionLength: "6d 02h", dominance: 62, leader: "Velvet Crown", uptime: "9d 08h 21m", tickRate: "60s", matchRules: "War mode / 10d season / Balanced crackdown / Crafting high", allianceCap: 10, dominanceThreshold: "70%", policeAggression: "Adaptive", cleanCashPerHour: 248000, dirtyCashPerHour: 149000, globalHeat: 176, activeRaids: 11 }
-    ],
-    players: [
-      { id: "P-100942", nickname: "Vortex_77", server: "war-district-war-alpha", faction: "Mafia", alliance: "Black Circuit", districts: 15, cleanCash: 882000, dirtyCash: 514000, heat: 322, online: true, lastActivityMinutes: 1, reports: 5, suspicion: "critical", profile: "Rank 82. Control specialist.", economy: "Clean +$18k/h. Dirty +$11k/h.", districtInfo: "Downtown A1-A4. Industrial C2-C4.", production: "Ghost Serum x42/h. SMG x18/h.", attacks: "18 raid attempts / 24h. Win rate 71%.", spying: "14 spying runs / 24h. Success 79%.", heatHistory: "190 to 322 dnes.", lastLogs: "15:22 Raid won on C7. 15:14 Heat spike." },
-      { id: "P-101004", nickname: "NeroGhost", server: "war-district-war-alpha", faction: "Cartel", alliance: "Black Circuit", districts: 12, cleanCash: 744000, dirtyCash: 602000, heat: 205, online: true, lastActivityMinutes: 2, reports: 2, suspicion: "warning", profile: "Rank 78. Logistics route manager.", economy: "Clean +$16k/h. Dirty +$13k/h.", districtInfo: "Industrial ring control.", production: "Combat Module x30/h.", attacks: "15 raid attempts / 24h.", spying: "11 spying runs / 24h.", heatHistory: "121 to 205 dnes.", lastLogs: "14:41 Market lock bypass report." },
-      { id: "P-100561", nickname: "MaraPulse", server: "war-sector-prime", faction: "Hackeři", alliance: "Neon Wolves", districts: 11, cleanCash: 698000, dirtyCash: 481000, heat: 144, online: false, lastActivityMinutes: 12, reports: 1, suspicion: "none", profile: "Rank 75. Recon and disruption.", economy: "Clean +$14k/h. Dirty +$9k/h.", districtInfo: "North sector recon.", production: "Data center boost active.", attacks: "12 raid attempts / 24h.", spying: "19 spying runs / 24h.", heatHistory: "88 to 144 dnes.", lastLogs: "13:57 Captured spying event on D4." },
-      { id: "P-112090", nickname: "NightFalcon", server: "free-neon-rift-1", faction: "Motorkářský gang", alliance: "Chrome Saints", districts: 8, cleanCash: 142000, dirtyCash: 76000, heat: 92, online: true, lastActivityMinutes: 1, reports: 0, suspicion: "none", profile: "Rank 52. Fast mode grinder.", economy: "Clean +$9k/h. Dirty +$4k/h.", districtInfo: "Rotating control in free sessions.", production: "Drug lab burst x18/h.", attacks: "9 raid attempts / 24h.", spying: "7 spying runs / 24h.", heatHistory: "34 to 92 dnes.", lastLogs: "15:19 Free takeover complete." },
-      { id: "P-112118", nickname: "DeltaRush", server: "free-black-grid-2", faction: "Pouliční gang", alliance: "Ghost Ledger", districts: 7, cleanCash: 128000, dirtyCash: 69000, heat: 66, online: true, lastActivityMinutes: 3, reports: 1, suspicion: "none", profile: "Rank 49. Session closer.", economy: "Clean +$8k/h. Dirty +$3k/h.", districtInfo: "Free map sweep routes.", production: "Armory cycle x11/h.", attacks: "7 raid attempts / 24h.", spying: "5 spying runs / 24h.", heatHistory: "41 to 66 dnes.", lastLogs: "14:08 Report cleared." },
-      { id: "P-130441", nickname: "QbitHunter", server: "war-sector-prime", faction: "Soukromá armáda", alliance: "Neon Wolves", districts: 13, cleanCash: 624000, dirtyCash: 392000, heat: 287, online: true, lastActivityMinutes: 4, reports: 4, suspicion: "warning", profile: "Rank 71. Siege specialist.", economy: "Clean +$13k/h. Dirty +$8k/h.", districtInfo: "East war line hold.", production: "Grenade x27/h.", attacks: "17 raid attempts / 24h.", spying: "9 spying runs / 24h.", heatHistory: "180 to 287 dnes.", lastLogs: "15:00 District attack chain x4." },
-      { id: "P-150220", nickname: "SilkVector", server: "war-iron-clash-3", faction: "Korporace", alliance: "Velvet Crown", districts: 10, cleanCash: 581000, dirtyCash: 248000, heat: 111, online: true, lastActivityMinutes: 5, reports: 1, suspicion: "none", profile: "Rank 68. Corporate asset broker.", economy: "Clean +$12k/h. Dirty +$5k/h.", districtInfo: "Commercial sector consolidation.", production: "Casino routing x21/h.", attacks: "8 raid attempts / 24h.", spying: "6 spying runs / 24h.", heatHistory: "76 to 111 dnes.", lastLogs: "14:32 Downtown influence shift." },
-      { id: "P-170334", nickname: "SaintMorrow", server: "war-iron-clash-3", faction: "Tajná organizace", alliance: "Velvet Crown", districts: 9, cleanCash: 462000, dirtyCash: 371000, heat: 242, online: false, lastActivityMinutes: 19, reports: 3, suspicion: "warning", profile: "Rank 64. Covert disruption lead.", economy: "Clean +$10k/h. Dirty +$7k/h.", districtInfo: "Residential network infiltration.", production: "Trap kits x17/h.", attacks: "11 raid attempts / 24h.", spying: "21 spying runs / 24h.", heatHistory: "170 to 242 dnes.", lastLogs: "13:11 Crackdown escaped." },
-      { id: "HRA-0001", nickname: "Host", server: "hra-alliance-ten-blackout", faction: "Mafia", alliance: "Zabijáci", districts: 5, cleanCash: 92000, dirtyCash: 62000, heat: 84, online: true, lastActivityMinutes: 1, reports: 0, suspicion: "none", profile: "HRA state player. Night blackout control.", economy: "Clean +$6.2k/h. Dirty +$4.1k/h.", districtInfo: "Districts 84, 95, 92, 120, 126.", production: "Mixed district income with blackout pressure.", attacks: "3 raid attempts / 24h.", spying: "4 spying runs / 24h.", heatHistory: "61 to 84 dnes.", lastLogs: "20:30 NOC-BLACKOUT aktivní." },
-      { id: "HRA-0002", nickname: "Knedlík", server: "hra-alliance-ten-blackout", faction: "Pouliční gang", alliance: "Zabijáci", districts: 2, cleanCash: 41000, dirtyCash: 26000, heat: 58, online: true, lastActivityMinutes: 2, reports: 0, suspicion: "none", profile: "HRA ally support.", economy: "Clean +$2.8k/h. Dirty +$1.9k/h.", districtInfo: "Districts 102, 109.", production: "Support routes active.", attacks: "1 raid attempt / 24h.", spying: "2 spying runs / 24h.", heatHistory: "34 to 58 dnes.", lastLogs: "20:18 Držím district 102." },
-      { id: "HRA-0003", nickname: "Poltergeist", server: "hra-alliance-ten-blackout", faction: "Hackeři", alliance: "Ledová aliance", districts: 2, cleanCash: 37000, dirtyCash: 42000, heat: 97, online: true, lastActivityMinutes: 3, reports: 2, suspicion: "warning", profile: "Blackout infiltrator.", economy: "Clean +$2.1k/h. Dirty +$3.2k/h.", districtInfo: "Districts 143, 121.", production: "Recon + pressure mix.", attacks: "2 raid attempts / 24h.", spying: "5 spying runs / 24h.", heatHistory: "70 to 97 dnes.", lastLogs: "20:12 Žádost o vstup do aliance." }
-    ],
-    alliances: [
-      { id: "A-001", name: "Black Circuit", server: "war-district-war-alpha", members: 10, districts: 56, dominance: 71, power: 98420, cashFlow: "$92k/h", conflicts: 12, founded: "2026-01-18", status: "Aggressive expansion" },
-      { id: "A-002", name: "Neon Wolves", server: "war-sector-prime", members: 10, districts: 61, dominance: 78, power: 94210, cashFlow: "$88k/h", conflicts: 16, founded: "2026-01-22", status: "High dominance alert" },
-      { id: "A-003", name: "Velvet Crown", server: "war-iron-clash-3", members: 9, districts: 47, dominance: 62, power: 88134, cashFlow: "$74k/h", conflicts: 9, founded: "2026-02-04", status: "Stabilized" },
-      { id: "A-004", name: "Chrome Saints", server: "free-neon-rift-1", members: 8, districts: 18, dominance: 48, power: 22904, cashFlow: "$24k/h", conflicts: 5, founded: "2026-02-14", status: "Fast mode active" },
-      { id: "A-005", name: "Ghost Ledger", server: "free-black-grid-2", members: 8, districts: 16, dominance: 44, power: 21227, cashFlow: "$21k/h", conflicts: 4, founded: "2026-02-19", status: "Fast mode active" },
-      { id: "A-006", name: "Riot Dividend", server: "free-black-grid-2", members: 7, districts: 13, dominance: 37, power: 18441, cashFlow: "$17k/h", conflicts: 3, founded: "2026-03-01", status: "Stable" },
-      { id: "A-007", name: "Zabijáci", server: "hra-alliance-ten-blackout", members: 2, districts: 7, dominance: 6, power: 11840, cashFlow: "$10k/h", conflicts: 3, founded: "2026-04-12", status: "NOC-BLACKOUT control" },
-      { id: "A-008", name: "Ledová aliance", server: "hra-alliance-ten-blackout", members: 4, districts: 6, dominance: 5, power: 13220, cashFlow: "$11k/h", conflicts: 4, founded: "2026-04-12", status: "Enemy pressure line" }
-    ],
-    dashboardByServer: {
-      "hra-alliance-ten-blackout": { meta: { status: "LIVE", uptime: "0d 03h 12m" }, playersTrend: [4, 5, 5, 6, 6, 7, 7, 8, 8, 8, 8, 8], attacks24h: [0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3], clean: 62000, dirty: 41000, heat: [11, 6, 2, 1, 0], police: [2, 6, 3, 1], alerts: [{ severity: "critical", title: "NOC-BLACKOUT aktivní", detail: "Round preset: Day 3 • 20:30 • NOC-BLACKOUT." }, { severity: "warning", title: "Police incident districts", detail: "Policejní tlak aktivní v districtech 143 a 38." }, { severity: "warning", title: "Alliance request", detail: "Poltergeist poslal žádost o vstup do Zabijáci." }] },
-      "war-district-war-alpha": { meta: { status: "LIVE", uptime: "18d 01h 10m" }, playersTrend: [18, 19, 19, 20, 21, 22, 23, 24, 25, 26, 26, 27], attacks24h: [4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 17], clean: 296000, dirty: 184000, heat: [5, 9, 7, 4, 2], police: [8, 17, 9, 4], alerts: [{ severity: "critical", title: "Downtown raid spike", detail: "Raid volume crossed threshold in District War Alpha." }, { severity: "critical", title: "Dirty cash burst", detail: "Black Circuit shifted $84k dirty cash in two minutes." }, { severity: "warning", title: "Heat tier 300+", detail: "Two players passed hard crackdown range." }] },
-      "war-sector-prime": { meta: { status: "LOCKED", uptime: "14d 17h 43m" }, playersTrend: [17, 18, 18, 19, 20, 21, 22, 22, 23, 24, 25, 25], attacks24h: [3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14], clean: 274000, dirty: 171000, heat: [4, 8, 6, 4, 2], police: [7, 15, 8, 3], alerts: [{ severity: "critical", title: "Dominance threshold reached", detail: "Neon Wolves drží 78% contested districts." }] },
-      "war-iron-clash-3": { meta: { status: "LIVE", uptime: "9d 08h 21m" }, playersTrend: [14, 15, 15, 16, 17, 18, 19, 20, 20, 21, 22, 23], attacks24h: [2, 3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 11], clean: 248000, dirty: 149000, heat: [5, 8, 5, 3, 1], police: [5, 11, 6, 2], alerts: [{ severity: "warning", title: "Residential spying net", detail: "Suspicious spying density rose by 18%." }] },
-      "free-neon-rift-1": { meta: { status: "LIVE", uptime: "6d 04h 19m" }, playersTrend: [7, 8, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18], attacks24h: [1, 1, 2, 2, 3, 4, 5, 5, 6, 7, 8, 9], clean: 182000, dirty: 96000, heat: [9, 6, 2, 1, 0], police: [4, 11, 4, 2], alerts: [{ severity: "warning", title: "Economy freeze pocket", detail: "Two Downtown blocks missed one income tick." }] },
-      "free-black-grid-2": { meta: { status: "LIVE", uptime: "4d 11h 52m" }, playersTrend: [6, 7, 7, 8, 8, 9, 10, 12, 13, 14, 15, 16], attacks24h: [1, 1, 1, 2, 2, 3, 4, 4, 5, 6, 7, 8], clean: 168000, dirty: 88000, heat: [8, 5, 2, 1, 0], police: [3, 9, 3, 2], alerts: [{ severity: "warning", title: "Player report spike", detail: "Reports rose 34% in the last free-mode session." }] },
-      "free-spark-yard-3": { meta: { status: "MAINTENANCE", uptime: "0d 00h 00m" }, playersTrend: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], attacks24h: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], clean: 0, dirty: 0, heat: [0, 0, 0, 0, 0], police: [0, 0, 0, 0], alerts: [{ severity: "critical", title: "Server warning", detail: "Free server remains in maintenance beyond expected window." }] }
-    },
+  const mockData = window.EmpireAdminMockData?.createMockData?.() || {
+    servers: [],
+    players: [],
+    alliances: [],
+    dashboardByServer: {},
     districts: [],
-    buildings: [
-      { type: "Restaurace", category: "legal", count: 214, avgIncome: 6200, avgHeat: 18, usageRate: "71%", topUpgrades: "Kitchen Sync, VIP Lounge", balanceStatus: "Stable", lastConfigChange: "2026-04-10 11:20", configPath: "balance/buildings/legal/restaurace.json", balanceKey: "buildings.restaurace" },
-      { type: "Lékárna", category: "legal", count: 149, avgIncome: 5400, avgHeat: 22, usageRate: "64%", topUpgrades: "Supply Chain, Storage+", balanceStatus: "Stable", lastConfigChange: "2026-04-09 17:50", configPath: "balance/buildings/legal/lekarna.json", balanceKey: "buildings.lekarna" },
-      { type: "Kasino", category: "legal", count: 132, avgIncome: 13800, avgHeat: 49, usageRate: "68%", topUpgrades: "VIP Tables, Fraud Shield", balanceStatus: "Watch", lastConfigChange: "2026-04-08 21:12", configPath: "balance/buildings/legal/kasino.json", balanceKey: "buildings.kasino" },
-      { type: "Autosalon", category: "legal", count: 104, avgIncome: 11200, avgHeat: 36, usageRate: "53%", topUpgrades: "Luxury Tier, Export Route", balanceStatus: "Stable", lastConfigChange: "2026-04-06 15:03", configPath: "balance/buildings/legal/autosalon.json", balanceKey: "buildings.autosalon" },
-      { type: "Fitness Club", category: "legal", count: 97, avgIncome: 4300, avgHeat: 14, usageRate: "41%", topUpgrades: "Premium Membership", balanceStatus: "Underused", lastConfigChange: "2026-04-01 09:30", configPath: "balance/buildings/legal/fitness-club.json", balanceKey: "buildings.fitnessClub" },
-      { type: "Směnárna", category: "legal", count: 156, avgIncome: 8600, avgHeat: 41, usageRate: "75%", topUpgrades: "Spread Tuner, Risk Buffer", balanceStatus: "Watch", lastConfigChange: "2026-04-11 14:35", configPath: "balance/buildings/legal/smenarna.json", balanceKey: "buildings.smenarna" },
-      { type: "Večerka", category: "legal", count: 245, avgIncome: 3100, avgHeat: 12, usageRate: "82%", topUpgrades: "Night Shift", balanceStatus: "Stable", lastConfigChange: "2026-04-03 19:16", configPath: "balance/buildings/legal/vecerka.json", balanceKey: "buildings.vecerka" },
-      { type: "Strip club", category: "illegal", count: 118, avgIncome: 10200, avgHeat: 57, usageRate: "67%", topUpgrades: "VIP Room, Security Loop", balanceStatus: "Watch", lastConfigChange: "2026-04-07 12:22", configPath: "balance/buildings/illegal/strip-club.json", balanceKey: "buildings.stripClub" },
-      { type: "Pouliční dealeři", category: "illegal", count: 271, avgIncome: 7400, avgHeat: 83, usageRate: "88%", topUpgrades: "Street Net, Silent Route", balanceStatus: "Hot", lastConfigChange: "2026-04-11 22:11", configPath: "balance/buildings/illegal/poulicni-dealeri.json", balanceKey: "buildings.streetDealers" },
-      { type: "Drug lab", category: "illegal", count: 142, avgIncome: 16100, avgHeat: 112, usageRate: "79%", topUpgrades: "Purity Line, Heat Sink", balanceStatus: "Hot", lastConfigChange: "2026-04-10 07:18", configPath: "balance/buildings/illegal/drug-lab.json", balanceKey: "buildings.drugLab" },
-      { type: "Pašovací tunel", category: "illegal", count: 84, avgIncome: 11900, avgHeat: 104, usageRate: "56%", topUpgrades: "Tunnel Mask, Relay Node", balanceStatus: "Watch", lastConfigChange: "2026-04-04 16:02", configPath: "balance/buildings/illegal/pasovaci-tunel.json", balanceKey: "buildings.smugglingTunnel" },
-      { type: "Továrna", category: "infra", count: 126, avgIncome: 14500, avgHeat: 62, usageRate: "73%", topUpgrades: "Assembly Boost, Cooling Grid", balanceStatus: "Stable", lastConfigChange: "2026-04-09 08:44", configPath: "balance/buildings/infra/tovarna.json", balanceKey: "buildings.factory" },
-      { type: "Zbrojovka", category: "infra", count: 74, avgIncome: 17200, avgHeat: 119, usageRate: "59%", topUpgrades: "Ballistics Forge", balanceStatus: "Hot", lastConfigChange: "2026-04-11 10:08", configPath: "balance/buildings/infra/zbrojovka.json", balanceKey: "buildings.armory" },
-      { type: "Sklad", category: "infra", count: 201, avgIncome: 5100, avgHeat: 19, usageRate: "76%", topUpgrades: "Storage Matrix", balanceStatus: "Stable", lastConfigChange: "2026-04-05 20:14", configPath: "balance/buildings/infra/sklad.json", balanceKey: "buildings.storage" },
-      { type: "Energetická stanice", category: "infra", count: 66, avgIncome: 9200, avgHeat: 35, usageRate: "61%", topUpgrades: "Power Relay", balanceStatus: "Stable", lastConfigChange: "2026-04-02 13:01", configPath: "balance/buildings/infra/energeticka-stanice.json", balanceKey: "buildings.powerStation" },
-      { type: "Datové centrum", category: "infra", count: 58, avgIncome: 12700, avgHeat: 73, usageRate: "47%", topUpgrades: "Core Cluster, Trace Jammer", balanceStatus: "Watch", lastConfigChange: "2026-04-10 18:27", configPath: "balance/buildings/infra/datove-centrum.json", balanceKey: "buildings.dataCenter" }
-    ]
+    buildings: []
   };
-
-  const handcraftedDistricts = [
-    { id: "D-A1", name: "Mercury Exchange", zone: "Commercial", server: "war-district-war-alpha", owner: "Vortex_77", alliance: "Black Circuit", buildings: "Kasino, Směnárna, Datové centrum", income: 248000, heat: 312, defenseStatus: "Fortified", activeEvents: "Crackdown watch", trapStatus: "Trap net armed", policePressure: "High", attackHistory: ["15:22 Black Circuit defended raid from Neon Wolves", "14:58 Raid attempt failed", "14:33 District lock contested"], spyingHistory: ["15:10 Spy packet intercepted", "14:42 Recon scan from rival alliance"], activeEffects: ["Defense +12%", "Dirty cash tax +4%"], production: ["Data shards x122/h", "Trap kits x8/h"], rumorFeed: ["Downtown courier route is compromised.", "Bounty broker seen near the exchange."], bountyMarker: "2 active bounty markers" },
-    { id: "D-B4", name: "Cinder Works", zone: "Industrial", server: "war-district-war-alpha", owner: "NeroGhost", alliance: "Black Circuit", buildings: "Továrna, Zbrojovka, Sklad", income: 179000, heat: 224, defenseStatus: "Reinforced", activeEvents: "Factory overdrive", trapStatus: "Trap placeholder", policePressure: "Medium", attackHistory: ["15:08 Harbor raid success", "14:11 Ownership retained"], spyingHistory: ["15:01 Suspicious logistics probe"], activeEffects: ["Production +8%"], production: ["Ammo crates x57/h", "Ballistic alloy x24/h"], rumorFeed: ["Convoy route may be compromised."], bountyMarker: "No direct bounty marker" },
-    { id: "D-C7", name: "Nova Commons", zone: "Downtown", server: "war-sector-prime", owner: "QbitHunter", alliance: "Neon Wolves", buildings: "Kasino, Strip club, Večerka", income: 202000, heat: 281, defenseStatus: "Critical perimeter", activeEvents: "Siege pressure", trapStatus: "Tripwire grid hot", policePressure: "High", attackHistory: ["15:00 Four-chain raid held", "14:20 Perimeter breach recovered"], spyingHistory: ["14:47 Drone intel leak"], activeEffects: ["Income +15%", "Heat output +10%"], production: ["Dirty cash laundering x188/h"], rumorFeed: ["Secret organization scouts are marking rooftops."], bountyMarker: "District sabotage bounty active" },
-    { id: "D-E2", name: "Glass Park", zone: "Park", server: "free-neon-rift-1", owner: "NightFalcon", alliance: "Chrome Saints", buildings: "Fitness Club, Večerka, Restaurace", income: 118000, heat: 92, defenseStatus: "Stable", activeEvents: "Park rush", trapStatus: "Trap placeholder", policePressure: "Low", attackHistory: ["14:02 Fast takeover complete"], spyingHistory: ["13:38 Scout pass detected"], activeEffects: ["Market spread +7%"], production: ["Consumables x72/h"], rumorFeed: ["Ghost Ledger is tracking clean cash flow."], bountyMarker: "No active bounty marker" },
-    { id: "D-F6", name: "Railyard Echo", zone: "Residential", server: "free-black-grid-2", owner: "DeltaRush", alliance: "Ghost Ledger", buildings: "Pouliční dealeři, Pašovací tunel, Sklad", income: 99000, heat: 74, defenseStatus: "Watch mode", activeEvents: "Convoy window", trapStatus: "Trap placeholder", policePressure: "Low", attackHistory: ["13:46 Minor raid skirmish"], spyingHistory: ["13:10 Smuggler route mapping"], activeEffects: ["Logistics speed +6%"], production: ["Transit packs x61/h"], rumorFeed: ["Possible convoy ambush tonight."], bountyMarker: "Watcher bounty marker active" },
-    { id: "D-H9", name: "Redline Heights", zone: "Residential", server: "war-iron-clash-3", owner: "SilkVector", alliance: "Velvet Crown", buildings: "Autosalon, Restaurace, Energetická stanice", income: 141000, heat: 111, defenseStatus: "Watch towers ready", activeEvents: "Influence drift", trapStatus: "Trap lattice idle", policePressure: "Medium", attackHistory: ["14:50 Influence push repelled"], spyingHistory: ["14:22 Silent crawl detected"], activeEffects: ["Clean cash +9%"], production: ["Vehicle exports x39/h"], rumorFeed: ["A corporation fixer is buying up local scouts."], bountyMarker: "Single bounty tag on owner" },
-    { id: "84", name: "District 84", zone: "Residential", server: "hra-alliance-ten-blackout", owner: "Host", alliance: "Zabijáci", buildings: "Pouliční dealeři, Sklad, Večerka", income: 11800, heat: 84, defenseStatus: "Blackout watch", activeEvents: "NOC-BLACKOUT pressure", trapStatus: "Trap net armed", policePressure: "Medium", attackHistory: ["20:30 Blackout shift started", "20:12 Border raid denied"], spyingHistory: ["20:17 Recon ping near sector edge"], activeEffects: ["Night income +6%", "Heat control -8%"], production: ["Dirty cash x19/h", "Supply packs x11/h"], rumorFeed: ["Ledová aliance marks nearby blocks."], bountyMarker: "No active bounty marker" },
-    { id: "95", name: "District 95", zone: "Residential", server: "hra-alliance-ten-blackout", owner: "Host", alliance: "Zabijáci", buildings: "Lékárna, Večerka, Sklad", income: 10600, heat: 72, defenseStatus: "Reinforced", activeEvents: "Blackout patrol", trapStatus: "Tripwire grid", policePressure: "Medium", attackHistory: ["20:11 Perimeter stabilized"], spyingHistory: ["20:19 Silent trace captured"], activeEffects: ["Defense +4%"], production: ["Chemicals x9/h"], rumorFeed: ["Poltergeist scouts were seen near block line."], bountyMarker: "Watcher bounty marker active" },
-    { id: "102", name: "District 102", zone: "Downtown", server: "hra-alliance-ten-blackout", owner: "Knedlík", alliance: "Zabijáci", buildings: "Směnárna, Kasino, Datové centrum", income: 14200, heat: 58, defenseStatus: "Fortified", activeEvents: "Alliance hold", trapStatus: "Trap lattice idle", policePressure: "Low", attackHistory: ["20:18 Ally hold confirmed"], spyingHistory: ["20:22 Suspicious packet route"], activeEffects: ["Clean cash +8%"], production: ["Data shards x7/h"], rumorFeed: ["District 102 is primary blackout anchor."], bountyMarker: "No active bounty marker" },
-    { id: "143", name: "District 143", zone: "Industrial", server: "hra-alliance-ten-blackout", owner: "Poltergeist", alliance: "Ledová aliance", buildings: "Továrna, Zbrojovka, Sklad", income: 12900, heat: 131, defenseStatus: "Critical perimeter", activeEvents: "Police incident", trapStatus: "Killbox primed", policePressure: "High", attackHistory: ["20:21 Police sweep started"], spyingHistory: ["20:23 Signal jammer active"], activeEffects: ["Heat output +12%"], production: ["Ammo crates x14/h"], rumorFeed: ["Police units locked district entrances."], bountyMarker: "District under pressure marker" }
-  ];
-
-  const districtZonePlans = {
-    "free-neon-rift-1": { Commercial: 34, Industrial: 29, Park: 21, Residential: 46, Downtown: 31 },
-    "free-black-grid-2": { Commercial: 34, Industrial: 29, Park: 21, Residential: 46, Downtown: 31 },
-    "free-spark-yard-3": { Commercial: 34, Industrial: 29, Park: 21, Residential: 46, Downtown: 31 },
-    "hra-alliance-ten-blackout": { Commercial: 34, Industrial: 29, Park: 21, Residential: 46, Downtown: 31 },
-    "war-district-war-alpha": { Commercial: 39, Industrial: 34, Park: 23, Residential: 52, Downtown: 38 },
-    "war-sector-prime": { Commercial: 40, Industrial: 36, Park: 25, Residential: 55, Downtown: 38 },
-    "war-iron-clash-3": { Commercial: 38, Industrial: 34, Park: 24, Residential: 54, Downtown: 38 }
-  };
-
-  const districtNamePools = {
-    Commercial: ["Exchange", "Arcade", "Plaza", "Market", "Forum", "Crossing", "Bazaar", "Atrium", "Corner", "Quarter"],
-    Industrial: ["Works", "Forge", "Depot", "Yard", "Foundry", "Plant", "Dock", "Refinery", "Mill", "Terminal"],
-    Park: ["Gardens", "Park", "Commons", "Run", "Walk", "Fields", "Heights", "Grove", "Terrace", "Meadow"],
-    Residential: ["Heights", "Blocks", "Residency", "Row", "Towers", "Gardens", "Courts", "Estate", "Homes", "Lane"],
-    Downtown: ["Center", "Plaza", "Boulevard", "Spine", "Square", "Axis", "Hub", "Exchange", "Gate", "Core"]
-  };
-
-  const districtPrefixes = ["Neon", "Black", "Glass", "Redline", "Iron", "Velvet", "Ghost", "Mercury", "Cinder", "Nova", "Chrome", "Cipher", "Silent", "Copper", "Midnight", "Static", "Electric", "Rogue", "Obsidian", "Crimson"];
-  const districtBuildingPools = {
-    Commercial: ["Kasino", "Směnárna", "Restaurace", "Autosalon", "Datové centrum", "Večerka"],
-    Industrial: ["Továrna", "Zbrojovka", "Sklad", "Energetická stanice", "Pašovací tunel", "Drug lab"],
-    Park: ["Fitness Club", "Restaurace", "Večerka", "Datové centrum", "Lékárna", "Směnárna"],
-    Residential: ["Večerka", "Pouliční dealeři", "Sklad", "Lékárna", "Restaurace", "Pašovací tunel"],
-    Downtown: ["Kasino", "Strip club", "Směnárna", "Datové centrum", "Autosalon", "Večerka"]
-  };
+  const adminDataLoader = window.EmpireAdminData || null;
+  const adminMockDistricts = window.EmpireAdminMockDistricts || null;
+  const districtZonePlans = adminMockDistricts?.districtZonePlans || {};
+  const districtNamePools = adminMockDistricts?.districtNamePools || {};
+  const districtPrefixes = adminMockDistricts?.districtPrefixes || ["Neon", "Black", "Glass", "Redline", "Iron", "Velvet", "Ghost", "Mercury"];
+  const districtBuildingPools = adminMockDistricts?.districtBuildingPools || {};
 
   function buildDistrictDataset(data) {
-    const districts = [...handcraftedDistricts];
-    const defenseByMode = { free: ["Stable", "Watch mode", "Rapid barricade"], war: ["Fortified", "Reinforced", "Critical perimeter", "Watch towers ready"] };
-    const eventByMode = { free: ["Quick rush", "Park rush", "Fast takeover", "Supply burst", "Convoy window"], war: ["Crackdown watch", "Siege pressure", "Influence drift", "Factory overdrive", "Border lockdown"] };
-    const trapByMode = { free: ["Trap placeholder", "Light snare", "Scout tripwire"], war: ["Trap net armed", "Tripwire grid hot", "Trap lattice idle", "Killbox primed"] };
-    const policeByMode = { free: ["Low", "Low", "Medium"], war: ["Medium", "High", "High", "Critical"] };
-    const baseIncomeByZone = {
-      free: { Commercial: 116000, Industrial: 104000, Park: 88000, Residential: 82000, Downtown: 124000 },
-      war: { Commercial: 146000, Industrial: 138000, Park: 112000, Residential: 108000, Downtown: 168000 }
-    };
+    return adminMockDistricts?.buildDistrictDataset?.(data, { buildZonePlanFromDistrictCount }) || [];
+  }
 
-    const zonePlansByServer = Object.fromEntries(data.servers.map((server) => {
-      const explicitPlan = server && typeof server.zonePlan === "object" ? server.zonePlan : null;
-      const fallbackPlan = districtZonePlans[server.id] || buildZonePlanFromDistrictCount(server.districtCount, server.type);
-      return [server.id, explicitPlan || fallbackPlan];
-    }));
-
-    Object.entries(zonePlansByServer).forEach(([serverId, zones]) => {
-      const server = data.servers.find((item) => item.id === serverId);
-      if (!server) return;
-      const serverPlayers = data.players.filter((item) => item.server === serverId);
-      const serverAlliances = data.alliances.filter((item) => item.server === serverId);
-      const craftedCounts = handcraftedDistricts.filter((item) => item.server === serverId).reduce((acc, item) => ({ ...acc, [item.zone]: (acc[item.zone] || 0) + 1 }), {});
-      const ownerPool = serverPlayers.length ? serverPlayers : [{ nickname: "Unclaimed", alliance: "Neutral", heat: 0 }];
-
-      Object.entries(zones).forEach(([zone, total]) => {
-        const remaining = total - (craftedCounts[zone] || 0);
-        for (let index = 0; index < remaining; index += 1) {
-          const ownerSeed = ownerPool[index % ownerPool.length];
-          const allianceSeed = serverAlliances[index % Math.max(serverAlliances.length, 1)];
-          const prefix = districtPrefixes[(index + zone.length + serverId.length) % districtPrefixes.length];
-          const suffix = districtNamePools[zone][index % districtNamePools[zone].length];
-          const districtNumber = String(index + 1).padStart(3, "0");
-          const buildingPool = districtBuildingPools[zone];
-          const buildingSet = [buildingPool[index % buildingPool.length], buildingPool[(index + 2) % buildingPool.length], buildingPool[(index + 4) % buildingPool.length]].join(", ");
-          const isWar = server.type === "war";
-          const income = baseIncomeByZone[server.type][zone] + (index % 7) * (isWar ? 4200 : 2600);
-          const heat = (isWar ? 88 : 28) + (index % 11) * (isWar ? 14 : 6) + (zone === "Downtown" ? (isWar ? 58 : 22) : zone === "Industrial" ? 18 : 0);
-
-          districts.push({
-            id: `${serverId}-D-${zone.slice(0, 2).toUpperCase()}-${districtNumber}`,
-            name: `${prefix} ${suffix} ${districtNumber}`,
-            zone,
-            server: serverId,
-            owner: server.status === "maintenance" ? "Unclaimed" : ownerSeed.nickname,
-            alliance: server.status === "maintenance" ? "Neutral Control" : (allianceSeed?.name || ownerSeed.alliance || "Independent"),
-            buildings: buildingSet,
-            income,
-            heat,
-            defenseStatus: defenseByMode[server.type][index % defenseByMode[server.type].length],
-            activeEvents: eventByMode[server.type][index % eventByMode[server.type].length],
-            trapStatus: trapByMode[server.type][index % trapByMode[server.type].length],
-            policePressure: policeByMode[server.type][index % policeByMode[server.type].length],
-            attackHistory: [`${15 - (index % 5)}:${String(50 - (index % 30)).padStart(2, "0")} Raid pressure on ${zone.toLowerCase()} line`, `${14 - (index % 3)}:${String(40 - (index % 25)).padStart(2, "0")} Defense rotation completed`],
-            spyingHistory: [`${15 - (index % 4)}:${String(12 + (index % 40)).padStart(2, "0")} Spying sweep near ${prefix.toLowerCase()} corridor`, `${14 - (index % 2)}:${String(8 + (index % 45)).padStart(2, "0")} Recon trace flagged`],
-            activeEffects: [zone === "Downtown" ? "Dirty cash +12%" : "Income +6%", isWar ? "Defense +8%" : "Heat decay boost +4%"],
-            production: [zone === "Industrial" ? `Ammo crates x${18 + (index % 40)}/h` : `Supply packs x${12 + (index % 26)}/h`, zone === "Commercial" ? `Clean cash tickets x${24 + (index % 18)}/h` : `Trap kits x${4 + (index % 8)}/h`],
-            rumorFeed: [`${prefix} route is under watch.`, isWar ? "Rival scouts are mapping district edges." : "Fast session crews are preparing a late push."],
-            bountyMarker: heat > (isWar ? 220 : 100) ? "Bounty marker active" : "No active bounty marker"
-          });
-        }
-      });
-    });
-
-    return districts;
+  function rebuildDistrictDatasetWithPinnedLayouts() {
+    if (!adminMockDistricts?.rebuildDistrictDatasetWithPinnedLayouts) return;
+    adminMockDistricts.rebuildDistrictDatasetWithPinnedLayouts(mockData, { buildZonePlanFromDistrictCount });
   }
 
   mockData.districts = buildDistrictDataset(mockData);
-  function rebuildDistrictDatasetWithPinnedLayouts() {
-    const currentByServer = new Map();
-    (Array.isArray(mockData.districts) ? mockData.districts : []).forEach((district) => {
-      const serverId = String(district?.server || "");
-      if (!serverId) return;
-      if (!currentByServer.has(serverId)) currentByServer.set(serverId, []);
-      currentByServer.get(serverId).push(district);
-    });
-    const pinnedServers = new Set();
-    currentByServer.forEach((districts, serverId) => {
-      const hasPolygon = districts.some((district) => Array.isArray(district?.polygon) && district.polygon.length >= 3);
-      if (hasPolygon) pinnedServers.add(serverId);
-    });
-    const rebuilt = buildDistrictDataset(mockData);
-    const merged = rebuilt.filter((district) => !pinnedServers.has(String(district?.server || "")));
-    pinnedServers.forEach((serverId) => {
-      const pinnedDistricts = currentByServer.get(serverId) || [];
-      merged.push(...pinnedDistricts);
-    });
-    mockData.districts = merged;
-  }
-
   const state = {
     activeSection: "Dashboard",
     selectedServer: "hra-alliance-ten-blackout",
@@ -201,8 +33,14 @@
     searchQuery: "",
     detailTitle: "Live Ops Detail",
     detailBody: "Vyber server, hráče, alianci nebo district pro detail.",
+    dashboardRuntime: {
+      requestedMode: "auto",
+      effectiveMode: "demo",
+      sourceLabel: "Demo data",
+      sourceDetail: "Lokální demo snapshot"
+    },
     filters: {
-      dataSource: "mock",
+      dataSource: "auto",
       buildingType: "all",
       reportServer: "all",
       reportPlayer: "",
@@ -214,6 +52,22 @@
       serverDetailMapView: "live"
     }
   };
+
+  function cloneDashboardData(input) {
+    if (typeof structuredClone === "function") {
+      return structuredClone(input);
+    }
+    return JSON.parse(JSON.stringify(input));
+  }
+
+  const baseMockSnapshot = cloneDashboardData(mockData);
+
+  function replaceDashboardData(nextData) {
+    Object.keys(mockData).forEach((key) => {
+      delete mockData[key];
+    });
+    Object.assign(mockData, nextData);
+  }
 
   Object.assign(mockData, {
     balanceConfigs: {
@@ -377,6 +231,8 @@
     sidebarNav: document.getElementById("sidebar-nav"),
     serverSwitcher: document.getElementById("server-switcher"),
     dataSourceSwitcher: document.getElementById("data-source-switcher"),
+    dashboardModeChip: document.getElementById("dashboard-mode-chip"),
+    dashboardSourceChip: document.getElementById("dashboard-source-chip"),
     globalSearch: document.getElementById("global-search"),
     serverStatusChip: document.getElementById("server-status-chip"),
     uptimeChip: document.getElementById("uptime-chip"),
@@ -544,6 +400,7 @@
 
   function formatCurrency(value) { return `$${Number(value || 0).toLocaleString("cs-CZ")}`; }
   function formatTimeAgo(minutes) { const value = Number(minutes || 0); if (value <= 1) return "před 1m"; if (value < 60) return `před ${value}m`; return `před ${Math.floor(value / 60)}h`; }
+  function getEventElementTarget(event) { return event?.target instanceof Element ? event.target : null; }
   function getStatusClass(status) { const value = String(status || "").toLowerCase(); if (["live", "online", "stable"].includes(value)) return "status-badge--live"; if (["locked", "critical", "hot"].includes(value)) return "status-badge--locked"; return "status-badge--maintenance"; }
   function getHeatLabel(heat) { const value = Number(heat || 0); if (value >= 300) return "Heat 300+"; if (value >= 150) return "Heat 150-299"; if (value >= 75) return "Heat 75-149"; if (value >= 25) return "Heat 25-74"; return "Heat 0-24"; }
   function createBadge(text, variant) { return `<span class="${variant}">${text}</span>`; }
@@ -978,10 +835,28 @@
     writeServerCreatorZoneInputs(buildZonePlanFromDistrictCount(preset.districtCount, preset.type));
     renderServerCreatorPreview();
   }
-  function getSelectedServer() { return mockData.servers.find((server) => server.id === state.selectedServer) || mockData.servers[0]; }
-  function getSelectedDashboard() { return mockData.dashboardByServer[state.selectedServer] || mockData.dashboardByServer[mockData.servers[0].id]; }
+  function getSelectedServer() {
+    return mockData.servers.find((server) => server.id === state.selectedServer)
+      || mockData.servers[0]
+      || { id: "no-server", name: "N/A", type: "war", status: "maintenance", players: 0, maxPlayers: 0, districtCount: 0, sessionLength: "0m", dominance: 0, leader: "-" };
+  }
+  function getSelectedDashboard() {
+    const firstServerId = mockData.servers[0]?.id;
+    return mockData.dashboardByServer[state.selectedServer]
+      || (firstServerId ? mockData.dashboardByServer[firstServerId] : null)
+      || { meta: { status: "UNKNOWN", uptime: "--" }, playersTrend: [0], attacks24h: [0], clean: 0, dirty: 0, heat: [0, 0, 0, 0, 0], police: [0, 0, 0, 0], alerts: [] };
+  }
   function pushOpsLog(message) { const entry = document.createElement("div"); entry.className = "ops-item"; entry.innerHTML = `<strong>${message}</strong><span>${new Date().toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>`; ui.opsLog.prepend(entry); while (ui.opsLog.children.length > 14) ui.opsLog.removeChild(ui.opsLog.lastElementChild); }
   function renderList(node, rows) { node.innerHTML = rows.map((item) => `<div class="activity-item"><strong>${item.title}</strong><span>${item.detail}</span></div>`).join(""); }
+  function safeRun(label, action) {
+    try {
+      return action();
+    } catch (error) {
+      console.error(`[admin-dashboard] ${label} failed`, error);
+      pushOpsLog(`${label} failed`);
+      return null;
+    }
+  }
   async function loadJsonConfig(path) { const response = await fetch(path, { cache: "no-store" }); if (!response.ok) throw new Error(`Config load failed: ${path}`); return response.json(); }
   async function loadBalanceConfigs() {
     const paths = {
@@ -1035,6 +910,96 @@
     }
   }
 
+  function resolveAdminGameMode() {
+    const selectedServer = mockData.servers.find((server) => server.id === state.selectedServer) || null;
+    return window.Empire?.GameModes?.normalizeMode?.(selectedServer?.type || window.Empire?.mode || "war") || "war";
+  }
+
+  function restoreMockDataSnapshot() {
+    replaceDashboardData(cloneDashboardData(baseMockSnapshot));
+    mockData.districts = buildDistrictDataset(mockData);
+  }
+
+  function applyDashboardRuntime(payload, fallback = {}) {
+    const requestedMode = String(payload?.requestedMode || fallback.requestedMode || state.filters.dataSource || "auto").toLowerCase();
+    const effectiveMode = String(payload?.effectiveMode || payload?.source || fallback.effectiveMode || "demo").toLowerCase();
+    const sourceLabel = String(payload?.modeIndicator?.label || fallback.sourceLabel || (effectiveMode === "live" ? "Live data" : "Demo data"));
+    const sourceDetail = String(payload?.modeIndicator?.detail || fallback.sourceDetail || "");
+    state.dashboardRuntime = { requestedMode, effectiveMode, sourceLabel, sourceDetail };
+  }
+
+  function applyLiveDashboardPayload(payload) {
+    const nextData = cloneDashboardData(baseMockSnapshot);
+    if (Array.isArray(payload?.servers) && payload.servers.length) nextData.servers = payload.servers;
+    if (Array.isArray(payload?.players) && payload.players.length) nextData.players = payload.players;
+    if (Array.isArray(payload?.alliances) && payload.alliances.length) nextData.alliances = payload.alliances;
+    if (payload?.dashboardByServer && typeof payload.dashboardByServer === "object") nextData.dashboardByServer = payload.dashboardByServer;
+    replaceDashboardData(nextData);
+    mockData.districts = buildDistrictDataset(mockData);
+
+    const preferredServerId = String(payload?.defaultServerId || "").trim();
+    const hasPreferred = preferredServerId && mockData.servers.some((server) => server.id === preferredServerId);
+    const hasSelected = mockData.servers.some((server) => server.id === state.selectedServer);
+    if (hasPreferred) {
+      state.selectedServer = preferredServerId;
+    } else if (!hasSelected && mockData.servers.length) {
+      state.selectedServer = mockData.servers[0].id;
+    }
+  }
+
+  async function refreshDashboardDataSource({ silent = false } = {}) {
+    const normalizedSource = adminDataLoader?.normalizeSource?.(state.filters.dataSource) || "demo";
+    state.filters.dataSource = normalizedSource;
+
+    if (!adminDataLoader?.loadDashboardPayload) {
+      restoreMockDataSnapshot();
+      regenerateOpsFeedData();
+      applyDashboardRuntime(null, {
+        requestedMode: normalizedSource,
+        effectiveMode: "demo",
+        sourceLabel: "Demo data",
+        sourceDetail: "Lokální fallback bez API"
+      });
+      if (!silent) pushOpsLog("Dashboard mode active: demo");
+      return { source: "demo", effectiveMode: "demo", requestedMode: normalizedSource };
+    }
+
+    try {
+      const payload = await adminDataLoader.loadDashboardPayload({
+        dashboardMode: normalizedSource,
+        mode: resolveAdminGameMode()
+      });
+      if (payload?.effectiveMode === "live" || payload?.source === "live") {
+        applyLiveDashboardPayload(payload);
+        regenerateOpsFeedData();
+        applyDashboardRuntime(payload);
+        if (!silent) pushOpsLog(`Dashboard mode active: live (${payload.mode || resolveAdminGameMode()})`);
+        return payload;
+      }
+      restoreMockDataSnapshot();
+      regenerateOpsFeedData();
+      applyDashboardRuntime(payload, {
+        requestedMode: normalizedSource,
+        effectiveMode: "demo",
+        sourceLabel: "Demo data",
+        sourceDetail: "Server-side demo payload"
+      });
+      if (!silent) pushOpsLog(`Dashboard mode active: ${state.dashboardRuntime.effectiveMode}`);
+      return payload && typeof payload === "object" ? payload : { source: "demo", effectiveMode: "demo", requestedMode: normalizedSource };
+    } catch (error) {
+      restoreMockDataSnapshot();
+      regenerateOpsFeedData();
+      applyDashboardRuntime(null, {
+        requestedMode: normalizedSource,
+        effectiveMode: "demo",
+        sourceLabel: "Demo data",
+        sourceDetail: "Lokální fallback po chybě live requestu"
+      });
+      if (!silent) pushOpsLog("Live data failed, fallback to demo");
+      return { source: "demo", effectiveMode: "demo", requestedMode: normalizedSource, error: String(error?.message || "unknown_error") };
+    }
+  }
+
   function renderSidebar() {
     ui.sidebarNav.innerHTML = "";
     filterCollection(Object.keys(ui.sections), (item) => item).forEach((item) => {
@@ -1052,6 +1017,14 @@
     const dashboard = getSelectedDashboard();
     ui.serverStatusChip.textContent = dashboard.meta.status;
     ui.serverStatusChip.className = `chip ${dashboard.meta.status === "LIVE" ? "chip--status" : ""}`.trim();
+    if (ui.dashboardModeChip) {
+      ui.dashboardModeChip.textContent = `Mode ${String(state.dashboardRuntime.effectiveMode || "demo").toUpperCase()}`;
+    }
+    if (ui.dashboardSourceChip) {
+      ui.dashboardSourceChip.textContent = state.dashboardRuntime.sourceDetail
+        ? `${state.dashboardRuntime.sourceLabel} • ${state.dashboardRuntime.sourceDetail}`
+        : state.dashboardRuntime.sourceLabel;
+    }
     ui.uptimeChip.textContent = `Uptime ${dashboard.meta.uptime}`;
     ui.notificationsCount.textContent = String(mockData.notifications.length);
     ui.serverSwitcher.innerHTML = mockData.servers.map((item) => `<option value="${item.id}">${item.name}</option>`).join("");
@@ -2385,7 +2358,26 @@
   }
   function renderModalForBuilding(buildingType) { const building = mockData.buildings.find((item) => item.type === buildingType); if (!building) return; renderDetail(`Budova ${building.type}`, `${building.category} segment. Usage ${building.usageRate}. Balance ${building.balanceStatus}.`); renderModal(`Detail budovy: ${building.type}`, [{ title: "Souhrn", body: `Počet ve hře ${building.count}. Průměrný income ${formatCurrency(building.avgIncome)}/h. Průměrný heat ${building.avgHeat}. Usage rate ${building.usageRate}.` }, { title: "Balanc a config", body: `Nejčastější upgrady: ${building.topUpgrades}. Balance status: ${building.balanceStatus}. Poslední změna configu: ${building.lastConfigChange}.` }, { title: "Napojení na JSON config", body: `Config path ${building.configPath}. Category ${building.category}. Balance key ${building.balanceKey}.` }], [{ key: "building-inspect", label: "Inspect logs" }, { key: "building-balance", label: "Open balance config" }]); }
 
-  function renderSummary() { renderSidebar(); renderTopbar(); renderDashboardOverview(); renderServersSection(); renderServerDetailSection(); renderPlayersSection(); renderAlliancesSection(); renderDistrictsSection(); renderBuildingsSection(); renderEconomySection(); renderPoliceSection(); renderProductionSection(); renderEventsSection(); renderLogsSection(); renderModerationSection(); renderNotificationsSection(); renderSettingsSection(); renderDetailPanel(); }
+  function renderSummary() {
+    safeRun("renderSidebar", renderSidebar);
+    safeRun("renderTopbar", renderTopbar);
+    safeRun("renderDashboardOverview", renderDashboardOverview);
+    safeRun("renderServersSection", renderServersSection);
+    safeRun("renderServerDetailSection", renderServerDetailSection);
+    safeRun("renderPlayersSection", renderPlayersSection);
+    safeRun("renderAlliancesSection", renderAlliancesSection);
+    safeRun("renderDistrictsSection", renderDistrictsSection);
+    safeRun("renderBuildingsSection", renderBuildingsSection);
+    safeRun("renderEconomySection", renderEconomySection);
+    safeRun("renderPoliceSection", renderPoliceSection);
+    safeRun("renderProductionSection", renderProductionSection);
+    safeRun("renderEventsSection", renderEventsSection);
+    safeRun("renderLogsSection", renderLogsSection);
+    safeRun("renderModerationSection", renderModerationSection);
+    safeRun("renderNotificationsSection", renderNotificationsSection);
+    safeRun("renderSettingsSection", renderSettingsSection);
+    safeRun("renderDetailPanel", renderDetailPanel);
+  }
   function closeModal() { ui.detailModal.classList.add("is-hidden"); }
   function applyScheduledServerTransitions() {
     let changed = false;
@@ -2424,11 +2416,11 @@
     }
   }
 
-  function bindSidebarNavClick() { ui.sidebarNav.addEventListener("click", (event) => { const button = event.target.closest("[data-nav-item]"); if (!button) return; state.activeSection = button.dataset.navItem; renderSidebar(); renderActiveSection(); pushOpsLog(`Section switched to ${state.activeSection}`); }); }
+  function bindSidebarNavClick() { ui.sidebarNav.addEventListener("click", (event) => { const target = getEventElementTarget(event); if (!target) return; const button = target.closest("[data-nav-item]"); if (!button) return; state.activeSection = button.dataset.navItem; renderSidebar(); renderActiveSection(); pushOpsLog(`Section switched to ${state.activeSection}`); }); }
   function bindRowClickHandlers() {
     ui.serversTableBody.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
+      const target = getEventElementTarget(event);
+      if (!target) return;
       const openBtn = target.closest("[data-open-server]");
       if (openBtn) {
         const serverId = String(openBtn.getAttribute("data-open-server") || "").trim();
@@ -2445,19 +2437,27 @@
       if (row) renderModalForServer(row.dataset.serverId);
     });
     ui.playersTableBody.addEventListener("click", (event) => {
-      const row = event.target.closest("[data-player-id]");
+      const target = getEventElementTarget(event);
+      if (!target) return;
+      const row = target.closest("[data-player-id]");
       if (row) renderModalForPlayer(row.dataset.playerId);
     });
     ui.alliancesTableBody.addEventListener("click", (event) => {
-      const row = event.target.closest("[data-alliance-id]");
+      const target = getEventElementTarget(event);
+      if (!target) return;
+      const row = target.closest("[data-alliance-id]");
       if (row) renderModalForAlliance(row.dataset.allianceId);
     });
     ui.districtGrid.addEventListener("click", (event) => {
-      const card = event.target.closest("[data-district-id]");
+      const target = getEventElementTarget(event);
+      if (!target) return;
+      const card = target.closest("[data-district-id]");
       if (card) renderModalForDistrict(card.dataset.districtId);
     });
     ui.buildingsTableBody.addEventListener("click", (event) => {
-      const row = event.target.closest("[data-building-type]");
+      const target = getEventElementTarget(event);
+      if (!target) return;
+      const row = target.closest("[data-building-type]");
       if (row) renderModalForBuilding(row.dataset.buildingType);
     });
     if (ui.serverDetailMap) {
@@ -2490,7 +2490,7 @@
   function bindFilterChange() { ui.buildingFilterButtons.forEach((button) => button.addEventListener("click", () => { state.filters.buildingType = button.dataset.buildingFilter || "all"; ui.buildingFilterButtons.forEach((item) => item.classList.toggle("is-active", item === button)); renderBuildingsSection(); pushOpsLog(`Building filter changed to ${state.filters.buildingType}`); })); [ui.reportFilterServer, ui.reportFilterPlayer, ui.reportFilterAlliance, ui.reportFilterType, ui.reportFilterTime, ui.reportFilterSeverity].forEach((input) => { input.addEventListener("input", () => { state.filters.reportServer = ui.reportFilterServer.value; state.filters.reportPlayer = ui.reportFilterPlayer.value; state.filters.reportAlliance = ui.reportFilterAlliance.value; state.filters.reportType = ui.reportFilterType.value; state.filters.reportTime = ui.reportFilterTime.value; state.filters.reportSeverity = ui.reportFilterSeverity.value; renderLogsSection(); }); input.addEventListener("change", () => { state.filters.reportServer = ui.reportFilterServer.value; state.filters.reportPlayer = ui.reportFilterPlayer.value; state.filters.reportAlliance = ui.reportFilterAlliance.value; state.filters.reportType = ui.reportFilterType.value; state.filters.reportTime = ui.reportFilterTime.value; state.filters.reportSeverity = ui.reportFilterSeverity.value; renderLogsSection(); }); }); ui.topModeButtons.forEach((button) => button.addEventListener("click", () => { state.filters.rankingMode = button.dataset.topMode; ui.topModeButtons.forEach((item) => item.classList.toggle("is-active", item === button)); renderDashboardOverview(); })); }
   function bindSearchInput() { ui.globalSearch.addEventListener("input", () => { state.searchQuery = ui.globalSearch.value.trim(); renderSidebar(); renderServersSection(); renderPlayersSection(); renderAlliancesSection(); renderDistrictsSection(); renderBuildingsSection(); renderLogsSection(); renderNotificationsSection(); }); }
   function bindModalOpenClose() { ui.detailModalBackdrop.addEventListener("click", closeModal); ui.detailModalClose.addEventListener("click", closeModal); document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeModal(); }); }
-  function bindQuickActionButtons() { ui.quickActionButtons.forEach((button) => button.addEventListener("click", () => pushOpsLog(`Quick action: ${button.dataset.action}`))); ui.policeActionButtons.forEach((button) => button.addEventListener("click", () => pushOpsLog(`Police action: ${button.dataset.policeAction}`))); ui.eventActionButtons.forEach((button) => button.addEventListener("click", () => pushOpsLog(`Event action ${button.dataset.eventAction}: ${ui.eventFormName.value || "untitled event"}`))); ui.modActionButtons.forEach((button) => button.addEventListener("click", () => pushOpsLog(`Moderation action: ${button.dataset.modAction}`))); ui.economySnapshotBtn.addEventListener("click", () => pushOpsLog(`Economy snapshot created for ${getSelectedServer().name}`)); ui.detailModalFooter.addEventListener("click", (event) => { const button = event.target.closest("[data-modal-action]"); if (button) pushOpsLog(`Modal action: ${button.dataset.modalAction}`); }); }
+  function bindQuickActionButtons() { ui.quickActionButtons.forEach((button) => button.addEventListener("click", () => pushOpsLog(`Quick action: ${button.dataset.action}`))); ui.policeActionButtons.forEach((button) => button.addEventListener("click", () => pushOpsLog(`Police action: ${button.dataset.policeAction}`))); ui.eventActionButtons.forEach((button) => button.addEventListener("click", () => pushOpsLog(`Event action ${button.dataset.eventAction}: ${ui.eventFormName.value || "untitled event"}`))); ui.modActionButtons.forEach((button) => button.addEventListener("click", () => pushOpsLog(`Moderation action: ${button.dataset.modAction}`))); ui.economySnapshotBtn.addEventListener("click", () => pushOpsLog(`Economy snapshot created for ${getSelectedServer().name}`)); ui.detailModalFooter.addEventListener("click", (event) => { const target = getEventElementTarget(event); if (!target) return; const button = target.closest("[data-modal-action]"); if (button) pushOpsLog(`Modal action: ${button.dataset.modalAction}`); }); }
   function bindServerCreator() {
     const watchedInputs = [
       ui.serverCreateName,
@@ -2652,7 +2652,36 @@
       });
     }
   }
-  function bindServerSwitch() { ui.serverSwitcher.addEventListener("change", () => { state.selectedServer = ui.serverSwitcher.value; regenerateOpsFeedData(); renderDetail(`Server ${getSelectedServer().name}`, `${getSelectedServer().type.toUpperCase()} mode. ${getSelectedServer().players}/${getSelectedServer().maxPlayers} players. ${getSelectedServer().districtCount} districts.`); renderTopbar(); renderDashboardOverview(); renderServersSection(); renderServerDetailSection(); renderPlayersSection(); renderAlliancesSection(); renderDistrictsSection(); renderEconomySection(); renderPoliceSection(); renderEventsSection(); renderLogsSection(); renderNotificationsSection(); pushOpsLog(`Server switched to ${getSelectedServer().name}`); }); ui.dataSourceSwitcher.addEventListener("change", () => { state.filters.dataSource = ui.dataSourceSwitcher.value; pushOpsLog(`Data source set to ${state.filters.dataSource}`); }); ui.refreshBtn.addEventListener("click", () => { regenerateOpsFeedData(); renderSummary(); renderActiveSection(); pushOpsLog("Dashboard sync complete"); }); ui.notificationsBtn.addEventListener("click", () => { ui.notificationsPop.classList.toggle("is-hidden"); }); ui.notificationsMuteBtn.addEventListener("click", () => { pushOpsLog("Notifications muted"); }); }
+  function bindServerSwitch() {
+    ui.serverSwitcher.addEventListener("change", () => {
+      state.selectedServer = ui.serverSwitcher.value;
+      regenerateOpsFeedData();
+      renderDetail(`Server ${getSelectedServer().name}`, `${getSelectedServer().type.toUpperCase()} mode. ${getSelectedServer().players}/${getSelectedServer().maxPlayers} players. ${getSelectedServer().districtCount} districts.`);
+      renderSummary();
+      pushOpsLog(`Server switched to ${getSelectedServer().name}`);
+    });
+
+    ui.dataSourceSwitcher.addEventListener("change", async () => {
+      state.filters.dataSource = ui.dataSourceSwitcher.value;
+      await refreshDashboardDataSource();
+      renderSummary();
+      renderActiveSection();
+    });
+
+    ui.refreshBtn.addEventListener("click", async () => {
+      await refreshDashboardDataSource({ silent: true });
+      renderSummary();
+      renderActiveSection();
+      pushOpsLog("Dashboard sync complete");
+    });
+
+    ui.notificationsBtn.addEventListener("click", () => {
+      ui.notificationsPop.classList.toggle("is-hidden");
+    });
+    ui.notificationsMuteBtn.addEventListener("click", () => {
+      pushOpsLog("Notifications muted");
+    });
+  }
   function bindServerDetailViewControls() {
     if (ui.serverDetailViewLiveBtn) {
       ui.serverDetailViewLiveBtn.addEventListener("click", () => {
@@ -2668,6 +2697,38 @@
     }
   }
 
-  async function init() { regenerateOpsFeedData(); renderSummary(); renderActiveSection(); updateClock(); window.setInterval(updateClock, 1000); bindSidebarNavClick(); bindRowClickHandlers(); bindFilterChange(); bindSearchInput(); bindModalOpenClose(); bindQuickActionButtons(); bindServerCreator(); bindServerSwitch(); bindServerDetailViewControls(); pushOpsLog("Admin dashboard spuštěn"); await loadBalanceConfigs(); regenerateOpsFeedData(); renderSummary(); renderActiveSection(); }
+  async function init() {
+    restoreMockDataSnapshot();
+    regenerateOpsFeedData();
+    applyDashboardRuntime(null, {
+      requestedMode: state.filters.dataSource,
+      effectiveMode: "demo",
+      sourceLabel: "Demo data",
+      sourceDetail: "Okamžitý lokální boot"
+    });
+    renderSummary();
+    renderActiveSection();
+    updateClock();
+    window.setInterval(updateClock, 1000);
+    bindSidebarNavClick();
+    bindRowClickHandlers();
+    bindFilterChange();
+    bindSearchInput();
+    bindModalOpenClose();
+    bindQuickActionButtons();
+    bindServerCreator();
+    bindServerSwitch();
+    bindServerDetailViewControls();
+    pushOpsLog("Admin dashboard spuštěn");
+    await loadBalanceConfigs();
+    refreshDashboardDataSource({ silent: true })
+      .then(() => {
+        renderSummary();
+        renderActiveSection();
+      })
+      .catch(() => {});
+  }
   init();
 })();
+
+

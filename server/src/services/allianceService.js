@@ -1,86 +1,32 @@
 const { pool } = require("../config/db");
+const { assertDatabaseSchema } = require("../db/schemaGuard");
+const { normalizeGameMode, normalizeServerKey } = require("../config/gameModes");
 const ALLIANCE_MAX_MEMBERS = 4;
 const ALLIANCE_READY_WINDOW_HOURS = 6;
 
 async function ensureAllianceSchema() {
-  await pool.query(`
-    ALTER TABLE alliances
-      ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '',
-      ADD COLUMN IF NOT EXISTS icon_key TEXT NOT NULL DEFAULT 'crown_skull'
-  `);
-  await pool.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS game_mode TEXT NOT NULL DEFAULT 'war'
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS alliance_join_requests (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      alliance_id UUID NOT NULL REFERENCES alliances(id) ON DELETE CASCADE,
-      player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      UNIQUE (alliance_id, player_id)
-    )
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS alliance_member_invites (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      alliance_id UUID NOT NULL REFERENCES alliances(id) ON DELETE CASCADE,
-      target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      inviter_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      UNIQUE (alliance_id, target_player_id)
-    )
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS alliance_notifications (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL,
-      message TEXT NOT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      read_at TIMESTAMP NULL
-    )
-  `);
-  await pool.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS alliance_ready_at TIMESTAMP NULL
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS alliance_kick_votes (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      alliance_id UUID NOT NULL REFERENCES alliances(id) ON DELETE CASCADE,
-      target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      started_by_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      status TEXT NOT NULL DEFAULT 'open',
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      resolved_at TIMESTAMP NULL
-    )
-  `);
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_alliance_kick_votes_open_unique
-      ON alliance_kick_votes (alliance_id, target_player_id)
-      WHERE status = 'open'
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS alliance_kick_vote_ballots (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      vote_id UUID NOT NULL REFERENCES alliance_kick_votes(id) ON DELETE CASCADE,
-      voter_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      UNIQUE (vote_id, voter_player_id)
-    )
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS alliance_audit_logs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      alliance_id UUID NOT NULL REFERENCES alliances(id) ON DELETE CASCADE,
-      actor_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
-      target_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
-      action_key TEXT NOT NULL,
-      message TEXT NOT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
-    )
-  `);
+  return assertDatabaseSchema();
+}
+
+async function getPlayerScope(playerId) {
+  const res = await pool.query(
+    `SELECT id, alliance_id, alliance_ready_at, game_mode, server_key
+       FROM players
+      WHERE id = $1`,
+    [playerId]
+  );
+  const player = res.rows[0] || null;
+  if (!player?.id) {
+    const error = new Error("player_not_found");
+    error.code = "player_not_found";
+    error.status = 404;
+    throw error;
+  }
+  return {
+    ...player,
+    game_mode: normalizeGameMode(player.game_mode || "war"),
+    server_key: normalizeServerKey(player.game_mode || "war", player.server_key || "")
+  };
 }
 
 function computeAllianceReadyState(readyAt, now = Date.now()) {
@@ -97,15 +43,19 @@ function computeAllianceReadyState(readyAt, now = Date.now()) {
 
 async function getAllianceContextForPlayer(playerId) {
   await ensureAllianceSchema();
+  const playerScope = await getPlayerScope(playerId);
   const res = await pool.query(
-    `SELECT p.id AS player_id, p.alliance_id, p.alliance_ready_at,
-            a.id AS alliance_id_resolved, a.owner_player_id, a.name
+    `SELECT p.id AS player_id, p.alliance_id, p.alliance_ready_at, p.game_mode, p.server_key,
+            a.id AS alliance_id_resolved, a.owner_player_id, a.name, a.game_mode AS alliance_game_mode, a.server_key AS alliance_server_key
        FROM players p
-       LEFT JOIN alliances a ON a.id = p.alliance_id
+       LEFT JOIN alliances a
+         ON a.id = p.alliance_id
+        AND a.game_mode = p.game_mode
+        AND a.server_key = p.server_key
       WHERE p.id = $1`,
     [playerId]
   );
-  return res.rows[0] || null;
+  return { ...playerScope, ...(res.rows[0] || {}) };
 }
 
 async function createAllianceNotification(playerId, kind, message) {
@@ -148,26 +98,32 @@ async function consumeAllianceNotifications(playerId) {
 
 async function getAllianceIncomingInvites(playerId) {
   await ensureAllianceSchema();
+  const playerScope = await getPlayerScope(playerId);
   const res = await pool.query(
     `SELECT i.id, i.alliance_id, i.created_at, a.name AS alliance_name, a.icon_key, a.description,
             p.username AS inviter_username, p.gang_name AS inviter_gang_name
        FROM alliance_member_invites i
-       INNER JOIN alliances a ON a.id = i.alliance_id
-       INNER JOIN players p ON p.id = i.inviter_player_id
+       INNER JOIN alliances a ON a.id = i.alliance_id AND a.game_mode = $2 AND a.server_key = $3
+       INNER JOIN players p ON p.id = i.inviter_player_id AND p.game_mode = $2 AND p.server_key = $3
       WHERE i.target_player_id = $1
       ORDER BY i.created_at ASC`,
-    [playerId]
+    [playerId, playerScope.game_mode, playerScope.server_key]
   );
   return res.rows;
 }
 
 async function getAlliance(playerId) {
   await ensureAllianceSchema();
+  const playerScope = await getPlayerScope(playerId);
   const now = Date.now();
   const res = await pool.query(
-    `SELECT a.id, a.name, a.owner_player_id, a.description, a.icon_key, a.bonus_income_pct, a.bonus_influence_pct
+    `SELECT a.id, a.name, a.owner_player_id, a.description, a.icon_key, a.bonus_income_pct, a.bonus_influence_pct,
+            a.game_mode, a.server_key
      FROM players p
-     LEFT JOIN alliances a ON a.id = p.alliance_id
+     LEFT JOIN alliances a
+       ON a.id = p.alliance_id
+      AND a.game_mode = p.game_mode
+      AND a.server_key = p.server_key
      WHERE p.id = $1`,
     [playerId]
   );
@@ -178,8 +134,10 @@ async function getAlliance(playerId) {
     `SELECT id, username, gang_name, gang_structure, gang_color, alliance_ready_at
        FROM players
       WHERE alliance_id = $1
+        AND game_mode = $2
+        AND server_key = $3
       ORDER BY username ASC`,
-    [alliance.id]
+    [alliance.id, playerScope.game_mode, playerScope.server_key]
   );
 
   let pendingRequests = [];
@@ -187,10 +145,10 @@ async function getAlliance(playerId) {
     const pendingRes = await pool.query(
       `SELECT r.id, r.player_id, r.created_at, p.username, p.gang_name
          FROM alliance_join_requests r
-         INNER JOIN players p ON p.id = r.player_id
+         INNER JOIN players p ON p.id = r.player_id AND p.game_mode = $2 AND p.server_key = $3
         WHERE r.alliance_id = $1
         ORDER BY r.created_at ASC`,
-      [alliance.id]
+      [alliance.id, playerScope.game_mode, playerScope.server_key]
     );
     pendingRequests = pendingRes.rows;
   }
@@ -198,10 +156,10 @@ async function getAlliance(playerId) {
   const outgoingInvitesRes = await pool.query(
     `SELECT i.id, i.target_player_id, i.created_at, p.username, p.gang_name
        FROM alliance_member_invites i
-       INNER JOIN players p ON p.id = i.target_player_id
+       INNER JOIN players p ON p.id = i.target_player_id AND p.game_mode = $2 AND p.server_key = $3
       WHERE i.alliance_id = $1
       ORDER BY i.created_at ASC`,
-    [alliance.id]
+    [alliance.id, playerScope.game_mode, playerScope.server_key]
   );
 
   const openVotesRes = await pool.query(
@@ -209,13 +167,13 @@ async function getAlliance(playerId) {
             target.username AS target_username, target.gang_name AS target_gang_name,
             COUNT(b.id)::int AS yes_votes
        FROM alliance_kick_votes v
-       INNER JOIN players target ON target.id = v.target_player_id
+       INNER JOIN players target ON target.id = v.target_player_id AND target.game_mode = $2 AND target.server_key = $3
        LEFT JOIN alliance_kick_vote_ballots b ON b.vote_id = v.id
       WHERE v.alliance_id = $1
         AND v.status = 'open'
       GROUP BY v.id, target.username, target.gang_name
       ORDER BY v.created_at ASC`,
-    [alliance.id]
+    [alliance.id, playerScope.game_mode, playerScope.server_key]
   );
   const auditRes = await pool.query(
     `SELECT id, action_key, message, created_at
@@ -260,16 +218,29 @@ async function getAlliance(playerId) {
 
 async function createAlliance({ playerId, name, description = "", iconKey = "crown_skull" }) {
   await ensureAllianceSchema();
+  const playerScope = await getPlayerScope(playerId);
+  if (playerScope.alliance_id) {
+    const error = new Error("already_in_alliance");
+    error.code = "already_in_alliance";
+    throw error;
+  }
   const res = await pool.query(
-    `INSERT INTO alliances (name, owner_player_id, description, icon_key)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, name, description, icon_key, bonus_income_pct, bonus_influence_pct`,
-    [name, playerId, String(description || "").trim(), String(iconKey || "crown_skull").trim() || "crown_skull"]
+    `INSERT INTO alliances (name, owner_player_id, game_mode, server_key, description, icon_key)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, name, description, icon_key, bonus_income_pct, bonus_influence_pct, game_mode, server_key`,
+    [
+      name,
+      playerId,
+      playerScope.game_mode,
+      playerScope.server_key,
+      String(description || "").trim(),
+      String(iconKey || "crown_skull").trim() || "crown_skull"
+    ]
   );
 
   await pool.query(
-    "UPDATE players SET alliance_id = $1 WHERE id = $2",
-    [res.rows[0].id, playerId]
+    "UPDATE players SET alliance_id = $1 WHERE id = $2 AND game_mode = $3 AND server_key = $4",
+    [res.rows[0].id, playerId, playerScope.game_mode, playerScope.server_key]
   );
 
   return res.rows[0];
@@ -277,13 +248,24 @@ async function createAlliance({ playerId, name, description = "", iconKey = "cro
 
 async function joinAlliance({ playerId, allianceId }) {
   await ensureAllianceSchema();
+  const playerScope = await getPlayerScope(playerId);
+  if (playerScope.alliance_id) {
+    const error = new Error("already_in_alliance");
+    error.code = "already_in_alliance";
+    throw error;
+  }
   const allianceRes = await pool.query(
-    `SELECT a.id, COUNT(p.id)::int AS member_count
+    `SELECT a.id, a.game_mode, a.server_key, COUNT(p.id)::int AS member_count
        FROM alliances a
-       LEFT JOIN players p ON p.alliance_id = a.id
+       LEFT JOIN players p
+         ON p.alliance_id = a.id
+        AND p.game_mode = a.game_mode
+        AND p.server_key = a.server_key
       WHERE a.id = $1
+        AND a.game_mode = $2
+        AND a.server_key = $3
       GROUP BY a.id`,
-    [allianceId]
+    [allianceId, playerScope.game_mode, playerScope.server_key]
   );
   const alliance = allianceRes.rows[0] || null;
   if (!alliance?.id) {
@@ -297,30 +279,32 @@ async function joinAlliance({ playerId, allianceId }) {
     throw error;
   }
   await pool.query(
-    "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2",
-    [allianceId, playerId]
+    "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2 AND game_mode = $3 AND server_key = $4",
+    [allianceId, playerId, playerScope.game_mode, playerScope.server_key]
   );
 }
 
 async function requestAllianceInvite({ playerId, allianceId }) {
   await ensureAllianceSchema();
-  const playerRes = await pool.query(
-    "SELECT alliance_id FROM players WHERE id = $1",
-    [playerId]
-  );
-  if (playerRes.rows[0]?.alliance_id) {
+  const playerScope = await getPlayerScope(playerId);
+  if (playerScope.alliance_id) {
     const error = new Error("already_in_alliance");
     error.code = "already_in_alliance";
     throw error;
   }
 
   const allianceRes = await pool.query(
-    `SELECT a.id, a.owner_player_id, COUNT(p.id)::int AS member_count
+    `SELECT a.id, a.owner_player_id, a.game_mode, a.server_key, COUNT(p.id)::int AS member_count
        FROM alliances a
-       LEFT JOIN players p ON p.alliance_id = a.id
+       LEFT JOIN players p
+         ON p.alliance_id = a.id
+        AND p.game_mode = a.game_mode
+        AND p.server_key = a.server_key
       WHERE a.id = $1
+        AND a.game_mode = $2
+        AND a.server_key = $3
       GROUP BY a.id`,
-    [allianceId]
+    [allianceId, playerScope.game_mode, playerScope.server_key]
   );
   const alliance = allianceRes.rows[0] || null;
   if (!alliance?.id) {
@@ -374,12 +358,15 @@ async function requestAllianceInvite({ playerId, allianceId }) {
 
 async function respondToAllianceInvite({ ownerPlayerId, requestId, accept }) {
   await ensureAllianceSchema();
+  const ownerScope = await getPlayerScope(ownerPlayerId);
   const reqRes = await pool.query(
-    `SELECT r.id, r.alliance_id, r.player_id, a.owner_player_id
+    `SELECT r.id, r.alliance_id, r.player_id, a.owner_player_id, a.game_mode, a.server_key
        FROM alliance_join_requests r
        INNER JOIN alliances a ON a.id = r.alliance_id
-      WHERE r.id = $1`,
-    [requestId]
+      WHERE r.id = $1
+        AND a.game_mode = $2
+        AND a.server_key = $3`,
+    [requestId, ownerScope.game_mode, ownerScope.server_key]
   );
   const request = reqRes.rows[0] || null;
   if (!request?.id) {
@@ -397,10 +384,15 @@ async function respondToAllianceInvite({ ownerPlayerId, requestId, accept }) {
     const allianceRes = await pool.query(
       `SELECT COUNT(p.id)::int AS member_count
          FROM alliances a
-         LEFT JOIN players p ON p.alliance_id = a.id
+         LEFT JOIN players p
+           ON p.alliance_id = a.id
+          AND p.game_mode = a.game_mode
+          AND p.server_key = a.server_key
         WHERE a.id = $1
+          AND a.game_mode = $2
+          AND a.server_key = $3
         GROUP BY a.id`,
-      [request.alliance_id]
+      [request.alliance_id, ownerScope.game_mode, ownerScope.server_key]
     );
     if (Number(allianceRes.rows[0]?.member_count || 0) >= ALLIANCE_MAX_MEMBERS) {
       const error = new Error("alliance_full");
@@ -408,8 +400,8 @@ async function respondToAllianceInvite({ ownerPlayerId, requestId, accept }) {
       throw error;
     }
     await pool.query(
-      "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2",
-      [request.alliance_id, request.player_id]
+      "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2 AND game_mode = $3 AND server_key = $4",
+      [request.alliance_id, request.player_id, ownerScope.game_mode, ownerScope.server_key]
     );
     await pool.query(
       "DELETE FROM alliance_join_requests WHERE player_id = $1",
@@ -451,11 +443,18 @@ async function respondToAllianceInvite({ ownerPlayerId, requestId, accept }) {
 
 async function sendAllianceInvite({ ownerPlayerId, username }) {
   await ensureAllianceSchema();
+  const ownerScope = await getPlayerScope(ownerPlayerId);
   const ownerAllianceRes = await pool.query(
-    `SELECT a.id, a.name, a.owner_player_id, COUNT(p.id)::int AS member_count
+    `SELECT a.id, a.name, a.owner_player_id, a.game_mode, a.server_key, COUNT(p.id)::int AS member_count
        FROM alliances a
-       INNER JOIN players owner ON owner.alliance_id = a.id
-       LEFT JOIN players p ON p.alliance_id = a.id
+       INNER JOIN players owner
+         ON owner.alliance_id = a.id
+        AND owner.game_mode = a.game_mode
+        AND owner.server_key = a.server_key
+       LEFT JOIN players p
+         ON p.alliance_id = a.id
+        AND p.game_mode = a.game_mode
+        AND p.server_key = a.server_key
       WHERE owner.id = $1
       GROUP BY a.id`,
     [ownerPlayerId]
@@ -481,8 +480,10 @@ async function sendAllianceInvite({ ownerPlayerId, username }) {
     `SELECT id, alliance_id, username
        FROM players
       WHERE LOWER(username) = LOWER($1)
+        AND game_mode = $2
+        AND server_key = $3
       LIMIT 1`,
-    [username]
+    [username, ownerScope.game_mode, ownerScope.server_key]
   );
   const target = playerRes.rows[0] || null;
   if (!target?.id) {
@@ -530,12 +531,15 @@ async function sendAllianceInvite({ ownerPlayerId, username }) {
 
 async function respondToAllianceMemberInvite({ playerId, inviteId, accept }) {
   await ensureAllianceSchema();
+  const playerScope = await getPlayerScope(playerId);
   const inviteRes = await pool.query(
-    `SELECT i.id, i.alliance_id, i.target_player_id, i.inviter_player_id, a.name AS alliance_name
+    `SELECT i.id, i.alliance_id, i.target_player_id, i.inviter_player_id, a.name AS alliance_name, a.game_mode, a.server_key
        FROM alliance_member_invites i
        INNER JOIN alliances a ON a.id = i.alliance_id
-      WHERE i.id = $1`,
-    [inviteId]
+      WHERE i.id = $1
+        AND a.game_mode = $2
+        AND a.server_key = $3`,
+    [inviteId, playerScope.game_mode, playerScope.server_key]
   );
   const invite = inviteRes.rows[0] || null;
   if (!invite?.id) {
@@ -550,11 +554,7 @@ async function respondToAllianceMemberInvite({ playerId, inviteId, accept }) {
   }
 
   if (accept) {
-    const playerRes = await pool.query(
-      "SELECT alliance_id, username FROM players WHERE id = $1",
-      [playerId]
-    );
-    if (playerRes.rows[0]?.alliance_id) {
+    if (playerScope.alliance_id) {
       const error = new Error("already_in_alliance");
       error.code = "already_in_alliance";
       throw error;
@@ -562,10 +562,15 @@ async function respondToAllianceMemberInvite({ playerId, inviteId, accept }) {
     const allianceRes = await pool.query(
       `SELECT COUNT(p.id)::int AS member_count
          FROM alliances a
-         LEFT JOIN players p ON p.alliance_id = a.id
+         LEFT JOIN players p
+           ON p.alliance_id = a.id
+          AND p.game_mode = a.game_mode
+          AND p.server_key = a.server_key
         WHERE a.id = $1
+          AND a.game_mode = $2
+          AND a.server_key = $3
         GROUP BY a.id`,
-      [invite.alliance_id]
+      [invite.alliance_id, playerScope.game_mode, playerScope.server_key]
     );
     if (Number(allianceRes.rows[0]?.member_count || 0) >= ALLIANCE_MAX_MEMBERS) {
       const error = new Error("alliance_full");
@@ -573,8 +578,8 @@ async function respondToAllianceMemberInvite({ playerId, inviteId, accept }) {
       throw error;
     }
     await pool.query(
-      "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2",
-      [invite.alliance_id, playerId]
+      "UPDATE players SET alliance_id = $1, alliance_ready_at = NOW() WHERE id = $2 AND game_mode = $3 AND server_key = $4",
+      [invite.alliance_id, playerId, playerScope.game_mode, playerScope.server_key]
     );
     await pool.query(
       "DELETE FROM alliance_member_invites WHERE target_player_id = $1",
@@ -655,8 +660,8 @@ async function removeAllianceMember({ ownerPlayerId, memberPlayerId }) {
     throw error;
   }
   const memberRes = await pool.query(
-    "SELECT id, alliance_id, username FROM players WHERE id = $1",
-    [memberPlayerId]
+    "SELECT id, alliance_id, username FROM players WHERE id = $1 AND game_mode = $2 AND server_key = $3",
+    [memberPlayerId, context.game_mode, context.server_key]
   );
   const member = memberRes.rows[0] || null;
   if (!member?.id || String(member.alliance_id || "") !== String(context.alliance_id || "")) {
@@ -693,9 +698,10 @@ async function evaluateAllianceKickVote(voteId) {
             COUNT(ballots.id)::int AS yes_votes,
             COUNT(members.id)::int AS member_count
        FROM alliance_kick_votes v
-       INNER JOIN players target ON target.id = v.target_player_id
+       INNER JOIN alliances a ON a.id = v.alliance_id
+       INNER JOIN players target ON target.id = v.target_player_id AND target.game_mode = a.game_mode AND target.server_key = a.server_key
        LEFT JOIN alliance_kick_vote_ballots ballots ON ballots.vote_id = v.id
-       LEFT JOIN players members ON members.alliance_id = v.alliance_id
+       LEFT JOIN players members ON members.alliance_id = v.alliance_id AND members.game_mode = a.game_mode AND members.server_key = a.server_key
       WHERE v.id = $1
         AND v.status = 'open'
       GROUP BY v.id, target.username`,
@@ -745,8 +751,8 @@ async function startAllianceKickVote({ playerId, targetPlayerId }) {
     throw error;
   }
   const targetRes = await pool.query(
-    "SELECT id, alliance_id, username, alliance_ready_at FROM players WHERE id = $1",
-    [targetPlayerId]
+    "SELECT id, alliance_id, username, alliance_ready_at FROM players WHERE id = $1 AND game_mode = $2 AND server_key = $3",
+    [targetPlayerId, context.game_mode, context.server_key]
   );
   const target = targetRes.rows[0] || null;
   if (!target?.id || String(target.alliance_id || "") !== String(context.alliance_id || "")) {
@@ -798,7 +804,8 @@ async function castAllianceKickVote({ playerId, voteId }) {
   const voteRes = await pool.query(
     `SELECT v.id, v.alliance_id, v.target_player_id, v.status
        FROM alliance_kick_votes v
-       INNER JOIN players p ON p.alliance_id = v.alliance_id
+       INNER JOIN alliances a ON a.id = v.alliance_id
+       INNER JOIN players p ON p.alliance_id = v.alliance_id AND p.game_mode = a.game_mode AND p.server_key = a.server_key
       WHERE v.id = $1
         AND p.id = $2
       LIMIT 1`,
@@ -841,10 +848,10 @@ async function leaveAlliance(playerId) {
   await pool.query("UPDATE players SET alliance_id = NULL WHERE id = $1", [playerId]);
 }
 
-async function listAlliances(playerId = null, gameMode = "war") {
+async function listAlliances(playerId = null, gameMode = "war", serverKey = "") {
   await ensureAllianceSchema();
-  const { normalizeGameMode } = require("../config/gameModes");
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = normalizeServerKey(mode, serverKey);
   const res = await pool.query(
     `SELECT a.id, a.name, a.owner_player_id, a.description, a.icon_key, a.bonus_income_pct, a.bonus_influence_pct,
             COUNT(p.id)::int AS member_count,
@@ -855,11 +862,13 @@ async function listAlliances(playerId = null, gameMode = "war") {
                  AND r.player_id = $1
             ) AS has_pending_request
        FROM alliances a
-       LEFT JOIN players p ON p.alliance_id = a.id
-       INNER JOIN players owner ON owner.id = a.owner_player_id AND owner.game_mode = $2
+       LEFT JOIN players p ON p.alliance_id = a.id AND p.game_mode = a.game_mode AND p.server_key = a.server_key
+       INNER JOIN players owner ON owner.id = a.owner_player_id AND owner.game_mode = $2 AND owner.server_key = $3
+      WHERE a.game_mode = $2
+        AND a.server_key = $3
       GROUP BY a.id
       ORDER BY member_count DESC, a.name ASC`,
-    [playerId, mode]
+    [playerId, mode, resolvedServerKey]
   );
   return res.rows;
 }
@@ -875,6 +884,10 @@ module.exports = {
   respondToAllianceInvite,
   sendAllianceInvite,
   respondToAllianceMemberInvite,
+  markAllianceMemberReady,
+  removeAllianceMember,
+  startAllianceKickVote,
+  castAllianceKickVote,
   leaveAlliance,
   listAlliances
 };

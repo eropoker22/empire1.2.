@@ -1,32 +1,44 @@
 window.Empire = window.Empire || {};
 
 window.Empire.API = (() => {
-  const baseUrl = "http://localhost:3000";
+  const runtimeConfig = window.Empire?.RuntimeConfig || null;
+  const baseUrl = runtimeConfig?.apiBaseUrl || "http://localhost:3000";
+  const modeHeader = runtimeConfig?.modeHeader || ((mode) => ({ "X-Game-Mode": mode }));
+
+  function resolveMode() {
+    return runtimeConfig?.normalizeMode?.(window.Empire.mode) || window.Empire.mode || "war";
+  }
 
   function init() {
     refreshRound();
   }
 
   async function login(username, password) {
+    const mode = resolveMode();
+    const serverKey = String(window.Empire?.Storage?.getItem?.("selectedServer") || "").trim().toLowerCase();
     const res = await fetch(`${baseUrl}/auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Game-Mode": window.Empire.mode || "war"
+        ...modeHeader(mode),
+        ...(serverKey ? { "X-Server-Key": serverKey } : {})
       },
-      body: JSON.stringify({ username, password, mode: window.Empire.mode || "war" })
+      body: JSON.stringify({ username, password, mode, serverKey })
     });
     return res.json();
   }
 
   async function register(username, gangName, password) {
+    const mode = resolveMode();
+    const serverKey = String(window.Empire?.Storage?.getItem?.("selectedServer") || "").trim().toLowerCase();
     const res = await fetch(`${baseUrl}/auth/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Game-Mode": window.Empire.mode || "war"
+        ...modeHeader(mode),
+        ...(serverKey ? { "X-Server-Key": serverKey } : {})
       },
-      body: JSON.stringify({ username, gangName, password, mode: window.Empire.mode || "war" })
+      body: JSON.stringify({ username, gangName, password, mode, serverKey })
     });
     return res.json();
   }
@@ -316,9 +328,12 @@ window.Empire.API = (() => {
   }
 
   function authHeaders() {
+    const mode = resolveMode();
+    const selectedServerKey = String(window.Empire?.Storage?.getItem?.("selectedServer") || "").trim().toLowerCase();
     return {
       ...(window.Empire.token ? { Authorization: `Bearer ${window.Empire.token}` } : {}),
-      "X-Game-Mode": window.Empire.mode || "war"
+      ...modeHeader(mode),
+      ...(selectedServerKey ? { "X-Server-Key": selectedServerKey } : {})
     };
   }
 

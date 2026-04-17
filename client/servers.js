@@ -1,28 +1,20 @@
-const SELECTED_SERVER_KEY = "empire_selected_server";
-const SPAWN_SELECTION_STORAGE_KEY = "empire_server_spawn_selection_v1";
+const runtimeConfig = window.Empire?.RuntimeConfig || null;
+const empireStorage = window.Empire?.Storage || null;
+const gameModeRules = window.Empire?.GameModeRules || null;
 const SERVER_MAP_SCALE_MIN = 1;
 const SERVER_MAP_SCALE_MAX = 2.6;
 const SERVER_MAP_SCALE_STEP = 0.2;
-const SERVER_MAP_PREVIEW_BY_MODE = Object.freeze({
-  war: "/img/mapanoc.png",
-  free: "/img/mapaden2.png"
+const FALLBACK_MODE_RULES = Object.freeze({
+  mapPreview: "/img/mapaden2.png",
+  serverLaunchOffsetMinutes: 75,
+  starterResourceLines: Object.freeze([])
 });
-const SERVER_START_MATERIALS_BY_MODE = Object.freeze({
-  war: Object.freeze([
-    "Clean cash: $12 000",
-    "Dirty cash: $4 500",
-    "Chemikálie: 60 ks",
-    "Biomasa: 45 ks",
-    "Stimpack: 20 ks"
-  ]),
-  free: Object.freeze([
-    "Clean cash: $25 000",
-    "Dirty cash: $10 000",
-    "Chemikálie: 120 ks",
-    "Biomasa: 90 ks",
-    "Stimpack: 45 ks"
-  ])
-});
+
+function resolveServerRules(serverKey = "", mode = "war") {
+  return gameModeRules?.getServerRules?.(serverKey, mode)
+    || gameModeRules?.getModeRules?.(mode, serverKey)
+    || FALLBACK_MODE_RULES;
+}
 
 const state = {
   activeMode: window.Empire?.mode || "war",
@@ -50,7 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function readTokenMode() {
-  const token = localStorage.getItem("empire_token");
+  const token = empireStorage?.getItem("token");
   if (!token) return null;
   const parts = String(token).split(".");
   if (parts.length < 2) return null;
@@ -66,11 +58,9 @@ function readTokenMode() {
 }
 
 function readTokenModeFromRawStorage() {
-  const raw = window.Empire?.__storagePatch;
-  if (!raw?.getItem) return null;
-  const activeAuthMode = window.Empire?.GameModes?.normalizeMode?.(raw.getItem("empire:active_auth_mode") || "") || null;
+  const activeAuthMode = window.Empire?.GameModes?.normalizeMode?.(empireStorage?.getRawItem("empire:active_auth_mode") || "") || null;
   if (!activeAuthMode) return null;
-  const token = raw.getItem(`empire:${activeAuthMode}:empire_token`);
+  const token = empireStorage?.getRawItem(`empire:${activeAuthMode}:empire_token`);
   if (!token) return null;
   return readJwtMode(token);
 }
@@ -89,9 +79,9 @@ function readJwtMode(token) {
 }
 
 function isGuestFlow() {
-  if (localStorage.getItem("empire_token")) return false;
-  const guestUsername = String(localStorage.getItem("empire_guest_username") || "").trim();
-  const guestGang = String(localStorage.getItem("empire_gang_name") || "").trim();
+  if (empireStorage?.getItem("token")) return false;
+  const guestUsername = String(empireStorage?.getItem("guestUsername") || "").trim();
+  const guestGang = String(empireStorage?.getItem("gangName") || "").trim();
   return Boolean(guestUsername || guestGang);
 }
 
@@ -187,7 +177,7 @@ function renderServers() {
     button.addEventListener("click", () => {
       const serverKey = String(button.dataset.serverKey || "").trim();
       if (!serverKey) return;
-      localStorage.setItem(SELECTED_SERVER_KEY, serverKey);
+      empireStorage?.setItem("selectedServer", serverKey);
       const card = config.servers.find((server) => server.key === serverKey) || null;
       renderServers();
       openServerModal(card);
@@ -196,11 +186,11 @@ function renderServers() {
 }
 
 function ensureMockLaunches(config) {
-  const mode = window.Empire?.GameModes?.normalizeMode?.(state.activeMode) || "war";
-  const offsets = mode === "free" ? [35, 95, 190] : [75, 210, 420];
   config.servers.forEach((server, index) => {
     if (state.launchByKey[server.key]) return;
-    const offsetMinutes = offsets[index] || (offsets[offsets.length - 1] + ((index + 1) * 45));
+    const mode = window.Empire?.GameModes?.normalizeMode?.(state.activeMode) || "war";
+    const serverRules = resolveServerRules(server.key, mode);
+    const offsetMinutes = Number(serverRules.serverLaunchOffsetMinutes || FALLBACK_MODE_RULES.serverLaunchOffsetMinutes || (75 + (index * 45)));
     state.launchByKey[server.key] = {
       startAt: Date.now() + (offsetMinutes * 60 * 1000)
     };
@@ -286,7 +276,7 @@ function initServerDetailModal() {
         updateSpawnSelectionUi(null, { required: true });
         return;
       }
-      localStorage.setItem(SELECTED_SERVER_KEY, state.activeServerKey);
+      empireStorage?.setItem("selectedServer", state.activeServerKey);
       persistSpawnSelection(state.activeMode, state.activeServerKey, Number(state.activeSpawnDistrictId));
       const nextUrl = `faction.html?mode=${state.activeMode}`;
       window.location.href = nextUrl;
@@ -338,9 +328,10 @@ function openServerModal(server) {
   if (!server || !state.serverModal?.root) return;
   const launch = state.launchByKey[server.key] || null;
   const modeConfig = window.Empire?.GameModes?.getConfig(state.activeMode) || null;
+  const modeRules = resolveServerRules(server.key, state.activeMode);
   const modeLabel = modeConfig?.label || String(state.activeMode || "WAR").toUpperCase();
-  const mapPreview = SERVER_MAP_PREVIEW_BY_MODE[state.activeMode] || "/img/mapaden.png";
-  const materials = SERVER_START_MATERIALS_BY_MODE[state.activeMode] || [];
+  const mapPreview = modeRules.mapPreview || FALLBACK_MODE_RULES.mapPreview;
+  const materials = modeRules.starterResourceLines || FALLBACK_MODE_RULES.starterResourceLines;
   state.activeServerKey = server.key;
   state.activeSpawnDistrictId = null;
   state.activeSpawnEligibleDistrictIds = [];
@@ -628,7 +619,7 @@ function updateSpawnSelectionUi(selectedDistrictId, options = {}) {
 function readPersistedSpawnSelection(mode, serverKey) {
   const storageKey = resolveSpawnSelectionStorageKey(mode, serverKey);
   try {
-    const parsed = JSON.parse(localStorage.getItem(SPAWN_SELECTION_STORAGE_KEY) || "{}");
+    const parsed = JSON.parse(empireStorage?.getItem("serverSpawnSelection") || "{}");
     const value = Number(parsed?.[storageKey] || 0);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
   } catch (error) {
@@ -640,12 +631,12 @@ function persistSpawnSelection(mode, serverKey, districtId) {
   const storageKey = resolveSpawnSelectionStorageKey(mode, serverKey);
   let parsed = {};
   try {
-    parsed = JSON.parse(localStorage.getItem(SPAWN_SELECTION_STORAGE_KEY) || "{}");
+    parsed = JSON.parse(empireStorage?.getItem("serverSpawnSelection") || "{}");
   } catch (error) {
     parsed = {};
   }
   parsed[storageKey] = Math.max(1, Math.floor(Number(districtId) || 1));
-  localStorage.setItem(SPAWN_SELECTION_STORAGE_KEY, JSON.stringify(parsed));
+  empireStorage?.setItem("serverSpawnSelection", JSON.stringify(parsed));
 }
 
 function resolveSpawnSelectionStorageKey(mode, serverKey) {

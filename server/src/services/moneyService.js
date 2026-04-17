@@ -1,23 +1,8 @@
 const { pool } = require("../config/db");
-
-let moneySchemaReady = false;
+const { assertDatabaseSchema } = require("../db/schemaGuard");
 
 async function ensureMoneySchema() {
-  if (moneySchemaReady) return;
-  await pool.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS game_mode TEXT NOT NULL DEFAULT 'war',
-      ADD COLUMN IF NOT EXISTS clean_money BIGINT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS dirty_money BIGINT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS district_income_dirty_remainder NUMERIC(10,2) NOT NULL DEFAULT 0
-  `);
-  await pool.query(`
-    UPDATE players
-       SET clean_money = COALESCE(clean_money, 0) + GREATEST(COALESCE(money, 0) - (COALESCE(clean_money, 0) + COALESCE(dirty_money, 0)), 0),
-           dirty_money = COALESCE(dirty_money, 0),
-           money = COALESCE(clean_money, 0) + COALESCE(dirty_money, 0) + GREATEST(COALESCE(money, 0) - (COALESCE(clean_money, 0) + COALESCE(dirty_money, 0)), 0)
-  `);
-  moneySchemaReady = true;
+  return assertDatabaseSchema();
 }
 
 function normalizeMoneyRow(row) {

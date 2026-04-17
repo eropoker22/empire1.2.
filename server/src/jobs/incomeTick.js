@@ -8,15 +8,12 @@ const {
 const { ensureDistrictDestructionSchema } = require("../services/districtService");
 const { HEAT_BALANCE } = require("../config/drugs");
 
-async function runIncomeTick(gameMode = "war") {
+async function runIncomeTick(gameMode = "war", serverKey = "") {
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = String(serverKey || "").trim().toLowerCase();
   await ensureMoneySchema();
   await ensureDrugSchema();
   await ensureDistrictDestructionSchema();
-  await pool.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS game_mode TEXT NOT NULL DEFAULT 'war'
-  `);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -26,14 +23,15 @@ async function runIncomeTick(gameMode = "war") {
               SUM(d.base_income) AS income,
               COALESCE(a.bonus_income_pct, 0) AS bonus_pct
        FROM districts d
-       JOIN players p ON p.id = d.owner_player_id AND p.game_mode = d.game_mode
-       LEFT JOIN alliances a ON a.id = p.alliance_id
+       JOIN players p ON p.id = d.owner_player_id AND p.game_mode = d.game_mode AND p.server_key = d.server_key
+       LEFT JOIN alliances a ON a.id = p.alliance_id AND a.game_mode = p.game_mode AND a.server_key = p.server_key
       WHERE d.owner_player_id IS NOT NULL
         AND COALESCE(d.is_destroyed, false) = false
         AND d.game_mode = $1
+        AND d.server_key = $2
       GROUP BY d.owner_player_id, a.bonus_income_pct`
       ,
-      [mode]
+      [mode, resolvedServerKey]
     );
 
     for (const row of earnings.rows) {

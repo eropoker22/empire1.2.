@@ -35,7 +35,11 @@ router.post("/structure", auth, async (req, res) => {
 
   const saved = await setPlayerStructure(req.user.id, structure);
   const profile = await getPlayerProfile(req.user.id);
-  const token = createToken({ ...profile, game_mode: req.user.gameMode || req.gameMode || "war" });
+  const token = createToken({
+    ...profile,
+    game_mode: req.user.gameMode || req.gameMode || "war",
+    server_key: req.user.serverKey || req.serverKey || profile.server_key || ""
+  });
   res.json({ structure: saved, token });
 });
 
@@ -49,7 +53,11 @@ router.post("/gang-color", auth, async (req, res) => {
     return res.status(400).json({ error: "gang_color_update_failed" });
   }
   const profile = await getPlayerProfile(req.user.id);
-  const token = createToken({ ...profile, game_mode: req.user.gameMode || req.gameMode || "war" });
+  const token = createToken({
+    ...profile,
+    game_mode: req.user.gameMode || req.gameMode || "war",
+    server_key: req.user.serverKey || req.serverKey || profile.server_key || ""
+  });
   res.json({ gangColor: result.gangColor, token });
 });
 

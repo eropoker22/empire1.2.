@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
-const { getGameModeConfig, normalizeGameMode } = require("../config/gameModes");
+const { getGameModeConfig, normalizeGameMode, normalizeServerKey } = require("../config/gameModes");
+const { assertDatabaseSchema } = require("../db/schemaGuard");
 
 const PHASE_KEYS = Object.freeze(["day", "night"]);
 
@@ -40,33 +41,35 @@ function resolveRoundClock(startedAtValue, gameMinutesPerRealMinute, gameClockSt
 }
 
 async function ensureRoundSchema() {
-  await pool.query(`
-    ALTER TABLE rounds
-      ADD COLUMN IF NOT EXISTS game_mode TEXT NOT NULL DEFAULT 'war'
-  `);
+  return assertDatabaseSchema();
 }
 
-async function getOrCreateActiveRound(gameMode = "war") {
+async function getOrCreateActiveRound(gameMode = "war", serverKey = "") {
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = normalizeServerKey(mode, serverKey);
   const modeConfig = getGameModeConfig(mode);
   await ensureRoundSchema();
-  const res = await pool.query("SELECT * FROM rounds WHERE active = true AND game_mode = $1 ORDER BY started_at DESC LIMIT 1", [mode]);
+  const res = await pool.query(
+    "SELECT * FROM rounds WHERE active = true AND game_mode = $1 AND server_key = $2 ORDER BY started_at DESC LIMIT 1",
+    [mode, resolvedServerKey]
+  );
   if (res.rowCount > 0) return res.rows[0];
 
   const startedAt = new Date();
   const endsAt = new Date(startedAt.getTime() + modeConfig.roundDurationHours * 60 * 60 * 1000);
   const insert = await pool.query(
-    "INSERT INTO rounds (started_at, ends_at, active, game_mode) VALUES ($1, $2, true, $3) RETURNING *",
-    [startedAt, endsAt, mode]
+    "INSERT INTO rounds (started_at, ends_at, active, game_mode, server_key) VALUES ($1, $2, true, $3, $4) RETURNING *",
+    [startedAt, endsAt, mode, resolvedServerKey]
   );
 
   return insert.rows[0];
 }
 
-async function getRoundStatus(gameMode = "war") {
+async function getRoundStatus(gameMode = "war", serverKey = "") {
   const mode = normalizeGameMode(gameMode);
   const modeConfig = getGameModeConfig(mode);
-  const round = await getOrCreateActiveRound(mode);
+  const resolvedServerKey = normalizeServerKey(mode, serverKey);
+  const round = await getOrCreateActiveRound(mode, resolvedServerKey);
   const now = new Date();
   const endsAt = new Date(round.ends_at);
   const msLeft = Math.max(0, endsAt - now);
@@ -98,7 +101,8 @@ async function getRoundStatus(gameMode = "war") {
     currentGameMinutesInDay: clock.minutesInDay,
     gameClockStartHour: modeConfig.gameClockStartHour,
     gameMinutesPerRealMinute: modeConfig.gameDaysPerRealDay,
-    gameMode: mode
+    gameMode: mode,
+    serverKey: resolvedServerKey
   };
 }
 

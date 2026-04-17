@@ -5,10 +5,11 @@ const router = express.Router();
 
 router.get("/dashboard", async (req, res) => {
   try {
-    const source = req.query?.source || "auto";
+    const dashboardMode = req.query?.dashboardMode || req.query?.source || "auto";
     const payload = await getAdminDashboardPayload({
       gameMode: req.gameMode,
-      source
+      source: dashboardMode,
+      dashboardMode
     });
     return res.json(payload);
   } catch (error) {

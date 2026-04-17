@@ -1,11 +1,15 @@
-const API_BASE = "http://localhost:3000";
-const GUEST_USERNAME_KEY = "empire_guest_username";
-const GUEST_GANG_KEY = "empire_gang_name";
+const runtimeConfig = window.Empire?.RuntimeConfig || null;
+const empireStorage = window.Empire?.Storage || null;
+const API_BASE = runtimeConfig?.apiBaseUrl || "http://localhost:3000";
 
 const state = {
   activeTab: "login",
   activeMode: window.Empire?.mode || "war"
 };
+
+function resolveSelectedServerKey() {
+  return String(empireStorage?.getItem("selectedServer") || "").trim().toLowerCase();
+}
 
 function getModeServersUrl(mode) {
   const normalizedMode = window.Empire?.GameModes?.normalizeMode?.(mode) || "war";
@@ -20,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindAboutGameLink();
   initMobileLoginFit();
 
-  if (localStorage.getItem("empire_token")) {
+  if (empireStorage?.getItem("token")) {
     window.location.href = window.Empire?.getGameModeUrl?.("faction", state.activeMode) || "/faction.html?mode=war";
     return;
   }
@@ -132,13 +136,18 @@ function bindForms() {
     const username = document.getElementById("login-username").value.trim();
     const password = document.getElementById("login-password").value.trim();
 
-    const result = await post(`${API_BASE}/auth/login`, { username, password, mode: state.activeMode });
+    const result = await post(`${API_BASE}/auth/login`, {
+      username,
+      password,
+      mode: state.activeMode,
+      serverKey: resolveSelectedServerKey()
+    });
     if (result?.token) {
       hideError();
-      localStorage.removeItem(GUEST_USERNAME_KEY);
-      localStorage.removeItem(GUEST_GANG_KEY);
-      localStorage.setItem("empire_token", result.token);
-      window.Empire?.__storagePatch?.setItem?.("empire:active_auth_mode", state.activeMode);
+      empireStorage?.removeItem("guestUsername");
+      empireStorage?.removeItem("gangName");
+      empireStorage?.setItem("token", result.token);
+      empireStorage?.setRawItem("empire:active_auth_mode", state.activeMode);
       window.location.href = window.Empire?.getGameModeUrl?.("faction", state.activeMode) || `/faction.html?mode=${state.activeMode}`;
     } else {
       showError("Přihlášení se nezdařilo. Zkontroluj údaje.");
@@ -151,13 +160,19 @@ function bindForms() {
     const gangName = document.getElementById("register-gang").value.trim();
     const password = document.getElementById("register-password").value.trim();
 
-    const result = await post(`${API_BASE}/auth/register`, { username, gangName, password, mode: state.activeMode });
+    const result = await post(`${API_BASE}/auth/register`, {
+      username,
+      gangName,
+      password,
+      mode: state.activeMode,
+      serverKey: resolveSelectedServerKey()
+    });
     if (result?.token) {
       hideError();
-      localStorage.removeItem(GUEST_USERNAME_KEY);
-      localStorage.setItem(GUEST_GANG_KEY, gangName);
-      localStorage.setItem("empire_token", result.token);
-      window.Empire?.__storagePatch?.setItem?.("empire:active_auth_mode", state.activeMode);
+      empireStorage?.removeItem("guestUsername");
+      empireStorage?.setItem("gangName", gangName);
+      empireStorage?.setItem("token", result.token);
+      empireStorage?.setRawItem("empire:active_auth_mode", state.activeMode);
       window.location.href = window.Empire?.getGameModeUrl?.("faction", state.activeMode) || `/faction.html?mode=${state.activeMode}`;
     } else {
       showError("Registrace se nezdařila. Zkus jiné jméno.");
@@ -181,11 +196,11 @@ function bindGuest() {
     }
 
     hideError();
-    localStorage.removeItem("empire_token");
-    localStorage.removeItem("empire_structure");
-    localStorage.setItem(GUEST_USERNAME_KEY, username);
-    localStorage.setItem(GUEST_GANG_KEY, gangName);
-    window.Empire?.__storagePatch?.setItem?.("empire:active_guest_mode", state.activeMode);
+    empireStorage?.removeItem("token");
+    empireStorage?.removeItem("structure");
+    empireStorage?.setItem("guestUsername", username);
+    empireStorage?.setItem("gangName", gangName);
+    empireStorage?.setRawItem("empire:active_guest_mode", state.activeMode);
     window.location.href = getModeServersUrl(state.activeMode);
   };
 
@@ -206,11 +221,13 @@ function sanitizeGuestValue(value, maxLength) {
 }
 
 async function post(url, body) {
+  const modeHeader = runtimeConfig?.modeHeader?.(state.activeMode) || { "X-Game-Mode": state.activeMode };
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Game-Mode": state.activeMode
+      ...modeHeader,
+      ...(resolveSelectedServerKey() ? { "X-Server-Key": resolveSelectedServerKey() } : {})
     },
     body: JSON.stringify(body)
   });

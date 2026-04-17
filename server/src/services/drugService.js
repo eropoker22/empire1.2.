@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { assertDatabaseSchema } = require("../db/schemaGuard");
 const { ensureMoneySchema } = require("./moneyService");
 const {
   ONE_HOUR_MS,
@@ -17,73 +18,9 @@ const {
   toApiDrugInventory
 } = require("../config/drugs");
 
-let drugSchemaReady = false;
-
 async function ensureDrugSchema() {
-  if (drugSchemaReady) return;
   await ensureMoneySchema();
-
-  await pool.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS heat INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_neon_dust INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_pulse_shot INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_velvet_smoke INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_ghost_serum INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_overdrive_x INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_neon_dust_active_until TIMESTAMP NULL,
-      ADD COLUMN IF NOT EXISTS drug_pulse_shot_active_until TIMESTAMP NULL,
-      ADD COLUMN IF NOT EXISTS drug_velvet_smoke_active_until TIMESTAMP NULL,
-      ADD COLUMN IF NOT EXISTS drug_ghost_serum_active_until TIMESTAMP NULL,
-      ADD COLUMN IF NOT EXISTS drug_overdrive_x_active_until TIMESTAMP NULL,
-      ADD COLUMN IF NOT EXISTS drug_neon_dust_active_dose INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_pulse_shot_active_dose INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_velvet_smoke_active_dose INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_ghost_serum_active_dose INT NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS drug_overdrive_x_active_dose INT NOT NULL DEFAULT 0
-  `);
-
-  await pool.query(`
-    UPDATE players
-       SET drug_neon_dust = FLOOR(COALESCE(drugs, 0) * 0.55)::int,
-           drug_pulse_shot = FLOOR(COALESCE(drugs, 0) * 0.18)::int,
-           drug_velvet_smoke = FLOOR(COALESCE(drugs, 0) * 0.15)::int,
-           drug_ghost_serum = FLOOR(COALESCE(drugs, 0) * 0.08)::int,
-           drug_overdrive_x = GREATEST(
-             0,
-             COALESCE(drugs, 0)
-             - FLOOR(COALESCE(drugs, 0) * 0.55)::int
-             - FLOOR(COALESCE(drugs, 0) * 0.18)::int
-             - FLOOR(COALESCE(drugs, 0) * 0.15)::int
-             - FLOOR(COALESCE(drugs, 0) * 0.08)::int
-           )
-     WHERE COALESCE(drugs, 0) > 0
-       AND (
-         COALESCE(drug_neon_dust, 0)
-         + COALESCE(drug_pulse_shot, 0)
-         + COALESCE(drug_velvet_smoke, 0)
-         + COALESCE(drug_ghost_serum, 0)
-         + COALESCE(drug_overdrive_x, 0)
-       ) = 0
-  `);
-
-  await pool.query(`
-    UPDATE players
-       SET drugs = COALESCE(drug_neon_dust, 0)
-         + COALESCE(drug_pulse_shot, 0)
-         + COALESCE(drug_velvet_smoke, 0)
-         + COALESCE(drug_ghost_serum, 0)
-         + COALESCE(drug_overdrive_x, 0)
-     WHERE COALESCE(drugs, 0) <> (
-       COALESCE(drug_neon_dust, 0)
-       + COALESCE(drug_pulse_shot, 0)
-       + COALESCE(drug_velvet_smoke, 0)
-       + COALESCE(drug_ghost_serum, 0)
-       + COALESCE(drug_overdrive_x, 0)
-     )
-  `);
-
-  drugSchemaReady = true;
+  return assertDatabaseSchema();
 }
 
 function parseTimestampMs(rawValue) {

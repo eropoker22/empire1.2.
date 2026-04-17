@@ -1,10 +1,17 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id TEXT PRIMARY KEY,
+  applied_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- Core players
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  username TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL,
   password_hash TEXT NOT NULL,
+  game_mode TEXT NOT NULL DEFAULT 'war',
+  server_key TEXT NOT NULL DEFAULT 'war-alpha',
   gang_name TEXT NOT NULL,
   gang_structure TEXT NULL,
   gang_color TEXT NULL,
@@ -33,17 +40,31 @@ CREATE TABLE IF NOT EXISTS players (
   defense INT NOT NULL DEFAULT 0,
   materials INT NOT NULL DEFAULT 0,
   data_shards INT NOT NULL DEFAULT 0,
+  district_income_dirty_remainder NUMERIC(10,2) NOT NULL DEFAULT 0,
   raid_member_losses INT NOT NULL DEFAULT 0,
   alliance_id UUID NULL,
+  alliance_ready_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE players
+  DROP CONSTRAINT IF EXISTS players_username_key;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_players_username_mode_server_unique
+  ON players (username, game_mode, server_key);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_players_gang_color_unique
+  ON players (gang_color)
+  WHERE gang_color IS NOT NULL;
+
 -- Alliances
 CREATE TABLE IF NOT EXISTS alliances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   owner_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  game_mode TEXT NOT NULL DEFAULT 'war',
+  server_key TEXT NOT NULL DEFAULT 'war-alpha',
   description TEXT NOT NULL DEFAULT '',
   icon_key TEXT NOT NULL DEFAULT 'crown_skull',
   bonus_income_pct INT NOT NULL DEFAULT 0,
@@ -51,9 +72,21 @@ CREATE TABLE IF NOT EXISTS alliances (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE players
-  ADD CONSTRAINT players_alliance_fk
-  FOREIGN KEY (alliance_id) REFERENCES alliances(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alliances_name_scope_unique
+  ON alliances (name, game_mode, server_key);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'players_alliance_fk'
+  ) THEN
+    ALTER TABLE players
+      ADD CONSTRAINT players_alliance_fk
+      FOREIGN KEY (alliance_id) REFERENCES alliances(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS alliance_join_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -80,9 +113,6 @@ CREATE TABLE IF NOT EXISTS alliance_notifications (
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   read_at TIMESTAMP NULL
 );
-
-ALTER TABLE players
-  ADD COLUMN IF NOT EXISTS alliance_ready_at TIMESTAMP NULL;
 
 CREATE TABLE IF NOT EXISTS alliance_kick_votes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -122,6 +152,8 @@ CREATE TABLE IF NOT EXISTS districts (
   name TEXT NOT NULL,
   type TEXT NOT NULL,
   polygon JSONB NOT NULL,
+  game_mode TEXT NOT NULL DEFAULT 'war',
+  server_key TEXT NOT NULL DEFAULT 'war-alpha',
   base_income INT NOT NULL DEFAULT 10,
   owner_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
   influence_level INT NOT NULL DEFAULT 0,
@@ -131,9 +163,7 @@ CREATE TABLE IF NOT EXISTS districts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_districts_owner ON districts(owner_player_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_players_gang_color_unique
-  ON players (gang_color)
-  WHERE gang_color IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_districts_mode_server ON districts(game_mode, server_key);
 
 -- Combat logs
 CREATE TABLE IF NOT EXISTS combat_logs (
@@ -141,6 +171,7 @@ CREATE TABLE IF NOT EXISTS combat_logs (
   attacker_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   district_id UUID NOT NULL REFERENCES districts(id) ON DELETE CASCADE,
   defender_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
+  server_key TEXT NOT NULL DEFAULT 'war-alpha',
   success BOOLEAN NOT NULL,
   attack_cost INT NOT NULL,
   influence_change INT NOT NULL,
@@ -160,15 +191,36 @@ CREATE TABLE IF NOT EXISTS attack_target_cooldowns (
   PRIMARY KEY (attacker_player_id, target_player_id)
 );
 
+CREATE TABLE IF NOT EXISTS raid_player_cooldowns (
+  player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+  next_raid_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS district_raid_locks (
+  district_id UUID PRIMARY KEY REFERENCES districts(id) ON DELETE CASCADE,
+  locked_until TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS district_raid_stashes (
+  district_id UUID PRIMARY KEY REFERENCES districts(id) ON DELETE CASCADE,
+  materials INT NOT NULL DEFAULT 0,
+  drugs INT NOT NULL DEFAULT 0,
+  weapons INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- Round metadata
 CREATE TABLE IF NOT EXISTS rounds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   started_at TIMESTAMP NOT NULL,
   ends_at TIMESTAMP NOT NULL,
-  active BOOLEAN NOT NULL DEFAULT true
+  active BOOLEAN NOT NULL DEFAULT true,
+  game_mode TEXT NOT NULL DEFAULT 'war',
+  server_key TEXT NOT NULL DEFAULT 'war-alpha'
 );
 
 CREATE INDEX IF NOT EXISTS idx_rounds_active ON rounds(active);
+CREATE INDEX IF NOT EXISTS idx_rounds_active_scope ON rounds(game_mode, server_key, active, started_at DESC);
 
 -- Player upgrades
 CREATE TABLE IF NOT EXISTS upgrades (
@@ -192,6 +244,8 @@ CREATE TABLE IF NOT EXISTS economy_ledger (
 CREATE TABLE IF NOT EXISTS market_orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  game_mode TEXT NOT NULL DEFAULT 'war',
+  server_key TEXT NOT NULL DEFAULT 'war-alpha',
   resource_key TEXT NOT NULL,
   side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
   quantity INT NOT NULL CHECK (quantity > 0),
@@ -202,8 +256,11 @@ CREATE TABLE IF NOT EXISTS market_orders (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_market_orders_book
-  ON market_orders (resource_key, side, status, price_per_unit, created_at);
+CREATE INDEX IF NOT EXISTS idx_market_orders_mode_book
+  ON market_orders (game_mode, resource_key, side, status, price_per_unit, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_market_orders_server_book
+  ON market_orders (server_key, resource_key, side, status, price_per_unit, created_at);
 
 CREATE TABLE IF NOT EXISTS market_trades (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -211,6 +268,8 @@ CREATE TABLE IF NOT EXISTS market_trades (
   sell_order_id UUID NULL REFERENCES market_orders(id) ON DELETE SET NULL,
   buyer_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   seller_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  game_mode TEXT NOT NULL DEFAULT 'war',
+  server_key TEXT NOT NULL DEFAULT 'war-alpha',
   resource_key TEXT NOT NULL,
   quantity INT NOT NULL CHECK (quantity > 0),
   price_per_unit INT NOT NULL CHECK (price_per_unit > 0),
@@ -218,14 +277,19 @@ CREATE TABLE IF NOT EXISTS market_trades (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_market_trades_resource_created
-  ON market_trades (resource_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_market_trades_mode_resource_created
+  ON market_trades (game_mode, resource_key, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_market_trades_server_resource_created
+  ON market_trades (server_key, resource_key, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS bounties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   target_district_id UUID NULL REFERENCES districts(id) ON DELETE SET NULL,
+  game_mode TEXT NOT NULL DEFAULT 'war',
+  server_key TEXT NOT NULL DEFAULT 'war-alpha',
   objective_type TEXT NOT NULL DEFAULT 'capture_district',
   is_anonymous BOOLEAN NOT NULL DEFAULT TRUE,
   expires_at TIMESTAMP NULL,
@@ -241,3 +305,25 @@ CREATE TABLE IF NOT EXISTS bounties (
 
 CREATE INDEX IF NOT EXISTS idx_bounties_target_active
   ON bounties (target_player_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bounties_scope_status_created
+  ON bounties (server_key, status, created_at DESC);
+
+INSERT INTO schema_migrations (id)
+VALUES ('001_initial_schema')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO schema_migrations (id)
+VALUES ('002_market_game_mode_isolation')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO schema_migrations (id)
+VALUES ('003_market_server_isolation')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO schema_migrations (id)
+VALUES ('004_alliances_server_isolation')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO schema_migrations (id)
+VALUES ('005_server_scope_core_entities')
+ON CONFLICT (id) DO NOTHING;

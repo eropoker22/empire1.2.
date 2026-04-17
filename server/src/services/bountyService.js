@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
-const { normalizeGameMode } = require("../config/gameModes");
+const { assertDatabaseSchema } = require("../db/schemaGuard");
+const { normalizeGameMode, normalizeServerKey } = require("../config/gameModes");
 const { normalizeDrugKey, DRUG_DEFINITIONS } = require("../config/drugs");
 
 const HUNT_MODE_THRESHOLD = 10000;
@@ -7,8 +8,6 @@ const DRUG_UNIT_VALUE = 350;
 const MATERIAL_UNIT_VALUE = 275;
 const VALID_STATUSES = new Set(["active", "expired", "completed"]);
 const VALID_TYPES = new Set(["capture_district", "successful_attack", "destroy_units"]);
-
-let bountySchemaEnsured = false;
 
 function clampWholeNumber(value) {
   return Math.max(0, Math.floor(Number(value) || 0));
@@ -110,43 +109,7 @@ function parseRewards(rewards) {
 }
 
 async function ensureBountySchema() {
-  if (bountySchemaEnsured) return;
-  await pool.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS game_mode TEXT NOT NULL DEFAULT 'war'
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS bounties (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      created_by_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      target_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      target_district_id UUID NULL REFERENCES districts(id) ON DELETE SET NULL,
-      objective_type TEXT NOT NULL DEFAULT 'capture_district',
-      is_anonymous BOOLEAN NOT NULL DEFAULT TRUE,
-      expires_at TIMESTAMP NULL,
-      rewards JSONB NOT NULL DEFAULT '[]'::jsonb,
-      status TEXT NOT NULL DEFAULT 'active',
-      claimed_by_player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
-      claimed_at TIMESTAMP NULL,
-      contributors JSONB NOT NULL DEFAULT '[]'::jsonb,
-      total_value INT NOT NULL DEFAULT 0,
-      hunt_mode_active BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
-    )
-  `);
-  await pool.query(`ALTER TABLE bounties ADD COLUMN IF NOT EXISTS contributors JSONB NOT NULL DEFAULT '[]'::jsonb`);
-  await pool.query(`ALTER TABLE bounties ADD COLUMN IF NOT EXISTS total_value INT NOT NULL DEFAULT 0`);
-  await pool.query(`ALTER TABLE bounties ADD COLUMN IF NOT EXISTS hunt_mode_active BOOLEAN NOT NULL DEFAULT FALSE`);
-  await pool.query(`
-    UPDATE bounties
-       SET status = 'completed'
-     WHERE status = 'claimed'
-  `);
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_bounties_target_active
-      ON bounties (target_player_id, status, created_at DESC)
-  `);
-  bountySchemaEnsured = true;
+  return assertDatabaseSchema();
 }
 
 async function expireBounties(client = pool) {
@@ -196,8 +159,9 @@ function mapBountyRow(row) {
   };
 }
 
-async function listBounties(gameMode = "war") {
+async function listBounties(gameMode = "war", serverKey = "") {
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = normalizeServerKey(mode, serverKey);
   await ensureBountySchema();
   await expireBounties();
   const result = await pool.query(`
@@ -222,16 +186,17 @@ async function listBounties(gameMode = "war") {
            claimant.username AS claimed_by_username,
            district.name AS target_district_name
       FROM bounties b
-      INNER JOIN players creator ON creator.id = b.created_by_player_id AND creator.game_mode = $1
-      INNER JOIN players target ON target.id = b.target_player_id AND target.game_mode = $1
-      LEFT JOIN alliances target_alliance ON target_alliance.id = target.alliance_id
-      LEFT JOIN players claimant ON claimant.id = b.claimed_by_player_id AND claimant.game_mode = $1
-      LEFT JOIN districts district ON district.id = b.target_district_id AND district.game_mode = $1
-     WHERE creator.game_mode = $1
+      INNER JOIN players creator ON creator.id = b.created_by_player_id AND creator.game_mode = $1 AND creator.server_key = $2
+      INNER JOIN players target ON target.id = b.target_player_id AND target.game_mode = $1 AND target.server_key = $2
+      LEFT JOIN alliances target_alliance ON target_alliance.id = target.alliance_id AND target_alliance.game_mode = target.game_mode AND target_alliance.server_key = target.server_key
+      LEFT JOIN players claimant ON claimant.id = b.claimed_by_player_id AND claimant.game_mode = $1 AND claimant.server_key = $2
+      LEFT JOIN districts district ON district.id = b.target_district_id AND district.game_mode = $1 AND district.server_key = $2
+     WHERE b.game_mode = $1
+       AND b.server_key = $2
      ORDER BY
        CASE WHEN b.status = 'active' THEN 0 ELSE 1 END ASC,
        b.created_at DESC
-  `, [mode]);
+  `, [mode, resolvedServerKey]);
   return result.rows.map(mapBountyRow);
 }
 
@@ -390,9 +355,11 @@ async function createBounty({
   bountyType = "capture_district",
   isAnonymous = true,
   durationHours = 12,
-  gameMode = "war"
+  gameMode = "war",
+  serverKey = ""
 }) {
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = normalizeServerKey(mode, serverKey);
   await ensureBountySchema();
   const client = await pool.connect();
 
@@ -405,8 +372,9 @@ async function createBounty({
          FROM players
         WHERE id = $1
           AND game_mode = $2
+          AND server_key = $3
         FOR UPDATE`,
-      [playerId, mode]
+      [playerId, mode, resolvedServerKey]
     );
     const actor = actorRes.rows[0];
     if (!actor) throw createServiceError("missing_actor", 404);
@@ -416,8 +384,9 @@ async function createBounty({
          FROM players
         WHERE LOWER(username) = LOWER($1)
           AND game_mode = $2
+          AND server_key = $3
         FOR UPDATE`,
-      [String(targetUsername || "").trim(), mode]
+      [String(targetUsername || "").trim(), mode, resolvedServerKey]
     );
     const target = targetRes.rows[0];
     if (!target) throw createServiceError("missing_target", 404);
@@ -433,8 +402,9 @@ async function createBounty({
            FROM districts
           WHERE id = $1
             AND owner_player_id = $2
-            AND game_mode = $3`,
-        [targetDistrictId, target.id, mode]
+            AND game_mode = $3
+            AND server_key = $4`,
+        [targetDistrictId, target.id, mode, resolvedServerKey]
       );
       if (!districtRes.rows[0]?.id) throw createServiceError("invalid_target_district", 400);
       safeDistrictId = districtRes.rows[0].id;
@@ -460,10 +430,11 @@ async function createBounty({
          FROM bounties
         WHERE created_by_player_id = $1
           AND target_player_id = $2
-          AND objective_type = $3
+          AND server_key = $3
+          AND objective_type = $4
           AND created_at > NOW() - INTERVAL '30 minutes'
         LIMIT 1`,
-      [playerId, target.id, safeBountyType]
+      [playerId, target.id, resolvedServerKey, safeBountyType]
     );
     if (duplicateRes.rows.length) throw createServiceError("bounty_cooldown_active", 400);
 
@@ -507,6 +478,8 @@ async function createBounty({
          created_by_player_id,
          target_player_id,
          target_district_id,
+         game_mode,
+         server_key,
          objective_type,
          is_anonymous,
          expires_at,
@@ -516,12 +489,14 @@ async function createBounty({
          total_value,
          hunt_mode_active
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'active', '[]'::jsonb, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'active', '[]'::jsonb, $10, $11)
        RETURNING id`,
       [
         playerId,
         target.id,
         safeDistrictId,
+        mode,
+        resolvedServerKey,
         safeBountyType,
         Boolean(isAnonymous),
         expiresAt,
@@ -549,9 +524,11 @@ async function resolveBounties({
   contributionValue = 0,
   attackSucceeded = false,
   capturedDistrict = false,
-  gameMode = "war"
+  gameMode = "war",
+  serverKey = ""
 }) {
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = normalizeServerKey(mode, serverKey);
   await ensureBountySchema();
   const client = await pool.connect();
 
@@ -563,8 +540,9 @@ async function resolveBounties({
       `SELECT id
          FROM players
         WHERE LOWER(username) = LOWER($1)
-          AND game_mode = $2`,
-      [String(targetUsername || "").trim(), mode]
+          AND game_mode = $2
+          AND server_key = $3`,
+      [String(targetUsername || "").trim(), mode, resolvedServerKey]
     );
     const target = targetRes.rows[0];
     if (!target?.id) {
@@ -575,11 +553,13 @@ async function resolveBounties({
     const bountiesRes = await client.query(
       `SELECT *
          FROM bounties
-        WHERE status = 'active'
-          AND target_player_id = $1
-          AND (target_district_id IS NULL OR target_district_id = $2)
+        WHERE game_mode = $1
+          AND server_key = $2
+          AND status = 'active'
+          AND target_player_id = $3
+          AND (target_district_id IS NULL OR target_district_id = $4)
         FOR UPDATE`,
-      [target.id, districtId || null]
+      [mode, resolvedServerKey, target.id, districtId || null]
     );
 
     const completed = [];
@@ -652,7 +632,18 @@ async function resolveBounties({
       });
 
       for (const [recipientId, payout] of payoutByPlayer.entries()) {
-        await applyPlayerPayout(client, recipientId, payout);
+        const recipientRes = await client.query(
+          `SELECT id
+             FROM players
+            WHERE id = $1
+              AND game_mode = $2
+              AND server_key = $3
+            LIMIT 1`,
+          [recipientId, mode, resolvedServerKey]
+        );
+        if (recipientRes.rowCount > 0) {
+          await applyPlayerPayout(client, recipientId, payout);
+        }
       }
 
       await client.query(
@@ -688,12 +679,13 @@ async function resolveBounties({
   }
 }
 
-async function claimBountiesForOccupation({ playerId, targetUsername, districtId, gameMode = "war" }) {
+async function claimBountiesForOccupation({ playerId, targetUsername, districtId, gameMode = "war", serverKey = "" }) {
   return resolveBounties({
     playerId,
     targetUsername,
     districtId,
     gameMode,
+    serverKey,
     resolutionType: "occupation",
     contributionValue: 100,
     capturedDistrict: true,

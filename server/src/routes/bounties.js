@@ -11,7 +11,7 @@ const router = express.Router();
 
 router.get("/", auth, async (req, res) => {
   try {
-    const bounties = await listBounties(req.gameMode);
+    const bounties = await listBounties(req.gameMode, req.serverKey);
     return res.json({ ok: true, bounties });
   } catch (error) {
     return res.status(500).json({ error: "bounties_fetch_failed" });
@@ -30,6 +30,7 @@ router.post("/", auth, async (req, res) => {
     await createBounty({
       playerId: req.user.id,
       gameMode: req.gameMode,
+      serverKey: req.serverKey,
       targetUsername,
       targetDistrictId: payload.targetDistrictId || null,
       rewardCash: payload.rewardCash,
@@ -41,7 +42,7 @@ router.post("/", auth, async (req, res) => {
       isAnonymous: payload.isAnonymous,
       durationHours: payload.durationHours
     });
-    const bounties = await listBounties(req.gameMode);
+    const bounties = await listBounties(req.gameMode, req.serverKey);
     return res.json({ ok: true, bounties });
   } catch (error) {
     const code = String(error?.code || "");
@@ -65,6 +66,7 @@ router.post("/resolve", auth, async (req, res) => {
     const result = await resolveBounties({
       playerId: req.user.id,
       gameMode: req.gameMode,
+      serverKey: req.serverKey,
       targetUsername,
       districtId: payload.districtId || null,
       resolutionType: payload.resolutionType || "attack",
@@ -72,7 +74,7 @@ router.post("/resolve", auth, async (req, res) => {
       attackSucceeded: payload.attackSucceeded,
       capturedDistrict: payload.capturedDistrict
     });
-    const bounties = await listBounties(req.gameMode);
+    const bounties = await listBounties(req.gameMode, req.serverKey);
     return res.json({
       ok: true,
       claimed: result.claimed || [],
@@ -91,10 +93,11 @@ router.post("/claim", auth, async (req, res) => {
     const result = await claimBountiesForOccupation({
       playerId: req.user.id,
       gameMode: req.gameMode,
+      serverKey: req.serverKey,
       targetUsername,
       districtId
     });
-    const bounties = await listBounties();
+    const bounties = await listBounties(req.gameMode, req.serverKey);
     return res.json({
       ok: true,
       claimed: result.claimed || [],

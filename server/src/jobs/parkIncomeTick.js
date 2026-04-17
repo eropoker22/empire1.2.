@@ -40,14 +40,11 @@ const DISTRICT_MINUTE_INCOME_RULES = {
   }
 };
 
-async function runParkIncomeTick(gameMode = "war") {
+async function runParkIncomeTick(gameMode = "war", serverKey = "") {
   const mode = normalizeGameMode(gameMode);
+  const resolvedServerKey = String(serverKey || "").trim().toLowerCase();
   await ensureMoneySchema();
   await ensureDistrictDestructionSchema();
-  await pool.query(`
-    ALTER TABLE players
-      ADD COLUMN IF NOT EXISTS game_mode TEXT NOT NULL DEFAULT 'war'
-  `);
 
   const client = await pool.connect();
   try {
@@ -64,9 +61,10 @@ async function runParkIncomeTick(gameMode = "war") {
        WHERE d.owner_player_id IS NOT NULL
           AND COALESCE(d.is_destroyed, false) = false
           AND d.game_mode = $1
+          AND d.server_key = $2
         GROUP BY d.owner_player_id`
       ,
-      [mode]
+      [mode, resolvedServerKey]
     );
 
     for (const row of parkOwners.rows) {

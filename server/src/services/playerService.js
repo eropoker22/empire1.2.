@@ -20,10 +20,11 @@ async function getPlayerProfile(playerId) {
             p.drug_neon_dust_active_dose, p.drug_pulse_shot_active_dose, p.drug_velvet_smoke_active_dose, p.drug_ghost_serum_active_dose, p.drug_overdrive_x_active_dose,
             p.gang_structure,
             p.gang_color,
+            p.server_key,
             a.name AS alliance_name,
-            (SELECT COUNT(*) FROM districts d WHERE d.owner_player_id = p.id) AS district_count
+            (SELECT COUNT(*) FROM districts d WHERE d.owner_player_id = p.id AND d.game_mode = p.game_mode AND d.server_key = p.server_key) AS district_count
      FROM players p
-     LEFT JOIN alliances a ON a.id = p.alliance_id
+     LEFT JOIN alliances a ON a.id = p.alliance_id AND a.game_mode = p.game_mode AND a.server_key = p.server_key
      WHERE p.id = $1`,
     [playerId]
   );

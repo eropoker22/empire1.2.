@@ -12,7 +12,7 @@ const router = express.Router();
 
 router.get("/", auth, async (req, res) => {
   try {
-    const market = await getMarketState(req.user.id, req.gameMode);
+    const market = await getMarketState(req.user.id, req.gameMode, req.serverKey);
     res.json(market);
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message || "market_failed" });
@@ -24,6 +24,8 @@ router.post("/orders", auth, async (req, res) => {
     const { resourceKey, side, quantity, pricePerUnit } = req.body || {};
     const result = await createMarketOrder({
       playerId: req.user.id,
+      gameMode: req.gameMode,
+      serverKey: req.serverKey,
       resourceKey,
       side,
       quantity: Number(quantity),
@@ -31,7 +33,7 @@ router.post("/orders", auth, async (req, res) => {
     });
     broadcastMarketUpdate({
       rooms: getRoomRegistry(),
-      gameMode: req.gameMode,
+      serverKey: req.serverKey,
       update: { resourceKey, ts: Date.now() }
     });
     res.json(result);
@@ -44,11 +46,13 @@ router.post("/orders/:id/cancel", auth, async (req, res) => {
   try {
     const result = await cancelMarketOrder({
       playerId: req.user.id,
+      gameMode: req.gameMode,
+      serverKey: req.serverKey,
       orderId: req.params.id
     });
     broadcastMarketUpdate({
       rooms: getRoomRegistry(),
-      gameMode: req.gameMode,
+      serverKey: req.serverKey,
       update: { orderId: req.params.id, ts: Date.now() }
     });
     res.json(result);

@@ -5,13 +5,19 @@ const { normalizeGameMode } = require("../config/gameModes");
 const router = express.Router();
 
 router.post("/register", async (req, res) => {
-  const { username, password, gangName, mode } = req.body || {};
+  const { username, password, gangName, mode, serverKey } = req.body || {};
   if (!username || !password || !gangName) {
     return res.status(400).json({ error: "missing_fields" });
   }
 
   try {
-    const token = await registerPlayer({ username, password, gangName, gameMode: normalizeGameMode(mode || req.gameMode) });
+    const token = await registerPlayer({
+      username,
+      password,
+      gangName,
+      gameMode: normalizeGameMode(mode || req.gameMode),
+      serverKey: serverKey || req.serverKey || ""
+    });
     return res.json({ token });
   } catch (err) {
     return res.status(400).json({ error: "register_failed" });
@@ -19,12 +25,17 @@ router.post("/register", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-  const { username, password, mode } = req.body || {};
+  const { username, password, mode, serverKey } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: "missing_fields" });
   }
 
-  const token = await loginPlayer({ username, password, gameMode: normalizeGameMode(mode || req.gameMode) });
+  const token = await loginPlayer({
+    username,
+    password,
+    gameMode: normalizeGameMode(mode || req.gameMode),
+    serverKey: serverKey || req.serverKey || ""
+  });
   if (!token) {
     return res.status(401).json({ error: "invalid_credentials" });
   }

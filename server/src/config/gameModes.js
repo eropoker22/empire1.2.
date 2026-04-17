@@ -1,12 +1,17 @@
-const GAME_MODES = Object.freeze({
+const SHARED_MODE_CORE = Object.freeze({
+  maxInfluence: 100
+});
+
+const MODE_SPECIFIC_CONFIG = Object.freeze({
   war: Object.freeze({
-    key: "war",
     label: "WAR",
     displayName: "Placená verze",
     routeSlug: "war",
     roundDurationDays: 10,
     roundDurationHours: 240,
     incomeTickMinutes: 60,
+    parkIncomeTickSeconds: 60,
+    roundTickSeconds: 60,
     attackCooldownSeconds: 30,
     attackActionDurationSeconds: 20,
     raidCooldownSeconds: 30,
@@ -15,7 +20,6 @@ const GAME_MODES = Object.freeze({
     phaseDurationHours: 4,
     gameDaysPerRealDay: 3,
     gameClockStartHour: 6,
-    maxInfluence: 100,
     maxPlayers: 200,
     loginAccent: "#22d3ee",
     loginAccentAlt: "#f472b6",
@@ -28,13 +32,14 @@ const GAME_MODES = Object.freeze({
     ]
   }),
   free: Object.freeze({
-    key: "free",
     label: "FREE",
     displayName: "Zrychlená free verze",
     routeSlug: "free",
     roundDurationDays: 0.08333333333333333,
     roundDurationHours: 2,
     incomeTickMinutes: 15,
+    parkIncomeTickSeconds: 60,
+    roundTickSeconds: 60,
     attackCooldownSeconds: 8,
     attackActionDurationSeconds: 10,
     raidCooldownSeconds: 8,
@@ -43,7 +48,6 @@ const GAME_MODES = Object.freeze({
     phaseDurationHours: 0.25,
     gameDaysPerRealDay: 12,
     gameClockStartHour: 8,
-    maxInfluence: 100,
     maxPlayers: 20,
     loginAccent: "#fb7185",
     loginAccentAlt: "#f59e0b",
@@ -57,6 +61,22 @@ const GAME_MODES = Object.freeze({
   })
 });
 
+function buildModeConfig(key) {
+  const modeKey = String(key || "").trim().toLowerCase();
+  const source = MODE_SPECIFIC_CONFIG[modeKey] || MODE_SPECIFIC_CONFIG.war;
+  return Object.freeze({
+    key: modeKey || "war",
+    ...SHARED_MODE_CORE,
+    ...source,
+    servers: Object.freeze((source.servers || []).map((server) => Object.freeze({ ...server })))
+  });
+}
+
+const GAME_MODES = Object.freeze({
+  war: buildModeConfig("war"),
+  free: buildModeConfig("free")
+});
+
 function normalizeGameMode(mode) {
   const raw = String(mode || "").trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(GAME_MODES, raw) ? raw : "war";
@@ -66,8 +86,24 @@ function getGameModeConfig(mode) {
   return GAME_MODES[normalizeGameMode(mode)] || GAME_MODES.war;
 }
 
+function getDefaultServerKey(mode) {
+  const config = getGameModeConfig(mode);
+  return String(config.servers?.[0]?.key || `${normalizeGameMode(mode)}-alpha`).trim().toLowerCase();
+}
+
+function normalizeServerKey(mode, serverKey) {
+  const normalizedMode = normalizeGameMode(mode);
+  const raw = String(serverKey || "").trim().toLowerCase();
+  if (!raw) return getDefaultServerKey(normalizedMode);
+  const config = getGameModeConfig(normalizedMode);
+  const matched = (config.servers || []).find((server) => String(server.key || "").trim().toLowerCase() === raw);
+  return matched ? String(matched.key).trim().toLowerCase() : getDefaultServerKey(normalizedMode);
+}
+
 module.exports = {
   GAME_MODES,
   getGameModeConfig,
-  normalizeGameMode
+  normalizeGameMode,
+  getDefaultServerKey,
+  normalizeServerKey
 };

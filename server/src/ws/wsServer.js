@@ -1,32 +1,54 @@
 const { WebSocketServer } = require("ws");
-const { verifySocketToken } = require("./wsAuth");
+const { authenticateSocket } = require("./wsAuth");
 const { handleMessage } = require("./wsHandlers");
 
 let wss = null;
 const rooms = new Map();
+const HEARTBEAT_INTERVAL_MS = 30000;
+const MAX_MESSAGE_BYTES = 64 * 1024;
+const AUTH_HANDSHAKE_TIMEOUT_MS = 5000;
+
+function cleanupSocketSubscriptions(socket) {
+  for (const key of socket.subscriptions) {
+    const room = rooms.get(key);
+    if (!room) continue;
+    room.delete(socket);
+    if (room.size === 0) rooms.delete(key);
+  }
+}
 
 function initWebSocket(server) {
   wss = new WebSocketServer({ server });
 
   wss.on("connection", (socket, req) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const token = url.searchParams.get("token");
-    const user = verifySocketToken(token);
-
-    if (!user) {
-      socket.close(1008, "unauthorized");
-      return;
-    }
-
-    socket.user = user;
     socket.isAlive = true;
+    socket.isAuthenticated = false;
     socket.subscriptions = new Set();
+    socket.authHandshakeTimer = setTimeout(() => {
+      if (!socket.isAuthenticated) {
+        try {
+          socket.send(JSON.stringify({ type: "error", error: "auth_timeout" }));
+        } catch (err) {
+          // Ignore send errors on closing socket.
+        }
+        socket.close(1008, "auth_timeout");
+      }
+    }, AUTH_HANDSHAKE_TIMEOUT_MS);
+
+    socket.send(JSON.stringify({ type: "auth:required", timeoutMs: AUTH_HANDSHAKE_TIMEOUT_MS }));
 
     socket.on("pong", () => {
       socket.isAlive = true;
     });
 
     socket.on("message", (data) => {
+      const sizeBytes = Buffer.isBuffer(data) ? data.length : Buffer.byteLength(String(data || ""));
+      if (sizeBytes > MAX_MESSAGE_BYTES) {
+        socket.send(JSON.stringify({ type: "error", error: "payload_too_large" }));
+        socket.close(1009, "payload_too_large");
+        return;
+      }
+
       let payload = null;
       try {
         payload = JSON.parse(data.toString());
@@ -35,17 +57,44 @@ function initWebSocket(server) {
         return;
       }
 
+      if (!socket.isAuthenticated) {
+        if (payload?.type !== "auth") {
+          socket.send(JSON.stringify({ type: "error", error: "auth_required" }));
+          return;
+        }
+
+        const result = authenticateSocket(socket, payload?.token);
+        if (!result.ok) {
+          socket.send(JSON.stringify({ type: "error", error: result.error }));
+          socket.close(1008, "auth_failed");
+          return;
+        }
+
+        if (socket.authHandshakeTimer) {
+          clearTimeout(socket.authHandshakeTimer);
+          socket.authHandshakeTimer = null;
+        }
+
+        socket.send(JSON.stringify({
+          type: "auth:ok",
+          user: {
+            id: socket.user?.id || null,
+            gameMode: socket.user?.gameMode || "war",
+            serverKey: socket.user?.serverKey || ""
+          }
+        }));
+        return;
+      }
+
       handleMessage({ socket, payload, rooms });
     });
 
     socket.on("close", () => {
-      for (const key of socket.subscriptions) {
-        const room = rooms.get(key);
-        if (room) {
-          room.delete(socket);
-          if (room.size === 0) rooms.delete(key);
-        }
+      if (socket.authHandshakeTimer) {
+        clearTimeout(socket.authHandshakeTimer);
+        socket.authHandshakeTimer = null;
       }
+      cleanupSocketSubscriptions(socket);
     });
   });
 
@@ -58,7 +107,7 @@ function initWebSocket(server) {
       socket.isAlive = false;
       socket.ping();
     }
-  }, 30000);
+  }, HEARTBEAT_INTERVAL_MS);
 
   wss.on("close", () => clearInterval(interval));
 }
