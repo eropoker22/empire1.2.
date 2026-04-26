@@ -3235,3 +3235,19 @@ html:has(body.auth-body--faction) {
   }
 }
 
+.faction-mobile-tap-note {
+  display: none;
+  margin: 8px auto 0;
+  max-width: 34ch;
+  color: rgba(232, 240, 252, 0.86);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+
+@media (max-width: 640px), (hover: none) and (pointer: coarse) {
+  .faction-mobile-tap-note {
+    display: block;
+  }
+}

@@ -12794,7 +12794,7 @@ function bindDistrictCanvas(root) {
   };
 
   const updateTooltip = (event, district) => {
-    if (!tooltip || !tooltipValue || !tooltipType || !district) {
+    if (!tooltip || !tooltipValue || !tooltipType || !district || (event?.pointerType && event.pointerType !== "mouse")) {
       hideTooltip();
       return;
     }
@@ -13296,6 +13296,14 @@ function bindDistrictCanvas(root) {
     }
 
     trackDistrictSelectionGesture(event);
+    if (event.pointerType && event.pointerType !== "mouse") {
+      if (interactionState.hoveredDistrictId !== null) {
+        interactionState.hoveredDistrictId = null; viewport.style.cursor = "";
+        clearHoverCanvas();
+      }
+      hideTooltip();
+      return;
+    }
     pendingHoverEvent = event;
     if (hoverPointerFrameId === null) {
       hoverPointerFrameId = window.requestAnimationFrame(flushHoverPointerMove);

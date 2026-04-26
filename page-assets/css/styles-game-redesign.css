@@ -3522,3 +3522,88 @@ body {
   animation-play-state: paused;
 }
 
+@media (max-width: 720px) {
+  .game-resource-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    overflow: hidden;
+  }
+
+  .resource-pill,
+  .game-resource-strip > .game-toolbar-button {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    padding: 3px 4px;
+    border-radius: 9px;
+    gap: 2px;
+    box-sizing: border-box;
+  }
+
+  .resource-label,
+  .resource-pill--interactive .resource-label {
+    width: 100%;
+    min-height: 0;
+    font-size: clamp(7px, 2.15vw, 9px);
+    line-height: 1.05;
+    letter-spacing: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .resource-value,
+  .resource-value--inline,
+  .game-resource-strip > .game-toolbar-button {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(9px, 2.7vw, 11px);
+    line-height: 1;
+    letter-spacing: 0;
+  }
+
+  .resource-pill--influence .resource-value--inline,
+  .resource-pill--spy .resource-value--inline {
+    font-size: clamp(12px, 3.6vw, 15px);
+  }
+
+  body.is-mobile-topbar-condensed .resource-pill,
+  body.is-mobile-topbar-condensed .game-resource-strip > .game-toolbar-button {
+    min-height: 31px;
+    padding: 3px 4px;
+    border-radius: 8px;
+  }
+
+  body.is-mobile-topbar-condensed .resource-value,
+  body.is-mobile-topbar-condensed .resource-value--inline,
+  body.is-mobile-topbar-condensed .game-resource-strip > .game-toolbar-button {
+    font-size: clamp(9px, 2.6vw, 10px);
+  }
+
+  body.is-mobile-topbar-condensed .resource-pill--influence .resource-value--inline,
+  body.is-mobile-topbar-condensed .resource-pill--spy .resource-value--inline {
+    font-size: clamp(11px, 3.4vw, 13px);
+  }
+
+  .map-viewport {
+    height: clamp(124px, calc(var(--mobile-locked-vh, 100svh) * 0.19), 172px);
+    min-height: 0;
+  }
+
+  .map-canvas-shell,
+  .map-district-canvas,
+  .map-hover-canvas {
+    min-height: 0;
+    height: 100%;
+  }
+}
+
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+  .district-hover-tooltip {
+    display: none !important;
+  }
+}

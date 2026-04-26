@@ -73,6 +73,7 @@ describe("page onboarding smoke", () => {
     expect(readFileSync(resolve(root, "page-assets/js/lobby.js"), "utf8")).not.toContain("free-demo");
 
     expect(page("faction.html")).toContain('id="structure-grid"');
+    expect(page("faction.html")).toContain("dvojitým klepnutím");
     expect(page("faction.html")).toContain('id="gang-color-grid"');
     expect(page("faction.html")).toContain('id="avatar-grid"');
     expect(page("faction.html")).toContain('id="go-game"');
