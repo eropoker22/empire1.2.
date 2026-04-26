@@ -121,6 +121,11 @@
     letter-spacing: 0.02em !important;
   }
 
+  body.game-modal-scroll-locked .game-resource-strip,
+  body.game-modal-scroll-locked.is-mobile-topbar-condensed .game-resource-strip {
+    display: none !important;
+  }
+
   .modal__content,
   .district-popup-card,
   .attack-setup-popup-card,
