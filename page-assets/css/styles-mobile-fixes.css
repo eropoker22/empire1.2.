@@ -1,27 +1,34 @@
-@media (max-width: 720px) {
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
   .game-topbar-inner {
-    justify-items: stretch !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+    justify-items: center !important;
+    text-align: center;
+    row-gap: 10px;
   }
 
   .game-topbar-controls {
-    width: 100vw !important;
-    max-width: 100vw !important;
-    margin-inline: calc(50% - 50vw) !important;
-    padding-inline: 8px !important;
-    box-sizing: border-box;
-    justify-self: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    justify-self: stretch;
   }
 
   .game-resource-strip {
     display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     justify-content: stretch;
     align-items: stretch;
-    gap: 4px !important;
+    gap: 8px !important;
     width: 100% !important;
     max-width: 100% !important;
     margin-inline: 0 !important;
-    overflow: hidden !important;
+    overflow: visible !important;
+    padding-bottom: 0;
     transform: none !important;
   }
 
@@ -37,19 +44,19 @@
 
   .resource-pill,
   .game-resource-strip > .game-toolbar-button {
-    min-height: 34px !important;
-    padding: 3px 4px !important;
-    border-radius: 10px !important;
-    gap: 2px !important;
+    min-height: 62px !important;
+    padding: 7px 8px !important;
+    border-radius: 12px !important;
+    gap: 4px !important;
     box-sizing: border-box;
   }
 
   .resource-label,
   .resource-pill--interactive .resource-label {
     width: 100%;
-    min-height: 0;
-    font-size: clamp(7px, 2.1vw, 9px);
-    line-height: 1.05;
+    min-height: 22px;
+    font-size: 10px;
+    line-height: 1.1;
     letter-spacing: 0;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -57,7 +64,18 @@
   }
 
   .resource-value,
-  .resource-value--inline,
+  .resource-value--inline {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px !important;
+    line-height: 1 !important;
+    letter-spacing: 0 !important;
+  }
+
   .game-resource-strip > .game-toolbar-button {
     width: 100%;
     max-width: 100%;
@@ -65,22 +83,42 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: clamp(9px, 2.7vw, 11px) !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
     line-height: 1 !important;
-    letter-spacing: 0 !important;
+    letter-spacing: 0.02em !important;
   }
 
   body.is-mobile-topbar-condensed .game-resource-strip {
     display: grid !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 4px !important;
+    gap: 6px !important;
   }
 
   body.is-mobile-topbar-condensed .resource-pill,
   body.is-mobile-topbar-condensed .game-resource-strip > .game-toolbar-button {
-    min-height: 32px !important;
-    padding: 3px 4px !important;
-    font-size: clamp(9px, 2.6vw, 10px) !important;
+    min-height: 40px !important;
+    padding: 5px 6px !important;
+    border-radius: 8px !important;
+    gap: 3px !important;
+  }
+
+  body.is-mobile-topbar-condensed .resource-label,
+  body.is-mobile-topbar-condensed .resource-pill--interactive .resource-label {
+    min-height: 0;
+    font-size: 9px;
+    opacity: 0.76;
+  }
+
+  body.is-mobile-topbar-condensed .resource-value,
+  body.is-mobile-topbar-condensed .resource-value--inline {
+    font-size: 13px !important;
+    line-height: 1 !important;
+  }
+
+  body.is-mobile-topbar-condensed .game-resource-strip > .game-toolbar-button {
+    font-size: 10px !important;
+    letter-spacing: 0.02em !important;
   }
 
   .modal__content,
