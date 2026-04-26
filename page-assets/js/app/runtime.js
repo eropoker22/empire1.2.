@@ -50,6 +50,7 @@ import {
   getAuthoritySession,
   updateStoredPreviewSession
 } from "./model/authority-state.js";
+import { bindMapNavigation } from "./map-navigation.js";
 
 const PAGE_ROOT_SELECTOR = "main[data-page]";
 const MOUNT_SELECTOR = "[data-mount-role], [id$='-mount'], [id$='-root']";
@@ -74,7 +75,6 @@ const BORDER_TOGGLE_SELECTOR = "[data-border-toggle]";
 const MAP_PHASE_SELECTOR = "[data-map-phase]";
 const MAP_VIEWPORT_SELECTOR = "[data-map-viewport]";
 const MAP_CANVAS_SELECTOR = "[data-map-canvas]";
-const MAP_ZOOM_BUTTON_SELECTOR = "[data-map-zoom]";
 const DISTRICT_CANVAS_SELECTOR = "[data-district-canvas]";
 const DISTRICT_TOOLTIP_SELECTOR = "[data-district-tooltip]";
 const DISTRICT_TOOLTIP_VALUE_SELECTOR = "[data-district-tooltip-value]";
@@ -13343,8 +13343,11 @@ function bindDistrictCanvas(root) {
       return;
     }
 
-    if (window.performance.now() < districtSelectionGesture.suppressClickUntil) {
+    const now = window.performance.now();
+    const mapNavigationSuppressUntil = Number(viewport.dataset.mapGestureSuppressUntil || 0);
+    if (now < districtSelectionGesture.suppressClickUntil || now < mapNavigationSuppressUntil) {
       districtSelectionGesture.suppressClickUntil = 0;
+      delete viewport.dataset.mapGestureSuppressUntil;
       return;
     }
 
@@ -14032,135 +14035,6 @@ function bindGamePhaseToggle(root) {
     const nextGamePhase = currentPhaseState.gamePhase === "launch" ? "live" : "launch";
     setGamePhase(nextGamePhase);
   });
-}
-
-function bindMapNavigation(root) {
-  const viewport = root.querySelector(MAP_VIEWPORT_SELECTOR);
-  const canvasHost = root.querySelector(MAP_CANVAS_SELECTOR);
-  const zoomButtons = Array.from(root.querySelectorAll(MAP_ZOOM_BUTTON_SELECTOR));
-
-  if (!viewport || !canvasHost) {
-    return;
-  }
-
-  const MIN_SCALE = window.matchMedia?.("(max-width: 720px)")?.matches ? 1.42 : 1;
-  const MAX_SCALE = 3;
-  const ZOOM_STEP = 0.18;
-  const state = {
-    scale: MIN_SCALE,
-    x: 0,
-    y: 0,
-    pointerId: null,
-    startX: 0,
-    startY: 0,
-    originX: 0,
-    originY: 0
-  };
-
-  const clampOffset = () => {
-    const maxX = Math.max(0, ((canvasHost.offsetWidth * state.scale) - viewport.clientWidth) / 2);
-    const maxY = Math.max(0, ((canvasHost.offsetHeight * state.scale) - viewport.clientHeight) / 2);
-    state.x = Math.min(Math.max(state.x, -maxX), maxX);
-    state.y = Math.min(Math.max(state.y, -maxY), maxY);
-  };
-
-  const render = () => {
-    clampOffset();
-    canvasHost.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
-  };
-
-  const setScale = (nextScale) => {
-    state.scale = Math.min(Math.max(nextScale, MIN_SCALE), MAX_SCALE);
-
-    if (state.scale === MIN_SCALE && MIN_SCALE === 1) {
-      state.x = 0;
-      state.y = 0;
-    }
-
-    render();
-  };
-
-  viewport.addEventListener("wheel", (event) => {
-    event.preventDefault();
-    const direction = event.deltaY < 0 ? 1 : -1;
-    setScale(state.scale + direction * ZOOM_STEP);
-  });
-
-  for (const button of zoomButtons) {
-    button.addEventListener("click", () => {
-      const direction = button.dataset.mapZoom === "in" ? 1 : -1;
-      setScale(state.scale + direction * ZOOM_STEP);
-    });
-  }
-
-  viewport.addEventListener("pointerdown", (event) => {
-    if (state.scale <= 1) {
-      return;
-    }
-
-    state.pointerId = event.pointerId;
-    state.startX = event.clientX;
-    state.startY = event.clientY;
-    state.originX = state.x;
-    state.originY = state.y;
-    viewport.classList.add("is-dragging");
-    viewport.setPointerCapture(event.pointerId);
-  });
-
-  let dragPointerFrameId = null;
-  let pendingDragEvent = null;
-
-  const flushDragPointerMove = () => {
-    dragPointerFrameId = null;
-    const event = pendingDragEvent;
-    pendingDragEvent = null;
-
-    if (!event || state.pointerId !== event.pointerId) {
-      return;
-    }
-
-    state.x = state.originX + (event.clientX - state.startX);
-    state.y = state.originY + (event.clientY - state.startY);
-    render();
-  };
-
-  viewport.addEventListener("pointermove", (event) => {
-    if (state.pointerId !== event.pointerId) {
-      return;
-    }
-
-    pendingDragEvent = event;
-    if (dragPointerFrameId === null) {
-      dragPointerFrameId = window.requestAnimationFrame(flushDragPointerMove);
-    }
-  });
-
-  const releasePointer = (event) => {
-    if (state.pointerId !== event.pointerId) {
-      return;
-    }
-
-    if (dragPointerFrameId !== null) {
-      window.cancelAnimationFrame(dragPointerFrameId);
-      dragPointerFrameId = null;
-    }
-    pendingDragEvent = null;
-    state.pointerId = null;
-    viewport.classList.remove("is-dragging");
-    if (viewport.hasPointerCapture(event.pointerId)) {
-      viewport.releasePointerCapture(event.pointerId);
-    }
-  };
-
-  viewport.addEventListener("pointerup", releasePointer);
-  viewport.addEventListener("pointercancel", releasePointer);
-  viewport.addEventListener("pointerleave", (event) => {
-    if (state.pointerId === event.pointerId) {
-      releasePointer(event);
-    }
-  });
-
-  render();
 }
 
 function bindBuildingActionStatus(root) {

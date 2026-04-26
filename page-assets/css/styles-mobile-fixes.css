@@ -1,0 +1,96 @@
+@media (max-width: 720px) {
+  .game-resource-strip {
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    gap: 0 !important;
+    width: 100%;
+    overflow: visible !important;
+    transform: none !important;
+  }
+
+  .game-resource-strip .resource-pill {
+    display: none !important;
+  }
+
+  .game-resource-strip > .game-toolbar-button {
+    width: auto !important;
+    min-width: 92px !important;
+    max-width: min(46vw, 132px);
+    min-height: 34px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    font-size: 11px !important;
+    letter-spacing: 0.04em !important;
+  }
+
+  body.is-mobile-topbar-condensed .game-resource-strip {
+    display: flex !important;
+    gap: 0 !important;
+  }
+
+  body.is-mobile-topbar-condensed .game-resource-strip > .game-toolbar-button {
+    min-height: 32px !important;
+    padding: 0 11px !important;
+    font-size: 10px !important;
+  }
+
+  .modal__content,
+  .district-popup-card,
+  .attack-setup-popup-card,
+  .wanted-popup-card,
+  .player-popup-card,
+  .market-popup-card,
+  .storage-popup-card,
+  .building-detail-modal__content,
+  .game-admin-slice-overlay__dialog {
+    position: relative;
+  }
+
+  .modal__close,
+  .district-popup-close,
+  .attack-setup-popup-close,
+  .wanted-popup-close,
+  .player-popup-close,
+  .market-popup-close,
+  .storage-popup-close,
+  .building-tech-popup-close,
+  .avatar-lightbox__close,
+  .game-admin-slice-overlay__close {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    left: auto !important;
+    z-index: 48 !important;
+    display: grid !important;
+    place-items: center !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    font-size: 0 !important;
+    line-height: 1 !important;
+  }
+
+  .modal__close::before,
+  .district-popup-close::before,
+  .attack-setup-popup-close::before,
+  .wanted-popup-close::before,
+  .player-popup-close::before,
+  .market-popup-close::before,
+  .storage-popup-close::before,
+  .building-tech-popup-close::before,
+  .avatar-lightbox__close::before,
+  .game-admin-slice-overlay__close::before {
+    content: "\00d7";
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .game-admin-slice-overlay__header {
+    padding-right: 54px;
+  }
+}

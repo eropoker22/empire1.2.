@@ -105,6 +105,13 @@ document.addEventListener("DOMContentLoaded", () => {
     detailPanX: 0,
     detailPanY: 0,
     activePanPointerId: null,
+    detailIsPinching: false,
+    detailPinchStartDistance: 0,
+    detailPinchStartZoom: 1,
+    detailPinchStartMidX: 0,
+    detailPinchStartMidY: 0,
+    detailPinchOriginX: 0,
+    detailPinchOriginY: 0,
     panStartX: 0,
     panStartY: 0,
     panOriginX: 0,
@@ -112,6 +119,7 @@ document.addEventListener("DOMContentLoaded", () => {
     panningMoved: false,
     suppressNextMapClick: false
   };
+  const detailMapPointers = new Map();
 
   const normalizeSelectableDistrictId = (districtId) => {
     const normalizedDistrictId = Number.parseInt(String(districtId || ""), 10) || 0;
@@ -510,12 +518,13 @@ document.addEventListener("DOMContentLoaded", () => {
         updateLobbySummary();
         updateDetailModal();
         renderServerList();
-        renderAllCanvases();
         applyDetailZoom(1);
         if (detailModal instanceof HTMLElement) {
           detailModal.classList.remove("hidden");
           detailModal.setAttribute("aria-hidden", "false");
         }
+        renderAllCanvases();
+        window.requestAnimationFrame(renderAllCanvases);
       });
     }
   };
@@ -545,6 +554,8 @@ document.addEventListener("DOMContentLoaded", () => {
     detailCanvasShell?.classList.remove("is-panning");
     setDetailPan(0, 0);
     applyDetailZoom(1);
+    detailMapPointers.clear();
+    state.detailIsPinching = false;
   };
 
   const setHoveredDetailDistrictId = (nextDistrictId) => {
@@ -619,11 +630,78 @@ document.addEventListener("DOMContentLoaded", () => {
 
   bindCanvasInteractions(detailCanvas);
 
+  const getPointerPair = () => {
+    const pointers = Array.from(detailMapPointers.values());
+    return pointers.length >= 2 ? pointers.slice(0, 2) : null;
+  };
+
+  const getPointerDistance = (first, second) => Math.hypot(second.x - first.x, second.y - first.y);
+
+  const getPointerMidpoint = (first, second) => ({
+    x: (first.x + second.x) / 2,
+    y: (first.y + second.y) / 2
+  });
+
+  const beginDetailMapPinch = () => {
+    const pair = getPointerPair();
+    if (!pair) {
+      return;
+    }
+
+    const [first, second] = pair;
+    const midpoint = getPointerMidpoint(first, second);
+    state.detailIsPinching = true;
+    state.detailPinchStartDistance = Math.max(1, getPointerDistance(first, second));
+    state.detailPinchStartZoom = state.detailZoom;
+    state.detailPinchStartMidX = midpoint.x;
+    state.detailPinchStartMidY = midpoint.y;
+    state.detailPinchOriginX = state.detailPanX;
+    state.detailPinchOriginY = state.detailPanY;
+    state.activePanPointerId = null;
+    state.suppressNextMapClick = true;
+    detailCanvasShell?.classList.add("is-panning");
+  };
+
+  const updateDetailMapPinch = (event) => {
+    const pair = getPointerPair();
+    if (!pair) {
+      return false;
+    }
+
+    event.preventDefault();
+    if (!state.detailIsPinching) {
+      beginDetailMapPinch();
+    }
+
+    const [first, second] = pair;
+    const distance = Math.max(1, getPointerDistance(first, second));
+    const midpoint = getPointerMidpoint(first, second);
+    const nextZoom = state.detailPinchStartZoom * (distance / Math.max(1, state.detailPinchStartDistance));
+    applyDetailZoom(nextZoom);
+    setDetailPan(
+      state.detailPinchOriginX + (midpoint.x - state.detailPinchStartMidX),
+      state.detailPinchOriginY + (midpoint.y - state.detailPinchStartMidY)
+    );
+    state.suppressNextMapClick = true;
+    return true;
+  };
+
   const startDetailMapPan = (event) => {
-    if (!(detailCanvasShell instanceof HTMLElement) || state.detailZoom <= 1.02) {
+    if (!(detailCanvasShell instanceof HTMLElement)) {
       return;
     }
     if (event.target instanceof Element && event.target.closest("button")) {
+      return;
+    }
+
+    detailMapPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    detailCanvasShell.setPointerCapture?.(event.pointerId);
+    if (detailMapPointers.size >= 2) {
+      beginDetailMapPinch();
+      return;
+    }
+
+    if (state.detailZoom <= 1.02) {
       return;
     }
 
@@ -634,10 +712,17 @@ document.addEventListener("DOMContentLoaded", () => {
     state.panOriginY = state.detailPanY;
     state.panningMoved = false;
     detailCanvasShell.classList.add("is-panning");
-    detailCanvasShell.setPointerCapture?.(event.pointerId);
   };
 
   const moveDetailMapPan = (event) => {
+    if (detailMapPointers.has(event.pointerId)) {
+      detailMapPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+
+    if (updateDetailMapPinch(event)) {
+      return;
+    }
+
     if (state.activePanPointerId !== event.pointerId || !(detailCanvasShell instanceof HTMLElement)) {
       return;
     }
@@ -652,17 +737,37 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const stopDetailMapPan = (event) => {
-    if (state.activePanPointerId !== event.pointerId || !(detailCanvasShell instanceof HTMLElement)) {
+    if (!(detailCanvasShell instanceof HTMLElement)) {
+      return;
+    }
+
+    const wasPinching = state.detailIsPinching;
+    detailMapPointers.delete(event.pointerId);
+    if (detailCanvasShell.hasPointerCapture?.(event.pointerId)) {
+      detailCanvasShell.releasePointerCapture?.(event.pointerId);
+    }
+
+    if (wasPinching && detailMapPointers.size < 2) {
+      state.detailIsPinching = false;
+      state.suppressNextMapClick = true;
+    }
+
+    if (state.activePanPointerId !== event.pointerId) {
+      if (detailMapPointers.size === 0) {
+        detailCanvasShell.classList.remove("is-panning");
+      }
       return;
     }
 
     if (state.panningMoved) {
       state.suppressNextMapClick = true;
     }
+
     state.activePanPointerId = null;
     state.panningMoved = false;
-    detailCanvasShell.classList.remove("is-panning");
-    detailCanvasShell.releasePointerCapture?.(event.pointerId);
+    if (detailMapPointers.size === 0) {
+      detailCanvasShell.classList.remove("is-panning");
+    }
   };
 
   detailCanvasShell?.addEventListener("pointerdown", startDetailMapPan);
