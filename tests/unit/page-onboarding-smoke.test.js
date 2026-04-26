@@ -69,6 +69,8 @@ describe("page onboarding smoke", () => {
     expect(page("lobby.html")).toContain('data-server-detail-map');
     expect(page("lobby.html")).toContain('data-server-detail-continue');
     expect(page("lobby.html")).toContain('src="../page-assets/js/lobby.js"');
+    expect(readFileSync(resolve(root, "page-assets/js/lobby.js"), "utf8")).not.toContain("war-demo");
+    expect(readFileSync(resolve(root, "page-assets/js/lobby.js"), "utf8")).not.toContain("free-demo");
 
     expect(page("faction.html")).toContain('id="structure-grid"');
     expect(page("faction.html")).toContain('id="gang-color-grid"');
@@ -80,6 +82,7 @@ describe("page onboarding smoke", () => {
     expect(page("game.html")).toContain('data-mount-role="map"');
     expect(page("game.html")).toContain('src="../page-assets/js/app.js"');
     expect(page("game.html")).toContain('src="../page-assets/js/app/game-admin-slice-launcher.js"');
+    expect(page("game.html")).not.toContain('src="../page-assets/js/admin-assets/admin-slice-demo.js"');
   });
 
   it("walks a clean registration draft through lobby and faction lock", () => {
@@ -96,6 +99,7 @@ describe("page onboarding smoke", () => {
       gangName: "Smoke Crew",
       serverMode: "war"
     });
+    expect(readSession().registration.password).toBeUndefined();
     expect(readSession().registration.serverId).toBeUndefined();
     expect(readSession().registration.factionId).toBeUndefined();
 

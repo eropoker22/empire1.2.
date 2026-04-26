@@ -17,6 +17,7 @@ export interface InstanceSnapshotDto {
   metadata: InstanceMetadataRecord;
   version: VersionMetadata;
   integrity: SnapshotIntegrityDto;
+  runtime: SnapshotRuntimeDto;
   state: CoreGameState;
 }
 
@@ -25,3 +26,10 @@ export interface SnapshotIntegrityDto {
   rootVersion: number;
 }
 
+export interface SnapshotRuntimeDto {
+  processedCommandIds: string[];
+  commandRateLimitWindow: {
+    tick: number;
+    commandCountsByPlayerId: Record<string, number>;
+  };
+}

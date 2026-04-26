@@ -11,6 +11,7 @@ import {
   type BuildingActionSpecialEffectResult,
   resolveBuildingActionSpecialEffect
 } from "./buildingActionSpecialEffects";
+import { createPlayerPoliceState, resolveWantedLevel } from "./playerPoliceState";
 
 /**
  * Responsibility: Placeholder handler for building-specific actions.
@@ -95,6 +96,13 @@ export const handleUseBuildingAction = (
     lastActionAt: command.issuedAt,
     version: player.version + 1
   };
+  const currentPoliceState = state.policeStatesById[player.policeStateId] ?? createPlayerPoliceState(player, state.root.tick);
+  const nextPoliceState = {
+    ...currentPoliceState,
+    heat: Math.max(0, Number(currentPoliceState.heat || 0) + action.heatGain),
+    wantedLevel: resolveWantedLevel(Math.max(0, Number(currentPoliceState.heat || 0) + action.heatGain)),
+    version: currentPoliceState.version + (state.policeStatesById[player.policeStateId] ? 1 : 0)
+  };
   const eventId = composeEntityId("event", `${command.id}:building-action`);
   const notification = createBuildingActionReportNotification({
     command,
@@ -126,6 +134,10 @@ export const handleUseBuildingAction = (
       resourceStatesById: {
         ...state.resourceStatesById,
         [nextPlayerResourceState.id]: nextPlayerResourceState
+      },
+      policeStatesById: {
+        ...state.policeStatesById,
+        [nextPoliceState.id]: nextPoliceState
       },
       notificationsById: {
         ...state.notificationsById,

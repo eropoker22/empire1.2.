@@ -17,10 +17,30 @@ export const createPersistenceRestoreService = (
 ): PersistenceRestoreService => ({
   restore: async (runtime) => {
     const snapshot = await snapshotRepository.loadLatest(runtime.record.id);
-    runtime.state = snapshot
-      ? restoreInstanceState(snapshot)
-      : createInitialState(runtime.record.id, runtime.record.mode);
+    if (!snapshot) {
+      runtime.state = createInitialState(runtime.record.id, runtime.record.mode);
+      runtime.processedCommandIds = new Set();
+      runtime.commandRateLimitWindow = {
+        tick: runtime.state.root.tick,
+        commandCountsByPlayerId: {}
+      };
+      return runtime;
+    }
+
+    runtime.state = restoreInstanceState(snapshot);
+    runtime.processedCommandIds = new Set(snapshot.runtime?.processedCommandIds ?? []);
+    runtime.commandRateLimitWindow = snapshot.runtime?.commandRateLimitWindow
+      ? {
+          tick: snapshot.runtime.commandRateLimitWindow.tick,
+          commandCountsByPlayerId: {
+            ...snapshot.runtime.commandRateLimitWindow.commandCountsByPlayerId
+          }
+        }
+      : {
+          tick: runtime.state.root.tick,
+          commandCountsByPlayerId: {}
+        };
+
     return runtime;
   }
 });
-

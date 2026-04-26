@@ -22,6 +22,7 @@ const GAME_ENTRY_HREF = "./game.html";
 const LOGIN_ENTRY_HREF = "./login.html";
 const DEFAULT_FACTION_SERVER_ID = "war-eu-01";
 const DEFAULT_FACTION_DISTRICT_ID = 27;
+const AVATAR_MARQUEE_COPY_COUNT = 6;
 const COLOR_OPTIONS = [
   { name: "Červená", value: "#ef4444" }, { name: "Modrá", value: "#3b82f6" }, { name: "Zelená", value: "#22c55e" },
   { name: "Žlutá", value: "#eab308" }, { name: "Oranžová", value: "#f97316" }, { name: "Fialová", value: "#8b5cf6" },
@@ -565,19 +566,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function normalizeMarqueeLoop() {
     if (!marquee || marqueeLoopWidth <= 0) return;
-    while (marquee.scrollLeft >= marqueeLoopWidth) {
+    const minLoopPosition = marqueeLoopWidth;
+    const maxLoopPosition = marqueeLoopWidth * 3;
+    while (marquee.scrollLeft >= maxLoopPosition) {
       marquee.scrollLeft -= marqueeLoopWidth;
     }
-    while (marquee.scrollLeft < 0) {
+    while (marquee.scrollLeft < minLoopPosition) {
       marquee.scrollLeft += marqueeLoopWidth;
     }
   }
 
   function updateMarqueeLoopWidth(resetPosition = false) {
     if (!marquee) return;
-    marqueeLoopWidth = marquee.scrollWidth / 2;
+    marqueeLoopWidth = marquee.scrollWidth / AVATAR_MARQUEE_COPY_COUNT;
     if (resetPosition && marqueeLoopWidth > 0) {
-      marquee.scrollLeft = marqueeLoopWidth;
+      marquee.scrollLeft = marqueeLoopWidth * 2;
       return;
     }
     normalizeMarqueeLoop();
@@ -585,11 +588,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function recenterMarqueeWindow() {
     if (!marquee || marqueeLoopWidth <= 0) return;
-    if (marquee.scrollLeft < marqueeLoopWidth * 0.5) {
+    if (marquee.scrollLeft < marqueeLoopWidth * 1.3) {
       marquee.scrollLeft += marqueeLoopWidth;
       return;
     }
-    if (marquee.scrollLeft > marqueeLoopWidth * 1.5) {
+    if (marquee.scrollLeft > marqueeLoopWidth * 2.7) {
       marquee.scrollLeft -= marqueeLoopWidth;
     }
   }
@@ -604,9 +607,9 @@ document.addEventListener("DOMContentLoaded", () => {
       updateLightboxNavigation();
       return;
     }
-    const looped = avatars.concat(avatars);
-    avatarGrid.innerHTML = looped.map((src) => `
-      <button class="avatar-item" data-avatar="${src}" type="button" aria-label="Vybrat avatara">
+    const looped = Array.from({ length: AVATAR_MARQUEE_COPY_COUNT }, () => avatars).flat();
+    avatarGrid.innerHTML = looped.map((src, index) => `
+      <button class="avatar-item" data-avatar="${src}" data-loop-index="${index}" type="button" aria-label="Vybrat avatara">
         <img src="${src}" alt="Avatar" loading="${isCoarsePointer ? "eager" : "lazy"}">
       </button>
     `).join("");
@@ -622,6 +625,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       if (!isCoarsePointer) {
         item.addEventListener("mouseenter", () => {
+          hoverPause = true;
           const preview = document.createElement("div");
           preview.id = "avatar-hover-preview";
           preview.className = "avatar-hover-preview";
@@ -629,7 +633,10 @@ document.addEventListener("DOMContentLoaded", () => {
           document.getElementById("avatar-hover-preview")?.remove();
           document.body.appendChild(preview);
         });
-        item.addEventListener("mouseleave", () => document.getElementById("avatar-hover-preview")?.remove());
+        item.addEventListener("mouseleave", () => {
+          hoverPause = false;
+          document.getElementById("avatar-hover-preview")?.remove();
+        });
       }
     });
     updateMarqueeLoopWidth(true);
@@ -763,7 +770,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (avatarLeft && avatarRight && avatarGrid && marquee) {
     const scrollByAmount = () => marquee.clientWidth * 0.6;
-    const autoSpeedPxPerMs = isCoarsePointer ? 0.016 : 0.038;
+    const autoSpeedPxPerMs = isCoarsePointer ? 0.022 : 0.052;
     const ARROW_HOLD_START_MS = 170;
     let lastTime = 0;
     let suppressArrowClickUntil = 0;
@@ -857,7 +864,6 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("resize", updateMarqueeLoopWidth);
 
     if (!isCoarsePointer) {
-      marquee.addEventListener("mouseenter", () => { hoverPause = true; });
       marquee.addEventListener("mouseleave", () => {
         hoverPause = false;
         document.getElementById("avatar-hover-preview")?.remove();

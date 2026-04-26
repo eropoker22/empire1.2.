@@ -4,6 +4,17 @@ import path from "node:path";
 const root = process.cwd();
 const sourceRoots = ["apps", "packages", "tools"];
 const maxLines = 250;
+const legacyFileBudgets = [
+  {
+    path: "page-assets/js/app/runtime.js",
+    maxLines: 15850,
+    forbiddenPatterns: [
+      "apps/server",
+      "@empire/game-core",
+      "@empire/game-config"
+    ]
+  }
+];
 const violations = [];
 
 const walk = (dir) => {
@@ -35,6 +46,28 @@ for (const sourceRoot of sourceRoots) {
   }
 }
 
+for (const budget of legacyFileBudgets) {
+  const fullPath = path.join(root, budget.path);
+
+  if (!fs.existsSync(fullPath)) {
+    violations.push(`${budget.path} is missing from the explicit legacy file budget`);
+    continue;
+  }
+
+  const content = fs.readFileSync(fullPath, "utf8");
+  const lineCount = content.split(/\r?\n/).length;
+
+  if (lineCount > budget.maxLines) {
+    violations.push(`${budget.path} has ${lineCount} lines (legacy budget ${budget.maxLines})`);
+  }
+
+  for (const forbiddenPattern of budget.forbiddenPatterns) {
+    if (content.includes(forbiddenPattern)) {
+      violations.push(`${budget.path} contains forbidden legacy boundary pattern "${forbiddenPattern}"`);
+    }
+  }
+}
+
 if (violations.length > 0) {
   console.error("File size violations detected:");
   for (const violation of violations) {
@@ -44,4 +77,3 @@ if (violations.length > 0) {
 }
 
 console.log("File size checks passed.");
-

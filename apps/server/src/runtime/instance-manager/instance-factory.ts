@@ -40,6 +40,11 @@ export const createServerInstanceRuntime = (
   );
   const scheduler = createInstanceScheduler(config.tickRateMs);
   const snapshotController = createSnapshotController(createNullGameStateRepository());
+  const processedCommandIds = new Set<string>();
+  const commandRateLimitWindow = {
+    tick: state.root.tick,
+    commandCountsByPlayerId: {}
+  };
 
   const runtime: ServerInstanceRuntime = {
     record: {
@@ -61,7 +66,9 @@ export const createServerInstanceRuntime = (
     logger,
     replayLogWriter,
     scheduler,
-    snapshotController
+    snapshotController,
+    processedCommandIds,
+    commandRateLimitWindow
   };
 
   createInstanceMonitorSnapshot(runtime.record, runtime.state, runtime.eventQueue, runtime.runtimeHealth);

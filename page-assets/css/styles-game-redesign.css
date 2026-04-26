@@ -1300,18 +1300,30 @@ body {
     linear-gradient(180deg, rgba(5, 10, 17, 0.12), rgba(5, 10, 17, 0.4)),
     url("../../img/blackout.png") center/cover;
   transform-origin: center center;
-  will-change: transform, filter;
+  will-change: transform;
   transition:
-    filter 220ms var(--motion-modal-ease),
     box-shadow 220ms var(--motion-modal-ease),
     transform 260ms var(--motion-modal-ease);
 }
 
 .map-district-canvas {
-  filter: saturate(0.94) contrast(1.04);
+  position: relative;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
   transition:
-    filter 220ms var(--motion-modal-ease),
     transform 260ms var(--motion-modal-ease);
+}
+
+.map-hover-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 18px 18px 10px 10px;
+  pointer-events: none;
 }
 
 .map-stage-shell,
@@ -1344,11 +1356,7 @@ body {
 }
 
 .map-interaction-overlay::before {
-  background:
-    radial-gradient(circle at var(--map-hover-x, 50%) var(--map-hover-y, 50%), rgba(103, 225, 255, 0.26), rgba(103, 225, 255, 0.12) 7%, rgba(103, 225, 255, 0.03) 15%, transparent 22%);
-  mix-blend-mode: screen;
-  filter: blur(2px);
-  transform: scale(1.015);
+  content: none;
 }
 
 .map-interaction-overlay::after {
@@ -1361,8 +1369,8 @@ body {
 }
 
 .map-interaction-overlay.is-hovering::before {
-  opacity: 1;
-  animation: ui-soft-pulse 2.3s ease-in-out infinite;
+  opacity: 0;
+  animation: none;
 }
 
 .map-interaction-overlay.is-focused::after {
@@ -1385,7 +1393,7 @@ body {
 }
 
 .map-canvas-shell.has-map-hover {
-  filter: saturate(1.03) contrast(1.05);
+  filter: none;
 }
 
 .map-stage-shell.is-district-focused {
@@ -1408,7 +1416,6 @@ body {
 }
 
 .map-canvas-shell.is-district-focused {
-  filter: saturate(1.05) contrast(1.06);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.03),
     inset 0 0 38px rgba(255, 154, 61, 0.06);

@@ -38,6 +38,14 @@ export const createInstanceSnapshot = (runtime: ServerInstanceRuntime): Instance
     },
     rootVersion: runtime.state.root.version
   },
+  runtime: {
+    processedCommandIds: [...runtime.processedCommandIds],
+    commandRateLimitWindow: {
+      tick: runtime.commandRateLimitWindow.tick,
+      commandCountsByPlayerId: {
+        ...runtime.commandRateLimitWindow.commandCountsByPlayerId
+      }
+    }
+  },
   state: runtime.state
 });
-

@@ -525,8 +525,12 @@
 .server-detail-modal__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(2, 6, 23, 0.76);
-  backdrop-filter: blur(4px);
+  background:
+    radial-gradient(circle at 20% 12%, rgba(34, 211, 238, 0.12), transparent 34%),
+    radial-gradient(circle at 86% 78%, rgba(244, 114, 182, 0.1), transparent 30%),
+    rgba(2, 6, 23, 0.56);
+  backdrop-filter: blur(12px) saturate(1.28);
+  -webkit-backdrop-filter: blur(12px) saturate(1.28);
 }
 
 .server-detail-modal__card {
@@ -536,17 +540,20 @@
   display: grid;
   gap: 10px;
   padding: 14px;
-  border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--auth-accent) 54%, rgba(255, 255, 255, 0.2));
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--auth-accent) 62%, rgba(255, 255, 255, 0.2));
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.04), transparent 24%),
-    radial-gradient(circle at top right, color-mix(in srgb, var(--auth-accent) 22%, transparent), transparent 34%),
-    radial-gradient(circle at bottom left, color-mix(in srgb, var(--auth-accent-2) 18%, transparent), transparent 30%),
-    linear-gradient(180deg, rgba(8, 13, 24, 0.96), rgba(4, 8, 15, 0.98));
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.024) 26%, transparent 58%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--auth-accent) 24%, transparent), transparent 36%),
+    radial-gradient(circle at bottom left, color-mix(in srgb, var(--auth-accent-2) 20%, transparent), transparent 34%),
+    linear-gradient(180deg, rgba(8, 13, 24, 0.72), rgba(4, 8, 15, 0.84));
   box-shadow:
     0 24px 48px rgba(2, 6, 23, 0.54),
     0 0 22px color-mix(in srgb, var(--auth-accent) 28%, transparent),
-    0 0 30px color-mix(in srgb, var(--auth-accent-2) 20%, transparent);
+    0 0 30px color-mix(in srgb, var(--auth-accent-2) 20%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(24px) saturate(1.45);
+  -webkit-backdrop-filter: blur(24px) saturate(1.45);
   min-height: 620px;
 }
 
@@ -644,7 +651,14 @@
   --server-map-offset-y: 0px;
   overflow: hidden;
   border-radius: 12px;
-  border: 1px solid rgba(56, 189, 248, 0.24);
+  border: 1px solid rgba(103, 225, 255, 0.36);
+  background:
+    linear-gradient(180deg, rgba(2, 6, 16, 0.14), rgba(2, 6, 16, 0.46)),
+    url("../../img/mapanoc.png") center / cover;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 14px 30px rgba(0, 0, 0, 0.26),
+    0 0 20px rgba(34, 211, 238, 0.14);
   max-width: 100%;
   touch-action: none;
   cursor: default;
@@ -672,11 +686,17 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  transform: translate(var(--server-map-offset-x, 0px), var(--server-map-offset-y, 0px)) scale(var(--server-map-scale, 1));
+  transform: translate3d(var(--server-map-offset-x, 0px), var(--server-map-offset-y, 0px), 0) scale(var(--server-map-scale, 1));
   transform-origin: center center;
   transition: transform 120ms ease;
   cursor: crosshair;
   -webkit-user-drag: none;
+}
+
+.server-detail-modal__map-wrap.is-panning .server-detail-modal__map,
+.server-detail-modal__map-wrap.is-panning .server-detail-modal__map-canvas {
+  transition: none;
+  cursor: grabbing;
 }
 
 .server-map-scale-controls {
@@ -786,25 +806,6 @@
   background: rgba(10, 14, 24, 0.66);
   color: rgba(226, 232, 240, 0.9);
   font-size: 12px;
-}
-
-.server-detail-modal__map-zoom-btn {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  z-index: 2;
-  display: inline-flex !important;
-  align-items: center;
-  justify-content: center;
-  width: auto !important;
-  max-width: none !important;
-  min-width: 0 !important;
-  min-height: 30px;
-  padding: 0 10px !important;
-  font-size: 11px;
-  border-radius: 10px;
-  background: rgba(8, 12, 22, 0.86);
-  border-color: rgba(56, 189, 248, 0.5);
 }
 
 .server-detail-modal__actions {
@@ -961,6 +962,261 @@ body.servers-page .auth-card.auth-card--wide {
 .lobby-server-list-only {
   display: grid;
   gap: 8px;
+}
+
+/* Lobby glass refresh: compact server selection surface without changing flow. */
+body.servers-page.auth-body--login {
+  min-height: 100vh;
+  background:
+    linear-gradient(120deg, rgba(2, 6, 12, 0.94), rgba(6, 12, 24, 0.72) 48%, rgba(2, 6, 12, 0.96)),
+    linear-gradient(180deg, rgba(2, 6, 12, 0.28), rgba(2, 6, 12, 0.86)),
+    url("../../img/loginmob.jpeg") center / cover fixed;
+}
+
+body.servers-page.auth-body--war::before {
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.08), transparent 28%, rgba(244, 63, 94, 0.07)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 80px),
+    linear-gradient(180deg, rgba(2, 6, 12, 0.2), rgba(2, 6, 12, 0.62));
+}
+
+body.servers-page .auth-shell {
+  width: min(620px, calc(100vw - 28px));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 28px 0;
+  align-content: center;
+}
+
+body.servers-page .auth-card.auth-card--wide {
+  width: min(560px, 100%);
+  max-width: 560px;
+  padding: 14px;
+  gap: 10px;
+  border-radius: 10px;
+  border-color: rgba(103, 232, 249, 0.28);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.075), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.68), rgba(2, 6, 23, 0.78)),
+    rgba(3, 7, 18, 0.56);
+  box-shadow:
+    0 28px 76px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.045) inset,
+    0 0 34px rgba(34, 211, 238, 0.12),
+    0 0 40px rgba(244, 63, 94, 0.08);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+body.servers-page .auth-card.auth-card--wide::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(103, 232, 249, 0.16), transparent 20%, rgba(251, 113, 133, 0.1) 82%, transparent),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 9px);
+  opacity: 0.52;
+}
+
+body.servers-page .auth-card.auth-card--wide > * {
+  position: relative;
+  z-index: 1;
+}
+
+body.servers-page .auth-brand {
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid rgba(103, 232, 249, 0.14);
+  border-radius: 9px;
+  background: rgba(2, 6, 23, 0.34);
+}
+
+body.servers-page .auth-brand__logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+}
+
+body.servers-page .brand__name {
+  font-size: 0.88rem;
+  letter-spacing: 0.08em;
+}
+
+body.servers-page .brand__tag {
+  font-size: 0.72rem;
+}
+
+body.servers-page .auth-headline {
+  gap: 4px;
+  padding: 2px 2px 0;
+}
+
+body.servers-page .auth-headline h1 {
+  font-size: clamp(1.55rem, 4vw, 2.25rem);
+  letter-spacing: 0;
+}
+
+body.servers-page .auth-subtitle {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: rgba(224, 242, 254, 0.72);
+}
+
+body.servers-page .lobby-profile-card {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border-radius: 9px;
+  border-color: rgba(103, 232, 249, 0.16);
+  background: rgba(2, 6, 23, 0.38);
+}
+
+body.servers-page .lobby-profile-card__label {
+  margin-bottom: 3px;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+}
+
+body.servers-page .lobby-profile-card__name {
+  font-size: 1rem;
+}
+
+body.servers-page .lobby-profile-card__meta {
+  margin-top: 4px;
+  font-size: 0.72rem;
+}
+
+body.servers-page .lobby-profile-card__summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+body.servers-page .lobby-profile-card__summary span {
+  display: grid;
+  gap: 3px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.54);
+  font-size: 0.64rem;
+}
+
+body.servers-page .lobby-profile-card__summary strong {
+  overflow-wrap: anywhere;
+  color: #f8fafc;
+  font-size: 0.72rem;
+}
+
+body.servers-page .auth-mode-tabs {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+  border-radius: 9px;
+  border-color: rgba(103, 232, 249, 0.18);
+  background: rgba(2, 6, 23, 0.44);
+}
+
+body.servers-page .auth-mode-tab {
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+body.servers-page .auth-mode-tab.is-active {
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.26), rgba(244, 63, 94, 0.14)),
+    rgba(15, 23, 42, 0.86);
+  box-shadow:
+    0 0 18px rgba(34, 211, 238, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+body.servers-page .auth-entry-status {
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-color: rgba(163, 230, 53, 0.18);
+  background: rgba(2, 6, 23, 0.38);
+  color: rgba(224, 242, 254, 0.82);
+  font-size: 0.72rem;
+}
+
+body.servers-page .lobby-server-list-only {
+  gap: 7px;
+}
+
+body.servers-page .auth-servers {
+  gap: 7px;
+  margin-bottom: 0;
+  max-height: min(34vh, 270px);
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+body.servers-page .auth-server-card {
+  gap: 3px;
+  padding: 10px 11px;
+  border-radius: 9px;
+  border-color: rgba(103, 232, 249, 0.16);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.07), transparent 42%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.62), rgba(2, 6, 23, 0.68));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+body.servers-page .auth-server-card__label {
+  font-size: 0.82rem;
+}
+
+body.servers-page .auth-server-card__subtitle {
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+body.servers-page .auth-server-card__meta,
+body.servers-page .auth-server-card__schedule,
+body.servers-page .auth-server-card__countdown {
+  font-size: 0.62rem;
+}
+
+body.servers-page .auth-server-card:hover {
+  transform: translateY(-1px);
+}
+
+body.servers-page .auth-server-card.is-selected {
+  border-color: rgba(103, 232, 249, 0.68);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.16), rgba(244, 63, 94, 0.08)),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.76), rgba(2, 6, 23, 0.82));
+}
+
+@media (max-width: 620px) {
+  body.servers-page .auth-shell {
+    width: min(420px, calc(100vw - 18px));
+    padding: 14px 0;
+    align-content: start;
+  }
+
+  body.servers-page .auth-card.auth-card--wide {
+    width: 100%;
+    padding: 11px;
+  }
+
+  body.servers-page .lobby-profile-card__summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.servers-page .auth-servers {
+    max-height: none;
+  }
 }
 
 .auth-card__head {
@@ -1558,6 +1814,110 @@ body.servers-page .auth-card.auth-card--wide {
   box-shadow: 0 0 18px rgba(168, 85, 247, 0.4);
 }
 
+/* Faction glass refresh: keeps the existing flow, but makes the avatar picker feel alive. */
+.auth-card--faction .card {
+  border-radius: 14px;
+  border-color: color-mix(in srgb, var(--faction-accent) 24%, rgba(255, 255, 255, 0.12));
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), transparent 30%),
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--faction-accent) 13%, transparent), transparent 36%),
+    linear-gradient(180deg, rgba(8, 13, 24, 0.72), rgba(3, 7, 15, 0.82));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 38px rgba(0, 0, 0, 0.28),
+    0 0 24px color-mix(in srgb, var(--faction-accent) 8%, transparent);
+  backdrop-filter: blur(18px) saturate(1.28);
+  -webkit-backdrop-filter: blur(18px) saturate(1.28);
+}
+
+.auth-card--faction .card h2 {
+  margin-bottom: 4px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(241, 250, 255, 0.96);
+}
+
+.auth-card--faction .card .muted {
+  font-size: 12px;
+  color: rgba(191, 219, 254, 0.72);
+}
+
+.auth-card--faction .avatar-card {
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--faction-accent) 34%, rgba(255, 255, 255, 0.14));
+}
+
+.auth-card--faction .avatar-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 0 82%, color-mix(in srgb, var(--faction-accent) 18%, transparent) 82% 83%, transparent 83%),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 8px);
+  opacity: 0.44;
+}
+
+.auth-card--faction .avatar-marquee {
+  min-height: 104px;
+  padding: 12px;
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--faction-accent) 32%, rgba(255, 255, 255, 0.12));
+  background:
+    linear-gradient(90deg, rgba(2, 6, 16, 0.78), rgba(8, 13, 24, 0.42), rgba(2, 6, 16, 0.78)),
+    radial-gradient(circle at 20% 0, color-mix(in srgb, var(--faction-accent) 18%, transparent), transparent 30%),
+    rgba(3, 7, 15, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 0 22px color-mix(in srgb, var(--faction-accent) 12%, transparent);
+}
+
+.auth-card--faction .avatar-marquee::before {
+  width: 56px;
+  background:
+    linear-gradient(90deg, rgba(3, 7, 15, 0.98), rgba(3, 7, 15, 0.78) 42%, transparent);
+}
+
+.auth-card--faction .avatar-marquee::after {
+  width: 56px;
+  background:
+    linear-gradient(270deg, rgba(3, 7, 15, 0.98), rgba(3, 7, 15, 0.78) 42%, transparent);
+}
+
+.auth-card--faction .avatar-track {
+  gap: 12px;
+  align-items: center;
+}
+
+.auth-card--faction .avatar-item {
+  flex-basis: 94px;
+  border-radius: 13px;
+  border-color: color-mix(in srgb, var(--faction-accent) 24%, rgba(255, 255, 255, 0.16));
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 34%),
+    rgba(5, 10, 20, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+.auth-card--faction .avatar-item img {
+  height: 70px;
+  border-radius: 10px;
+  filter: saturate(1.06) contrast(1.03);
+}
+
+.auth-card--faction .avatar-item.is-selected {
+  border-color: color-mix(in srgb, var(--faction-accent) 78%, white 12%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--faction-accent) 62%, transparent),
+    0 0 22px color-mix(in srgb, var(--faction-accent) 34%, transparent),
+    0 14px 26px rgba(0, 0, 0, 0.34);
+}
+
 .avatar-hover-preview {
   position: fixed;
   top: 14%;
@@ -2092,11 +2452,6 @@ body.servers-page .auth-card.auth-card--wide {
 
   .server-detail-modal__title-row {
     display: flex;
-  }
-
-  .server-detail-modal__map-zoom-btn {
-    right: 8px;
-    bottom: 8px;
   }
 
   .server-detail-modal__meta {

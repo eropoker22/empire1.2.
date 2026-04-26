@@ -1,4 +1,4 @@
-import { resolveDistrictActions } from "../../../packages/shared/src/district-action-policy.js";
+import { resolveDistrictActions } from "./legacy/district-action-policy.js";
 import {
   ATTACK_COOLDOWN_MS,
   ATTACK_SETUP_WEAPONS,
@@ -10316,27 +10316,23 @@ function renderDistrictCanvas(canvas, phase, interactionState = {}, imageSet = n
     context.fillStyle = fillStyle;
     context.fill();
 
-    if (isHovered || isSelected) {
+    if (isSelected) {
       context.save();
-      context.shadowBlur = isSelected ? 26 : 20;
-      context.shadowColor = isNight ? "rgba(103, 225, 255, 0.9)" : "rgba(79, 232, 255, 0.8)";
+      context.shadowBlur = 26;
+      context.shadowColor = isNight ? "rgba(255, 154, 61, 0.74)" : "rgba(255, 154, 61, 0.6)";
       drawDistrictPolygon(context, district.polygon);
-      context.strokeStyle = isSelected
-        ? "rgba(255, 154, 61, 0.96)"
-        : "rgba(103, 225, 255, 0.98)";
-      context.lineWidth = isSelected ? 4 : 3;
+      context.strokeStyle = "rgba(255, 154, 61, 0.96)";
+      context.lineWidth = 4;
       context.stroke();
       context.restore();
     }
 
-    const shouldDrawBorder = showDistrictBorders || isSelected || isHovered || isOwnedByCurrentPlayer || Boolean(launchOwnerColor);
+    const shouldDrawBorder = showDistrictBorders || isSelected || isOwnedByCurrentPlayer || Boolean(launchOwnerColor);
     if (shouldDrawBorder) {
       drawDistrictPolygon(context, district.polygon);
       context.strokeStyle = isSelected
         ? "rgba(255, 154, 61, 0.92)"
-        : isHovered
-          ? "rgba(103, 225, 255, 0.95)"
-          : isOwnedByCurrentPlayer
+        : isOwnedByCurrentPlayer
             ? currentPlayerColor
           : launchOwnerColor
             ? launchOwnerColor
@@ -10345,7 +10341,7 @@ function renderDistrictCanvas(canvas, phase, interactionState = {}, imageSet = n
           : isNight
             ? "rgba(242, 248, 255, 0.96)"
             : "rgba(245, 250, 255, 0.92)";
-      context.lineWidth = isSelected ? 2.8 : isHovered ? 2.2 : isOwnedByCurrentPlayer || launchOwnerColor ? 1.8 : 1.2;
+      context.lineWidth = isSelected ? 2.8 : isOwnedByCurrentPlayer || launchOwnerColor ? 1.8 : 1.2;
       context.stroke();
     }
 
@@ -10613,6 +10609,37 @@ function bindDistrictCanvas(root) {
     canvasHost.append(interactionOverlay);
   }
 
+  let hoverCanvas = canvasHost.querySelector(".map-hover-canvas");
+  if (!(hoverCanvas instanceof HTMLCanvasElement)) {
+    hoverCanvas = document.createElement("canvas");
+    hoverCanvas.className = "map-hover-canvas";
+    hoverCanvas.setAttribute("aria-hidden", "true");
+    canvas.after(hoverCanvas);
+  }
+  const hoverCanvasContext = hoverCanvas.getContext("2d");
+  const syncHoverCanvasSize = () => {
+    if (hoverCanvas.width !== canvas.width) hoverCanvas.width = canvas.width;
+    if (hoverCanvas.height !== canvas.height) hoverCanvas.height = canvas.height;
+  };
+  const clearHoverCanvas = () => {
+    if (!hoverCanvasContext) return;
+    syncHoverCanvasSize();
+    hoverCanvasContext.clearRect(0, 0, hoverCanvas.width, hoverCanvas.height);
+  };
+  const renderHoverCanvas = () => {
+    clearHoverCanvas();
+    if (!hoverCanvasContext || !geometry || !interactionState.hoveredDistrictId) return;
+    const hoveredDistrict = geometry.districts.find((district) => district.id === interactionState.hoveredDistrictId);
+    if (!hoveredDistrict) return;
+    hoverCanvasContext.save();
+    drawDistrictPolygon(hoverCanvasContext, hoveredDistrict.polygon);
+    hoverCanvasContext.strokeStyle = "rgba(103, 225, 255, 0.95)";
+    hoverCanvasContext.lineWidth = 2.4;
+    hoverCanvasContext.lineJoin = "round";
+    hoverCanvasContext.stroke();
+    hoverCanvasContext.restore();
+  };
+
   const initialSettings = getSettingsState();
   const interactionState = {
     hoveredDistrictId: null,
@@ -10665,6 +10692,8 @@ function bindDistrictCanvas(root) {
   let pendingAttackContext = null;
   let isDistrictPopupOverviewEnabled = false;
   let lastTooltipDistrictId = null;
+  let tooltipSize = { width: 84, height: 52 };
+  let lastMissionAnimationAt = 0;
   const districtSelectionGesture = {
     pointerId: null,
     startX: 0,
@@ -10723,13 +10752,10 @@ function bindDistrictCanvas(root) {
   };
 
   const syncMapInteractionVisualState = (options = {}) => {
-    const hoveredDistrict = options.hoveredDistrict ?? (
-      geometry?.districts?.find((district) => district.id === interactionState.hoveredDistrictId) || null
-    );
     const focusedDistrict = options.focusedDistrict ?? (
       geometry?.districts?.find((district) => district.id === interactionState.selectedDistrictId) || null
     );
-    const hasHover = Boolean(hoveredDistrict && !options.suppressHover);
+    const hasHover = false;
     const hasFocus = Boolean(focusedDistrict && hasActiveDistrictModal());
 
     if (interactionOverlay instanceof HTMLDivElement) {
@@ -12787,26 +12813,25 @@ function bindDistrictCanvas(root) {
       tooltipType.textContent = tooltipTypeLabel;
       renderDistrictTooltipGossip(district);
       lastTooltipDistrictId = district.id;
+      tooltipSize = { width: tooltip.offsetWidth || 84, height: tooltip.offsetHeight || 52 };
     }
     tooltip.hidden = false;
 
-    const tooltipWidth = tooltip.offsetWidth || 84;
-    const tooltipHeight = tooltip.offsetHeight || 52;
     const pointerX = event.clientX - viewportRect.left;
     const pointerY = event.clientY - viewportRect.top;
     const offsetX = 12;
     const offsetY = 8;
     const preferredLeft = pointerX + offsetX;
-    const fallbackLeft = pointerX - tooltipWidth - offsetX;
+    const fallbackLeft = pointerX - tooltipSize.width - offsetX;
     const nextLeft = clamp(
-      preferredLeft + tooltipWidth <= viewportRect.width - 8 ? preferredLeft : fallbackLeft,
+      preferredLeft + tooltipSize.width <= viewportRect.width - 8 ? preferredLeft : fallbackLeft,
       8,
-      Math.max(8, viewportRect.width - tooltipWidth - 8)
+      Math.max(8, viewportRect.width - tooltipSize.width - 8)
     );
     const nextTop = clamp(
-      pointerY - Math.round(tooltipHeight * 0.34) + offsetY,
+      pointerY - Math.round(tooltipSize.height * 0.34) + offsetY,
       8,
-      Math.max(8, viewportRect.height - tooltipHeight - 8)
+      Math.max(8, viewportRect.height - tooltipSize.height - 8)
     );
 
     tooltip.style.transform = `translate(${nextLeft}px, ${nextTop}px)`;
@@ -12823,17 +12848,9 @@ function bindDistrictCanvas(root) {
     };
   };
 
-  const syncHoverOverlayPoint = (event) => {
-    const canvasPoint = toCanvasPoint(event);
-    setOverlayPoint(
-      "map-hover",
-      (canvasPoint.x / canvas.width) * 100,
-      (canvasPoint.y / canvas.height) * 100
-    );
-  };
-
   const renderCanvasOnly = () => {
     geometry = renderDistrictCanvas(canvas, phaseHost.dataset.mapPhase || "day", interactionState, imageSet);
+    renderHoverCanvas();
   };
 
   const beginDistrictSelectionGesture = (event) => {
@@ -13002,6 +13019,7 @@ function bindDistrictCanvas(root) {
         window.cancelAnimationFrame(spyAnimationFrameId);
         spyAnimationFrameId = null;
       }
+      lastMissionAnimationAt = 0;
       return;
     }
 
@@ -13009,7 +13027,12 @@ function bindDistrictCanvas(root) {
       return;
     }
 
-    const animate = () => {
+    const animate = (time) => {
+      if (time - lastMissionAnimationAt < 66) {
+        spyAnimationFrameId = window.requestAnimationFrame(animate);
+        return;
+      }
+      lastMissionAnimationAt = time;
       const mapVisibleSpyMissions = getResolvedSpyState().missions.filter(isSpyMissionActiveOnMap);
       interactionState.activeSpyDistrictIds = new Set(
         mapVisibleSpyMissions.map((mission) => Number(mission.targetDistrictId)).filter(Boolean)
@@ -13257,12 +13280,9 @@ function bindDistrictCanvas(root) {
     if (nextHoveredId !== interactionState.hoveredDistrictId) {
       interactionState.hoveredDistrictId = nextHoveredId;
       viewport.style.cursor = district ? "pointer" : "";
-      renderCanvasOnly();
+      renderHoverCanvas();
     }
 
-    if (district) {
-      syncHoverOverlayPoint(event);
-    }
     syncMapInteractionVisualState({
       hoveredDistrict: district,
       focusedDistrict: hasActiveDistrictModal() ? getSelectedDistrict() : null
@@ -13292,7 +13312,7 @@ function bindDistrictCanvas(root) {
     if (interactionState.hoveredDistrictId !== null) {
       interactionState.hoveredDistrictId = null;
       viewport.style.cursor = "";
-      renderCanvasOnly();
+      clearHoverCanvas();
     }
 
     syncMapInteractionVisualState({

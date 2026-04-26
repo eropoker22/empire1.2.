@@ -73,9 +73,8 @@ export function ensureLobbySelection() {
   return Boolean(registration?.serverId && registration?.startDistrictId);
 }
 
-export function saveLoginStep({ identity, password = "", isGuest = false, gangName = "", mode = "" }) {
+export function saveLoginStep({ identity, isGuest = false, gangName = "", mode = "" }) {
   const normalizedIdentity = String(identity || "").trim() || createGuestIdentity();
-  const normalizedPassword = String(password || "").trim();
   const normalizedGangName = String(gangName || "").trim();
   const normalizedMode = String(mode || "").trim().toLowerCase();
 
@@ -83,7 +82,6 @@ export function saveLoginStep({ identity, password = "", isGuest = false, gangNa
     ...session,
     registration: {
       identity: normalizedIdentity,
-      password: normalizedPassword,
       ...(normalizedGangName ? { gangName: normalizedGangName } : {}),
       ...(normalizedMode ? { serverMode: normalizedMode } : {}),
       isGuest,
@@ -105,7 +103,6 @@ export function saveLobbyStep({ serverId, districtId }) {
     ...session,
     registration: {
       identity: session.registration?.identity,
-      password: session.registration?.password || "",
       ...(session.registration?.gangName ? { gangName: session.registration.gangName } : {}),
       isGuest: Boolean(session.registration?.isGuest),
       loginKind: session.registration?.loginKind || (session.registration?.isGuest ? "guest" : "account"),

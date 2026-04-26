@@ -110,8 +110,8 @@ export function resolveDistrictActions(context) {
         label: action.defaultLabel,
         reason: visible
           ? null
-            : isOwnedByCurrentPlayer
-              ? `District ${districtId} už vlastní hráč.`
+          : isOwnedByCurrentPlayer
+            ? `District ${districtId} už vlastní hráč.`
             : "Útok vyžaduje sousední vlastněný district."
       };
     }

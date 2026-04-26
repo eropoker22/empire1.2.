@@ -13,55 +13,9 @@ const FACTION_ENTRY_HREF = "./faction.html";
 const LOGIN_ENTRY_HREF = "./login.html";
 const DISTRICT_CANVAS_WIDTH = 1600;
 const DISTRICT_CANVAS_HEIGHT = 980;
-const DEMO_SERVER_CATALOG = Object.freeze([
-  {
-    id: "war-demo-01",
-    name: "Vortex City WAR-01",
-    mode: "war",
-    region: "EU Central",
-    players: 64,
-    capacity: 120,
-    startLabel: "Live server",
-    badge: "HOT",
-    description: "Tvrdý válečný shard s rychlou expanzí, hustší konkurencí a tlakem na obranu districtů."
-  },
-  {
-    id: "war-demo-02",
-    name: "Black Harbor WAR-02",
-    mode: "war",
-    region: "EU Central",
-    players: 41,
-    capacity: 120,
-    startLabel: "Start za 12 min",
-    badge: "QUEUE",
-    description: "Čerstvě otevíraná instance, vhodná pro nový náběh a rychlé obsazení startovní pozice."
-  },
-  {
-    id: "free-demo-01",
-    name: "Neon Drift FREE-01",
-    mode: "free",
-    region: "EU Central",
-    players: 29,
-    capacity: 80,
-    startLabel: "Volný vstup",
-    badge: "FREE",
-    description: "Volnější režim pro test buildů, economy loopu a klidnější rozjezdy gangu."
-  },
-  {
-    id: "free-demo-02",
-    name: "Afterglow FREE-02",
-    mode: "free",
-    region: "EU West",
-    players: 52,
-    capacity: 80,
-    startLabel: "Live server",
-    badge: "ACTIVE",
-    description: "Rozjetý free shard s vyšší ekonomikou a otevřeným onboardingem pro nové hráče."
-  }
-]);
+const NIGHT_MAP_IMAGE_PATH = "../img/mapanoc.png";
 const SERVER_COUNTDOWN_OFFSETS_MINUTES = Object.freeze({
-  "war-eu-02": 12,
-  "war-demo-02": 12
+  "war-eu-02": 12
 });
 const START_PACKAGES = Object.freeze({
   war: Object.freeze([
@@ -104,7 +58,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const detailModalStart = document.querySelector("[data-server-detail-start]");
   const detailModalCountdown = document.querySelector("[data-server-detail-countdown]");
   const detailModalHint = document.querySelector("[data-server-detail-hint]");
-  const detailModalSelection = document.querySelector("[data-server-detail-selection]");
   const detailModalTypeCounts = document.querySelector("[data-server-detail-type-counts]");
   const detailModalMaterials = document.querySelector("[data-server-detail-materials]");
   const detailCanvas = document.querySelector("[data-server-detail-map]");
@@ -112,16 +65,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const detailContinueButton = document.querySelector("[data-server-detail-continue]");
   const detailZoomInButton = document.querySelector("[data-server-detail-zoom-in]");
   const detailZoomOutButton = document.querySelector("[data-server-detail-zoom-out]");
-  const detailZoomToggleButton = document.querySelector("[data-server-detail-zoom-toggle]");
   const detailCloseNodes = Array.from(document.querySelectorAll("[data-server-detail-close]"));
 
   const geometry = createDistrictGeometry(DISTRICT_CANVAS_WIDTH, DISTRICT_CANVAS_HEIGHT, 0, 0, 0);
+  const minSpawnColumnIndex = Math.min(...geometry.districts.map((district) => district.columnIndex));
+  const maxSpawnColumnIndex = Math.max(...geometry.districts.map((district) => district.columnIndex));
+  const maxSpawnRowIndex = Math.max(...geometry.districts.map((district) => district.rowIndex));
+  const nightMapImage = new Image();
+  nightMapImage.src = NIGHT_MAP_IMAGE_PATH;
+  nightMapImage.addEventListener("load", () => renderAllCanvases());
   const selectableSpawnDistrictIds = new Set(
     geometry.districts
-      .filter((district) => district.columnIndex >= 21 || (district.columnIndex <= 1 && district.rowIndex >= 5))
+      .filter((district) => (
+        district.columnIndex === minSpawnColumnIndex
+        || district.columnIndex === maxSpawnColumnIndex
+        || district.rowIndex === maxSpawnRowIndex
+      ))
       .map((district) => district.id)
   );
-  const availableServers = Array.isArray(SERVER_CATALOG) && SERVER_CATALOG.length > 0 ? SERVER_CATALOG : DEMO_SERVER_CATALOG;
+  const availableServers = Array.isArray(SERVER_CATALOG) ? SERVER_CATALOG : [];
   const state = {
     mode: registration?.serverMode || "war",
     serverId: registration?.serverId || "",
@@ -139,7 +101,16 @@ document.addEventListener("DOMContentLoaded", () => {
       ])
     ),
     countdownTimer: null,
-    detailZoom: 1
+    detailZoom: 1,
+    detailPanX: 0,
+    detailPanY: 0,
+    activePanPointerId: null,
+    panStartX: 0,
+    panStartY: 0,
+    panOriginX: 0,
+    panOriginY: 0,
+    panningMoved: false,
+    suppressNextMapClick: false
   };
 
   const normalizeSelectableDistrictId = (districtId) => {
@@ -231,12 +202,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const getVisibleServers = () => {
     const matches = availableServers.filter((server) => server.mode === state.mode);
-    return matches.length > 0 ? matches : DEMO_SERVER_CATALOG.filter((server) => server.mode === state.mode);
+    return matches;
   };
 
   const getSelectedServer = () => availableServers.find((entry) => entry.id === state.serverId) || null;
 
   const isDetailModalOpen = () => detailModal instanceof HTMLElement && !detailModal.classList.contains("hidden");
+
+  const getDetailPanLimits = () => {
+    if (!(detailCanvasShell instanceof HTMLElement)) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = detailCanvasShell.getBoundingClientRect();
+    const zoomOverflow = Math.max(0, state.detailZoom - 1);
+    return {
+      x: Math.max(0, (rect.width * zoomOverflow) / 2),
+      y: Math.max(0, (rect.height * zoomOverflow) / 2)
+    };
+  };
+
+  const clampDetailPan = (x, y) => {
+    const limits = getDetailPanLimits();
+    return {
+      x: Math.min(limits.x, Math.max(-limits.x, Number(x) || 0)),
+      y: Math.min(limits.y, Math.max(-limits.y, Number(y) || 0))
+    };
+  };
 
   const setCanvasScale = (shell, zoomValue) => {
     if (!(shell instanceof HTMLElement)) {
@@ -247,15 +239,27 @@ document.addEventListener("DOMContentLoaded", () => {
     shell.style.setProperty("--server-map-scale", String(zoomValue));
   };
 
-  const syncDetailZoomUi = () => {
-    if (detailZoomToggleButton instanceof HTMLButtonElement) {
-      detailZoomToggleButton.textContent = state.detailZoom > 1.02 ? "Zmenšit mapu" : "Zvětšit mapu";
+  const setDetailPan = (x, y) => {
+    if (!(detailCanvasShell instanceof HTMLElement)) {
+      return;
     }
+
+    const nextPan = state.detailZoom > 1.02 ? clampDetailPan(x, y) : { x: 0, y: 0 };
+    state.detailPanX = nextPan.x;
+    state.detailPanY = nextPan.y;
+    detailCanvasShell.style.setProperty("--server-map-offset-x", `${nextPan.x}px`);
+    detailCanvasShell.style.setProperty("--server-map-offset-y", `${nextPan.y}px`);
+  };
+
+  const syncDetailZoomUi = () => {
     if (detailZoomOutButton instanceof HTMLButtonElement) {
       detailZoomOutButton.disabled = state.detailZoom <= 1;
     }
     if (detailZoomInButton instanceof HTMLButtonElement) {
       detailZoomInButton.disabled = state.detailZoom >= 1.72;
+    }
+    if (detailCanvasShell instanceof HTMLElement) {
+      detailCanvasShell.classList.toggle("is-map-draggable", state.detailZoom > 1.02);
     }
   };
 
@@ -263,6 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const nextZoom = Math.min(1.72, Math.max(1, Number(zoomValue) || 1));
     state.detailZoom = nextZoom;
     setCanvasScale(detailCanvasShell, nextZoom);
+    setDetailPan(state.detailPanX, state.detailPanY);
     syncDetailZoomUi();
   };
 
@@ -298,6 +303,16 @@ document.addEventListener("DOMContentLoaded", () => {
     state.countdownTimer = window.setInterval(updateCountdowns, 1000);
   };
 
+  const drawMapImageCover = (context, image, width, height) => {
+    const imageRatio = image.naturalWidth / image.naturalHeight;
+    const canvasRatio = width / height;
+    const drawWidth = imageRatio > canvasRatio ? height * imageRatio : width;
+    const drawHeight = imageRatio > canvasRatio ? height : width / imageRatio;
+    const drawX = (width - drawWidth) / 2;
+    const drawY = (height - drawHeight) / 2;
+    context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+  };
+
   const renderCanvasTo = (targetCanvas) => {
     if (!(targetCanvas instanceof HTMLCanvasElement)) {
       return;
@@ -309,12 +324,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const isDisabled = !state.serverId;
-    const gradient = context.createLinearGradient(0, 0, targetCanvas.width, targetCanvas.height);
-    gradient.addColorStop(0, "#07111e");
-    gradient.addColorStop(0.5, "#0c1b2f");
-    gradient.addColorStop(1, "#050911");
     context.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
-    context.fillStyle = gradient;
+    if (nightMapImage.complete && nightMapImage.naturalWidth > 0) {
+      drawMapImageCover(context, nightMapImage, targetCanvas.width, targetCanvas.height);
+    } else {
+      const gradient = context.createLinearGradient(0, 0, targetCanvas.width, targetCanvas.height);
+      gradient.addColorStop(0, "#07111e");
+      gradient.addColorStop(0.5, "#0c1b2f");
+      gradient.addColorStop(1, "#050911");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+    }
+    context.fillStyle = "rgba(2, 6, 16, 0.42)";
     context.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
 
     for (const district of geometry.districts) {
@@ -327,13 +348,11 @@ document.addEventListener("DOMContentLoaded", () => {
         ? "rgba(148, 163, 184, 0.08)"
         : isSelected
           ? "rgba(255, 154, 61, 0.34)"
-          : isHovered
-            ? "rgba(103, 225, 255, 0.3)"
-            : isSelectable
-              ? getDistrictBaseColor(district.districtType)
-              : district.districtType === "downtown"
-                ? "rgba(255, 78, 196, 0.12)"
-                : "rgba(120, 130, 144, 0.08)";
+          : isSelectable
+            ? "rgba(103, 225, 255, 0.11)"
+            : district.districtType === "downtown"
+              ? "rgba(255, 78, 196, 0.06)"
+              : "rgba(9, 16, 28, 0.22)";
       context.fill();
 
       drawPolygon(context, district.polygon);
@@ -343,22 +362,22 @@ document.addEventListener("DOMContentLoaded", () => {
           ? "rgba(255, 154, 61, 0.96)"
           : isHovered
             ? "rgba(103, 225, 255, 0.96)"
-            : isSelectable
-              ? "rgba(245, 250, 255, 0.74)"
-              : district.districtType === "downtown"
-                ? "rgba(255, 103, 208, 0.28)"
-                : "rgba(148, 163, 184, 0.18)";
+          : isSelectable
+            ? "rgba(245, 250, 255, 0.74)"
+            : district.districtType === "downtown"
+              ? "rgba(255, 103, 208, 0.28)"
+              : "rgba(148, 163, 184, 0.18)";
       context.lineWidth = isSelected ? 3 : isHovered ? 2.4 : isSelectable ? 1.15 : 0.9;
       context.stroke();
 
-      if (!isDisabled && isSelectable && (isSelected || isHovered)) {
+      if (!isDisabled && isSelectable && isSelected) {
         context.save();
         context.font = "700 18px Bahnschrift, Segoe UI, sans-serif";
         context.textAlign = "center";
         context.textBaseline = "middle";
-        context.fillStyle = isSelected ? "#ffd7c2" : "#dff9ff";
+        context.fillStyle = "#ffd7c2";
         context.shadowBlur = 18;
-        context.shadowColor = isSelected ? "rgba(255, 154, 61, 0.65)" : "rgba(103, 225, 255, 0.65)";
+        context.shadowColor = "rgba(255, 154, 61, 0.65)";
         context.fillText(`D${district.id}`, district.centerX, district.centerY);
         context.restore();
       }
@@ -412,7 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? "Klikni na server, otevři detail a vyber startovní district."
         : state.selectedDistrictId
           ? `${server.name} • District ${state.selectedDistrictId} je připravený pro vstup do frakce.`
-          : `${server.name} • otevři detail a zvol district vlevo dole nebo na pravém okraji.`;
+          : `${server.name} • otevři detail a zvol district na levém, spodním nebo pravém okraji.`;
       flowNote.setAttribute("data-state", state.selectedDistrictId ? "success" : "ready");
     }
   };
@@ -426,9 +445,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (detailModalHint) {
         detailModalHint.textContent = "Vyber server";
         detailModalHint.classList.add("is-required");
-      }
-      if (detailModalSelection) {
-        detailModalSelection.textContent = "Vyber server pro aktivaci mapy.";
       }
       return;
     }
@@ -452,13 +468,8 @@ document.addEventListener("DOMContentLoaded", () => {
       detailModalCountdown.textContent = getServerCountdownText(server.id);
     }
     if (detailModalHint) {
-      detailModalHint.textContent = state.selectedDistrictId ? `Start: District ${state.selectedDistrictId}` : "Edge district";
+      detailModalHint.textContent = state.selectedDistrictId ? `Start: District ${state.selectedDistrictId}` : "Okraj mapy";
       detailModalHint.classList.toggle("is-required", !state.selectedDistrictId);
-    }
-    if (detailModalSelection) {
-      detailModalSelection.textContent = state.selectedDistrictId
-        ? `Vybraný start: District ${state.selectedDistrictId}`
-        : "Vyber jen district vlevo dole nebo na pravém okraji mapy.";
     }
     if (detailContinueButton instanceof HTMLButtonElement) {
       detailContinueButton.disabled = !state.serverId || !state.selectedDistrictId;
@@ -530,7 +541,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     detailModal.classList.add("hidden");
     detailModal.setAttribute("aria-hidden", "true");
+    state.activePanPointerId = null;
+    detailCanvasShell?.classList.remove("is-panning");
+    setDetailPan(0, 0);
     applyDetailZoom(1);
+  };
+
+  const setHoveredDetailDistrictId = (nextDistrictId) => {
+    const normalizedDistrictId = nextDistrictId ? Number(nextDistrictId) : null;
+    if (state.hoveredDistrictId === normalizedDistrictId) {
+      return;
+    }
+
+    state.hoveredDistrictId = normalizedDistrictId;
+    renderAllCanvases();
   };
 
   const bindCanvasInteractions = (targetCanvas) => {
@@ -542,25 +566,29 @@ document.addEventListener("DOMContentLoaded", () => {
     targetCanvas.height = DISTRICT_CANVAS_HEIGHT;
 
     targetCanvas.addEventListener("mousemove", (event) => {
+      if (state.activePanPointerId !== null) {
+        return;
+      }
       if (!state.serverId) {
-        state.hoveredDistrictId = null;
-        renderAllCanvases();
+        setHoveredDetailDistrictId(null);
         return;
       }
 
       const point = getCanvasPoint(targetCanvas, event);
       const district = point ? getDistrictAtPoint(geometry, point) : null;
       const selectableDistrict = isSelectableSpawnDistrict(district) ? district : null;
-      state.hoveredDistrictId = selectableDistrict?.id ?? null;
-      renderAllCanvases();
+      setHoveredDetailDistrictId(selectableDistrict?.id ?? null);
     });
 
     targetCanvas.addEventListener("mouseleave", () => {
-      state.hoveredDistrictId = null;
-      renderAllCanvases();
+      setHoveredDetailDistrictId(null);
     });
 
     targetCanvas.addEventListener("click", (event) => {
+      if (state.suppressNextMapClick) {
+        state.suppressNextMapClick = false;
+        return;
+      }
       if (!state.serverId) {
         return;
       }
@@ -571,15 +599,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       if (!isSelectableSpawnDistrict(district)) {
-        state.hoveredDistrictId = null;
-        if (detailModalSelection) {
-          detailModalSelection.textContent = "Vyber jen district vlevo dole nebo na pravém okraji mapy.";
-        }
+        setHoveredDetailDistrictId(null);
         if (detailModalHint) {
-          detailModalHint.textContent = "Jen edge distrikty";
+          detailModalHint.textContent = "Jen okraj mapy";
           detailModalHint.classList.add("is-required");
         }
-        renderAllCanvases();
         return;
       }
 
@@ -595,10 +619,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
   bindCanvasInteractions(detailCanvas);
 
+  const startDetailMapPan = (event) => {
+    if (!(detailCanvasShell instanceof HTMLElement) || state.detailZoom <= 1.02) {
+      return;
+    }
+    if (event.target instanceof Element && event.target.closest("button")) {
+      return;
+    }
+
+    state.activePanPointerId = event.pointerId;
+    state.panStartX = event.clientX;
+    state.panStartY = event.clientY;
+    state.panOriginX = state.detailPanX;
+    state.panOriginY = state.detailPanY;
+    state.panningMoved = false;
+    detailCanvasShell.classList.add("is-panning");
+    detailCanvasShell.setPointerCapture?.(event.pointerId);
+  };
+
+  const moveDetailMapPan = (event) => {
+    if (state.activePanPointerId !== event.pointerId || !(detailCanvasShell instanceof HTMLElement)) {
+      return;
+    }
+
+    event.preventDefault();
+    const deltaX = event.clientX - state.panStartX;
+    const deltaY = event.clientY - state.panStartY;
+    if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+      state.panningMoved = true;
+    }
+    setDetailPan(state.panOriginX + deltaX, state.panOriginY + deltaY);
+  };
+
+  const stopDetailMapPan = (event) => {
+    if (state.activePanPointerId !== event.pointerId || !(detailCanvasShell instanceof HTMLElement)) {
+      return;
+    }
+
+    if (state.panningMoved) {
+      state.suppressNextMapClick = true;
+    }
+    state.activePanPointerId = null;
+    state.panningMoved = false;
+    detailCanvasShell.classList.remove("is-panning");
+    detailCanvasShell.releasePointerCapture?.(event.pointerId);
+  };
+
+  detailCanvasShell?.addEventListener("pointerdown", startDetailMapPan);
+  detailCanvasShell?.addEventListener("pointermove", moveDetailMapPan);
+  detailCanvasShell?.addEventListener("pointerup", stopDetailMapPan);
+  detailCanvasShell?.addEventListener("pointercancel", stopDetailMapPan);
+
   detailContinueButton?.addEventListener("click", commitLobbySelection);
   detailZoomInButton?.addEventListener("click", () => applyDetailZoom(state.detailZoom + 0.18));
   detailZoomOutButton?.addEventListener("click", () => applyDetailZoom(state.detailZoom - 0.18));
-  detailZoomToggleButton?.addEventListener("click", () => applyDetailZoom(state.detailZoom > 1.02 ? 1 : 1.55));
 
   detailCloseNodes.forEach((node) => {
     node.addEventListener("click", closeDetailModal);

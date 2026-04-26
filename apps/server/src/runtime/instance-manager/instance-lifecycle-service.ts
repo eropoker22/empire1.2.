@@ -9,6 +9,10 @@ import { writeDiagnosticLog } from "../logging";
 import { restoreOrCreateInitialState } from "../snapshots/instance-restore-service";
 import { runInstanceTick } from "../scheduling/tick-runner";
 import type { InstanceCommandDispatchResult } from "../orchestration/instance-command-dispatch-result";
+import {
+  recordCommandRateLimitUsage,
+  validateCommandDispatchGate
+} from "./instance-command-gates";
 
 /**
  * Responsibility: Encapsulates lifecycle transitions and safe tick execution for one runtime.
@@ -96,6 +100,21 @@ export class InstanceLifecycleService {
   }
 
   dispatch(runtime: ServerInstanceRuntime, command: GameCommand): InstanceCommandDispatchResult {
+    const gateErrors = validateCommandDispatchGate(runtime, command);
+
+    if (gateErrors.length > 0) {
+      void writeDiagnosticLog(runtime.replayLogWriter, runtime.record.id, "warn", "command", "Command rejected before core dispatch.", {
+        commandId: command.id,
+        commandType: command.type,
+        errorCount: gateErrors.length
+      });
+
+      return {
+        runtime,
+        errors: gateErrors
+      };
+    }
+
     void runtime.replayLogWriter.writeCommand({
       id: `cmd:${command.id}`,
       instanceId: runtime.record.id,
@@ -105,6 +124,8 @@ export class InstanceLifecycleService {
       correlationId: command.clientRequestId,
       tickAtReceive: runtime.state.root.tick
     });
+    runtime.processedCommandIds.add(command.id);
+    recordCommandRateLimitUsage(runtime, command);
 
     const result = applyCommand(runtime.state, command, {
       config: runtime.config

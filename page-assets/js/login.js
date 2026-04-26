@@ -42,7 +42,6 @@ const normalizeMode = (mode) => {
 
 const hydrateInputs = (registration) => {
   setInputValue("login-username", registration?.isGuest ? "" : registration?.identity);
-  setInputValue("login-password", registration?.isGuest ? "" : registration?.password);
   setInputValue("register-username", registration?.isGuest ? "" : registration?.identity);
   setInputValue("register-gang", registration?.gangName || window.localStorage.getItem(GUEST_GANG_KEY));
   setInputValue("guest-username", window.localStorage.getItem(GUEST_USERNAME_KEY) || (registration?.isGuest ? registration.identity : ""));
@@ -151,7 +150,6 @@ function bindForms() {
     window.localStorage.removeItem(GUEST_USERNAME_KEY);
     saveLoginStep({
       identity: username,
-      password,
       isGuest: false,
       gangName: `${username} Crew`,
       mode: state.activeMode
@@ -176,7 +174,6 @@ function bindForms() {
     window.localStorage.setItem(GUEST_GANG_KEY, gangName);
     saveLoginStep({
       identity: username,
-      password,
       isGuest: false,
       gangName,
       mode: state.activeMode
@@ -208,7 +205,6 @@ function bindGuest() {
     window.localStorage.setItem(GUEST_GANG_KEY, gangName);
     saveLoginStep({
       identity: username,
-      password: "",
       isGuest: true,
       gangName,
       mode: state.activeMode

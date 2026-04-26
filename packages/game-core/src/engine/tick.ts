@@ -1,8 +1,10 @@
 import type { CoreGameState } from "../entities";
 import type { CoreEvent } from "../events";
 import type { GameCoreContext } from "./context";
+import { collectIncome } from "../rules/economy/collectIncome";
 import { completeCraftProcessing } from "../rules/production/completeCraftProcessing";
 import { completeProduction } from "../rules/production/completeProduction";
+import { triggerRaid } from "../rules/police/triggerRaid";
 import { checkVictory } from "../rules/victory/checkVictory";
 
 /**
@@ -25,14 +27,14 @@ export const runTick = (
       tick: state.root.tick + 1
     }
   };
-  const producedState = completeProduction(advancedState, context);
+  const incomeState = collectIncome(advancedState);
+  const producedState = completeProduction(incomeState, context);
   const processingResult = completeCraftProcessing(producedState, context);
-  const nextState = processingResult.nextState;
-
-  checkVictory(nextState, context);
+  const policeResult = triggerRaid(processingResult.nextState, context);
+  const victoryResult = checkVictory(policeResult.nextState, context);
 
   return {
-    nextState,
-    events: processingResult.events
+    nextState: victoryResult.nextState,
+    events: [...processingResult.events, ...policeResult.events]
   };
 };

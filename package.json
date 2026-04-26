@@ -22,6 +22,7 @@
     "lint": "node scripts/check-architecture.mjs && node scripts/check-file-sizes.mjs",
     "lint:architecture": "node scripts/check-architecture.mjs",
     "lint:file-sizes": "node scripts/check-file-sizes.mjs",
+    "smoke:ui": "node scripts/smoke-ui-pages.mjs",
     "typecheck": "node scripts/run-local-bin.mjs typescript/bin/tsc -p tsconfig.test.json --noEmit",
     "test": "npm run test:unit && npm run test:integration && npm run test:server && npm run test:persistence && npm run test:read-models",
     "test:unit": "node scripts/run-local-bin.mjs vitest/vitest.mjs run tests/unit",
@@ -30,7 +31,7 @@
     "test:persistence": "node scripts/run-local-bin.mjs vitest/vitest.mjs run tests/persistence",
     "test:read-models": "node scripts/run-local-bin.mjs vitest/vitest.mjs run tests/read-models",
     "coverage:check": "node scripts/run-local-bin.mjs vitest/vitest.mjs run --coverage",
-    "quality": "npm run lint && npm run typecheck && npm run test && npm run coverage:check"
+    "quality": "npm run lint && npm run smoke:ui && npm run typecheck && npm run test && npm run coverage:check"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^2.1.5",

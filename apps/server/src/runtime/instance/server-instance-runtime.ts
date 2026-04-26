@@ -25,4 +25,11 @@ export interface ServerInstanceRuntime {
   replayLogWriter: ReplayLogWriter;
   scheduler: InstanceScheduler;
   snapshotController: InstanceSnapshotController;
+  processedCommandIds: Set<string>;
+  commandRateLimitWindow: CommandRateLimitWindow;
+}
+
+export interface CommandRateLimitWindow {
+  tick: number;
+  commandCountsByPlayerId: Record<string, number>;
 }

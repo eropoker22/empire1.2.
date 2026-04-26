@@ -1,0 +1,75 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const pages = [
+  "pages/index.html",
+  "pages/login.html",
+  "pages/lobby.html",
+  "pages/faction.html",
+  "pages/game.html",
+  "pages/admin.html"
+];
+const violations = [];
+
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
+const exists = (relativePath) => fs.existsSync(path.join(root, relativePath));
+const normalizeAssetPath = (pagePath, assetPath) => {
+  if (
+    assetPath.startsWith("http:") ||
+    assetPath.startsWith("https:") ||
+    assetPath.startsWith("#") ||
+    assetPath.startsWith("mailto:")
+  ) {
+    return null;
+  }
+
+  return path
+    .normalize(path.join(path.dirname(pagePath), assetPath))
+    .replace(/\\/g, "/");
+};
+
+for (const pagePath of pages) {
+  if (!exists(pagePath)) {
+    violations.push(`${pagePath} is missing`);
+    continue;
+  }
+
+  const html = read(pagePath);
+
+  if (!html.includes("<main")) {
+    violations.push(`${pagePath} does not define a main UI root`);
+  }
+
+  for (const match of html.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)) {
+    const assetPath = normalizeAssetPath(pagePath, match[1]);
+
+    if (!assetPath || assetPath.endsWith(".html")) {
+      continue;
+    }
+
+    if (!exists(assetPath)) {
+      violations.push(`${pagePath} references missing asset ${match[1]} (${assetPath})`);
+    }
+  }
+}
+
+const gameHtml = read("pages/game.html");
+if (!gameHtml.includes("data-page=\"game\"")) {
+  violations.push("pages/game.html is missing the game page marker");
+}
+
+const adminHtml = read("pages/admin.html");
+if (!adminHtml.includes("type=\"module\" src=\"../page-assets/js/admin-assets/admin-slice-demo.js\"")) {
+  violations.push("pages/admin.html must load the admin slice bundle as a module script");
+}
+
+if (violations.length > 0) {
+  console.error("UI smoke violations detected:");
+  for (const violation of violations) {
+    console.error(`- ${violation}`);
+  }
+  process.exit(1);
+}
+
+console.log("UI page smoke checks passed.");

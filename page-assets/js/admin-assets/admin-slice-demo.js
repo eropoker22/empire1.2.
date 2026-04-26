@@ -1222,11 +1222,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     productionCollected: "production-collected",
     itemProcessingStarted: "item-processing-started",
     itemCrafted: "item-crafted",
+    policeRaidTriggered: "police-raid-triggered",
     notificationCreated: "notification-created"
   };
   const PRODUCTION_GAME_LIFECYCLE_PHASES = {
     bootstrapping: "bootstrapping",
-    live: "live"
+    live: "live",
+    resolved: "resolved"
   };
   const DEV_SETUP_GAME_LIFECYCLE_PHASES = {
     devSetup: "dev-setup"
@@ -1312,6 +1314,109 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   const calculateReducedAttackPowerFromTowers = (attackPower, towerCount) => {
     const reductionPercent = calculateTowerAttackReductionPercent(towerCount);
     return Math.max(0, attackPower * (1 - reductionPercent / 100));
+  };
+  const calculateIncomeByPlayerId = (state) => {
+    var _a;
+    const incomeByPlayerId = {};
+    for (const district of Object.values(state.districtsById)) {
+      if (!district.ownerPlayerId || district.status === "destroyed") {
+        continue;
+      }
+      for (const [resourceKey, rawAmount] of Object.entries(district.resourceModifiers)) {
+        const amount = Math.max(0, Number(rawAmount || 0));
+        if (amount <= 0) {
+          continue;
+        }
+        incomeByPlayerId[district.ownerPlayerId] = {
+          ...incomeByPlayerId[district.ownerPlayerId],
+          [resourceKey]: (((_a = incomeByPlayerId[district.ownerPlayerId]) == null ? void 0 : _a[resourceKey]) ?? 0) + amount
+        };
+      }
+    }
+    return incomeByPlayerId;
+  };
+  const collectIncome = (state) => {
+    const incomeByPlayerId = calculateIncomeByPlayerId(state);
+    if (Object.keys(incomeByPlayerId).length === 0) {
+      return state;
+    }
+    let changed = false;
+    let nextResourceStatesById = state.resourceStatesById;
+    for (const [playerId, incomeBalances] of Object.entries(incomeByPlayerId)) {
+      const player = state.playersById[playerId];
+      if (!player) {
+        continue;
+      }
+      const currentResourceState = state.resourceStatesById[player.resourceStateId] ?? createPlayerResourceState$4(player, state.root.tick);
+      const nextBalances = {
+        ...currentResourceState.balances
+      };
+      for (const [resourceKey, amount] of Object.entries(incomeBalances)) {
+        nextBalances[resourceKey] = Math.max(0, Number(nextBalances[resourceKey] || 0) + amount);
+      }
+      nextResourceStatesById = {
+        ...nextResourceStatesById,
+        [currentResourceState.id]: {
+          ...currentResourceState,
+          balances: nextBalances,
+          lastUpdatedTick: state.root.tick,
+          version: currentResourceState.version + (state.resourceStatesById[currentResourceState.id] ? 1 : 0)
+        }
+      };
+      changed = true;
+    }
+    return changed ? {
+      ...state,
+      resourceStatesById: nextResourceStatesById
+    } : state;
+  };
+  const createPlayerResourceState$4 = (player, tick) => ({
+    id: player.resourceStateId,
+    ownerType: "player",
+    ownerId: player.id,
+    balances: {},
+    incomeModifiers: {},
+    lastUpdatedTick: tick,
+    version: 1
+  });
+  const RAID_PRESSURE_THRESHOLD = 100;
+  const RAID_PENDING_FLAG = "raid:pending";
+  const triggerRaid = (state, context) => {
+    let changed = false;
+    let nextPoliceStatesById = state.policeStatesById;
+    const events = [];
+    const raidIntensityMultiplier = Math.max(0, Number((context == null ? void 0 : context.config.balance.raidIntensityMultiplier) ?? 1));
+    const threshold = Math.max(1, Math.floor(RAID_PRESSURE_THRESHOLD / Math.max(0.01, raidIntensityMultiplier)));
+    for (const policeState of Object.values(state.policeStatesById)) {
+      if (policeState.heat < threshold || policeState.activeFlags.includes(RAID_PENDING_FLAG)) {
+        continue;
+      }
+      nextPoliceStatesById = {
+        ...nextPoliceStatesById,
+        [policeState.id]: {
+          ...policeState,
+          wantedLevel: Math.max(policeState.wantedLevel, 5),
+          activeFlags: [...policeState.activeFlags, RAID_PENDING_FLAG],
+          version: policeState.version + 1
+        }
+      };
+      changed = true;
+      events.push(
+        createEvent(CORE_EVENT_TYPES.policeRaidTriggered, {
+          playerId: policeState.ownerPlayerId,
+          policeStateId: policeState.id,
+          heat: policeState.heat,
+          threshold
+        })
+      );
+    }
+    return {
+      nextState: changed ? {
+        ...state,
+        policeStatesById: nextPoliceStatesById
+      } : state,
+      events
+    };
   };
   const composeEntityId = (prefix, value) => `${prefix}:${value}`;
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -1542,6 +1647,95 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       nextLoadout,
       blocked: LOSS_ORDER.every((weaponId) => Math.max(0, Number(nextLoadout[weaponId] ?? 0)) === 0)
     };
+  };
+  const checkVictory = (state, context) => {
+    var _a, _b;
+    if (((_a = state.victoryState) == null ? void 0 : _a.status) === "resolved" || state.matchResult) {
+      return {
+        nextState: state,
+        resolved: true
+      };
+    }
+    const activeDistricts = Object.values(state.districtsById).filter((district) => district.status !== "destroyed");
+    const districtScores = createDistrictControlScores(activeDistricts);
+    const leader = districtScores[0] ?? null;
+    const allActiveDistrictsControlledByLeader = activeDistricts.length > 1 && leader !== null && leader.score === activeDistricts.length;
+    const durationTicks = Math.max(1, Math.ceil(context.config.technical.gameDurationMs / Math.max(1, context.config.tickRateMs)));
+    const durationExpired = state.root.tick >= durationTicks;
+    if (!allActiveDistrictsControlledByLeader && !durationExpired) {
+      return {
+        nextState: state,
+        resolved: false
+      };
+    }
+    const reason = allActiveDistrictsControlledByLeader ? `control:${context.config.balance.victoryConditionKey}` : `duration:${context.config.balance.victoryConditionKey}`;
+    const winnerPlayerId = (leader == null ? void 0 : leader.subjectId) ?? null;
+    const victoryStateId = state.root.victoryStateId ?? `victory:${state.serverInstance.id}`;
+    const matchResultId = state.root.matchResultId ?? `match:${state.serverInstance.id}:${state.root.tick}`;
+    const endedAt = (/* @__PURE__ */ new Date(0)).toISOString();
+    return {
+      nextState: {
+        ...state,
+        serverInstance: {
+          ...state.serverInstance,
+          status: "ended",
+          endedAt,
+          version: state.serverInstance.version + 1
+        },
+        root: {
+          ...state.root,
+          phase: PRODUCTION_GAME_LIFECYCLE_PHASES.resolved,
+          victoryStateId,
+          matchResultId,
+          version: state.root.version + 1
+        },
+        victoryState: {
+          id: victoryStateId,
+          serverInstanceId: state.serverInstance.id,
+          status: "resolved",
+          victoryType: context.config.balance.victoryConditionKey,
+          leaderPlayerId: winnerPlayerId,
+          leaderAllianceId: null,
+          progressPayload: {
+            reason,
+            controlledDistrictCount: (leader == null ? void 0 : leader.score) ?? 0,
+            totalActiveDistrictCount: activeDistricts.length,
+            durationTicks,
+            currentTick: state.root.tick
+          },
+          resolvedAtTick: state.root.tick,
+          version: (((_b = state.victoryState) == null ? void 0 : _b.version) ?? 0) + 1
+        },
+        matchResult: {
+          id: matchResultId,
+          serverInstanceId: state.serverInstance.id,
+          endedAt,
+          winnerPlayerId,
+          winnerAllianceId: null,
+          ranking: districtScores.map((score, index) => ({
+            subjectType: "player",
+            subjectId: score.subjectId,
+            rank: index + 1,
+            score: score.score
+          })),
+          reason
+        }
+      },
+      resolved: true
+    };
+  };
+  const createDistrictControlScores = (districts) => {
+    const scoreByPlayerId = /* @__PURE__ */ new Map();
+    for (const district of districts) {
+      if (!district.ownerPlayerId) {
+        continue;
+      }
+      scoreByPlayerId.set(
+        district.ownerPlayerId,
+        (scoreByPlayerId.get(district.ownerPlayerId) ?? 0) + 1
+      );
+    }
+    return [...scoreByPlayerId.entries()].map(([subjectId, score]) => ({ subjectId, score })).sort((left, right) => right.score - left.score || left.subjectId.localeCompare(right.subjectId));
   };
   const validateAttack = (state, command) => {
     var _a, _b;
@@ -2784,6 +2978,16 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const candidate = state.districtsById[districtId];
     return Boolean(candidate && candidate.status !== "destroyed");
   }).slice(0, limit);
+  const createPlayerPoliceState = (player, tick) => ({
+    id: player.policeStateId,
+    ownerPlayerId: player.id,
+    heat: 0,
+    wantedLevel: 0,
+    lastDecayTick: tick,
+    activeFlags: [],
+    version: 1
+  });
+  const resolveWantedLevel = (heat) => Math.max(0, Math.min(5, Math.floor(Math.max(0, heat) / 20)));
   const handleUseBuildingAction = (state, command, context) => {
     var _a;
     const errors = validateRunBuildingAction(state, command, context);
@@ -2852,6 +3056,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       lastActionAt: command.issuedAt,
       version: player.version + 1
     };
+    const currentPoliceState = state.policeStatesById[player.policeStateId] ?? createPlayerPoliceState(player, state.root.tick);
+    const nextPoliceState = {
+      ...currentPoliceState,
+      heat: Math.max(0, Number(currentPoliceState.heat || 0) + action.heatGain),
+      wantedLevel: resolveWantedLevel(Math.max(0, Number(currentPoliceState.heat || 0) + action.heatGain)),
+      version: currentPoliceState.version + (state.policeStatesById[player.policeStateId] ? 1 : 0)
+    };
     const eventId = composeEntityId("event", `${command.id}:building-action`);
     const notification = createBuildingActionReportNotification({
       command,
@@ -2882,6 +3093,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         resourceStatesById: {
           ...state.resourceStatesById,
           [nextPlayerResourceState.id]: nextPlayerResourceState
+        },
+        policeStatesById: {
+          ...state.policeStatesById,
+          [nextPoliceState.id]: nextPoliceState
         },
         notificationsById: {
           ...state.notificationsById,
@@ -3005,12 +3220,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         tick: state.root.tick + 1
       }
     };
-    const producedState = completeProduction(advancedState, context);
+    const incomeState = collectIncome(advancedState);
+    const producedState = completeProduction(incomeState, context);
     const processingResult = completeCraftProcessing(producedState, context);
-    const nextState = processingResult.nextState;
+    const policeResult = triggerRaid(processingResult.nextState, context);
+    const victoryResult = checkVictory(policeResult.nextState, context);
     return {
-      nextState,
-      events: processingResult.events
+      nextState: victoryResult.nextState,
+      events: [...processingResult.events, ...policeResult.events]
     };
   };
   const createInitialState = (instanceId, mode) => {
@@ -3586,6 +3803,86 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       runtime.scheduler.tickInProgress = false;
     }
   };
+  const MAX_COMMANDS_PER_PLAYER_PER_TICK = 5;
+  const validateCommandDispatchGate = (runtime, command) => {
+    if (command.serverInstanceId !== runtime.record.id) {
+      return [
+        {
+          code: "server.instance_mismatch",
+          message: "Command serverInstanceId does not match the target server instance."
+        }
+      ];
+    }
+    if (command.mode !== runtime.record.mode) {
+      return [
+        {
+          code: "server.mode_mismatch",
+          message: "Command mode does not match the target server instance mode."
+        }
+      ];
+    }
+    if (runtime.processedCommandIds.has(command.id)) {
+      return [
+        {
+          code: "server.duplicate_command",
+          message: "Command id was already processed by this server instance."
+        }
+      ];
+    }
+    if (runtime.state.serverInstance.status === "ended" || runtime.state.root.phase === PRODUCTION_GAME_LIFECYCLE_PHASES.resolved) {
+      return [
+        {
+          code: "server.instance_resolved",
+          message: "Resolved server instances do not accept player commands."
+        }
+      ];
+    }
+    if (runtime.state.root.playerIds.length > runtime.config.balance.maxPlayersPerServer) {
+      return [
+        {
+          code: "server.player_cap_exceeded",
+          message: "Server instance player count exceeds the configured maximum."
+        }
+      ];
+    }
+    const sessionTtlTicks = Math.max(
+      1,
+      Math.ceil(runtime.config.technical.sessionTtlMs / Math.max(1, runtime.config.tickRateMs))
+    );
+    if (runtime.state.root.tick >= sessionTtlTicks) {
+      return [
+        {
+          code: "server.session_expired",
+          message: "Server instance session TTL has expired."
+        }
+      ];
+    }
+    const currentRateWindow = normalizeCommandRateLimitWindow(runtime);
+    const currentCommandCount = currentRateWindow.commandCountsByPlayerId[command.playerId] ?? 0;
+    if (currentCommandCount >= MAX_COMMANDS_PER_PLAYER_PER_TICK) {
+      return [
+        {
+          code: "server.rate_limited",
+          message: "Player command rate limit exceeded for the current server tick."
+        }
+      ];
+    }
+    return [];
+  };
+  const recordCommandRateLimitUsage = (runtime, command) => {
+    const currentRateWindow = normalizeCommandRateLimitWindow(runtime);
+    currentRateWindow.commandCountsByPlayerId[command.playerId] = (currentRateWindow.commandCountsByPlayerId[command.playerId] ?? 0) + 1;
+  };
+  const normalizeCommandRateLimitWindow = (runtime) => {
+    if (runtime.commandRateLimitWindow.tick === runtime.state.root.tick) {
+      return runtime.commandRateLimitWindow;
+    }
+    runtime.commandRateLimitWindow = {
+      tick: runtime.state.root.tick,
+      commandCountsByPlayerId: {}
+    };
+    return runtime.commandRateLimitWindow;
+  };
   class InstanceLifecycleService {
     start(runtime) {
       runtime.record.status = "booting";
@@ -3661,6 +3958,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       return runInstanceTick(runtime);
     }
     dispatch(runtime, command) {
+      const gateErrors = validateCommandDispatchGate(runtime, command);
+      if (gateErrors.length > 0) {
+        void writeDiagnosticLog(runtime.replayLogWriter, runtime.record.id, "warn", "command", "Command rejected before core dispatch.", {
+          commandId: command.id,
+          commandType: command.type,
+          errorCount: gateErrors.length
+        });
+        return {
+          runtime,
+          errors: gateErrors
+        };
+      }
       void runtime.replayLogWriter.writeCommand({
         id: `cmd:${command.id}`,
         instanceId: runtime.record.id,
@@ -3670,6 +3979,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         correlationId: command.clientRequestId,
         tickAtReceive: runtime.state.root.tick
       });
+      runtime.processedCommandIds.add(command.id);
+      recordCommandRateLimitUsage(runtime, command);
       const result = applyCommand(runtime.state, command, {
         config: runtime.config
       });
@@ -4535,13 +4846,42 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       },
       rootVersion: runtime.state.root.version
     },
+    runtime: {
+      processedCommandIds: [...runtime.processedCommandIds],
+      commandRateLimitWindow: {
+        tick: runtime.commandRateLimitWindow.tick,
+        commandCountsByPlayerId: {
+          ...runtime.commandRateLimitWindow.commandCountsByPlayerId
+        }
+      }
+    },
     state: runtime.state
   });
   const restoreInstanceState = (snapshot) => snapshot.state;
   const createPersistenceRestoreService = (snapshotRepository) => ({
     restore: async (runtime) => {
+      var _a, _b;
       const snapshot = await snapshotRepository.loadLatest(runtime.record.id);
-      runtime.state = snapshot ? restoreInstanceState(snapshot) : createInitialState(runtime.record.id, runtime.record.mode);
+      if (!snapshot) {
+        runtime.state = createInitialState(runtime.record.id, runtime.record.mode);
+        runtime.processedCommandIds = /* @__PURE__ */ new Set();
+        runtime.commandRateLimitWindow = {
+          tick: runtime.state.root.tick,
+          commandCountsByPlayerId: {}
+        };
+        return runtime;
+      }
+      runtime.state = restoreInstanceState(snapshot);
+      runtime.processedCommandIds = new Set(((_a = snapshot.runtime) == null ? void 0 : _a.processedCommandIds) ?? []);
+      runtime.commandRateLimitWindow = ((_b = snapshot.runtime) == null ? void 0 : _b.commandRateLimitWindow) ? {
+        tick: snapshot.runtime.commandRateLimitWindow.tick,
+        commandCountsByPlayerId: {
+          ...snapshot.runtime.commandRateLimitWindow.commandCountsByPlayerId
+        }
+      } : {
+        tick: runtime.state.root.tick,
+        commandCountsByPlayerId: {}
+      };
       return runtime;
     }
   });
@@ -4582,6 +4922,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     );
     const scheduler = createInstanceScheduler(config.tickRateMs);
     const snapshotController = createSnapshotController(createNullGameStateRepository());
+    const processedCommandIds = /* @__PURE__ */ new Set();
+    const commandRateLimitWindow = {
+      tick: state.root.tick,
+      commandCountsByPlayerId: {}
+    };
     const runtime = {
       record: {
         id: instanceId,
@@ -4602,7 +4947,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       logger,
       replayLogWriter,
       scheduler,
-      snapshotController
+      snapshotController,
+      processedCommandIds,
+      commandRateLimitWindow
     };
     createInstanceMonitorSnapshot(runtime.record, runtime.state, runtime.eventQueue, runtime.runtimeHealth);
     return runtime;

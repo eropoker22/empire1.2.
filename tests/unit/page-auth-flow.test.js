@@ -57,7 +57,6 @@ describe("page auth flow", () => {
 
     expect(session.registration).toMatchObject({
       identity: "New Boss",
-      password: "secret",
       gangName: "New Crew",
       serverMode: "free",
       isGuest: false,
@@ -70,6 +69,7 @@ describe("page auth flow", () => {
     expect(session.registration.gangColor).toBeUndefined();
     expect(session.registration.avatar).toBeUndefined();
     expect(session.registration.lockedAt).toBeUndefined();
+    expect(session.registration.password).toBeUndefined();
   });
 
   it("locks lobby selection while clearing stale faction choices", () => {
@@ -98,7 +98,6 @@ describe("page auth flow", () => {
 
     expect(session.registration).toMatchObject({
       identity: "Lobby Boss",
-      password: "secret",
       gangName: "Lobby Crew",
       isGuest: false,
       loginKind: "account",
@@ -111,6 +110,7 @@ describe("page auth flow", () => {
     expect(session.registration.gangColor).toBeUndefined();
     expect(session.registration.avatar).toBeUndefined();
     expect(session.registration.lockedAt).toBeUndefined();
+    expect(session.registration.password).toBeUndefined();
     expect(session.world.ownedDistrictIds).toEqual([27]);
   });
 });

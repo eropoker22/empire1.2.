@@ -172,6 +172,7 @@ function normalizePreviewSession(session) {
   return {
     ...base,
     ...session,
+    registration: normalizePreviewRegistration(session?.registration),
     inventory: {
       ...base.inventory,
       ...(session?.inventory || {}),
@@ -287,6 +288,15 @@ function normalizePreviewSession(session) {
     },
     market: session?.market?.items && session?.market?.nextRefreshAt ? session.market : base.market
   };
+}
+
+function normalizePreviewRegistration(registration) {
+  if (!registration || typeof registration !== "object") {
+    return null;
+  }
+
+  const { password, ...safeRegistration } = registration;
+  return safeRegistration;
 }
 
 export function hasServerAuthority() {

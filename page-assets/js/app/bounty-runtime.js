@@ -472,6 +472,13 @@ function initBountyRuntime() {
   const huntState = document.getElementById("bounty-hunt-state");
   const huntFill = document.getElementById("bounty-hunt-progress-fill");
   const huntLabel = document.getElementById("bounty-hunt-progress-label");
+  const targetStatus = document.getElementById("bounty-target-status");
+  const formStatus = document.getElementById("bounty-form-status");
+  const previewSummary = document.getElementById("bounty-preview-summary");
+  const escrowValue = document.getElementById("bounty-escrow-value");
+  const activeCount = document.getElementById("bounty-active-count");
+  const submitHint = document.getElementById("bounty-submit-hint");
+  const cashPresetButtons = Array.from(modal?.querySelectorAll("[data-bounty-cash-preset]") || []);
   const objectiveInputs = Array.from(modal?.querySelectorAll('input[name="bounty-objective"]') || []);
   const targetScopeInputs = Array.from(modal?.querySelectorAll('input[name="bounty-target-scope"]') || []);
   const durationInputs = Array.from(modal?.querySelectorAll('input[name="bounty-duration"]') || []);
@@ -527,6 +534,14 @@ function initBountyRuntime() {
     input.max = String(safeMax);
     input.value = String(nextValue);
     return nextValue;
+  };
+
+  const setCashAmount = (amount) => {
+    const cashMax = Math.max(0, Math.floor(Number(cashInput.max || 0)));
+    const nextValue = Math.min(cashMax, Math.max(0, Math.floor(Number(amount || 0))));
+    cashInput.value = String(nextValue);
+    cashRange.value = String(nextValue);
+    syncPreview();
   };
 
   const renderTargetOptions = () => {
@@ -591,6 +606,10 @@ function initBountyRuntime() {
       targetAvatar.src = "";
       targetAvatar.classList.add("is-empty");
       targetAvatarFallback.textContent = "??";
+      if (targetStatus) {
+        targetStatus.textContent = "Bez cíle nelze bounty vypsat.";
+        targetStatus.dataset.state = "warning";
+      }
       return null;
     }
 
@@ -604,6 +623,12 @@ function initBountyRuntime() {
     targetAvatar.src = player.avatar || "";
     targetAvatar.classList.toggle("is-empty", !player.avatar);
     targetAvatarFallback.textContent = player.name.slice(0, 2).toUpperCase();
+    if (targetStatus) {
+      targetStatus.textContent = player.districtCount > 0
+        ? `${player.name} drží ${player.districtCount} aktivních districtů.`
+        : `${player.name} nemá dostupný district, bounty půjde jen na hráče.`;
+      targetStatus.dataset.state = player.districtCount > 0 ? "ready" : "warning";
+    }
     return player;
   };
 
@@ -629,6 +654,8 @@ function initBountyRuntime() {
       ? Number(districtSelect.value)
       : null;
     const hasMinimumCash = Number(cashReward?.amount || 0) >= BOUNTY_MINIMUM_CASH;
+    const activeEntries = getStoredBountyState().entries.filter((entry) => isEntryActive(entry));
+    const totalEscrow = activeEntries.reduce((sum, entry) => sum + Math.max(0, Number(entry.totalValue || 0)), 0);
 
     previewTarget.textContent = player
       ? (selectedDistrictId ? `${player.name} · District #${selectedDistrictId}` : player.name)
@@ -637,6 +664,17 @@ function initBountyRuntime() {
     previewType.textContent = formatBountyObjectiveLabel(getSelectedObjectiveType());
     previewDuration.textContent = `${getSelectedDurationHours()}h`;
     previewAnonymous.textContent = anonymousInput.checked ? "Anonymní" : "Veřejná";
+    if (previewSummary) {
+      previewSummary.textContent = player
+        ? `${formatBountyObjectiveLabel(getSelectedObjectiveType())} · ${selectedDistrictId ? `District #${selectedDistrictId}` : "celý hráč"} · escrow ${formatMoney(totalValue)}`
+        : "Kontrakt čeká na target.";
+    }
+    if (escrowValue) {
+      escrowValue.textContent = formatMoney(totalEscrow);
+    }
+    if (activeCount) {
+      activeCount.textContent = String(activeEntries.length);
+    }
 
     if (totalValue >= BOUNTY_HUNT_MODE_THRESHOLD) {
       huntState.textContent = "HUNT MODE AKTIVNÍ";
@@ -653,6 +691,21 @@ function initBountyRuntime() {
     districtField.hidden = scope !== "district";
     districtSelect.disabled = scope !== "district";
     submitBtn.disabled = !player || rewards.length === 0 || !hasMinimumCash || (scope === "district" && !selectedDistrictId);
+    const validationMessage = resolveValidationMessage({
+      player,
+      rewards,
+      hasMinimumCash,
+      selectedDistrictId,
+      scope
+    });
+    if (formStatus) {
+      formStatus.textContent = validationMessage.message;
+      formStatus.dataset.state = validationMessage.state;
+    }
+    if (submitHint) {
+      submitHint.textContent = validationMessage.message;
+      submitHint.dataset.state = validationMessage.state;
+    }
 
     return {
       player,
@@ -661,6 +714,26 @@ function initBountyRuntime() {
       hasMinimumCash,
       selectedDistrictId
     };
+  };
+
+  const resolveValidationMessage = ({ player, rewards, hasMinimumCash, selectedDistrictId, scope }) => {
+    if (!player) {
+      return { state: "warning", message: "Vyber target pro bounty kontrakt." };
+    }
+
+    if (!rewards.length) {
+      return { state: "warning", message: "Nastav clean cash escrow." };
+    }
+
+    if (!hasMinimumCash) {
+      return { state: "danger", message: `Minimum escrow je ${formatMoney(BOUNTY_MINIMUM_CASH)} clean cash.` };
+    }
+
+    if (scope === "district" && !selectedDistrictId) {
+      return { state: "warning", message: "Vyber konkrétní district pro district bounty." };
+    }
+
+    return { state: "ready", message: "Kontrakt je připravený k potvrzení." };
   };
 
   const renderBoard = () => {
@@ -672,7 +745,7 @@ function initBountyRuntime() {
     boardBody.innerHTML = activeEntries.map((entry) => `
       <tr>
         <td>${escapeHtml(formatBountyTargetLabel(entry))}</td>
-        <td>${entry.targetDistrictId ? "District" : "Hráč"}</td>
+        <td>${escapeHtml(formatBountyObjectiveLabel(entry.objectiveType))}</td>
         <td>${escapeHtml(formatBountyRewardSummary(entry.rewards) || "-")}</td>
         <td>${entry.isAnonymous ? "Anonymní" : "Veřejná"}</td>
         <td>${escapeHtml(formatExpiryLabel(entry.expiresAt))}</td>
@@ -887,6 +960,18 @@ function initBountyRuntime() {
     const nextValue = clampIntInput(cashInput, Number(cashInput.max || 0));
     cashRange.value = String(nextValue >= BOUNTY_MINIMUM_CASH ? nextValue : 0);
     syncPreview();
+  });
+  cashPresetButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const preset = String(button.dataset.bountyCashPreset || "").trim();
+      const cashMax = Math.max(0, Math.floor(Number(cashInput.max || 0)));
+      if (preset === "max") {
+        setCashAmount(cashMax);
+        return;
+      }
+
+      setCashAmount(Number(preset || 0));
+    });
   });
   anonymousInput.addEventListener("change", syncPreview);
   objectiveInputs.forEach((input) => input.addEventListener("change", syncPreview));

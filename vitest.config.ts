@@ -11,11 +11,30 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
+      include: [
+        "apps/**/*.ts",
+        "packages/game-core/src/**/*.ts",
+        "packages/game-config/src/**/*.ts",
+        "tools/**/*.ts"
+      ],
+      exclude: [
+        "apps/**/index.ts",
+        "apps/**/bootstrap/**",
+        "packages/**/src/**/*.d.ts",
+        "packages/**/src/**/index.ts",
+        "packages/game-core/src/contracts/**",
+        "packages/game-core/src/entities/**",
+        "packages/shared-types/**",
+        "page-assets/**",
+        "pages/**",
+        "tools/debug/src/index.ts",
+        "vite*.config.ts"
+      ],
       thresholds: {
-        lines: 1,
-        statements: 1,
-        functions: 1,
-        branches: 1
+        lines: 45,
+        statements: 45,
+        functions: 45,
+        branches: 40
       }
     }
   }
