@@ -15121,7 +15121,7 @@ function bindFactoryPopup(root) {
   if (
     !openButton || !popup || closeElements.length === 0 || !slotList || !levelElement || !multiplierElement
     || !ownedCountElement || !upgradeCostElement || !metalElement || !techElement || !combatElement
-    || !supplyMetalElement || !supplyTechElement || !supplyCombatElement || !effectsLabelElement || !upgradeButton
+    || !effectsLabelElement || !upgradeButton
     || !collectButton
     || !activeBoostElement
   ) {
@@ -15159,9 +15159,15 @@ function bindFactoryPopup(root) {
     metalElement.textContent = String(factoryState.resources.metalParts || 0);
     techElement.textContent = String(factoryState.resources.techCore || 0);
     combatElement.textContent = String(factoryState.resources.combatModule || 0);
-    supplyMetalElement.textContent = String(supplyState.metalParts || 0);
-    supplyTechElement.textContent = String(supplyState.techCore || 0);
-    supplyCombatElement.textContent = String(supplyState.combatModule || 0);
+    if (supplyMetalElement) {
+      supplyMetalElement.textContent = String(supplyState.metalParts || 0);
+    }
+    if (supplyTechElement) {
+      supplyTechElement.textContent = String(supplyState.techCore || 0);
+    }
+    if (supplyCombatElement) {
+      supplyCombatElement.textContent = String(supplyState.combatModule || 0);
+    }
     effectsLabelElement.textContent = `Síť Továren: ${syncResult.ownedFactoryCount} budova (+${syncResult.networkProductionBonusPct}% rychlost výroby)`;
     upgradeButton.disabled = factoryState.level >= FACTORY_CONFIG.maxLevel;
     upgradeButton.textContent = factoryState.level >= FACTORY_CONFIG.maxLevel ? "MAX" : "⇪";
@@ -15305,22 +15311,37 @@ function bindFactoryPopup(root) {
       const actions = document.createElement("div");
       actions.className = "factory-slot__actions";
 
-      const toggleButton = document.createElement("button");
-      toggleButton.type = "button";
-      toggleButton.className = "button drug-lab-mini-btn factory-slot-button";
-      toggleButton.dataset.factorySlotToggleState = slot.isProducing ? "stop" : "start";
-      toggleButton.textContent = slot.isProducing ? "Pozastavit produkci" : "Spustit produkci";
-      toggleButton.addEventListener("click", () => {
+      const setFactorySlotProduction = (isProducing) => {
         const nextState = getStoredFactoryState();
         const targetSlot = nextState.slots.find((item) => item.id === slot.id);
         if (!targetSlot) return;
-        targetSlot.isProducing = !targetSlot.isProducing;
+        targetSlot.isProducing = isProducing;
         targetSlot.lastTick = Date.now();
         setStoredFactoryState(nextState);
         renderFactoryDashboard();
+      };
+
+      const pauseButton = document.createElement("button");
+      pauseButton.type = "button";
+      pauseButton.className = "button drug-lab-mini-btn factory-slot-button";
+      pauseButton.dataset.factorySlotToggleState = "stop";
+      pauseButton.textContent = "Pozastavit";
+      pauseButton.disabled = !slot.isProducing;
+      pauseButton.addEventListener("click", () => {
+        setFactorySlotProduction(false);
       });
 
-      actions.append(toggleButton);
+      const startButton = document.createElement("button");
+      startButton.type = "button";
+      startButton.className = "button drug-lab-mini-btn factory-slot-button";
+      startButton.dataset.factorySlotToggleState = "start";
+      startButton.textContent = "Spustit";
+      startButton.disabled = slot.isProducing;
+      startButton.addEventListener("click", () => {
+        setFactorySlotProduction(true);
+      });
+
+      actions.append(pauseButton, startButton);
       card.append(head, metrics, actions);
       slotList.append(card);
     }

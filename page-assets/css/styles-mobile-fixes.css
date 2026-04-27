@@ -311,4 +311,90 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .pharmacy-popup-card.building-detail-modal__content .pharmacy-slot__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .druglab-popup-card.building-detail-modal__content .drug-production-slot__metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .druglab-popup-card.building-detail-modal__content .drug-production-slot__metric {
+    padding: 7px 6px !important;
+  }
+
+  .druglab-popup-card.building-detail-modal__content .drug-production-slot__metric-label,
+  .factory-popup-card.building-detail-modal__content .drug-production-slot__metric-label {
+    font-size: 8px !important;
+    letter-spacing: 0.04em !important;
+  }
+
+  .druglab-popup-card.building-detail-modal__content .drug-production-slot__metric-value,
+  .druglab-popup-card.building-detail-modal__content .drug-production-slot__metric-inline-value,
+  .factory-popup-card.building-detail-modal__content .drug-production-slot__metric-value,
+  .factory-popup-card.building-detail-modal__content .drug-production-slot__metric-inline-value {
+    font-size: 11px !important;
+  }
+
+  .druglab-popup-card.building-detail-modal__content .drug-production-slot__metric--supplies {
+    grid-column: 1 / -1;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-resource-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-resource-pill {
+    min-width: 0;
+    padding: 8px 5px !important;
+    border-radius: 10px !important;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-resource-pill span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 8px !important;
+    letter-spacing: 0.03em !important;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-resource-pill strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px !important;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-slot .drug-production-slot__metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-slot .drug-production-slot__metric {
+    padding: 7px 5px !important;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-slot__recipe-value {
+    font-size: 10px !important;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-slot__recipe-line {
+    overflow-wrap: anywhere;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-slot__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .factory-popup-card.building-detail-modal__content .factory-slot__actions .factory-slot-button {
+    grid-column: auto !important;
+    min-height: 32px;
+    padding-inline: 4px !important;
+    font-size: 8px !important;
+  }
 }
