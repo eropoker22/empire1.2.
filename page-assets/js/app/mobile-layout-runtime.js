@@ -1,7 +1,5 @@
 const MOBILE_MEDIA = "(max-width: 720px)";
-const CONDENSE_SCROLL_Y = 44;
-const EXPAND_SCROLL_Y = 18;
-const MOBILE_TOPBAR_GAP = 12;
+const MOBILE_TOPBAR_GAP = 4;
 const MOBILE_OVERLAY_SELECTOR = [
   ".modal",
   ".district-popup-shell",
@@ -79,7 +77,6 @@ function initMobileTopbarState(windowObj = window, documentObj = document) {
   if (!topbar) return;
 
   let ticking = false;
-  let condensed = false;
   let offsetFrameId = null;
 
   const applyTopbarOffset = () => {
@@ -104,18 +101,7 @@ function initMobileTopbarState(windowObj = window, documentObj = document) {
 
   const applyState = () => {
     ticking = false;
-    if (media.matches) {
-      const scrollY = Math.max(0, windowObj.scrollY || 0);
-      if (!condensed && scrollY > CONDENSE_SCROLL_Y) {
-        condensed = true;
-      } else if (condensed && scrollY < EXPAND_SCROLL_Y) {
-        condensed = false;
-      }
-    } else {
-      condensed = false;
-    }
-
-    documentObj.body.classList.toggle("is-mobile-topbar-condensed", condensed && media.matches);
+    documentObj.body.classList.toggle("is-mobile-topbar-condensed", media.matches);
     requestTopbarOffset();
   };
 

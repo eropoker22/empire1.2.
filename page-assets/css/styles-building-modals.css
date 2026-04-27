@@ -141,6 +141,10 @@
   gap: 10px;
 }
 
+.building-tech-popup-overview-grid--lab {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .building-tech-popup-stat-card {
   padding: 12px 14px;
   border-radius: 14px;
@@ -781,6 +785,14 @@
   --building-btn-accent: rgba(251, 191, 207, 0.26);
   --building-btn-accent-strong: rgba(252, 165, 165, 0.34);
   --building-btn-glow: rgba(244, 63, 94, 0.12);
+}
+
+@media (min-width: 901px) {
+  .armory-popup-card.building-detail-modal__content {
+    width: min(940px, calc(100vw - 64px)) !important;
+    height: min(calc(100vh - 96px), 760px);
+    max-height: min(calc(100vh - 96px), 760px);
+  }
 }
 
 .factory-popup-card.building-detail-modal__content {
@@ -1489,6 +1501,10 @@
   gap: 8px;
 }
 
+.druglab-popup-card .drug-production-slot__metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .drug-production-slot__metric {
   display: grid;
   gap: 4px;
@@ -1586,6 +1602,11 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   align-items: stretch;
+}
+
+.druglab-popup-card .drug-production-slot__controls {
+  grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .drug-lab-mini-btn {
@@ -1749,11 +1770,56 @@
 }
 
 .armory-slot {
-  border-color: rgba(56, 189, 248, 0.24);
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(125, 211, 252, 0.28);
   background:
-    linear-gradient(180deg, rgba(11, 17, 30, 0.96), rgba(9, 14, 24, 0.88)),
-    radial-gradient(circle at 100% 0, rgba(239, 68, 68, 0.06), transparent 46%),
+    radial-gradient(circle at 0 0, rgba(251, 113, 133, 0.14), transparent 34%),
+    radial-gradient(circle at 100% 0, rgba(56, 189, 248, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(13, 20, 36, 0.98), rgba(7, 12, 22, 0.92)),
     rgba(8, 14, 26, 0.84);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 22px rgba(15, 23, 42, 0.38),
+    0 14px 26px rgba(2, 6, 23, 0.32),
+    0 0 0 1px rgba(125, 211, 252, 0.06);
+}
+
+.armory-slot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 24%),
+    linear-gradient(90deg, rgba(251, 113, 133, 0.08), transparent 46%, rgba(34, 211, 238, 0.08));
+  opacity: 0.84;
+}
+
+.armory-slot > * {
+  position: relative;
+  z-index: 1;
+}
+
+.armory-slot--active {
+  border-color: rgba(251, 113, 133, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(251, 113, 133, 0.12),
+    0 0 22px rgba(251, 113, 133, 0.14),
+    0 16px 30px rgba(2, 6, 23, 0.34);
+}
+
+.armory-slot .drug-production-slot__head {
+  align-items: center;
+}
+
+.armory-slot .drug-production-slot__title {
+  color: #fff7ed;
+}
+
+.armory-slot .drug-production-slot__product {
+  color: #fda4af;
 }
 
 .armory-slot .drug-production-slot__metrics {
@@ -1765,7 +1831,11 @@
   min-width: 0;
   padding: 8px 9px;
   border-radius: 11px;
-  background: linear-gradient(180deg, rgba(13, 20, 36, 0.96), rgba(9, 14, 24, 0.88));
+  border-color: rgba(125, 211, 252, 0.2);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(9, 14, 24, 0.88)),
+    rgba(15, 23, 42, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .armory-slot .drug-production-slot__metric-label {
@@ -1797,11 +1867,14 @@
 }
 
 .armory-slot__material-pill {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
+  justify-content: stretch;
+  gap: 8px;
+  min-width: 0;
   min-height: 30px;
+  padding: 5px 8px;
   border-radius: 9px;
   border: 1px solid rgba(56, 189, 248, 0.28);
   background: rgba(8, 14, 26, 0.86);
@@ -1812,14 +1885,19 @@
 }
 
 .armory-slot__material-name {
+  min-width: 0;
   opacity: 0.92;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .armory-slot__material-value {
-  margin-left: 8px;
+  margin-left: 0;
   font-size: 17px;
   line-height: 1;
   color: #f8fafc;
+  white-space: nowrap;
 }
 
 .armory-slot__material-pill--metal {
@@ -1835,14 +1913,14 @@
 }
 
 .armory-slot .drug-production-slot__controls {
-  grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(118px, 1.45fr) repeat(2, minmax(72px, 1fr));
   gap: 6px;
   align-items: stretch;
 }
 
 .armory-slot__quantity {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  grid-template-columns: 30px minmax(46px, 1fr) 30px;
   align-items: center;
   gap: 5px;
   min-width: 0;
@@ -1871,7 +1949,11 @@
 .armory-slot__quantity-value {
   display: grid;
   place-items: center;
-  font-size: 12px;
+  min-width: 46px;
+  padding-inline: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .armory-slot .drug-lab-mini-btn[data-armory-slot-start] {

@@ -817,40 +817,52 @@
 
   .events-modal__agents {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(132px, 68vw);
-    grid-template-columns: none;
-    gap: 10px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 2px 2px 8px;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x proximity;
-    touch-action: pan-x;
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+    padding: 2px 2px 4px;
+    overscroll-behavior-x: auto;
+    scroll-snap-type: none;
+    touch-action: pan-y;
   }
 
   .events-agent {
+    display: block;
+    aspect-ratio: 1 / 1;
     min-height: 0;
-    scroll-snap-align: start;
+    border-radius: 12px;
+    scroll-snap-align: none;
     background:
-      radial-gradient(circle at 50% 34%, rgba(103, 232, 249, 0.12), transparent 46%),
+      radial-gradient(circle at 50% 30%, rgba(103, 232, 249, 0.18), transparent 46%),
       linear-gradient(180deg, rgba(8, 15, 29, 0.9), rgba(5, 9, 20, 0.96));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 8px 18px rgba(2, 6, 23, 0.34);
+  }
+
+  .events-agent::before {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 30%, rgba(3, 7, 18, 0.28)),
+      linear-gradient(135deg, rgba(34, 211, 238, 0.1), transparent 42%, rgba(244, 114, 182, 0.1));
+    opacity: 1;
   }
 
   .events-agent img,
   #events-modal.events-modal--compact .events-agent img {
-    height: clamp(184px, 36vh, 248px);
-    object-fit: contain;
-    object-position: center bottom;
-    background:
-      radial-gradient(circle at 50% 54%, rgba(103, 232, 249, 0.16), transparent 42%),
-      linear-gradient(180deg, rgba(5, 11, 22, 0.2), rgba(5, 9, 18, 0.72));
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-bottom: 0;
+    border-radius: inherit;
+    object-fit: cover;
+    object-position: center;
+    background: rgba(5, 9, 18, 0.72);
   }
 
   .events-agent__info {
-    min-height: 46px;
-    padding: 7px 9px 8px;
+    display: none;
   }
 
   .events-agent__name {
@@ -958,14 +970,14 @@
   }
 
   .events-modal__agents {
-    grid-auto-columns: minmax(122px, 78vw);
-    gap: 8px;
-    padding-bottom: 6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding-bottom: 4px;
   }
 
   .events-agent img,
   #events-modal.events-modal--compact .events-agent img {
-    height: clamp(172px, 32vh, 224px);
+    height: 100%;
   }
 
   #events-modal.events-modal--compact .events-modal__content {
@@ -980,8 +992,7 @@
   }
 
   .events-agent__info {
-    min-height: 44px;
-    padding: 7px 8px 8px;
+    display: none;
   }
 
   .events-agent__name {

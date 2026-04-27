@@ -1182,19 +1182,21 @@ body.game-body--booting .game-logo-slot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  justify-self: stretch;
+  gap: 7px;
   width: 100%;
-  min-height: 46px;
-  margin-top: 10px;
-  padding: 9px 14px;
+  max-width: 100%;
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 6px 11px;
   border: 1px solid rgba(226, 232, 240, 0.5);
-  border-radius: 14px;
+  border-radius: 12px;
   background:
     radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.34), transparent 34%),
     linear-gradient(135deg, rgba(248, 250, 252, 0.2), rgba(148, 163, 184, 0.12) 42%, rgba(34, 211, 238, 0.12)),
     rgba(12, 17, 26, 0.92);
   color: #f8fbff;
-  font-size: 0.66rem;
+  font-size: 0.56rem;
   font-weight: 850;
   line-height: 1;
   letter-spacing: 0.1em;
@@ -1210,11 +1212,11 @@ body.game-body--booting .game-logo-slot {
 .leaderboard-button__icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
   border: 1px solid rgba(248, 250, 252, 0.38);
-  border-radius: 10px;
+  border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(148, 163, 184, 0.08)),
     rgba(15, 23, 42, 0.72);
@@ -1225,8 +1227,8 @@ body.game-body--booting .game-logo-slot {
 }
 
 .leaderboard-button__icon svg {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;

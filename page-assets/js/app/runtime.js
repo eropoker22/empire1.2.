@@ -4323,6 +4323,13 @@ function persistProductionJob(jobId, payload) {
 }
 
 function clearProductionJob(jobId) {
+  if (productionTimers.has(jobId)) {
+    const timerId = productionTimers.get(jobId);
+    const clearTimer = typeof window !== "undefined" && typeof window.clearTimeout === "function" ? window.clearTimeout.bind(window) : globalThis.clearTimeout;
+    if (typeof clearTimer === "function") clearTimer(timerId);
+    productionTimers.delete(jobId);
+  }
+
   const productionState = getResolvedProductionState();
   delete productionState[jobId];
   setStoredProductionState(productionState);
@@ -4719,6 +4726,30 @@ function createArmoryMaterialsRow(inputs = {}) {
   return row;
 }
 
+function createProductionQuantityControl({ recipe, job, startButton, timeMetric, queueMetric, effectiveDurationMs, extraClass = "" }) {
+  let selectedBatches = 1;
+  const control = document.createElement("div"), minusButton = document.createElement("button"), plusButton = document.createElement("button"), quantityValue = document.createElement("strong");
+  control.className = `armory-slot__quantity${extraClass ? ` ${extraClass}` : ""}`;
+  minusButton.type = plusButton.type = "button";
+  minusButton.className = plusButton.className = `armory-slot__quantity-btn${extraClass ? ` ${extraClass}-btn` : ""}`;
+  quantityValue.className = `armory-slot__quantity-value${extraClass ? ` ${extraClass}-value` : ""}`;
+  minusButton.textContent = "−"; plusButton.textContent = "+";
+  minusButton.setAttribute("aria-label", `Ubrat výrobu ${recipe.name}`); plusButton.setAttribute("aria-label", `Přidat výrobu ${recipe.name}`);
+  control.append(minusButton, quantityValue, plusButton);
+  const getMaxBatches = () => Math.min(99, ...Object.entries(recipe.inputs || {}).map(([itemId, amount]) => Math.floor(getInventoryAmount("materials", itemId) / Math.max(1, Number(amount || 0)))));
+  const refresh = () => {
+    const maxBatches = Math.max(0, getMaxBatches()), outputAmount = Math.max(1, Number(recipe.output.amount || 1));
+    selectedBatches = Math.min(Math.max(1, selectedBatches), Math.max(1, maxBatches));
+    const queuedAmount = Number(job?.output?.amount || outputAmount * selectedBatches || 0);
+    quantityValue.textContent = String(job ? Math.max(1, Math.ceil(queuedAmount / outputAmount)) : selectedBatches);
+    minusButton.disabled = !!job || selectedBatches <= 1; plusButton.disabled = !!job || selectedBatches >= maxBatches; startButton.disabled = !!job || selectedBatches > maxBatches;
+    timeMetric.querySelector(".drug-production-slot__metric-value").textContent = formatDurationLabel(Number(job?.durationMs || effectiveDurationMs * selectedBatches));
+    queueMetric.querySelector(".drug-production-slot__metric-inline-value").textContent = `${queuedAmount} ks`;
+  };
+  minusButton.addEventListener("click", () => { selectedBatches -= 1; refresh(); }); plusButton.addEventListener("click", () => { selectedBatches += 1; refresh(); });
+  return { control, getStartBatchCount: () => selectedBatches, refresh };
+}
+
 function createProductionCard(buildingName, recipeId, recipeKey, recipe, rerender) {
   const job = getProductionJob(recipeKey);
   const buildingState = getStoredProductionBuildingState(buildingName);
@@ -4730,7 +4761,7 @@ function createProductionCard(buildingName, recipeId, recipeKey, recipe, rerende
   const card = document.createElement("article");
   const startButton = document.createElement("button");
   const collectButton = document.createElement("button");
-  let selectedBatches = 1, getStartBatchCount = () => 1, refreshQuantityControl = () => {};
+  let getStartBatchCount = () => 1, refreshQuantityControl = () => {};
 
   if (buildingName === "pharmacy") {
     card.className = [
@@ -4810,20 +4841,25 @@ function createProductionCard(buildingName, recipeId, recipeKey, recipe, rerende
 
     const metrics = document.createElement("div");
     metrics.className = "drug-production-slot__metrics";
+    const timeMetric = createMetricBlock({ label: "Čas", value: formatDurationLabel(Number(job?.durationMs || effectiveDurationMs)) });
+    const queueMetric = createMetricBlock({ label: "Ve frontě", value: `${Number(job?.output?.amount || recipe.output.amount || 0)} ks`, inline: true });
     metrics.append(
       createMetricBlock({ label: "Výstup", value: `${recipe.output.amount} ks` }),
-      createMetricBlock({ label: "Čas", value: formatDurationLabel(effectiveDurationMs) }),
+      timeMetric,
       createMetricBlock({ label: "Ve skladu", value: `${outputInventoryAmount} ks`, inline: true }),
+      queueMetric,
       createDrugSupplyRow(recipe.inputs || {})
     );
 
     const actions = document.createElement("div");
     actions.className = "drug-production-slot__controls";
+    const quantityControl = createProductionQuantityControl({ recipe, job, startButton, timeMetric, queueMetric, effectiveDurationMs, extraClass: "drug-production-slot__quantity" });
+    getStartBatchCount = quantityControl.getStartBatchCount; refreshQuantityControl = quantityControl.refresh;
     startButton.className = "button drug-lab-mini-btn";
     startButton.dataset.drugLabSlotStart = "true";
     collectButton.className = "button drug-lab-mini-btn";
     collectButton.dataset.drugLabSlotStop = "true";
-    actions.append(startButton, collectButton);
+    actions.append(quantityControl.control, startButton, collectButton);
     card.append(head, metrics, actions);
   } else {
     card.className = slotState.isActive
@@ -4876,39 +4912,13 @@ function createProductionCard(buildingName, recipeId, recipeKey, recipe, rerende
 
     const actions = document.createElement("div");
     actions.className = "drug-production-slot__controls";
-    const quantityControl = document.createElement("div");
-    const minusButton = document.createElement("button");
-    const plusButton = document.createElement("button");
-    const quantityValue = document.createElement("strong");
-    quantityControl.className = "armory-slot__quantity";
-    minusButton.type = plusButton.type = "button";
-    minusButton.className = plusButton.className = "armory-slot__quantity-btn";
-    quantityValue.className = "armory-slot__quantity-value";
-    minusButton.textContent = "−";
-    plusButton.textContent = "+";
-    minusButton.setAttribute("aria-label", `Ubrat výrobu ${recipe.name}`);
-    plusButton.setAttribute("aria-label", `Přidat výrobu ${recipe.name}`);
-    quantityControl.append(minusButton, quantityValue, plusButton);
-    const getMaxBatches = () => Math.min(99, ...Object.entries(recipe.inputs || {}).map(([itemId, amount]) => Math.floor(getInventoryAmount("materials", itemId) / Math.max(1, Number(amount || 0)))));
-    getStartBatchCount = () => selectedBatches;
-    refreshQuantityControl = () => {
-      const maxBatches = Math.max(0, getMaxBatches());
-      selectedBatches = Math.min(Math.max(1, selectedBatches), Math.max(1, maxBatches));
-      const queuedAmount = Number(job?.output?.amount || recipe.output.amount * selectedBatches || 0);
-      quantityValue.textContent = String(job ? Math.max(1, Math.ceil(queuedAmount / Math.max(1, Number(recipe.output.amount || 1)))) : selectedBatches);
-      minusButton.disabled = !!job || selectedBatches <= 1;
-      plusButton.disabled = !!job || selectedBatches >= maxBatches;
-      startButton.disabled = !!job || selectedBatches > maxBatches;
-      timeMetric.querySelector(".drug-production-slot__metric-value").textContent = formatDurationLabel(Number(job?.durationMs || effectiveDurationMs * selectedBatches));
-      queueMetric.querySelector(".drug-production-slot__metric-inline-value").textContent = `${queuedAmount} ks`;
-    };
-    minusButton.addEventListener("click", () => { selectedBatches -= 1; refreshQuantityControl(); });
-    plusButton.addEventListener("click", () => { selectedBatches += 1; refreshQuantityControl(); });
+    const quantityControl = createProductionQuantityControl({ recipe, job, startButton, timeMetric, queueMetric, effectiveDurationMs });
+    getStartBatchCount = quantityControl.getStartBatchCount; refreshQuantityControl = quantityControl.refresh;
     startButton.className = "button drug-lab-mini-btn";
     startButton.dataset.armorySlotStart = "true";
     collectButton.className = "button drug-lab-mini-btn";
     collectButton.dataset.armorySlotStop = "true";
-    actions.append(quantityControl, startButton, collectButton);
+    actions.append(quantityControl.control, startButton, collectButton);
     card.append(head, metrics, actions);
   }
 
@@ -4938,20 +4948,28 @@ function createProductionCard(buildingName, recipeId, recipeKey, recipe, rerende
   });
 
   collectButton.type = "button";
-  collectButton.textContent = "Vybrat";
-  collectButton.disabled = !job || job.status !== "ready";
-  collectButton.addEventListener("click", () => {
-    const currentJob = getProductionJob(recipeKey);
-
-    if (!currentJob || currentJob.status !== "ready") {
+  if (buildingName === "druglab") {
+    collectButton.textContent = "Zastavit";
+    collectButton.disabled = !job || job.status !== "running";
+    collectButton.title = "Zastavit výrobu";
+    collectButton.setAttribute("aria-label", `Zastavit výrobu ${recipe.name}`);
+    collectButton.addEventListener("click", () => {
+      const currentJob = getProductionJob(recipeKey);
+      if (!currentJob || currentJob.status !== "running") return rerender();
+      clearProductionJob(recipeKey);
       rerender();
-      return;
-    }
-
-    applyInventoryOutput(currentJob.output);
-    clearProductionJob(recipeKey);
-    rerender();
-  });
+    });
+  } else {
+    collectButton.textContent = "Vybrat";
+    collectButton.disabled = !job || job.status !== "ready";
+    collectButton.addEventListener("click", () => {
+      const currentJob = getProductionJob(recipeKey);
+      if (!currentJob || currentJob.status !== "ready") return rerender();
+      applyInventoryOutput(currentJob.output);
+      clearProductionJob(recipeKey);
+      rerender();
+    });
+  }
 
   if (job?.status === "running") {
     scheduleProductionJob(recipeKey, rerender);
