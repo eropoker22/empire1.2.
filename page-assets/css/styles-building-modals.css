@@ -942,6 +942,15 @@
     0 0 12px rgba(56, 189, 248, 0.28);
 }
 
+.armory-popup-card.building-detail-modal__content .modal__header h3 .building-detail-header-level,
+.pharmacy-popup-card.building-detail-modal__content .modal__header h3 .building-detail-header-level,
+.druglab-popup-card.building-detail-modal__content .modal__header h3 .building-detail-header-level,
+.factory-popup-card.building-detail-modal__content .modal__header h3 .building-detail-header-level {
+  margin-left: 6px;
+  margin-right: 0;
+  transform: translateY(-1px);
+}
+
 .building-detail-title__action-btn {
   display: inline-flex;
   align-items: center;

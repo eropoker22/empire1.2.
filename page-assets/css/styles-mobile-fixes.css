@@ -239,9 +239,8 @@
   .druglab-popup-card.building-detail-modal__content .modal__header,
   .factory-popup-card.building-detail-modal__content .modal__header {
     grid-template-columns: minmax(0, 1fr) 30px 30px !important;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto;
     column-gap: 6px !important;
-    row-gap: 4px !important;
     padding-right: 48px !important;
   }
 
@@ -251,6 +250,9 @@
   .factory-popup-card.building-detail-modal__content .modal__header h3 {
     grid-column: 1;
     grid-row: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
@@ -259,10 +261,12 @@
   }
 
   .building-detail-header-level {
-    grid-column: 1;
-    grid-row: 2;
-    justify-self: start;
-    margin: 0 !important;
+    flex: 0 0 auto;
+    height: 22px;
+    min-width: 32px;
+    margin: 0 0 0 4px !important;
+    padding: 0 7px;
+    font-size: 10px;
   }
 
   .building-detail-title__action-btn {
@@ -276,15 +280,35 @@
 
   .building-detail-title__action-btn--collect {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     align-self: center;
     justify-self: end;
   }
 
   .building-detail-title__action-btn--upgrade {
     grid-column: 3;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     align-self: center;
     justify-self: end;
+  }
+
+  .building-tech-popup-overview-grid,
+  .factory-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .building-tech-popup-stat-card,
+  .factory-stat-card {
+    min-width: 0;
+    padding: 10px !important;
+  }
+
+  .building-tech-popup-stat-card__value,
+  .factory-stat-card__value {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
