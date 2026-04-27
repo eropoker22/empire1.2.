@@ -111,7 +111,7 @@
               <div class="building-action-status__feed" data-building-action-feed role="log" aria-live="polite" aria-label="Historie uličních zpráv"></div>
             </section>
             <div id="leaderboard-card-anchor" hidden aria-hidden="true"></div>
-            <button id="leaderboard-card" type="button" class="button leaderboard-button" aria-label="Otevřít leaderboard">
+            <button id="leaderboard-card" type="button" class="button leaderboard-button" aria-label="Otevřít leaderboard" data-leaderboard-popup-open>
               <span class="leaderboard-button__icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="presentation" focusable="false">
                   <path d="M9 20V8h6v12"></path>
@@ -1626,6 +1626,25 @@
           </div>
           <p class="market-popup-copy" data-market-copy>Legální bazar serveru pro rychlý nákup a výkup materiálu bez heat risku.</p>
           <div class="market-popup-list" data-market-list></div>
+        </div>
+      </div>
+
+      <div class="leaderboard-popup-shell" data-leaderboard-popup hidden>
+        <div class="leaderboard-popup-backdrop" data-leaderboard-popup-close></div>
+        <div class="leaderboard-popup-card" role="dialog" aria-modal="true" aria-label="Leaderboard">
+          <button type="button" class="button leaderboard-popup-close" data-leaderboard-popup-close aria-label="Zavřít leaderboard">✕</button>
+          <div class="leaderboard-popup-heading">
+            <span class="leaderboard-popup-eyebrow">EmpireStreets ranking</span>
+            <span class="leaderboard-popup-server" data-leaderboard-server-badge>Server shard</span>
+          </div>
+          <h3 class="leaderboard-popup-title">Leaderboard</h3>
+          <div class="leaderboard-popup-tabs" aria-label="Leaderboard tabs">
+            <button type="button" class="button leaderboard-popup-tab is-active" data-leaderboard-tab="server">Server</button>
+            <button type="button" class="button leaderboard-popup-tab" data-leaderboard-tab="global">Celkové žebříčky</button>
+          </div>
+          <p class="leaderboard-popup-copy" data-leaderboard-copy>Příčky všech hráčů na aktuálním serveru.</p>
+          <div class="leaderboard-popup-stats" data-leaderboard-stats></div>
+          <div class="leaderboard-popup-list" data-leaderboard-list></div>
         </div>
       </div>
 

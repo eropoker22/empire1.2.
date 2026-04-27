@@ -14,6 +14,7 @@ const MOBILE_OVERLAY_SELECTOR = [
   ".druglab-popup-shell",
   ".factory-popup-shell",
   ".market-popup-shell",
+  ".leaderboard-popup-shell",
   ".storage-popup-shell",
   ".game-admin-slice-overlay"
 ].join(",");
@@ -24,6 +25,7 @@ const MOBILE_CLOSE_CONTROL_SELECTOR = [
   ".wanted-popup-close",
   ".player-popup-close",
   ".market-popup-close",
+  ".leaderboard-popup-close",
   ".storage-popup-close",
   ".building-tech-popup-close",
   ".avatar-lightbox__close",

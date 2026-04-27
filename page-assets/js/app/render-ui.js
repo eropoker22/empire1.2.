@@ -5,6 +5,7 @@ export { bindAttackOrders, showAttackToast } from "./features/attack.js";
 export { bindSpyMissions, bindSpyResourceToggle, showSpyToast } from "./features/spying.js";
 export { bindArmoryPopup, bindDrugLabPopup, bindFactoryPopup, bindPharmacyPopup, renderProductionPanel } from "./features/production.js";
 export { bindMarketPopup } from "./features/market.js";
+export { bindLeaderboardPopup } from "./features/leaderboard.js";
 export { bindPlayerProfilePopup, bindRegisteredPlayerState } from "./features/player-profile.js";
 export { bindAlliancePopup } from "./features/alliance.js";
 export { bindCityStatusBar, bindGangWantedStatus, showRobberyToast } from "./features/wanted-police.js";

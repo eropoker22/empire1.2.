@@ -47,6 +47,7 @@ import {
   getAuthoritySession,
   updateStoredPreviewSession
 } from "./model/authority-state.js";
+import { bindLeaderboardPopup } from "./features/leaderboard.js";
 import { bindMapNavigation } from "./map-navigation.js";
 import { getPoliceTierShortEffect, resolvePoliceTierImpact } from "./police-raid-config.js";
 import { renderPoliceRaidImpactDetails } from "./police-raid-modal.js";
@@ -15644,6 +15645,7 @@ function bootstrapPage() {
   bindPlayerProfilePopup(root);
   bindAlliancePopup(root);
   bindMarketPopup(root);
+  bindLeaderboardPopup(root);
   bindStoragePopup(root);
   bindPharmacyPopup(root);
   bindDrugLabPopup(root);
@@ -15700,6 +15702,7 @@ export {
   bindFactionRegistration,
   bindGamePhaseToggle,
   bindGangWantedStatus,
+  bindLeaderboardPopup,
   bindMapNavigation,
   bindMapPhaseToggle,
   bindMarketPopup,
