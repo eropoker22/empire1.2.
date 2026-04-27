@@ -48,6 +48,7 @@ import {
   updateStoredPreviewSession
 } from "./model/authority-state.js";
 import { bindMapNavigation } from "./map-navigation.js";
+import { getPoliceTierShortEffect, resolvePoliceTierImpact } from "./police-raid-config.js";
 
 const PAGE_ROOT_SELECTOR = "main[data-page]";
 const MOUNT_SELECTOR = "[data-mount-role], [id$='-mount'], [id$='-root']";
@@ -423,6 +424,8 @@ const ATTACK_WEAPON_LABELS = Object.freeze({
   "defense-tower": "Defense tower",
   alarm: "Alarm"
 });
+const ATTACK_WEAPON_IDS = Object.freeze(["baseball-bat", "pistol", "grenade", "smg", "bazooka"]);
+const DEFENSE_WEAPON_IDS = Object.freeze(["vest", "barricades", "cameras", "defense-tower", "alarm"]);
 const GANG_HEAT_DIRTY_COST = 500;
 const GANG_HEAT_DIRTY_REDUCTION = 10;
 const GANG_HEAT_CLEAN_COST = 300;
@@ -603,18 +606,6 @@ const POLICE_OPERATION_TYPES = Object.freeze({
     specialtyKey: "total",
     summary: (districtName) => `Na district ${districtName} běží koordinovaná razie více jednotek.`
   })
-});
-const POLICE_OPERATION_SEVERITY_MULTIPLIER = Object.freeze({
-  warning_notice: 0,
-  district_control: 0.55,
-  cash_seizure: 0.8,
-  warehouse_raid: 1,
-  district_lock: 1.15,
-  apartment_search: 0.9,
-  drug_seizure: 0.9,
-  dirty_cash_seizure: 0.95,
-  building_shutdown: 1,
-  coordinated_operation: 1.35
 });
 const POLICE_ACTION_TIER_MESSAGES = Object.freeze({
   1: Object.freeze({
@@ -869,21 +860,6 @@ const SPY_ALLIANCE_DETECTION_WARNING_QUOTES = Object.freeze([
   "[ALLY] drží jejich člověka. Někdo se hrabe v našem rajónu.",
   "Špeh skončil u [ALLY]. Teď víme, odkud fouká vítr."
 ]);
-const POLICE_TIER_IMPACT_PROFILE = Object.freeze({
-  1: Object.freeze({ cleanPct: 0, dirtyPct: 0, drugPct: 0, weaponPct: 0, materialPct: 0, influencePct: 0, membersPct: 0 }),
-  2: Object.freeze({ cleanPct: 2, dirtyPct: 8, drugPct: 0, weaponPct: 0, materialPct: 0, influencePct: 4, membersPct: 3 }),
-  3: Object.freeze({ cleanPct: 4, dirtyPct: 12, drugPct: 6, weaponPct: 3, materialPct: 0, influencePct: 6, membersPct: 5 }),
-  4: Object.freeze({ cleanPct: 8, dirtyPct: 18, drugPct: 10, weaponPct: 8, materialPct: 8, influencePct: 8, membersPct: 8 }),
-  5: Object.freeze({ cleanPct: 12, dirtyPct: 24, drugPct: 15, weaponPct: 12, materialPct: 16, influencePct: 12, membersPct: 12 }),
-  6: Object.freeze({ cleanPct: 25, dirtyPct: 40, drugPct: 20, weaponPct: 18, materialPct: 24, influencePct: 18, membersPct: 18 })
-});
-const POLICE_SPECIALTY_IMPACT_MULTIPLIER = Object.freeze({
-  total: Object.freeze({ clean: 1, dirty: 1, drugs: 1, weapons: 1, materials: 1, influence: 1, members: 1 }),
-  financial: Object.freeze({ clean: 1.35, dirty: 1.45, drugs: 0.55, weapons: 0.6, materials: 0.7, influence: 1.2, members: 0.7 }),
-  drug: Object.freeze({ clean: 0.75, dirty: 1.05, drugs: 1.7, weapons: 0.7, materials: 1.2, influence: 0.9, members: 0.85 }),
-  weapons: Object.freeze({ clean: 0.8, dirty: 0.95, drugs: 0.7, weapons: 1.7, materials: 1.45, influence: 0.95, members: 0.9 }),
-  arrests: Object.freeze({ clean: 0.7, dirty: 0.8, drugs: 0.65, weapons: 0.8, materials: 0.75, influence: 1.1, members: 1.7 })
-});
 let topbarStatSwitchTimer = null;
 let lastRenderedCleanMoney = null;
 let lastRenderedDirtyMoney = null;
@@ -1590,7 +1566,8 @@ function normalizePoliceActionMarker(districtId, marker) {
     raidSpecialtyKey: specialtyMeta.key,
     startedAt,
     expiresAt,
-    seed: Number(marker.seed || districtId) || Number(districtId) || 1
+    seed: Number(marker.seed || districtId) || Number(districtId) || 1,
+    impact: marker.impact && typeof marker.impact === "object" ? marker.impact : null
   };
 }
 
@@ -1646,6 +1623,11 @@ function getDistrictPoliceAction(districtId) {
   return getResolvedDistrictPoliceActions()[String(normalizedDistrictId)] || null;
 }
 
+function getActivePoliceIncomeMultiplier() {
+  const penaltyPct = Object.values(getResolvedDistrictPoliceActions()).reduce((max, marker) => Math.max(max, Number(marker?.impact?.incomePct || 0)), 0);
+  return 1 - (clamp(penaltyPct, 0, 100) / 100);
+}
+
 function markDistrictPoliceAction(districtId, options = {}) {
   const normalizedDistrictId = Number(districtId);
   if (!normalizedDistrictId) {
@@ -1670,14 +1652,10 @@ function markDistrictPoliceAction(districtId, options = {}) {
   const operationMeta = resolvePoliceOperationType(operationKey) || POLICE_OPERATION_TYPES.warning_notice;
   const specialtyKey = resolvePoliceSpecialty(options.raidSpecialtyKey || operationMeta.specialtyKey || resolveRandomPoliceSpecialtyKey()).key;
   const now = Date.now();
-  const durationMs = Math.max(60_000, Number(options.durationMs || operationMeta.durationMs || GANG_HEAT_POLICE_DURATION_MS) || GANG_HEAT_POLICE_DURATION_MS);
+  const durationMs = Math.max(60_000, Number(options.durationMs || GANG_HEAT_POLICE_DURATION_MS) || GANG_HEAT_POLICE_DURATION_MS);
   const impact = options.skipImpact === true
     ? { rows: [] }
-    : applyPoliceActionImpact({
-        districtId: normalizedDistrictId,
-        operationType: operationKey,
-        raidSpecialtyKey: specialtyKey
-      }, tier);
+    : applyPoliceActionImpact(tier);
   const nextMarker = {
     districtId: normalizedDistrictId,
     source: String(options.source || "police-action").trim() || "police-action",
@@ -2541,14 +2519,16 @@ function applyPercentageLoss(value, percent) {
   };
 }
 
-function applyInventoryPenalty(inventoryName, percent) {
+function applyInventoryPenalty(inventoryName, percent, allowedItemIds = null) {
   const safePercent = Math.max(0, Number(percent || 0));
   if (safePercent <= 0) {
     return { totalLost: 0, entries: [] };
   }
 
+  const supplies = inventoryName === "materials" ? getStoredFactorySupplies() : null;
+  const allowedSet = Array.isArray(allowedItemIds) ? new Set(allowedItemIds) : null;
   const currentInventory = inventoryName === "materials"
-    ? getResolvedMaterialInventory()
+    ? { ...getResolvedMaterialInventory(), "metal-parts": supplies.metalParts, "tech-core": supplies.techCore, "combat-module": supplies.combatModule }
     : inventoryName === "drugs"
       ? getResolvedDrugInventory()
       : getResolvedWeaponInventory();
@@ -2557,6 +2537,9 @@ function applyInventoryPenalty(inventoryName, percent) {
   let totalLost = 0;
 
   for (const [itemId, amount] of Object.entries(currentInventory || {})) {
+    if (allowedSet && !allowedSet.has(itemId)) {
+      continue;
+    }
     const result = applyPercentageLoss(amount, safePercent);
     if (result.lostValue <= 0) {
       continue;
@@ -2571,7 +2554,9 @@ function applyInventoryPenalty(inventoryName, percent) {
   }
 
   if (inventoryName === "materials") {
-    setStoredMaterialInventory(nextInventory);
+    const { ["metal-parts"]: metalParts, ["tech-core"]: techCore, ["combat-module"]: combatModule, ...materials } = nextInventory;
+    setStoredMaterialInventory(materials);
+    setStoredFactorySupplies({ ...supplies, metalParts, techCore, combatModule });
   } else if (inventoryName === "drugs") {
     setStoredDrugInventory(nextInventory);
   } else {
@@ -2593,36 +2578,26 @@ function summarizePenaltyEntries(entries, resolver) {
     .join(", ");
 }
 
-function applyPoliceActionImpact(marker, tier) {
-  const specialtyMeta = resolvePoliceSpecialty(marker?.raidSpecialtyKey);
-  const specialtyMultiplier = POLICE_SPECIALTY_IMPACT_MULTIPLIER[specialtyMeta.key] || POLICE_SPECIALTY_IMPACT_MULTIPLIER.total;
-  const tierImpact = POLICE_TIER_IMPACT_PROFILE[tier.id] || POLICE_TIER_IMPACT_PROFILE[1];
-  const severity = POLICE_OPERATION_SEVERITY_MULTIPLIER[String(marker?.operationType || "").trim().toLowerCase()] ?? 1;
-
-  const cleanPct = tierImpact.cleanPct * severity * specialtyMultiplier.clean;
-  const dirtyPct = tierImpact.dirtyPct * severity * specialtyMultiplier.dirty;
-  const drugPct = tierImpact.drugPct * severity * specialtyMultiplier.drugs;
-  const weaponPct = tierImpact.weaponPct * severity * specialtyMultiplier.weapons;
-  const materialPct = tierImpact.materialPct * severity * specialtyMultiplier.materials;
-  const influencePct = tierImpact.influencePct * severity * specialtyMultiplier.influence;
-  const membersPct = tierImpact.membersPct * severity * specialtyMultiplier.members;
+function applyPoliceActionImpact(tier) {
+  const tierImpact = resolvePoliceTierImpact(tier.id);
 
   const economyState = getResolvedEconomyState();
-  const cleanLoss = applyPercentageLoss(economyState.cleanMoney, cleanPct);
-  const dirtyLoss = applyPercentageLoss(economyState.dirtyMoney, dirtyPct);
+  const cleanLoss = applyPercentageLoss(economyState.cleanMoney, tierImpact.cleanPct);
+  const dirtyLoss = applyPercentageLoss(economyState.dirtyMoney, tierImpact.dirtyPct);
   setStoredEconomyState({
     ...economyState,
     cleanMoney: cleanLoss.nextValue,
     dirtyMoney: dirtyLoss.nextValue
   });
 
-  const drugLoss = applyInventoryPenalty("drugs", drugPct);
-  const weaponLoss = applyInventoryPenalty("weapons", weaponPct);
-  const materialLoss = applyInventoryPenalty("materials", materialPct);
+  const drugLoss = applyInventoryPenalty("drugs", tierImpact.drugPct);
+  const attackWeaponLoss = applyInventoryPenalty("weapons", tierImpact.attackWeaponPct, ATTACK_WEAPON_IDS);
+  const defenseWeaponLoss = applyInventoryPenalty("weapons", tierImpact.defenseWeaponPct, DEFENSE_WEAPON_IDS);
+  const materialLoss = applyInventoryPenalty("materials", tierImpact.materialPct);
 
   const gangState = getResolvedGangState();
-  const membersLoss = applyPercentageLoss(gangState.members, membersPct);
-  const influenceLoss = applyPercentageLoss(gangState.influence, influencePct);
+  const membersLoss = applyPercentageLoss(gangState.members, tierImpact.membersPct);
+  const influenceLoss = applyPercentageLoss(gangState.influence, tierImpact.influencePct);
   setStoredGangState({
     members: membersLoss.nextValue,
     influence: influenceLoss.nextValue
@@ -2632,7 +2607,8 @@ function applyPoliceActionImpact(marker, tier) {
     cleanLoss.lostValue > 0 ? { label: "Zabaveno clean", value: formatCurrency(cleanLoss.lostValue) } : null,
     dirtyLoss.lostValue > 0 ? { label: "Zabaveno dirty", value: formatCurrency(dirtyLoss.lostValue) } : null,
     drugLoss.totalLost > 0 ? { label: "Zabavené drogy", value: summarizePenaltyEntries(drugLoss.entries, getProductionResourceLabel) } : null,
-    weaponLoss.totalLost > 0 ? { label: "Zabavená výzbroj", value: summarizePenaltyEntries(weaponLoss.entries, (itemId) => ATTACK_WEAPON_LABELS[itemId] || itemId) } : null,
+    attackWeaponLoss.totalLost > 0 ? { label: "Zabavené attack zbraně", value: summarizePenaltyEntries(attackWeaponLoss.entries, (itemId) => ATTACK_WEAPON_LABELS[itemId] || itemId) } : null,
+    defenseWeaponLoss.totalLost > 0 ? { label: "Zabavené defense zbraně", value: summarizePenaltyEntries(defenseWeaponLoss.entries, (itemId) => ATTACK_WEAPON_LABELS[itemId] || itemId) } : null,
     materialLoss.totalLost > 0 ? { label: "Zabavený materiál", value: summarizePenaltyEntries(materialLoss.entries, getProductionResourceLabel) } : null,
     membersLoss.lostValue > 0 ? { label: "Zatčení členové", value: `${membersLoss.lostValue}` } : null,
     influenceLoss.lostValue > 0 ? { label: "Ztracený vliv", value: `${influenceLoss.lostValue}` } : null
@@ -2642,10 +2618,17 @@ function applyPoliceActionImpact(marker, tier) {
     cleanLoss: cleanLoss.lostValue,
     dirtyLoss: dirtyLoss.lostValue,
     drugLoss: drugLoss.totalLost,
-    weaponLoss: weaponLoss.totalLost,
+    attackWeaponLoss: attackWeaponLoss.totalLost,
+    defenseWeaponLoss: defenseWeaponLoss.totalLost,
     materialLoss: materialLoss.totalLost,
     membersLoss: membersLoss.lostValue,
     influenceLoss: influenceLoss.lostValue,
+    tierId: tier.id,
+    durationMs: tierImpact.durationMs,
+    incomePct: tierImpact.incomePct,
+    attackPowerPct: tierImpact.attackPowerPct,
+    defensePowerPct: tierImpact.defensePowerPct,
+    effectRows: tierImpact.effectRows,
     rows: impactRows
   };
 }
@@ -2907,25 +2890,38 @@ function resolvePoliceActionSpecialtyQuote(specialtyKey) {
   return pickRandomQuote(POLICE_ACTION_SPECIALTY_QUOTES[String(specialtyKey || "").trim().toLowerCase()] || []);
 }
 
+function createPoliceActionInfoRows(districtId, policeAction, specialtyMeta) {
+  const startedAt = Number(policeAction?.startedAt || Date.now());
+  const expiresAt = Number(policeAction?.expiresAt || startedAt + GANG_HEAT_POLICE_DURATION_MS);
+  return [
+    { label: "District", value: formatDistrictReference(districtId) },
+    { label: "Vlastník", value: getResultDistrictOwnerLabel(districtId) },
+    { label: "Typ razie", value: `${specialtyMeta.icon} ${specialtyMeta.label}` },
+    { label: "Doba razie", value: formatDurationLabel(Math.max(0, expiresAt - startedAt)), nowrap: true },
+    { label: "Konec za", value: formatDurationLabel(Math.max(0, expiresAt - Date.now())), nowrap: true },
+    ...(Array.isArray(policeAction?.impact?.effectRows) ? policeAction.impact.effectRows : []),
+    ...(Array.isArray(policeAction?.impact?.rows) ? policeAction.impact.rows : [])
+  ];
+}
+
 function createPoliceActionStartedPayload(district, policeAction) {
-  const districtName = formatDistrictReference(district || policeAction?.districtId);
-  const tier = resolveGangHeatTier(getResolvedGangState().heat);
+  const districtId = resolveDistrictNumericId(district || policeAction?.districtId);
+  const tier = POLICE_ACTION_TIER_MESSAGES[policeAction?.impact?.tierId] ? { id: policeAction.impact.tierId } : resolveGangHeatTier(getResolvedGangState().heat);
   const tierEntry = POLICE_ACTION_TIER_MESSAGES[tier.id] || POLICE_ACTION_TIER_MESSAGES[1];
   const specialtyMeta = resolvePoliceSpecialty(policeAction?.raidSpecialtyKey || resolvePoliceOperationType(policeAction?.operationType)?.specialtyKey);
   const specialtyQuote = resolvePoliceActionSpecialtyQuote(specialtyMeta.key);
   const policeQuote = resolvePoliceActionTierQuote(tier.id);
+  const buildRows = () => createPoliceActionInfoRows(districtId, policeAction, specialtyMeta);
 
   return {
     tone: `${tierEntry.tone} is-specialty-${specialtyMeta.key}`,
     title: "Policejní akce",
     badge: `Stupeň ${tier.id}/6 • ${specialtyMeta.label}`,
     summary: specialtyQuote || policeQuote || tierEntry.text,
-    rows: [
-      { label: "Hláška", value: tierEntry.title },
-      { label: "Policejní hláška", value: specialtyQuote || policeQuote || tierEntry.text },
-      { label: "District", value: districtName },
-      { label: "Typ razie", value: `${specialtyMeta.icon} ${specialtyMeta.label}` }
-    ]
+    syncToBuildingAction: false,
+    getRows: buildRows,
+    refreshMs: 1000,
+    autoCloseWhen: () => Math.max(0, Number(policeAction?.expiresAt || 0) - Date.now()) <= 0
   };
 }
 
@@ -2947,11 +2943,14 @@ function createDistrictPoliceRaidWarningPayload(district, policeAction) {
 
 function createOwnedDistrictPoliceRaidAlertPayload(district, policeAction) {
   const districtId = resolveDistrictNumericId(district || policeAction?.districtId);
+  const tier = POLICE_ACTION_TIER_MESSAGES[policeAction?.impact?.tierId] ? { id: policeAction.impact.tierId } : resolveGangHeatTier(getResolvedGangState().heat);
+  const tierEntry = POLICE_ACTION_TIER_MESSAGES[tier.id] || POLICE_ACTION_TIER_MESSAGES[1];
   const specialtyMeta = resolvePoliceSpecialty(policeAction?.raidSpecialtyKey || resolvePoliceOperationType(policeAction?.operationType)?.specialtyKey);
+  const buildRows = () => createPoliceActionInfoRows(districtId, policeAction, specialtyMeta);
   return {
-    tone: `is-specialty-${specialtyMeta.key} is-owned-district-raid-alert`,
-    title: "Policejní razie v tvém districtu",
-    badge: `Tvůj district pod razií • ${specialtyMeta.label}`,
+    tone: `${tierEntry.tone} is-specialty-${specialtyMeta.key} is-owned-district-raid-alert`,
+    title: "Policejní akce",
+    badge: `Stupeň ${tier.id}/6 • ${specialtyMeta.label}`,
     summary: pickRandomQuote(
       [
         "Policie právě najela do tvého districtu. Všechno je pod tlakem a bere se, co jde.",
@@ -2961,11 +2960,9 @@ function createOwnedDistrictPoliceRaidAlertPayload(district, policeAction) {
       "Policie právě razí tvůj district."
     ),
     syncToBuildingAction: false,
-    rows: [
-      { label: "District", value: formatDistrictReference(districtId) },
-      { label: "Vlastník", value: getResultDistrictOwnerLabel(districtId) },
-      { label: "Typ razie", value: specialtyMeta.label }
-    ]
+    getRows: buildRows,
+    refreshMs: 1000,
+    autoCloseWhen: () => Math.max(0, Number(policeAction?.expiresAt || 0) - Date.now()) <= 0
   };
 }
 
@@ -3351,7 +3348,8 @@ function openPoliceActionResultModal(root, payload = {}) {
     "is-specialty-arrests",
     "is-specialty-total",
     "is-district-raid-warning",
-    "is-district-attack-warning"
+    "is-district-attack-warning",
+    "is-owned-district-raid-alert"
   );
 
   for (const token of String(payload.tone || "").split(/\s+/).map((entry) => entry.trim()).filter(Boolean)) {
@@ -4598,7 +4596,8 @@ const PRODUCTION_RESOURCE_LABELS = Object.freeze({
   biomass: "Biomass",
   "stim-pack": "Stim Pack",
   "metal-parts": "Metal Parts",
-  "tech-core": "Tech Core"
+  "tech-core": "Tech Core",
+  "combat-module": "Combat Module"
 });
 
 const PRODUCTION_SLOT_VISUALS = Object.freeze({
@@ -7444,6 +7443,7 @@ function getCurrentPlayerStartPhaseSourceSnapshot() {
   let heatPerDay = 0;
   let heatPerMinute = 0;
   let districtCount = 0;
+  const policeIncomeMultiplier = getActivePoliceIncomeMultiplier();
 
   for (const district of getDistrictResourceCatalog()) {
     const districtId = Number(district.id);
@@ -7463,8 +7463,8 @@ function getCurrentPlayerStartPhaseSourceSnapshot() {
   }
 
   return {
-    cleanMoneyPerMinute: Math.max(0, cleanMoneyPerMinute),
-    dirtyMoneyPerMinute: Math.max(0, dirtyMoneyPerMinute),
+    cleanMoneyPerMinute: Math.max(0, cleanMoneyPerMinute * policeIncomeMultiplier),
+    dirtyMoneyPerMinute: Math.max(0, dirtyMoneyPerMinute * policeIncomeMultiplier),
     influencePerMinute: Math.max(0, influencePerMinute),
     heatPerDay: Math.max(0, Math.round(heatPerDay * 10) / 10),
     heatPerMinute: Math.max(0, heatPerMinute),
@@ -14747,7 +14747,7 @@ function bindGangWantedStatus(root) {
       title.textContent = tier.label;
 
       const copy = document.createElement("span");
-      copy.textContent = tier.title;
+      copy.textContent = `${tier.title} • ${getPoliceTierShortEffect(tier.id)}`;
 
       entry.append(title, copy);
       popupLevels.append(entry);
