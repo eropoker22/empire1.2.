@@ -1273,22 +1273,23 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     "defense-tower": 20,
     alarm: 10
   };
-  const calculateBaseAttackPower = (loadout) => Object.entries(loadout).reduce((totalPower, [weaponId, amount]) => {
+  const calculateBaseAttackPower = (loadout, modifiers = {}) => Object.entries(loadout).reduce((totalPower, [weaponId, amount]) => {
     const normalizedAmount = Math.max(0, amount ?? 0);
     const attackPower = ATTACK_POWER_BY_WEAPON[weaponId] ?? 0;
-    return totalPower + normalizedAmount * attackPower;
+    const multiplier = Math.max(0, Number(modifiers[weaponId] ?? 1));
+    return totalPower + normalizedAmount * attackPower * multiplier;
   }, 0);
   const hasFullAttackWeaponSet = (loadout) => ATTACK_WEAPON_IDS.every((weaponId) => (loadout[weaponId] ?? 0) > 0);
-  const calculateSmgComboBonus = (loadout) => {
+  const calculateSmgComboBonus = (loadout, modifiers = {}) => {
     if (!hasFullAttackWeaponSet(loadout)) {
       return 0;
     }
-    return (loadout.smg ?? 0) * 0.2;
+    return (loadout.smg ?? 0) * 0.2 * Math.max(0, Number(modifiers.smg ?? 1));
   };
   const calculateGrenadeDefenseIgnorePercent = (grenadeCount) => Math.max(0, grenadeCount) * 0.3;
   const calculateBazookaTotalDestructionBonusPercent = (bazookaCount) => Math.max(0, bazookaCount) * 0.5;
   const calculateEffectiveDefenseAfterGrenades = (defensePercent, grenadeCount) => Math.max(0, defensePercent - calculateGrenadeDefenseIgnorePercent(grenadeCount));
-  const calculateTotalAttackPower = (loadout, strengthMultiplier = 1) => (calculateBaseAttackPower(loadout) + calculateSmgComboBonus(loadout)) * Math.max(0, Number(strengthMultiplier || 1));
+  const calculateTotalAttackPower = (loadout, strengthMultiplier = 1, modifiers = {}) => (calculateBaseAttackPower(loadout, modifiers) + calculateSmgComboBonus(loadout, modifiers)) * Math.max(0, Number(strengthMultiplier || 1));
   const calculateBaseDefensePower = (loadout, modifiers = {}) => Object.entries(loadout).reduce((totalPower, [weaponId, amount]) => {
     const normalizedAmount = Math.max(0, amount ?? 0);
     const defensePower = DEFENSE_POWER_BY_WEAPON[weaponId] ?? 0;
@@ -1444,6 +1445,245 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         return "The attack triggered severe damage before ending.";
     }
   };
+  const getOwnedGarageCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
+    (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
+  ).length;
+  const resolveGarageNetworkMultipliers = (count, config) => {
+    const extra = Math.max(0, Math.floor(Number(count || 0)) - 1);
+    return {
+      incomeMultiplier: Math.min(config.network.maxIncomeMultiplier, 1 + extra * config.network.incomeBonusPctPerExtraGarage / 100),
+      heatMultiplier: Math.min(config.network.maxHeatMultiplier, 1 + extra * config.network.heatBonusPctPerExtraGarage / 100)
+    };
+  };
+  const resolveGarageCooldownStats = (input) => {
+    if (!input.config || !input.playerId) {
+      return {
+        ownedCount: 0,
+        cooldownReductionPct: 0,
+        fullBonusCategories: [],
+        halfBonusCategories: [],
+        excludedCategories: []
+      };
+    }
+    const ownedCount = getOwnedGarageCount(input.state, input.playerId, input.config);
+    return {
+      ownedCount,
+      cooldownReductionPct: Math.min(
+        input.config.cooldownReduction.maxReductionPct,
+        ownedCount * input.config.cooldownReduction.reductionPctPerGarage
+      ),
+      fullBonusCategories: [...input.config.cooldownReduction.fullBonusActionCategories],
+      halfBonusCategories: [...input.config.cooldownReduction.halfBonusActionCategories],
+      excludedCategories: [...input.config.cooldownReduction.excludedActionCategories]
+    };
+  };
+  const resolveGarageCooldownMultiplier = (input) => {
+    if (!input.config || !input.playerId) {
+      return 1;
+    }
+    const stats = resolveGarageCooldownStats({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.config
+    });
+    const category = input.category;
+    const reductionScale = input.config.cooldownReduction.fullBonusActionCategories.includes(category) ? 1 : input.config.cooldownReduction.halfBonusActionCategories.includes(category) ? 0.5 : 0;
+    const reductionPct = Math.min(input.config.cooldownReduction.maxReductionPct, stats.cooldownReductionPct * reductionScale);
+    return Math.max(1 - input.config.cooldownReduction.maxReductionPct / 100, 1 - reductionPct / 100);
+  };
+  const applyGarageCooldownReductionTicks = (input) => {
+    const baseTicks = Math.max(0, Math.ceil(Number(input.baseTicks || 0)));
+    if (baseTicks <= 0) {
+      return 0;
+    }
+    const multiplier = resolveGarageCooldownMultiplier({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.config,
+      category: input.category
+    });
+    return Math.max(1, Math.ceil(baseTicks * multiplier));
+  };
+  const resolveGarageCategoryForBuildingAction = (buildingTypeId, actionId) => {
+    if (buildingTypeId === "clinic" && actionId === "stabilization_protocol") {
+      return "clinicRecovery";
+    }
+    return null;
+  };
+  const applyGarageIncomeModifiers = (input) => {
+    if (input.building.buildingTypeId !== input.config.buildingTypeId || !input.building.ownerPlayerId) {
+      return {
+        cleanPerHour: input.cleanPerHour,
+        dirtyPerHour: input.dirtyPerHour,
+        heatPerDay: input.heatPerDay,
+        influencePerDay: input.influencePerDay,
+        maxLevel: 1
+      };
+    }
+    const network = resolveGarageNetworkMultipliers(getOwnedGarageCount(input.state, input.building.ownerPlayerId, input.config), input.config);
+    return {
+      cleanPerHour: input.cleanPerHour * network.incomeMultiplier,
+      dirtyPerHour: 0,
+      heatPerDay: input.heatPerDay * network.heatMultiplier,
+      influencePerDay: 0,
+      maxLevel: 1
+    };
+  };
+  const isCarDealerBuildingType = (buildingTypeId, config) => buildingTypeId === config.buildingTypeId || (config.legacyBuildingTypeIds ?? []).includes(buildingTypeId);
+  const resolveScaleForCategory = (category, config) => config.cooldownReduction.fullBonusActionCategories.includes(category) ? 1 : config.cooldownReduction.halfBonusActionCategories.includes(category) ? 0.5 : config.cooldownReduction.smallBonusActionCategories.includes(category) ? 0.25 : 0;
+  const resolveGarageReductionPctForCategory = (input) => {
+    if (!input.config || !input.playerId) {
+      return 0;
+    }
+    const scale = input.config.cooldownReduction.fullBonusActionCategories.includes(input.category) ? 1 : input.config.cooldownReduction.halfBonusActionCategories.includes(input.category) ? 0.5 : 0;
+    return Math.min(
+      input.config.cooldownReduction.maxReductionPct,
+      getOwnedGarageCount(input.state, input.playerId, input.config) * input.config.cooldownReduction.reductionPctPerGarage * scale
+    );
+  };
+  const getOwnedCarDealerCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
+    (building2) => isCarDealerBuildingType(building2.buildingTypeId, config) && building2.ownerPlayerId === playerId && building2.status === "active"
+  ).length;
+  const resolveCarDealerNetworkMultipliers = (count, config) => {
+    const extra = Math.max(0, Math.floor(Number(count || 0)) - 1);
+    return {
+      cleanIncomeMultiplier: Math.min(config.network.maxCleanIncomeMultiplier, 1 + extra * config.network.cleanIncomeBonusPctPerExtraDealer / 100),
+      dirtyIncomeMultiplier: Math.min(config.network.maxDirtyIncomeMultiplier, 1 + extra * config.network.dirtyIncomeBonusPctPerExtraDealer / 100),
+      heatMultiplier: Math.min(config.network.maxHeatMultiplier, 1 + extra * config.network.heatBonusPctPerExtraDealer / 100)
+    };
+  };
+  const resolveCarDealerSupportStats = (input) => {
+    var _a;
+    if (!input.config || !input.playerId) {
+      return {
+        ownedCount: 0,
+        mobilityBonusPct: 0,
+        cooldownReductionPct: 0,
+        escapeChanceBonusPct: 0,
+        combinedGarageDealerCooldownReductionPct: 0,
+        combinedGarageDealerMaxReductionPct: ((_a = input.config) == null ? void 0 : _a.cooldownReduction.combinedGarageDealerMaxReductionPct) ?? 22,
+        fullBonusCategories: [],
+        halfBonusCategories: [],
+        smallBonusCategories: [],
+        excludedCategories: [],
+        escapeAppliesTo: []
+      };
+    }
+    const ownedCount = getOwnedCarDealerCount(input.state, input.playerId, input.config);
+    const cooldownReductionPct = Math.min(
+      input.config.cooldownReduction.maxReductionPct,
+      ownedCount * input.config.cooldownReduction.reductionPctPerDealer
+    );
+    const garageStats = input.garageConfig ? resolveGarageCooldownStats({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.garageConfig
+    }) : null;
+    return {
+      ownedCount,
+      mobilityBonusPct: Math.min(input.config.mobility.maxBonusPct, ownedCount * input.config.mobility.bonusPctPerDealer),
+      cooldownReductionPct,
+      escapeChanceBonusPct: Math.min(input.config.escapeChance.maxBonusPct, ownedCount * input.config.escapeChance.bonusPctPerDealer),
+      combinedGarageDealerCooldownReductionPct: Math.min(
+        input.config.cooldownReduction.combinedGarageDealerMaxReductionPct,
+        cooldownReductionPct + ((garageStats == null ? void 0 : garageStats.cooldownReductionPct) ?? 0)
+      ),
+      combinedGarageDealerMaxReductionPct: input.config.cooldownReduction.combinedGarageDealerMaxReductionPct,
+      fullBonusCategories: [...input.config.cooldownReduction.fullBonusActionCategories],
+      halfBonusCategories: [...input.config.cooldownReduction.halfBonusActionCategories],
+      smallBonusCategories: [...input.config.cooldownReduction.smallBonusActionCategories],
+      excludedCategories: [...input.config.cooldownReduction.excludedActionCategories],
+      escapeAppliesTo: [...input.config.escapeChance.appliesTo]
+    };
+  };
+  const resolveCarDealerCooldownMultiplier = (input) => {
+    if (!input.playerId) {
+      return 1;
+    }
+    if (!input.config) {
+      const garageReductionPct2 = resolveGarageReductionPctForCategory({
+        state: input.state,
+        playerId: input.playerId,
+        config: input.garageConfig,
+        category: input.category
+      });
+      return 1 - garageReductionPct2 / 100;
+    }
+    if (input.config.cooldownReduction.excludedActionCategories.includes(input.category)) {
+      return 1;
+    }
+    const stats = resolveCarDealerSupportStats({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.config,
+      garageConfig: input.garageConfig
+    });
+    const scale = resolveScaleForCategory(input.category, input.config);
+    if (scale <= 0) {
+      return 1;
+    }
+    const dealerReductionPct = Math.min(input.config.cooldownReduction.maxReductionPct, stats.cooldownReductionPct * scale);
+    const garageReductionPct = resolveGarageReductionPctForCategory({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.garageConfig,
+      category: input.category
+    });
+    const combinedReductionPct = Math.min(
+      input.config.cooldownReduction.combinedGarageDealerMaxReductionPct,
+      dealerReductionPct + garageReductionPct
+    );
+    return Math.max(1 - input.config.cooldownReduction.combinedGarageDealerMaxReductionPct / 100, 1 - combinedReductionPct / 100);
+  };
+  const applyCarDealerCooldownReductionTicks = (input) => {
+    const baseTicks = Math.max(0, Math.ceil(Number(input.baseTicks || 0)));
+    if (baseTicks <= 0) {
+      return 0;
+    }
+    const multiplier = resolveCarDealerCooldownMultiplier({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.config,
+      garageConfig: input.garageConfig,
+      category: input.category
+    });
+    return Math.max(1, Math.ceil(baseTicks * multiplier));
+  };
+  const resolveCarDealerCategoryForBuildingAction = (buildingTypeId, actionId) => {
+    if (buildingTypeId === "clinic" && actionId === "stabilization_protocol") {
+      return "clinicEvacuationRecovery";
+    }
+    if (buildingTypeId === "recycling_center" && actionId === "extract_losses") {
+      return "recyclingSalvageTransport";
+    }
+    return null;
+  };
+  const resolveCarDealerEscapeChanceBonusPct = (input) => {
+    if (!input.config || !input.playerId) {
+      return 0;
+    }
+    const ownedCount = getOwnedCarDealerCount(input.state, input.playerId, input.config);
+    return Math.min(input.config.escapeChance.maxBonusPct, ownedCount * input.config.escapeChance.bonusPctPerDealer);
+  };
+  const applyCarDealerIncomeModifiers = (input) => {
+    if (!isCarDealerBuildingType(input.building.buildingTypeId, input.config) || !input.building.ownerPlayerId) {
+      return {
+        cleanPerHour: input.cleanPerHour,
+        dirtyPerHour: input.dirtyPerHour,
+        heatPerDay: input.heatPerDay,
+        influencePerDay: input.influencePerDay,
+        maxLevel: 1
+      };
+    }
+    const network = resolveCarDealerNetworkMultipliers(getOwnedCarDealerCount(input.state, input.building.ownerPlayerId, input.config), input.config);
+    return {
+      cleanPerHour: input.cleanPerHour * network.cleanIncomeMultiplier,
+      dirtyPerHour: input.dirtyPerHour * network.dirtyIncomeMultiplier,
+      heatPerDay: input.heatPerDay * network.heatMultiplier,
+      influencePerDay: 0,
+      maxLevel: 1
+    };
+  };
   const createPlayerPoliceState = (player, tick) => ({
     id: player.policeStateId,
     ownerPlayerId: player.id,
@@ -1475,7 +1715,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   };
   const getArcadeMetadata = (building2) => {
     var _a, _b;
-    const raw = isRecord$9((_a = building2.metadata) == null ? void 0 : _a.arcade) ? (_b = building2.metadata) == null ? void 0 : _b.arcade : {};
+    const raw = isRecord$b((_a = building2.metadata) == null ? void 0 : _a.arcade) ? (_b = building2.metadata) == null ? void 0 : _b.arcade : {};
     return {
       launderedEvents: Array.isArray(raw.launderedEvents) ? raw.launderedEvents.map((entry) => ({
         tick: Math.max(0, Math.floor(Number((entry == null ? void 0 : entry.tick) || 0))),
@@ -1486,14 +1726,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         riskPct: Math.max(0, Number((entry == null ? void 0 : entry.riskPct) || 0)),
         source: String((entry == null ? void 0 : entry.source) || "arcade")
       })).filter((entry) => entry.expiresAtTick > 0 && entry.riskPct > 0) : [],
-      nightMachinesExpiresAtTick: asOptionalTick$7(raw.nightMachinesExpiresAtTick),
-      incomePenaltyExpiresAtTick: asOptionalTick$7(raw.incomePenaltyExpiresAtTick),
-      incomePenaltyPct: asOptionalNumber$3(raw.incomePenaltyPct),
-      dirtyIncomePenaltyExpiresAtTick: asOptionalTick$7(raw.dirtyIncomePenaltyExpiresAtTick),
-      dirtyIncomePenaltyPct: asOptionalNumber$3(raw.dirtyIncomePenaltyPct),
-      backCashdeskBlockedUntilTick: asOptionalTick$7(raw.backCashdeskBlockedUntilTick),
-      lastAuditCheckTick: asOptionalTick$7(raw.lastAuditCheckTick),
-      auditLog: Array.isArray(raw.auditLog) ? raw.auditLog.filter(isRecord$9).slice(-10) : []
+      nightMachinesExpiresAtTick: asOptionalTick$9(raw.nightMachinesExpiresAtTick),
+      incomePenaltyExpiresAtTick: asOptionalTick$9(raw.incomePenaltyExpiresAtTick),
+      incomePenaltyPct: asOptionalNumber$5(raw.incomePenaltyPct),
+      dirtyIncomePenaltyExpiresAtTick: asOptionalTick$9(raw.dirtyIncomePenaltyExpiresAtTick),
+      dirtyIncomePenaltyPct: asOptionalNumber$5(raw.dirtyIncomePenaltyPct),
+      backCashdeskBlockedUntilTick: asOptionalTick$9(raw.backCashdeskBlockedUntilTick),
+      lastAuditCheckTick: asOptionalTick$9(raw.lastAuditCheckTick),
+      auditLog: Array.isArray(raw.auditLog) ? raw.auditLog.filter(isRecord$b).slice(-10) : []
     };
   };
   const resolveArcadeAuditRisk = (input) => {
@@ -1671,15 +1911,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return (hash >>> 0) % 1e4 / 100;
   };
-  const asOptionalTick$7 = (value) => {
+  const asOptionalTick$9 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : void 0;
   };
-  const asOptionalNumber$3 = (value) => {
+  const asOptionalNumber$5 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) ? numberValue : void 0;
   };
-  const isRecord$9 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const isRecord$b = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const isCasinoAction = (actionId, config) => Boolean(config && [
     config.quietBackroom.actionId,
     config.vipNight.actionId,
@@ -1687,7 +1927,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   ].includes(actionId));
   const getCasinoMetadata = (building2) => {
     var _a, _b;
-    const raw = isRecord$8((_a = building2.metadata) == null ? void 0 : _a.casino) ? (_b = building2.metadata) == null ? void 0 : _b.casino : {};
+    const raw = isRecord$a((_a = building2.metadata) == null ? void 0 : _a.casino) ? (_b = building2.metadata) == null ? void 0 : _b.casino : {};
     return {
       launderedEvents: Array.isArray(raw.launderedEvents) ? raw.launderedEvents.map((entry) => ({
         tick: Math.max(0, Math.floor(Number((entry == null ? void 0 : entry.tick) || 0))),
@@ -1698,14 +1938,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         riskPct: Math.max(0, Number((entry == null ? void 0 : entry.riskPct) || 0)),
         source: String((entry == null ? void 0 : entry.source) || "casino")
       })).filter((entry) => entry.expiresAtTick > 0 && entry.riskPct > 0) : [],
-      vipNightExpiresAtTick: asOptionalTick$6(raw.vipNightExpiresAtTick),
-      bribedInspectorExpiresAtTick: asOptionalTick$6(raw.bribedInspectorExpiresAtTick),
-      incomePenaltyExpiresAtTick: asOptionalTick$6(raw.incomePenaltyExpiresAtTick),
-      incomePenaltyPct: asOptionalNumber$2(raw.incomePenaltyPct),
-      launderingBlockedUntilTick: asOptionalTick$6(raw.launderingBlockedUntilTick),
-      vipBlockedUntilTick: asOptionalTick$6(raw.vipBlockedUntilTick),
-      lastAuditCheckTick: asOptionalTick$6(raw.lastAuditCheckTick),
-      auditLog: Array.isArray(raw.auditLog) ? raw.auditLog.filter(isRecord$8).slice(-10) : []
+      vipNightExpiresAtTick: asOptionalTick$8(raw.vipNightExpiresAtTick),
+      bribedInspectorExpiresAtTick: asOptionalTick$8(raw.bribedInspectorExpiresAtTick),
+      incomePenaltyExpiresAtTick: asOptionalTick$8(raw.incomePenaltyExpiresAtTick),
+      incomePenaltyPct: asOptionalNumber$4(raw.incomePenaltyPct),
+      launderingBlockedUntilTick: asOptionalTick$8(raw.launderingBlockedUntilTick),
+      vipBlockedUntilTick: asOptionalTick$8(raw.vipBlockedUntilTick),
+      lastAuditCheckTick: asOptionalTick$8(raw.lastAuditCheckTick),
+      auditLog: Array.isArray(raw.auditLog) ? raw.auditLog.filter(isRecord$a).slice(-10) : []
     };
   };
   const resolveCasinoAuditRisk = (input) => {
@@ -2057,15 +2297,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return (hash >>> 0) % 1e4 / 100;
   };
-  const asOptionalTick$6 = (value) => {
+  const asOptionalTick$8 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : void 0;
   };
-  const asOptionalNumber$2 = (value) => {
+  const asOptionalNumber$4 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) ? numberValue : void 0;
   };
-  const isRecord$8 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const isRecord$a = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const INCOME_TARGET_BY_BUILDING_TYPE = {
     casino: "casinoIncome",
     arcade: "arcadeIncome",
@@ -2088,9 +2328,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   };
   const getPowerStationMetadata = (building2) => {
     var _a;
-    const raw = isRecord$7((_a = building2.metadata) == null ? void 0 : _a.powerStation) ? building2.metadata.powerStation : {};
+    const raw = isRecord$9((_a = building2.metadata) == null ? void 0 : _a.powerStation) ? building2.metadata.powerStation : {};
     return {
-      backupGridSwitchExpiresAtTick: asOptionalTick$5(raw.backupGridSwitchExpiresAtTick)
+      backupGridSwitchExpiresAtTick: asOptionalTick$7(raw.backupGridSwitchExpiresAtTick)
     };
   };
   const isPowerStationBackupGridActiveForPlayer = (state, playerId, config, tick) => Object.values(state.buildingsById).some(
@@ -2221,11 +2461,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     powerStation
   });
   const minutesToTicks$4 = (minutes, tickRateMs) => Math.max(1, Math.ceil(Math.max(0, Number(minutes || 0)) * 60 * 1e3 / Math.max(1, tickRateMs)));
-  const asOptionalTick$5 = (value) => {
+  const asOptionalTick$7 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : void 0;
   };
-  const isRecord$7 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const isRecord$9 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const getOwnedWarehouseCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
     (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
   ).length;
@@ -2587,10 +2827,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   };
   const getConvenienceStoreMetadata = (building2) => {
     var _a;
-    const raw = isRecord$6((_a = building2.metadata) == null ? void 0 : _a.convenienceStore) ? building2.metadata.convenienceStore : {};
+    const raw = isRecord$8((_a = building2.metadata) == null ? void 0 : _a.convenienceStore) ? building2.metadata.convenienceStore : {};
     return {
-      lastPassiveRumorCheckTick: asOptionalTick$4(raw.lastPassiveRumorCheckTick),
-      rumorEvents: Array.isArray(raw.rumorEvents) ? raw.rumorEvents.filter(isRecord$6).map(normalizeRumor$2).slice(-12) : []
+      lastPassiveRumorCheckTick: asOptionalTick$6(raw.lastPassiveRumorCheckTick),
+      rumorEvents: Array.isArray(raw.rumorEvents) ? raw.rumorEvents.filter(isRecord$8).map(normalizeRumor$2).slice(-12) : []
     };
   };
   const generateRumor = (input) => {
@@ -2709,11 +2949,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return (hash >>> 0) % 1e4 / 100;
   };
-  const asOptionalTick$4 = (value) => {
+  const asOptionalTick$6 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) && numberValue >= 0 ? Math.floor(numberValue) : void 0;
   };
-  const isRecord$6 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const isRecord$8 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const getOwnedActiveBuildingCount = (state, playerId, buildingTypeId) => Object.values(state.buildingsById).filter(
     (building2) => building2.buildingTypeId === buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
   ).length;
@@ -2730,7 +2970,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   };
   const getExchangeOfficeMetadata = (building2) => {
     var _a, _b;
-    const raw = isRecord$5((_a = building2.metadata) == null ? void 0 : _a.exchangeOffice) ? (_b = building2.metadata) == null ? void 0 : _b.exchangeOffice : {};
+    const raw = isRecord$7((_a = building2.metadata) == null ? void 0 : _a.exchangeOffice) ? (_b = building2.metadata) == null ? void 0 : _b.exchangeOffice : {};
     return {
       launderedEvents: Array.isArray(raw.launderedEvents) ? raw.launderedEvents.map((entry) => ({
         tick: Math.max(0, Math.floor(Number((entry == null ? void 0 : entry.tick) || 0))),
@@ -2741,13 +2981,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         riskPct: Math.max(0, Number((entry == null ? void 0 : entry.riskPct) || 0)),
         source: String((entry == null ? void 0 : entry.source) || "exchange_office")
       })).filter((entry) => entry.expiresAtTick > 0 && entry.riskPct > 0) : [],
-      incomePenaltyExpiresAtTick: asOptionalTick$3(raw.incomePenaltyExpiresAtTick),
-      incomePenaltyPct: asOptionalNumber$1(raw.incomePenaltyPct),
-      dirtyIncomePenaltyExpiresAtTick: asOptionalTick$3(raw.dirtyIncomePenaltyExpiresAtTick),
-      dirtyIncomePenaltyPct: asOptionalNumber$1(raw.dirtyIncomePenaltyPct),
-      actionBlockedUntilTick: asOptionalTick$3(raw.actionBlockedUntilTick),
-      lastAuditCheckTick: asOptionalTick$3(raw.lastAuditCheckTick),
-      auditLog: Array.isArray(raw.auditLog) ? raw.auditLog.filter(isRecord$5).slice(-10) : []
+      incomePenaltyExpiresAtTick: asOptionalTick$5(raw.incomePenaltyExpiresAtTick),
+      incomePenaltyPct: asOptionalNumber$3(raw.incomePenaltyPct),
+      dirtyIncomePenaltyExpiresAtTick: asOptionalTick$5(raw.dirtyIncomePenaltyExpiresAtTick),
+      dirtyIncomePenaltyPct: asOptionalNumber$3(raw.dirtyIncomePenaltyPct),
+      actionBlockedUntilTick: asOptionalTick$5(raw.actionBlockedUntilTick),
+      lastAuditCheckTick: asOptionalTick$5(raw.lastAuditCheckTick),
+      auditLog: Array.isArray(raw.auditLog) ? raw.auditLog.filter(isRecord$7).slice(-10) : []
     };
   };
   const resolveExchangeOfficeAuditRisk = (input) => {
@@ -3029,99 +3269,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return (hash >>> 0) % 1e4 / 100;
   };
-  const asOptionalTick$3 = (value) => {
+  const asOptionalTick$5 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : void 0;
   };
-  const asOptionalNumber$1 = (value) => {
+  const asOptionalNumber$3 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) ? numberValue : void 0;
   };
-  const isRecord$5 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-  const getOwnedGarageCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
-    (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
-  ).length;
-  const resolveGarageNetworkMultipliers = (count, config) => {
-    const extra = Math.max(0, Math.floor(Number(count || 0)) - 1);
-    return {
-      incomeMultiplier: Math.min(config.network.maxIncomeMultiplier, 1 + extra * config.network.incomeBonusPctPerExtraGarage / 100),
-      heatMultiplier: Math.min(config.network.maxHeatMultiplier, 1 + extra * config.network.heatBonusPctPerExtraGarage / 100)
-    };
-  };
-  const resolveGarageCooldownStats = (input) => {
-    if (!input.config || !input.playerId) {
-      return {
-        ownedCount: 0,
-        cooldownReductionPct: 0,
-        fullBonusCategories: [],
-        halfBonusCategories: [],
-        excludedCategories: []
-      };
-    }
-    const ownedCount = getOwnedGarageCount(input.state, input.playerId, input.config);
-    return {
-      ownedCount,
-      cooldownReductionPct: Math.min(
-        input.config.cooldownReduction.maxReductionPct,
-        ownedCount * input.config.cooldownReduction.reductionPctPerGarage
-      ),
-      fullBonusCategories: [...input.config.cooldownReduction.fullBonusActionCategories],
-      halfBonusCategories: [...input.config.cooldownReduction.halfBonusActionCategories],
-      excludedCategories: [...input.config.cooldownReduction.excludedActionCategories]
-    };
-  };
-  const resolveGarageCooldownMultiplier = (input) => {
-    if (!input.config || !input.playerId) {
-      return 1;
-    }
-    const stats = resolveGarageCooldownStats({
-      state: input.state,
-      playerId: input.playerId,
-      config: input.config
-    });
-    const category = input.category;
-    const reductionScale = input.config.cooldownReduction.fullBonusActionCategories.includes(category) ? 1 : input.config.cooldownReduction.halfBonusActionCategories.includes(category) ? 0.5 : 0;
-    const reductionPct = Math.min(input.config.cooldownReduction.maxReductionPct, stats.cooldownReductionPct * reductionScale);
-    return Math.max(1 - input.config.cooldownReduction.maxReductionPct / 100, 1 - reductionPct / 100);
-  };
-  const applyGarageCooldownReductionTicks = (input) => {
-    const baseTicks = Math.max(0, Math.ceil(Number(input.baseTicks || 0)));
-    if (baseTicks <= 0) {
-      return 0;
-    }
-    const multiplier = resolveGarageCooldownMultiplier({
-      state: input.state,
-      playerId: input.playerId,
-      config: input.config,
-      category: input.category
-    });
-    return Math.max(1, Math.ceil(baseTicks * multiplier));
-  };
-  const resolveGarageCategoryForBuildingAction = (buildingTypeId, actionId) => {
-    if (buildingTypeId === "clinic" && actionId === "stabilization_protocol") {
-      return "clinicRecovery";
-    }
-    return null;
-  };
-  const applyGarageIncomeModifiers = (input) => {
-    if (input.building.buildingTypeId !== input.config.buildingTypeId || !input.building.ownerPlayerId) {
-      return {
-        cleanPerHour: input.cleanPerHour,
-        dirtyPerHour: input.dirtyPerHour,
-        heatPerDay: input.heatPerDay,
-        influencePerDay: input.influencePerDay,
-        maxLevel: 1
-      };
-    }
-    const network = resolveGarageNetworkMultipliers(getOwnedGarageCount(input.state, input.building.ownerPlayerId, input.config), input.config);
-    return {
-      cleanPerHour: input.cleanPerHour * network.incomeMultiplier,
-      dirtyPerHour: 0,
-      heatPerDay: input.heatPerDay * network.heatMultiplier,
-      influencePerDay: 0,
-      maxLevel: 1
-    };
-  };
+  const isRecord$7 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const getOwnedRecruitmentCenterCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
     (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
   ).length;
@@ -3134,7 +3290,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   };
   const resolveRecruitmentCenterSupportBonuses = (input) => {
     if (!input.config || !input.playerId) {
-      return createEmptySupportBonuses(input.config);
+      return createEmptySupportBonuses$1(input.config);
     }
     const count = getOwnedRecruitmentCenterCount(input.state, input.playerId, input.config);
     const populationProductionBonusPct = Math.min(
@@ -3201,7 +3357,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       maxLevel: 1
     };
   };
-  const createEmptySupportBonuses = (config) => ({
+  const createEmptySupportBonuses$1 = (config) => ({
     populationProductionBonusPct: 0,
     apartmentCapacityBonusPct: 0,
     attackWeaponStrengthBonusPct: 0,
@@ -3209,6 +3365,111 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     cameraStrengthBonusPct: 0,
     alarmStrengthBonusPct: 0,
     combinedCameraAlarmCapPct: (config == null ? void 0 : config.combatSupport.maxCombinedCameraAlarmBonusPct) ?? 50
+  });
+  const getOwnedFitnessClubCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
+    (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
+  ).length;
+  const resolveFitnessClubNetworkMultipliers = (count, config) => {
+    const extra = Math.max(0, Math.floor(Number(count || 0)) - 1);
+    return {
+      incomeMultiplier: Math.min(config.network.maxIncomeMultiplier, 1 + extra * config.network.incomeBonusPctPerExtraClub / 100),
+      heatMultiplier: Math.min(config.network.maxHeatMultiplier, 1 + extra * config.network.heatBonusPctPerExtraClub / 100)
+    };
+  };
+  const resolveFitnessClubSupportBonuses = (input) => {
+    if (!input.config || !input.playerId) {
+      return createEmptySupportBonuses(input.config);
+    }
+    const ownedCount = getOwnedFitnessClubCount(input.state, input.playerId, input.config);
+    return {
+      ownedCount,
+      attackStrengthBonusPct: Math.min(
+        input.config.combatConditioning.maxAttackStrengthBonusPct,
+        ownedCount * input.config.combatConditioning.attackStrengthBonusPctPerClub
+      ),
+      defenseStrengthBonusPct: Math.min(
+        input.config.combatConditioning.maxDefenseStrengthBonusPct,
+        ownedCount * input.config.combatConditioning.defenseStrengthBonusPctPerClub
+      ),
+      combinedRecruitmentFitnessAttackCapPct: input.config.combatConditioning.combinedRecruitmentFitnessAttackCapPct,
+      combinedRecruitmentFitnessDefenseCapPct: input.config.combatConditioning.combinedRecruitmentFitnessDefenseCapPct,
+      attackApplication: { ...input.config.combatConditioning.attackApplication },
+      defenseApplication: { ...input.config.combatConditioning.defenseApplication }
+    };
+  };
+  const resolveFitnessAttackWeaponModifiers = (input) => {
+    const recruitment = resolveRecruitmentCenterSupportBonuses({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.recruitmentCenterConfig
+    });
+    const fitness = resolveFitnessClubSupportBonuses({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.fitnessConfig
+    });
+    const keys = ["baseball-bat", "pistol", "grenade", "smg", "bazooka"];
+    return Object.fromEntries(keys.map((weaponId) => {
+      const scale = Math.max(0, Number(fitness.attackApplication[weaponId] ?? 0));
+      const combinedBonusPct = Math.min(
+        fitness.combinedRecruitmentFitnessAttackCapPct,
+        recruitment.attackWeaponStrengthBonusPct + fitness.attackStrengthBonusPct * scale
+      );
+      return [weaponId, 1 + combinedBonusPct / 100];
+    }));
+  };
+  const resolveFitnessDefenseItemModifiers = (input) => {
+    const recruitment = resolveRecruitmentCenterSupportBonuses({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.recruitmentCenterConfig
+    });
+    const fitness = resolveFitnessClubSupportBonuses({
+      state: input.state,
+      playerId: input.playerId,
+      config: input.fitnessConfig
+    });
+    const keys = ["vest", "barricades", "cameras", "defense-tower", "alarm"];
+    return Object.fromEntries(keys.map((itemId) => {
+      const baseModifier = Math.max(0, Number(input.baseModifiers[itemId] ?? 1));
+      if (itemId === "cameras" || itemId === "alarm") {
+        return [itemId, baseModifier];
+      }
+      const scale = Math.max(0, Number(fitness.defenseApplication[itemId] ?? 0));
+      const combinedBonusPct = Math.min(
+        fitness.combinedRecruitmentFitnessDefenseCapPct,
+        recruitment.defenseItemStrengthBonusPct + fitness.defenseStrengthBonusPct * scale
+      );
+      return [itemId, baseModifier * (1 + combinedBonusPct / 100)];
+    }));
+  };
+  const applyFitnessClubIncomeModifiers = (input) => {
+    if (input.building.buildingTypeId !== input.config.buildingTypeId || !input.building.ownerPlayerId) {
+      return {
+        cleanPerHour: input.cleanPerHour,
+        dirtyPerHour: input.dirtyPerHour,
+        heatPerDay: input.heatPerDay,
+        influencePerDay: input.influencePerDay,
+        maxLevel: 1
+      };
+    }
+    const network = resolveFitnessClubNetworkMultipliers(getOwnedFitnessClubCount(input.state, input.building.ownerPlayerId, input.config), input.config);
+    return {
+      cleanPerHour: input.cleanPerHour * network.incomeMultiplier,
+      dirtyPerHour: 0,
+      heatPerDay: input.heatPerDay * network.heatMultiplier,
+      influencePerDay: 0,
+      maxLevel: 1
+    };
+  };
+  const createEmptySupportBonuses = (config) => ({
+    ownedCount: 0,
+    attackStrengthBonusPct: 0,
+    defenseStrengthBonusPct: 0,
+    combinedRecruitmentFitnessAttackCapPct: (config == null ? void 0 : config.combatConditioning.combinedRecruitmentFitnessAttackCapPct) ?? 30,
+    combinedRecruitmentFitnessDefenseCapPct: (config == null ? void 0 : config.combatConditioning.combinedRecruitmentFitnessDefenseCapPct) ?? 24,
+    attackApplication: config ? { ...config.combatConditioning.attackApplication } : {},
+    defenseApplication: config ? { ...config.combatConditioning.defenseApplication } : {}
   });
   const getOwnedRecyclingCenterCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
     (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
@@ -3459,10 +3720,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   };
   const getRestaurantMetadata = (building2) => {
     var _a;
-    const raw = isRecord$4((_a = building2.metadata) == null ? void 0 : _a.restaurant) ? building2.metadata.restaurant : {};
+    const raw = isRecord$6((_a = building2.metadata) == null ? void 0 : _a.restaurant) ? building2.metadata.restaurant : {};
     return {
-      lastPassiveRumorCheckTick: asOptionalTick$2(raw.lastPassiveRumorCheckTick),
-      rumorEvents: Array.isArray(raw.rumorEvents) ? raw.rumorEvents.filter(isRecord$4).map(normalizeRumor$1).slice(-12) : []
+      lastPassiveRumorCheckTick: asOptionalTick$4(raw.lastPassiveRumorCheckTick),
+      rumorEvents: Array.isArray(raw.rumorEvents) ? raw.rumorEvents.filter(isRecord$6).map(normalizeRumor$1).slice(-12) : []
     };
   };
   const updateBuildingMetadata = (buildingsById, building2, metadata) => ({
@@ -3562,11 +3823,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return (hash >>> 0) % 1e4 / 100;
   };
-  const asOptionalTick$2 = (value) => {
+  const asOptionalTick$4 = (value) => {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) && numberValue >= 0 ? Math.floor(numberValue) : void 0;
   };
-  const isRecord$4 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const isRecord$6 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const getOwnedShoppingMallCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
     (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
   ).length;
@@ -3616,6 +3877,537 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       maxLevel: 1
     };
   };
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+  const deterministicUnitInterval = (seed) => {
+    let hash = 2166136261;
+    for (let index = 0; index < seed.length; index += 1) {
+      hash ^= seed.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) / 4294967295;
+  };
+  const TALENT_LABELS = {
+    technician: "Technik",
+    informant: "Informátor",
+    medic: "Medik",
+    negotiator: "Vyjednavač",
+    organizer: "Organizátor",
+    protector: "Ochránce"
+  };
+  const TALENT_SUMMARIES = {
+    technician: "Technik umí zrychlit výrobu ve Zbrojovce nebo Továrně.",
+    informant: "Informátor přinesl slabý civilní drb z okolí Školy.",
+    medic: "Medik zná levnější postup pro stabilizaci zraněných.",
+    negotiator: "Vyjednavač umí vytěžit z města drobný vliv.",
+    organizer: "Organizátor umí zkrátit logistické zdržení.",
+    protector: "Ochránce umí krátce podržet obranu nejbližšího vlastního districtu."
+  };
+  const getOwnedSchoolCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
+    (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
+  ).length;
+  const resolveSchoolNetworkMultipliers = (count, config) => {
+    const extra = Math.max(0, Math.floor(Number(count || 0)) - 1);
+    return {
+      populationProductionMultiplier: Math.min(
+        config.network.maxPopulationProductionMultiplier,
+        1 + extra * config.network.populationProductionBonusPctPerExtraSchool / 100
+      ),
+      studentCapacityMultiplier: Math.min(
+        config.network.maxStudentCapacityMultiplier,
+        1 + extra * config.network.studentCapacityBonusPctPerExtraSchool / 100
+      ),
+      incomeMultiplier: Math.min(
+        config.network.maxIncomeMultiplier,
+        1 + extra * config.network.incomeBonusPctPerExtraSchool / 100
+      )
+    };
+  };
+  const getSchoolMetadata = (building2, tick = 0) => {
+    var _a, _b;
+    const raw = isRecord$5((_a = building2.metadata) == null ? void 0 : _a.school) ? (_b = building2.metadata) == null ? void 0 : _b.school : {};
+    return {
+      storedStudents: Math.max(0, Number(raw.storedStudents || 0)),
+      lastUpdatedTick: asOptionalTick$3(raw.lastUpdatedTick),
+      lastCapacity: asOptionalNumber$2(raw.lastCapacity),
+      wasFull: Boolean(raw.wasFull),
+      eveningCourseExpiresAtTick: asOptionalTick$3(raw.eveningCourseExpiresAtTick)
+    };
+  };
+  const isEveningCourseActive = (metadata, tick) => Math.max(0, Number(metadata.eveningCourseExpiresAtTick || 0)) > tick;
+  const resolveSchoolTalentChancePct = (input) => {
+    const extra = Math.max(0, Math.floor(Number(input.ownedCount || 0)) - 1);
+    const baseChance = Math.min(
+      input.config.talentPool.maxChancePct,
+      input.config.talentPool.baseChancePct + extra * input.config.talentPool.chancePctPerExtraSchool
+    );
+    return Math.min(
+      100,
+      baseChance + (input.eveningCourseActive ? input.config.talentPool.eveningCourseTalentChanceBonusPct : 0)
+    );
+  };
+  const applySchoolIncomeModifiers = (input) => {
+    if (input.building.buildingTypeId !== input.config.buildingTypeId || !input.building.ownerPlayerId) {
+      return {
+        cleanPerHour: input.cleanPerHour,
+        dirtyPerHour: input.dirtyPerHour,
+        heatPerDay: input.heatPerDay,
+        influencePerDay: input.influencePerDay,
+        maxLevel: 1
+      };
+    }
+    const network = resolveSchoolNetworkMultipliers(
+      getOwnedSchoolCount(input.state, input.building.ownerPlayerId, input.config),
+      input.config
+    );
+    const metadata = getSchoolMetadata(input.building, input.tick);
+    const courseMultiplier = isEveningCourseActive(metadata, input.tick) ? input.config.eveningCourse.cleanIncomeMultiplier : 1;
+    return {
+      cleanPerHour: input.cleanPerHour * network.incomeMultiplier * courseMultiplier,
+      dirtyPerHour: 0,
+      heatPerDay: 0,
+      influencePerDay: input.influencePerDay,
+      maxLevel: 1
+    };
+  };
+  const resolveSchoolCapacity = (input) => {
+    const ownedCount = input.building.ownerPlayerId ? getOwnedSchoolCount(input.state, input.building.ownerPlayerId, input.config) : 0;
+    const network = resolveSchoolNetworkMultipliers(ownedCount, input.config);
+    return Math.max(1, Math.floor(input.config.baseStudentCapacity * network.studentCapacityMultiplier + 1e-9));
+  };
+  const applySchoolStudentProduction = (state, config, tickRateMs) => {
+    let buildingsById = state.buildingsById;
+    let changed = false;
+    for (const building2 of Object.values(state.buildingsById)) {
+      if (building2.buildingTypeId !== config.buildingTypeId || building2.status !== "active" || !building2.ownerPlayerId) {
+        continue;
+      }
+      const metadata = getSchoolMetadata(building2, state.root.tick);
+      const lastTick = metadata.lastUpdatedTick ?? state.root.tick;
+      const elapsedTicks = Math.max(0, state.root.tick - lastTick);
+      const ownedCount = getOwnedSchoolCount(state, building2.ownerPlayerId, config);
+      const network = resolveSchoolNetworkMultipliers(ownedCount, config);
+      const capacity = resolveSchoolCapacity({ state, building: building2, config });
+      const currentStored = Math.min(capacity, metadata.storedStudents);
+      const eveningMultiplier = isEveningCourseActive(metadata, state.root.tick) ? config.eveningCourse.populationProductionMultiplier : 1;
+      const gain = currentStored >= capacity ? 0 : config.populationPerMinute * network.populationProductionMultiplier * eveningMultiplier * elapsedTicks * Math.max(1, tickRateMs) / 6e4;
+      const nextStored = Math.min(capacity, currentStored + gain);
+      const nextMetadata = {
+        ...metadata,
+        storedStudents: nextStored,
+        lastUpdatedTick: state.root.tick,
+        lastCapacity: capacity,
+        wasFull: nextStored >= capacity
+      };
+      if (Math.abs(nextMetadata.storedStudents - metadata.storedStudents) <= Number.EPSILON && nextMetadata.lastUpdatedTick === metadata.lastUpdatedTick && nextMetadata.lastCapacity === metadata.lastCapacity && nextMetadata.wasFull === metadata.wasFull) {
+        continue;
+      }
+      buildingsById = {
+        ...buildingsById,
+        [building2.id]: {
+          ...building2,
+          metadata: withSchoolMetadata(building2, nextMetadata),
+          version: building2.version + 1
+        }
+      };
+      changed = true;
+    }
+    return changed ? { ...state, buildingsById } : state;
+  };
+  const resolveSchoolAction = (input) => {
+    const metadata = getSchoolMetadata(input.building, input.state.root.tick);
+    if (input.actionId === input.config.collectStudents.actionId) {
+      const collected = Math.max(0, Math.floor(metadata.storedStudents));
+      const ownedCount = input.building.ownerPlayerId ? getOwnedSchoolCount(input.state, input.building.ownerPlayerId, input.config) : 0;
+      const courseActive = isEveningCourseActive(metadata, input.state.root.tick);
+      const talentChancePct = resolveSchoolTalentChancePct({
+        ownedCount,
+        config: input.config,
+        eveningCourseActive: courseActive
+      });
+      const talent = rollSchoolTalent({
+        state: input.state,
+        building: input.building,
+        config: input.config,
+        chancePct: talentChancePct,
+        eveningCourseActive: courseActive
+      });
+      const nextMetadata2 = {
+        ...metadata,
+        storedStudents: 0,
+        lastUpdatedTick: input.state.root.tick,
+        wasFull: false
+      };
+      const talentText = talent ? `Uliční zpráva: ${talent.label}. ${talent.summary}` : `Talent nepadl (${talentChancePct} % šance).`;
+      return {
+        balances: input.balances,
+        buildingMetadata: withSchoolMetadata(input.building, nextMetadata2),
+        heatGain: 0,
+        influenceChange: 0,
+        inputCost: {},
+        outputGain: {
+          population: collected
+        },
+        reportText: `Vybral jsi ${collected} obyvatel ze Školy. ${talentText}`,
+        schoolResult: {
+          type: "collect_students",
+          collectedPopulation: collected,
+          remainingStoredStudents: 0,
+          talentChancePct,
+          talent: talent ? {
+            id: talent.talentId,
+            label: talent.label,
+            summary: talent.summary
+          } : null,
+          streetNews: talentText
+        }
+      };
+    }
+    if (input.actionId !== input.config.eveningCourse.actionId) {
+      return null;
+    }
+    const durationTicks = Math.ceil(input.config.eveningCourse.durationMinutes * 6e4 / Math.max(1, input.tickRateMs));
+    const nextMetadata = {
+      ...metadata,
+      eveningCourseExpiresAtTick: input.state.root.tick + durationTicks
+    };
+    return {
+      balances: {
+        ...input.balances,
+        cash: Math.max(0, Number(input.balances.cash || 0) - input.config.eveningCourse.costCleanCash)
+      },
+      buildingMetadata: withSchoolMetadata(input.building, nextMetadata),
+      heatGain: 0,
+      influenceChange: 0,
+      inputCost: { cash: input.config.eveningCourse.costCleanCash },
+      outputGain: {},
+      reportText: "Večerní kurz běží. Škola dočasně zvedá studenty, talent roll a clean income.",
+      schoolResult: {
+        type: "education_boost",
+        expiresAtTick: nextMetadata.eveningCourseExpiresAtTick,
+        talentChanceFlatBonusPct: input.config.eveningCourse.talentChanceFlatBonusPct,
+        populationProductionMultiplier: input.config.eveningCourse.populationProductionMultiplier,
+        cleanIncomeMultiplier: input.config.eveningCourse.cleanIncomeMultiplier
+      }
+    };
+  };
+  const validateSchoolAction = (input) => {
+    const config = input.config;
+    if (!config || input.building.buildingTypeId !== config.buildingTypeId) return null;
+    const metadata = getSchoolMetadata(input.building, input.state.root.tick);
+    if (input.actionId === config.collectStudents.actionId) {
+      return metadata.storedStudents > 0 ? null : "school_no_students";
+    }
+    if (input.actionId !== config.eveningCourse.actionId) return null;
+    if (isEveningCourseActive(metadata, input.state.root.tick)) return "school_evening_course_active";
+    if (Math.max(0, Number(input.balances.cash || 0)) < config.eveningCourse.costCleanCash) {
+      return "school_insufficient_clean_cash";
+    }
+    return null;
+  };
+  const rollSchoolTalent = (input) => {
+    const roll = deterministicUnitInterval(`${input.state.serverInstance.worldSeed}:school:talent:${input.building.id}:${input.state.root.tick}`);
+    if (roll >= input.chancePct / 100) {
+      return null;
+    }
+    const betterRoll = deterministicUnitInterval(`${input.state.serverInstance.worldSeed}:school:talent:quality:${input.building.id}:${input.state.root.tick}`);
+    const betterTalent = input.eveningCourseActive && betterRoll < input.config.talentPool.betterTalentChanceBonusPct / 100;
+    const pool = betterTalent ? ["technician", "medic", "organizer", "protector", "negotiator", "informant"] : ["technician", "informant", "medic", "negotiator", "organizer", "protector"];
+    const pick = deterministicUnitInterval(`${input.state.serverInstance.worldSeed}:school:talent:pick:${input.building.id}:${input.state.root.tick}`);
+    const talentId = pool[Math.min(pool.length - 1, Math.floor(pick * pool.length))] ?? "informant";
+    const label = TALENT_LABELS[talentId];
+    const summary = TALENT_SUMMARIES[talentId];
+    return { talentId, label, summary };
+  };
+  const withSchoolMetadata = (building2, school) => ({
+    ...building2.metadata ?? {},
+    school
+  });
+  const asOptionalTick$3 = (value) => {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) && numberValue >= 0 ? Math.floor(numberValue) : void 0;
+  };
+  const asOptionalNumber$2 = (value) => {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : void 0;
+  };
+  const isRecord$5 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const getOwnedSmugglingTunnelCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
+    (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
+  ).length;
+  const resolveSmugglingTunnelNetworkMultipliers = (count, config) => {
+    const extra = Math.max(0, Math.floor(Number(count || 0)) - 1);
+    return {
+      dirtyProductionMultiplier: Math.min(
+        config.network.maxDirtyProductionMultiplier,
+        1 + extra * config.network.dirtyProductionBonusPctPerExtraTunnel / 100
+      ),
+      batchCapacityMultiplier: Math.min(
+        config.network.maxBatchCapacityMultiplier,
+        1 + extra * config.network.batchCapacityBonusPctPerExtraTunnel / 100
+      ),
+      passiveHeatMultiplier: Math.min(
+        config.network.maxPassiveHeatMultiplier,
+        1 + extra * config.network.passiveHeatBonusPctPerExtraTunnel / 100
+      )
+    };
+  };
+  const getSmugglingTunnelMetadata = (building2) => {
+    var _a, _b;
+    const raw = isRecord$4((_a = building2.metadata) == null ? void 0 : _a.smugglingTunnel) ? (_b = building2.metadata) == null ? void 0 : _b.smugglingTunnel : {};
+    return {
+      storedDirtyCash: Math.max(0, Number(raw.storedDirtyCash || 0)),
+      lastUpdatedTick: asOptionalTick$2(raw.lastUpdatedTick),
+      lastCapacity: asOptionalNumber$1(raw.lastCapacity),
+      wasFull: Boolean(raw.wasFull),
+      silentChannelExpiresAtTick: asOptionalTick$2(raw.silentChannelExpiresAtTick),
+      silentChannelResolvedAtTick: asOptionalTick$2(raw.silentChannelResolvedAtTick),
+      silentChannelBlockedUntilTick: asOptionalTick$2(raw.silentChannelBlockedUntilTick),
+      rumorEvents: Array.isArray(raw.rumorEvents) ? raw.rumorEvents.filter(isRecord$4) : []
+    };
+  };
+  const resolveSmugglingTunnelCapacity = (input) => {
+    const ownedCount = input.building.ownerPlayerId ? getOwnedSmugglingTunnelCount(input.state, input.building.ownerPlayerId, input.config) : 0;
+    const network = resolveSmugglingTunnelNetworkMultipliers(ownedCount, input.config);
+    const metadata = getSmugglingTunnelMetadata(input.building);
+    const silentMultiplier = isSilentChannelActive(metadata, input.tick) ? input.config.silentChannel.batchCapacityMultiplier : 1;
+    return Math.max(1, Math.floor(input.config.batch.baseCapacityDirtyCash * network.batchCapacityMultiplier * silentMultiplier));
+  };
+  const resolveSmugglingTunnelCollectHeat = (amount, config) => {
+    var _a;
+    const safeAmount = Math.max(0, Math.floor(Number(amount || 0)));
+    return ((_a = config.batch.heatByCollectedDirtyCash.find(
+      (tier) => safeAmount >= tier.minDirtyCash && (tier.maxDirtyCash === void 0 || safeAmount <= tier.maxDirtyCash)
+    )) == null ? void 0 : _a.heatGain) ?? 0;
+  };
+  const applySmugglingTunnelIncomeModifiers = (input) => {
+    if (input.building.buildingTypeId !== input.config.buildingTypeId || !input.building.ownerPlayerId) {
+      return {
+        cleanPerHour: input.cleanPerHour,
+        dirtyPerHour: input.dirtyPerHour,
+        heatPerDay: input.heatPerDay,
+        influencePerDay: input.influencePerDay,
+        maxLevel: 1
+      };
+    }
+    const network = resolveSmugglingTunnelNetworkMultipliers(
+      getOwnedSmugglingTunnelCount(input.state, input.building.ownerPlayerId, input.config),
+      input.config
+    );
+    const metadata = getSmugglingTunnelMetadata(input.building);
+    const silentHeatMultiplier = isSilentChannelActive(metadata, input.tick) ? input.config.silentChannel.passiveHeatMultiplier : 1;
+    return {
+      cleanPerHour: 0,
+      dirtyPerHour: 0,
+      heatPerDay: input.heatPerDay * network.passiveHeatMultiplier * silentHeatMultiplier,
+      influencePerDay: 0,
+      maxLevel: 1
+    };
+  };
+  const applySmugglingTunnelBatchProduction = (input) => {
+    let nextState = input.state;
+    let buildingsById = nextState.buildingsById;
+    let districtsById = nextState.districtsById;
+    let changed = false;
+    for (const building2 of Object.values(nextState.buildingsById)) {
+      if (building2.buildingTypeId !== input.config.buildingTypeId || building2.status !== "active" || !building2.ownerPlayerId) {
+        continue;
+      }
+      const current = buildingsById[building2.id] ?? building2;
+      const metadata = getSmugglingTunnelMetadata(current);
+      const resolved = resolveExpiredSilentChannel({
+        state: nextState,
+        building: current,
+        metadata,
+        config: input.config
+      });
+      if (resolved.changed) {
+        buildingsById = {
+          ...buildingsById,
+          [current.id]: {
+            ...current,
+            metadata: withSmugglingTunnelMetadata(current, resolved.metadata),
+            version: current.version + 1
+          }
+        };
+        districtsById = resolved.districtsById ?? districtsById;
+        nextState = {
+          ...nextState,
+          buildingsById,
+          districtsById
+        };
+        changed = true;
+      }
+      const activeBuilding = buildingsById[current.id] ?? current;
+      const activeMetadata = getSmugglingTunnelMetadata(activeBuilding);
+      const lastTick = activeMetadata.lastUpdatedTick ?? nextState.root.tick;
+      const elapsedTicks = Math.max(0, nextState.root.tick - lastTick);
+      const capacity = resolveSmugglingTunnelCapacity({
+        state: nextState,
+        building: activeBuilding,
+        config: input.config,
+        tick: nextState.root.tick
+      });
+      const currentStored = Math.min(capacity, activeMetadata.storedDirtyCash);
+      const ownedCount = getOwnedSmugglingTunnelCount(nextState, activeBuilding.ownerPlayerId, input.config);
+      const network = resolveSmugglingTunnelNetworkMultipliers(ownedCount, input.config);
+      const silentProductionMultiplier = isSilentChannelActive(activeMetadata, nextState.root.tick) ? input.config.silentChannel.dirtyProductionMultiplier : 1;
+      const gain = currentStored >= capacity ? 0 : input.config.dirtyCashPerMinute * network.dirtyProductionMultiplier * silentProductionMultiplier * Math.max(0, Number(input.incomeMultiplier || 0)) * elapsedTicks * Math.max(1, input.tickRateMs) / 6e4;
+      const nextStored = Math.min(capacity, currentStored + gain);
+      const nextMetadata = {
+        ...activeMetadata,
+        storedDirtyCash: nextStored,
+        lastUpdatedTick: nextState.root.tick,
+        lastCapacity: capacity,
+        wasFull: nextStored >= capacity
+      };
+      if (Math.abs(nextMetadata.storedDirtyCash - activeMetadata.storedDirtyCash) <= Number.EPSILON && nextMetadata.lastUpdatedTick === activeMetadata.lastUpdatedTick && nextMetadata.lastCapacity === activeMetadata.lastCapacity && nextMetadata.wasFull === activeMetadata.wasFull) {
+        continue;
+      }
+      buildingsById = {
+        ...buildingsById,
+        [activeBuilding.id]: {
+          ...activeBuilding,
+          metadata: withSmugglingTunnelMetadata(activeBuilding, nextMetadata),
+          version: activeBuilding.version + 1
+        }
+      };
+      changed = true;
+    }
+    return changed ? { ...nextState, buildingsById, districtsById } : input.state;
+  };
+  const resolveSmugglingTunnelAction = (input) => {
+    const metadata = getSmugglingTunnelMetadata(input.building);
+    if (input.actionId === input.config.collectBatch.actionId) {
+      const collected = Math.max(0, Math.floor(metadata.storedDirtyCash));
+      const heatGain = resolveSmugglingTunnelCollectHeat(collected, input.config);
+      const nextMetadata2 = {
+        ...metadata,
+        storedDirtyCash: 0,
+        lastUpdatedTick: input.state.root.tick,
+        wasFull: false
+      };
+      return {
+        balances: {
+          ...input.balances,
+          "dirty-cash": Math.max(0, Number(input.balances["dirty-cash"] || 0) + collected)
+        },
+        buildingMetadata: withSmugglingTunnelMetadata(input.building, nextMetadata2),
+        heatGain,
+        influenceChange: 0,
+        inputCost: {},
+        outputGain: { "dirty-cash": collected },
+        reportText: `Vybral jsi ${collected} dirty cash z Pašovacího tunelu. Heat +${heatGain}.`,
+        smugglingTunnelResult: {
+          type: "collect_dirty_cash",
+          collectedDirtyCash: collected,
+          heatGain,
+          remainingStoredDirtyCash: 0
+        }
+      };
+    }
+    if (input.actionId !== input.config.silentChannel.actionId) {
+      return null;
+    }
+    const durationTicks = Math.ceil(input.config.silentChannel.durationMinutes * 6e4 / Math.max(1, input.tickRateMs));
+    const nextMetadata = {
+      ...metadata,
+      silentChannelExpiresAtTick: input.state.root.tick + durationTicks,
+      silentChannelResolvedAtTick: void 0
+    };
+    return {
+      balances: {
+        ...input.balances,
+        "dirty-cash": Math.max(0, Number(input.balances["dirty-cash"] || 0) - input.config.silentChannel.costDirtyCash)
+      },
+      buildingMetadata: withSmugglingTunnelMetadata(input.building, nextMetadata),
+      heatGain: 0,
+      influenceChange: 0,
+      inputCost: { "dirty-cash": input.config.silentChannel.costDirtyCash },
+      outputGain: {},
+      reportText: "Tichý kanál běží. Tunel dočasně zvedá dávku, produkci dirty cash a heat.",
+      smugglingTunnelResult: {
+        type: "dirty_cash_boost_risk",
+        expiresAtTick: nextMetadata.silentChannelExpiresAtTick,
+        raidChancePct: input.config.silentChannel.raidChancePct
+      }
+    };
+  };
+  const validateSmugglingTunnelAction = (input) => {
+    const config = input.config;
+    if (!config || input.building.buildingTypeId !== config.buildingTypeId) return null;
+    const metadata = getSmugglingTunnelMetadata(input.building);
+    if (input.actionId === config.collectBatch.actionId) {
+      return Math.floor(metadata.storedDirtyCash) >= config.collectBatch.minStoredDirtyCash ? null : "smuggling_tunnel_batch_too_small";
+    }
+    if (input.actionId !== config.silentChannel.actionId) return null;
+    if (isSilentChannelActive(metadata, input.state.root.tick)) return "smuggling_tunnel_silent_channel_active";
+    if (Math.max(0, Number(metadata.silentChannelBlockedUntilTick || 0)) > input.state.root.tick) {
+      return "smuggling_tunnel_silent_channel_blocked";
+    }
+    if (Math.max(0, Number(input.balances["dirty-cash"] || 0)) < config.silentChannel.costDirtyCash) {
+      return "smuggling_tunnel_insufficient_dirty_cash";
+    }
+    return null;
+  };
+  const isSilentChannelActive = (metadata, tick) => Math.max(0, Number(metadata.silentChannelExpiresAtTick || 0)) > tick;
+  const resolveExpiredSilentChannel = (input) => {
+    const expiresAt = Math.max(0, Number(input.metadata.silentChannelExpiresAtTick || 0));
+    if (expiresAt <= 0 || expiresAt > input.state.root.tick || Math.max(0, Number(input.metadata.silentChannelResolvedAtTick || 0)) >= expiresAt) {
+      return { changed: false, metadata: input.metadata };
+    }
+    const raidRoll = deterministicUnitInterval(`${input.state.serverInstance.worldSeed}:smuggling:silent_channel:raid:${input.building.id}:${expiresAt}`);
+    const raidTriggered = raidRoll < input.config.silentChannel.raidChancePct / 100;
+    const nextMetadata = {
+      ...input.metadata,
+      silentChannelResolvedAtTick: input.state.root.tick
+    };
+    let districtsById;
+    if (raidTriggered) {
+      const consequenceRoll = deterministicUnitInterval(`${input.state.serverInstance.worldSeed}:smuggling:silent_channel:consequence:${input.building.id}:${expiresAt}`);
+      const consequenceIndex = Math.min(3, Math.floor(consequenceRoll * 4));
+      if (consequenceIndex === 0) {
+        nextMetadata.storedDirtyCash = Math.max(0, input.metadata.storedDirtyCash * 0.7);
+      } else if (consequenceIndex === 1) {
+        const district = input.state.districtsById[input.building.districtId];
+        if (district) {
+          districtsById = {
+            ...input.state.districtsById,
+            [district.id]: {
+              ...district,
+              heat: Math.max(0, Number(district.heat || 0) + 10),
+              version: district.version + 1
+            }
+          };
+        }
+      } else if (consequenceIndex === 2) {
+        nextMetadata.silentChannelBlockedUntilTick = input.state.root.tick + Math.ceil(input.config.silentChannel.blockedMinutesOnClosedEntrance * 6e4 / 5e3);
+      } else {
+        nextMetadata.rumorEvents = [
+          ...nextMetadata.rumorEvents ?? [],
+          {
+            tick: input.state.root.tick,
+            type: "negative_smuggling_rumor",
+            districtId: input.building.districtId,
+            text: "Okolím se šíří drb, že pod districtem běží pašovací trasa."
+          }
+        ];
+      }
+    }
+    return { changed: true, metadata: nextMetadata, districtsById };
+  };
+  const withSmugglingTunnelMetadata = (building2, smugglingTunnel) => ({
+    ...building2.metadata ?? {},
+    smugglingTunnel
+  });
+  const asOptionalTick$2 = (value) => {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) && numberValue >= 0 ? Math.floor(numberValue) : void 0;
+  };
+  const asOptionalNumber$1 = (value) => {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : void 0;
+  };
+  const isRecord$4 = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const getOwnedStripClubCount = (state, playerId, config) => Object.values(state.buildingsById).filter(
     (building2) => building2.buildingTypeId === config.buildingTypeId && building2.ownerPlayerId === playerId && building2.status === "active"
   ).length;
@@ -4089,8 +4881,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: convenienceStoreConfig.heatPerDay,
           influencePerDay: convenienceStoreConfig.influencePerDay
         }) : convenienceStoreConfig;
-        const shoppingMallConfig = context.config.balance.shoppingMall ? applyShoppingMallIncomeModifiers({
-          config: context.config.balance.shoppingMall,
+        const fitnessClubConfig = context.config.balance.fitnessClub ? applyFitnessClubIncomeModifiers({
+          config: context.config.balance.fitnessClub,
           state,
           building: building2,
           cleanPerHour: recruitmentCenterConfig.cleanPerHour,
@@ -4098,6 +4890,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: recruitmentCenterConfig.heatPerDay,
           influencePerDay: recruitmentCenterConfig.influencePerDay
         }) : recruitmentCenterConfig;
+        const shoppingMallConfig = context.config.balance.shoppingMall ? applyShoppingMallIncomeModifiers({
+          config: context.config.balance.shoppingMall,
+          state,
+          building: building2,
+          cleanPerHour: fitnessClubConfig.cleanPerHour,
+          dirtyPerHour: fitnessClubConfig.dirtyPerHour,
+          heatPerDay: fitnessClubConfig.heatPerDay,
+          influencePerDay: fitnessClubConfig.influencePerDay
+        }) : fitnessClubConfig;
         const garageConfig = context.config.balance.garage ? applyGarageIncomeModifiers({
           config: context.config.balance.garage,
           state,
@@ -4107,8 +4908,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: shoppingMallConfig.heatPerDay,
           influencePerDay: shoppingMallConfig.influencePerDay
         }) : shoppingMallConfig;
-        const recyclingCenterConfig = context.config.balance.recyclingCenter ? applyRecyclingCenterIncomeModifiers({
-          config: context.config.balance.recyclingCenter,
+        const carDealerConfig = context.config.balance.carDealer ? applyCarDealerIncomeModifiers({
+          config: context.config.balance.carDealer,
           state,
           building: building2,
           cleanPerHour: garageConfig.cleanPerHour,
@@ -4116,8 +4917,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: garageConfig.heatPerDay,
           influencePerDay: garageConfig.influencePerDay
         }) : garageConfig;
-        const powerStationConfig = context.config.balance.powerStation ? applyPowerStationIncomeModifiers({
-          config: context.config.balance.powerStation,
+        const recyclingCenterConfig = context.config.balance.recyclingCenter ? applyRecyclingCenterIncomeModifiers({
+          config: context.config.balance.recyclingCenter,
+          state,
+          building: building2,
+          cleanPerHour: carDealerConfig.cleanPerHour,
+          dirtyPerHour: carDealerConfig.dirtyPerHour,
+          heatPerDay: carDealerConfig.heatPerDay,
+          influencePerDay: carDealerConfig.influencePerDay
+        }) : carDealerConfig;
+        const schoolConfig = context.config.balance.school ? applySchoolIncomeModifiers({
+          config: context.config.balance.school,
           state,
           building: building2,
           tick: state.root.tick,
@@ -4126,6 +4936,26 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: recyclingCenterConfig.heatPerDay,
           influencePerDay: recyclingCenterConfig.influencePerDay
         }) : recyclingCenterConfig;
+        const smugglingTunnelConfig = context.config.balance.smugglingTunnel ? applySmugglingTunnelIncomeModifiers({
+          config: context.config.balance.smugglingTunnel,
+          state,
+          building: building2,
+          tick: state.root.tick,
+          cleanPerHour: schoolConfig.cleanPerHour,
+          dirtyPerHour: schoolConfig.dirtyPerHour,
+          heatPerDay: schoolConfig.heatPerDay,
+          influencePerDay: schoolConfig.influencePerDay
+        }) : schoolConfig;
+        const powerStationConfig = context.config.balance.powerStation ? applyPowerStationIncomeModifiers({
+          config: context.config.balance.powerStation,
+          state,
+          building: building2,
+          tick: state.root.tick,
+          cleanPerHour: smugglingTunnelConfig.cleanPerHour,
+          dirtyPerHour: smugglingTunnelConfig.dirtyPerHour,
+          heatPerDay: smugglingTunnelConfig.heatPerDay,
+          influencePerDay: smugglingTunnelConfig.influencePerDay
+        }) : smugglingTunnelConfig;
         return {
           cash: totals.cash + resolvePerTick$1(powerStationConfig.cleanPerHour, ticksPerHour) * incomeMultiplier * modifiers.cleanIncomeMultiplier,
           dirtyCash: totals.dirtyCash + resolvePerTick$1(powerStationConfig.dirtyPerHour, ticksPerHour) * incomeMultiplier * modifiers.dirtyIncomeMultiplier
@@ -4361,7 +5191,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const exchangeAuditState = (context == null ? void 0 : context.config.balance.exchangeOffice) ? applyExchangeOfficeAuditChecks(casinoAuditState, context.config.balance.exchangeOffice, context.config.tickRateMs) : casinoAuditState;
     const arcadeAuditState = (context == null ? void 0 : context.config.balance.arcade) ? applyArcadeAuditChecks(exchangeAuditState, context.config.balance.arcade, context.config.tickRateMs) : exchangeAuditState;
     const apartmentState = (context == null ? void 0 : context.config.balance.apartmentBlock) ? applyApartmentBlockPopulationProduction(arcadeAuditState, context.config.balance.apartmentBlock, context.config.tickRateMs, context.config.balance.powerStation, context.config.balance.recruitmentCenter) : arcadeAuditState;
-    const stripClubRumorState = (context == null ? void 0 : context.config.balance.stripClub) ? applyStripClubPassiveRumors(apartmentState, context.config.balance.stripClub, context.config.tickRateMs) : apartmentState;
+    const schoolState = (context == null ? void 0 : context.config.balance.school) ? applySchoolStudentProduction(apartmentState, context.config.balance.school, context.config.tickRateMs) : apartmentState;
+    const smugglingTunnelState = (context == null ? void 0 : context.config.balance.smugglingTunnel) ? applySmugglingTunnelBatchProduction({
+      state: schoolState,
+      config: context.config.balance.smugglingTunnel,
+      tickRateMs: context.config.tickRateMs,
+      incomeMultiplier: context.config.balance.incomeMultiplier
+    }) : schoolState;
+    const stripClubRumorState = (context == null ? void 0 : context.config.balance.stripClub) ? applyStripClubPassiveRumors(smugglingTunnelState, context.config.balance.stripClub, context.config.tickRateMs) : smugglingTunnelState;
     const restaurantRumorState = (context == null ? void 0 : context.config.balance.restaurant) ? applyRestaurantPassiveRumors(stripClubRumorState, context.config.balance.restaurant, context.config.tickRateMs) : stripClubRumorState;
     return (context == null ? void 0 : context.config.balance.convenienceStore) ? applyConvenienceStorePassiveRumors(restaurantRumorState, context.config.balance.convenienceStore, context.config.tickRateMs, context.config.balance.restaurant) : restaurantRumorState;
   };
@@ -4475,8 +5312,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: convenienceStoreConfig.heatPerDay,
           influencePerDay: convenienceStoreConfig.influencePerDay
         }) : convenienceStoreConfig;
-        const shoppingMallConfig = context.config.balance.shoppingMall ? applyShoppingMallIncomeModifiers({
-          config: context.config.balance.shoppingMall,
+        const fitnessClubConfig = context.config.balance.fitnessClub ? applyFitnessClubIncomeModifiers({
+          config: context.config.balance.fitnessClub,
           state,
           building: building2,
           cleanPerHour: recruitmentCenterConfig.cleanPerHour,
@@ -4484,6 +5321,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: recruitmentCenterConfig.heatPerDay,
           influencePerDay: recruitmentCenterConfig.influencePerDay
         }) : recruitmentCenterConfig;
+        const shoppingMallConfig = context.config.balance.shoppingMall ? applyShoppingMallIncomeModifiers({
+          config: context.config.balance.shoppingMall,
+          state,
+          building: building2,
+          cleanPerHour: fitnessClubConfig.cleanPerHour,
+          dirtyPerHour: fitnessClubConfig.dirtyPerHour,
+          heatPerDay: fitnessClubConfig.heatPerDay,
+          influencePerDay: fitnessClubConfig.influencePerDay
+        }) : fitnessClubConfig;
         const garageConfig = context.config.balance.garage ? applyGarageIncomeModifiers({
           config: context.config.balance.garage,
           state,
@@ -4493,8 +5339,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: shoppingMallConfig.heatPerDay,
           influencePerDay: shoppingMallConfig.influencePerDay
         }) : shoppingMallConfig;
-        const recyclingCenterConfig = context.config.balance.recyclingCenter ? applyRecyclingCenterIncomeModifiers({
-          config: context.config.balance.recyclingCenter,
+        const carDealerConfig = context.config.balance.carDealer ? applyCarDealerIncomeModifiers({
+          config: context.config.balance.carDealer,
           state,
           building: building2,
           cleanPerHour: garageConfig.cleanPerHour,
@@ -4502,8 +5348,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: garageConfig.heatPerDay,
           influencePerDay: garageConfig.influencePerDay
         }) : garageConfig;
-        const powerStationConfig = context.config.balance.powerStation ? applyPowerStationIncomeModifiers({
-          config: context.config.balance.powerStation,
+        const recyclingCenterConfig = context.config.balance.recyclingCenter ? applyRecyclingCenterIncomeModifiers({
+          config: context.config.balance.recyclingCenter,
+          state,
+          building: building2,
+          cleanPerHour: carDealerConfig.cleanPerHour,
+          dirtyPerHour: carDealerConfig.dirtyPerHour,
+          heatPerDay: carDealerConfig.heatPerDay,
+          influencePerDay: carDealerConfig.influencePerDay
+        }) : carDealerConfig;
+        const schoolConfig = context.config.balance.school ? applySchoolIncomeModifiers({
+          config: context.config.balance.school,
           state,
           building: building2,
           tick: state.root.tick,
@@ -4512,6 +5367,26 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: recyclingCenterConfig.heatPerDay,
           influencePerDay: recyclingCenterConfig.influencePerDay
         }) : recyclingCenterConfig;
+        const smugglingTunnelConfig = context.config.balance.smugglingTunnel ? applySmugglingTunnelIncomeModifiers({
+          config: context.config.balance.smugglingTunnel,
+          state,
+          building: building2,
+          tick: state.root.tick,
+          cleanPerHour: schoolConfig.cleanPerHour,
+          dirtyPerHour: schoolConfig.dirtyPerHour,
+          heatPerDay: schoolConfig.heatPerDay,
+          influencePerDay: schoolConfig.influencePerDay
+        }) : schoolConfig;
+        const powerStationConfig = context.config.balance.powerStation ? applyPowerStationIncomeModifiers({
+          config: context.config.balance.powerStation,
+          state,
+          building: building2,
+          tick: state.root.tick,
+          cleanPerHour: smugglingTunnelConfig.cleanPerHour,
+          dirtyPerHour: smugglingTunnelConfig.dirtyPerHour,
+          heatPerDay: smugglingTunnelConfig.heatPerDay,
+          influencePerDay: smugglingTunnelConfig.influencePerDay
+        }) : smugglingTunnelConfig;
         return total + sanitizePerDay(powerStationConfig.heatPerDay);
       }, 0);
       const baseInfluencePerDay = activeBuildings.reduce((total, { building: building2, config }) => {
@@ -4599,8 +5474,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: convenienceStoreConfig.heatPerDay,
           influencePerDay: convenienceStoreConfig.influencePerDay
         }) : convenienceStoreConfig;
-        const shoppingMallConfig = context.config.balance.shoppingMall ? applyShoppingMallIncomeModifiers({
-          config: context.config.balance.shoppingMall,
+        const fitnessClubConfig = context.config.balance.fitnessClub ? applyFitnessClubIncomeModifiers({
+          config: context.config.balance.fitnessClub,
           state,
           building: building2,
           cleanPerHour: recruitmentCenterConfig.cleanPerHour,
@@ -4608,6 +5483,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: recruitmentCenterConfig.heatPerDay,
           influencePerDay: recruitmentCenterConfig.influencePerDay
         }) : recruitmentCenterConfig;
+        const shoppingMallConfig = context.config.balance.shoppingMall ? applyShoppingMallIncomeModifiers({
+          config: context.config.balance.shoppingMall,
+          state,
+          building: building2,
+          cleanPerHour: fitnessClubConfig.cleanPerHour,
+          dirtyPerHour: fitnessClubConfig.dirtyPerHour,
+          heatPerDay: fitnessClubConfig.heatPerDay,
+          influencePerDay: fitnessClubConfig.influencePerDay
+        }) : fitnessClubConfig;
         const garageConfig = context.config.balance.garage ? applyGarageIncomeModifiers({
           config: context.config.balance.garage,
           state,
@@ -4617,8 +5501,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: shoppingMallConfig.heatPerDay,
           influencePerDay: shoppingMallConfig.influencePerDay
         }) : shoppingMallConfig;
-        const recyclingCenterConfig = context.config.balance.recyclingCenter ? applyRecyclingCenterIncomeModifiers({
-          config: context.config.balance.recyclingCenter,
+        const carDealerConfig = context.config.balance.carDealer ? applyCarDealerIncomeModifiers({
+          config: context.config.balance.carDealer,
           state,
           building: building2,
           cleanPerHour: garageConfig.cleanPerHour,
@@ -4626,8 +5510,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: garageConfig.heatPerDay,
           influencePerDay: garageConfig.influencePerDay
         }) : garageConfig;
-        const powerStationConfig = context.config.balance.powerStation ? applyPowerStationIncomeModifiers({
-          config: context.config.balance.powerStation,
+        const recyclingCenterConfig = context.config.balance.recyclingCenter ? applyRecyclingCenterIncomeModifiers({
+          config: context.config.balance.recyclingCenter,
+          state,
+          building: building2,
+          cleanPerHour: carDealerConfig.cleanPerHour,
+          dirtyPerHour: carDealerConfig.dirtyPerHour,
+          heatPerDay: carDealerConfig.heatPerDay,
+          influencePerDay: carDealerConfig.influencePerDay
+        }) : carDealerConfig;
+        const schoolConfig = context.config.balance.school ? applySchoolIncomeModifiers({
+          config: context.config.balance.school,
           state,
           building: building2,
           tick: state.root.tick,
@@ -4636,6 +5529,26 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           heatPerDay: recyclingCenterConfig.heatPerDay,
           influencePerDay: recyclingCenterConfig.influencePerDay
         }) : recyclingCenterConfig;
+        const smugglingTunnelConfig = context.config.balance.smugglingTunnel ? applySmugglingTunnelIncomeModifiers({
+          config: context.config.balance.smugglingTunnel,
+          state,
+          building: building2,
+          tick: state.root.tick,
+          cleanPerHour: schoolConfig.cleanPerHour,
+          dirtyPerHour: schoolConfig.dirtyPerHour,
+          heatPerDay: schoolConfig.heatPerDay,
+          influencePerDay: schoolConfig.influencePerDay
+        }) : schoolConfig;
+        const powerStationConfig = context.config.balance.powerStation ? applyPowerStationIncomeModifiers({
+          config: context.config.balance.powerStation,
+          state,
+          building: building2,
+          tick: state.root.tick,
+          cleanPerHour: smugglingTunnelConfig.cleanPerHour,
+          dirtyPerHour: smugglingTunnelConfig.dirtyPerHour,
+          heatPerDay: smugglingTunnelConfig.heatPerDay,
+          influencePerDay: smugglingTunnelConfig.influencePerDay
+        }) : smugglingTunnelConfig;
         return total + sanitizePerDay(powerStationConfig.influencePerDay);
       }, 0);
       const heatPerDay = baseHeatPerDay * modifiers.heatMultiplier + modifiers.heatPerDay;
@@ -4755,15 +5668,6 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     };
   };
   const composeEntityId = (prefix, value) => `${prefix}:${value}`;
-  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-  const deterministicUnitInterval = (seed) => {
-    let hash = 2166136261;
-    for (let index = 0; index < seed.length; index += 1) {
-      hash ^= seed.charCodeAt(index);
-      hash = Math.imul(hash, 16777619);
-    }
-    return (hash >>> 0) / 4294967295;
-  };
   const completeProduction = (state, context) => {
     const productionBuildings = context.config.balance.productionBuildings;
     if (!productionBuildings || Object.keys(productionBuildings).length <= 0) {
@@ -5678,6 +6582,32 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         message: "Power station action preconditions are not met."
       });
     }
+    const smugglingTunnelErrorCode = validateSmugglingTunnelAction({
+      state,
+      building: building2,
+      actionId: action2.actionId,
+      balances,
+      config: context.config.balance.smugglingTunnel
+    });
+    if (smugglingTunnelErrorCode) {
+      errors.push({
+        code: smugglingTunnelErrorCode,
+        message: "Smuggling tunnel action preconditions are not met."
+      });
+    }
+    const schoolErrorCode = validateSchoolAction({
+      state,
+      building: building2,
+      actionId: action2.actionId,
+      balances,
+      config: context.config.balance.school
+    });
+    if (schoolErrorCode) {
+      errors.push({
+        code: schoolErrorCode,
+        message: "School action preconditions are not met."
+      });
+    }
     return errors;
   };
   const validateSpy = (state, command) => {
@@ -5942,6 +6872,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const towerCount = targetDistrict.defenseLoadout["defense-tower"] ?? 0;
     const attackerDistrictModifiers = (sourceDistrict == null ? void 0 : sourceDistrict.ownerPlayerId) === attacker.id ? resolveActiveDistrictEffectModifiers(state, sourceDistrict.id) : createDefaultDistrictEffectModifiers();
     const targetDistrictModifiers = resolveActiveDistrictEffectModifiers(state, targetDistrict.id);
+    const combinedCameraAlarmBonuses = resolveCombinedCameraAlarmBonuses({
+      state,
+      playerId: targetDistrict.ownerPlayerId,
+      recruitmentCenterConfig: context.config.balance.recruitmentCenter,
+      powerStationConfig: context.config.balance.powerStation,
+      tick: state.root.tick
+    });
     const attackerRecruitmentBonuses = resolveRecruitmentCenterSupportBonuses({
       state,
       playerId: attacker.id,
@@ -5952,25 +6889,26 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       playerId: targetDistrict.ownerPlayerId,
       config: context.config.balance.recruitmentCenter
     });
-    const combinedCameraAlarmBonuses = resolveCombinedCameraAlarmBonuses({
+    const attackWeaponModifiers = resolveFitnessAttackWeaponModifiers({
+      state,
+      playerId: attacker.id,
+      fitnessConfig: context.config.balance.fitnessClub,
+      recruitmentCenterConfig: context.config.balance.recruitmentCenter
+    });
+    const defenseItemModifiers = resolveFitnessDefenseItemModifiers({
       state,
       playerId: targetDistrict.ownerPlayerId,
+      fitnessConfig: context.config.balance.fitnessClub,
       recruitmentCenterConfig: context.config.balance.recruitmentCenter,
-      powerStationConfig: context.config.balance.powerStation,
-      tick: state.root.tick
+      baseModifiers: {
+        cameras: 1 + combinedCameraAlarmBonuses.cameraStrengthBonusPct / 100,
+        alarm: 1 + combinedCameraAlarmBonuses.alarmStrengthBonusPct / 100
+      }
     });
-    const attackStrengthMultiplier = 1 + attackerRecruitmentBonuses.attackWeaponStrengthBonusPct / 100;
-    const defenseStrengthMultiplier = 1 + defenderRecruitmentBonuses.defenseItemStrengthBonusPct / 100;
-    const baseAttackPower = calculateTotalAttackPower(attacker.attackLoadout, attackStrengthMultiplier);
-    const trapAdjustedAttackPower = calculateTotalAttackPower(effectiveLoadout, attackStrengthMultiplier);
+    const baseAttackPower = calculateTotalAttackPower(attacker.attackLoadout, 1, attackWeaponModifiers);
+    const trapAdjustedAttackPower = calculateTotalAttackPower(effectiveLoadout, 1, attackWeaponModifiers);
     const effectAdjustedAttackPower = trapAdjustedAttackPower * attackerDistrictModifiers.attackMultiplier;
-    const defensePower = calculateBaseDefensePower(targetDistrict.defenseLoadout, {
-      vest: defenseStrengthMultiplier,
-      barricades: defenseStrengthMultiplier,
-      "defense-tower": defenseStrengthMultiplier,
-      cameras: 1 + combinedCameraAlarmBonuses.cameraStrengthBonusPct / 100,
-      alarm: 1 + combinedCameraAlarmBonuses.alarmStrengthBonusPct / 100
-    });
+    const defensePower = calculateBaseDefensePower(targetDistrict.defenseLoadout, defenseItemModifiers);
     const effectAdjustedDefensePower = defensePower * targetDistrictModifiers.defenseMultiplier;
     const effectiveAttackPower = calculateReducedAttackPowerFromTowers(effectAdjustedAttackPower, towerCount);
     const effectiveDefensePower = calculateEffectiveDefenseAfterGrenades(effectAdjustedDefensePower, grenadeCount);
@@ -5991,16 +6929,33 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     });
     const attackSucceeded = combatResolution.districtCaptured;
     const battleResult = combatResolution.legacyResult;
+    const escapeChanceBonusPct = resolveCarDealerEscapeChanceBonusPct({
+      state,
+      playerId: attacker.id,
+      config: context.config.balance.carDealer
+    });
+    const escapeRoll = deterministicUnitInterval(
+      `${state.serverInstance.worldSeed}:attack:escape:${command.playerId}:${targetDistrict.id}:${state.root.tick}:${command.id}`
+    );
+    const escapeMitigation = resolveAttackEscapeMitigation({
+      losses: combatResolution.attackerLosses,
+      nextLoadout: combatResolution.nextAttackerLoadout,
+      heatGained: combatResolution.heatGained,
+      enabled: !attackSucceeded,
+      bonusPct: escapeChanceBonusPct,
+      roll: escapeRoll
+    });
     const currentCooldownState = state.cooldownStatesById[attacker.cooldownStateId] ?? createPlayerCooldownState$1(attacker.id, attacker.cooldownStateId);
     const attackCooldownKey = `attack:${targetDistrict.id}`;
-    const attackDurationTicks = applyGarageCooldownReductionTicks({
+    const attackDurationTicks = applyCarDealerCooldownReductionTicks({
       baseTicks: resolveAttackDurationTicks(context),
       state,
       playerId: attacker.id,
-      config: context.config.balance.garage,
+      config: context.config.balance.carDealer,
+      garageConfig: context.config.balance.garage,
       category: "attackPreparation"
     });
-    const nextPoliceState = increasePlayerPoliceHeat(state, attacker, combatResolution.heatGained, state.root.tick);
+    const nextPoliceState = increasePlayerPoliceHeat(state, attacker, escapeMitigation.heatGained, state.root.tick);
     const notificationEntries = createBattleReportNotifications({
       command,
       attackerPlayerId: attacker.id,
@@ -6014,9 +6969,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       trapTriggered: Boolean(activeTrap),
       trapType: activeTrap ? trapResolution.trapType : null,
       trapReport: activeTrap ? trapResolution.report : null,
-      attackerLosses: combatResolution.attackerLosses,
+      attackerLosses: escapeMitigation.losses,
       defenderLosses: combatResolution.defenderLosses,
-      heatGained: combatResolution.heatGained,
+      heatGained: escapeMitigation.heatGained,
       reportForAttacker: combatResolution.reportForAttacker,
       reportForDefender: combatResolution.reportForDefender,
       attackDurationTicks,
@@ -6032,7 +6987,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         ...state.playersById,
         [attacker.id]: {
           ...attacker,
-          attackLoadout: combatResolution.nextAttackerLoadout,
+          attackLoadout: escapeMitigation.nextLoadout,
           lastActionAt: command.issuedAt,
           version: attacker.version + 1
         }
@@ -6043,7 +6998,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           ...targetDistrict,
           ownerPlayerId: districtDestroyed ? null : attackSucceeded ? command.playerId : targetDistrict.ownerPlayerId,
           controllerAllianceId: districtDestroyed ? null : attackSucceeded ? attacker.allianceId : targetDistrict.controllerAllianceId,
-          heat: districtDestroyed ? 0 : Math.max(0, Number(targetDistrict.heat || 0) + combatResolution.heatGained),
+          heat: districtDestroyed ? 0 : Math.max(0, Number(targetDistrict.heat || 0) + escapeMitigation.heatGained),
           influence: districtDestroyed ? 0 : targetDistrict.influence,
           buildingIds: districtDestroyed ? [] : targetDistrict.buildingIds,
           defenseLoadout: districtDestroyed ? {} : combatResolution.nextDefenseLoadout,
@@ -6096,7 +7051,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
             nextState,
             attacker.id,
             createRecoveryEntriesFromLosses(
-              combatResolution.attackerLosses,
+              escapeMitigation.losses,
               activeTrap && trapResolution.trapType === "toxic" ? "toxic_trap" : "attack"
             ),
             `${command.id}:attacker`
@@ -6107,7 +7062,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         ),
         attacker.id,
         createSalvageEntriesFromLosses(
-          combatResolution.attackerLosses,
+          escapeMitigation.losses,
           activeTrap && trapResolution.trapType === "toxic" ? "toxic_trap" : "attack",
           context.config.balance.recyclingCenter
         ),
@@ -6154,9 +7109,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         catastropheRoll,
         trapTriggered: Boolean(activeTrap),
         trapType: activeTrap ? trapResolution.trapType : null,
-        attackerLosses: combatResolution.attackerLosses,
+        attackerLosses: escapeMitigation.losses,
         defenderLosses: combatResolution.defenderLosses,
-        heatGained: combatResolution.heatGained,
+        heatGained: escapeMitigation.heatGained,
+        carDealerEscapeChanceBonusPct: escapeChanceBonusPct,
+        carDealerEscapeMitigated: escapeMitigation.mitigated,
         attackDurationTicks,
         attackDurationMs: attackDurationTicks * context.config.tickRateMs,
         reportForAttacker: combatResolution.reportForAttacker,
@@ -6167,6 +7124,42 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       nextState: recoveryState,
       events,
       errors: []
+    };
+  };
+  const resolveAttackEscapeMitigation = (input) => {
+    const chance = Math.max(0, Math.min(0.95, Number(input.bonusPct || 0) / 100));
+    if (!input.enabled || chance <= 0 || input.roll > chance) {
+      return {
+        losses: input.losses,
+        nextLoadout: input.nextLoadout,
+        heatGained: input.heatGained,
+        mitigated: false
+      };
+    }
+    const reducedLosses = { ...input.losses };
+    const restoredWeaponId = Object.keys(reducedLosses).find(
+      (weaponId) => Math.max(0, Number(reducedLosses[weaponId] ?? 0)) > 0
+    );
+    if (!restoredWeaponId) {
+      return {
+        losses: input.losses,
+        nextLoadout: input.nextLoadout,
+        heatGained: Math.max(0, input.heatGained - 1),
+        mitigated: true
+      };
+    }
+    reducedLosses[restoredWeaponId] = Math.max(0, Number(reducedLosses[restoredWeaponId] ?? 0) - 1);
+    if (reducedLosses[restoredWeaponId] === 0) {
+      delete reducedLosses[restoredWeaponId];
+    }
+    return {
+      losses: reducedLosses,
+      nextLoadout: {
+        ...input.nextLoadout,
+        [restoredWeaponId]: Math.max(0, Number(input.nextLoadout[restoredWeaponId] ?? 0)) + 1
+      },
+      heatGained: Math.max(0, input.heatGained - 1),
+      mitigated: true
     };
   };
   const placeBuilding = (state, command, context) => {
@@ -6701,9 +7694,6 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       cameras: 1,
       alarm: 1
     },
-    fitness_gang_training: {
-      vest: 2
-    },
     clinic_recovery_boost: {
       vest: 1,
       barricades: 1
@@ -6726,13 +7716,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     vip_lounge_private_table: { limit: 1, detectDefense: false },
     airport_fast_manifest: { limit: 1, detectDefense: false },
     convenience_street_info: { limit: 2, detectDefense: false },
-    strip_club_compromise: { limit: 1, detectDefense: false },
-    smuggling_reduce_trace: { limit: 1, detectDefense: false }
+    strip_club_compromise: { limit: 1, detectDefense: false }
   };
   const BUILDING_ACTION_MESSAGE_LABELS = {
     armory_fortify: "Armory crews",
     court_case_pressure: "Court pressure",
-    fitness_gang_training: "Fitness security",
     clinic_recovery_boost: "Clinic recovery teams",
     school_discipline: "School discipline crews",
     garage_escape_routes: "Garage route crews",
@@ -6742,8 +7730,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     vip_lounge_private_table: "VIP contacts",
     airport_fast_manifest: "Airport manifest",
     convenience_street_info: "Store gossip",
-    strip_club_compromise: "Compromat",
-    smuggling_reduce_trace: "Smuggling scouts"
+    strip_club_compromise: "Compromat"
   };
   const addDefenseLoadout = (currentLoadout, addedLoadout) => ({
     ...currentLoadout,
@@ -6857,7 +7844,23 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       powerStationConfig: context.config.balance.powerStation,
       tickRateMs: context.config.tickRateMs
     }) : null;
-    const specialResolution = casinoResolution ?? exchangeOfficeResolution ?? arcadeResolution ?? apartmentBlockResolution ?? clinicResolution ?? recyclingCenterResolution ?? stripClubResolution ?? powerStationResolution;
+    const smugglingTunnelResolution = !casinoResolution && !exchangeOfficeResolution && !arcadeResolution && !apartmentBlockResolution && !clinicResolution && !recyclingCenterResolution && !stripClubResolution && !powerStationResolution && context.config.balance.smugglingTunnel ? resolveSmugglingTunnelAction({
+      state,
+      building: building2,
+      actionId: action2.actionId,
+      balances: nextBalances,
+      config: context.config.balance.smugglingTunnel,
+      tickRateMs: context.config.tickRateMs
+    }) : null;
+    const schoolResolution = !casinoResolution && !exchangeOfficeResolution && !arcadeResolution && !apartmentBlockResolution && !clinicResolution && !recyclingCenterResolution && !stripClubResolution && !powerStationResolution && !smugglingTunnelResolution && context.config.balance.school ? resolveSchoolAction({
+      state,
+      building: building2,
+      actionId: action2.actionId,
+      balances: nextBalances,
+      config: context.config.balance.school,
+      tickRateMs: context.config.tickRateMs
+    }) : null;
+    const specialResolution = casinoResolution ?? exchangeOfficeResolution ?? arcadeResolution ?? apartmentBlockResolution ?? clinicResolution ?? recyclingCenterResolution ?? stripClubResolution ?? powerStationResolution ?? smugglingTunnelResolution ?? schoolResolution;
     const resolvedAction = specialResolution ? {
       ...action2,
       inputCost: specialResolution.inputCost,
@@ -6948,7 +7951,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       clinicResult: clinicResolution == null ? void 0 : clinicResolution.clinicResult,
       recyclingResult: recyclingCenterResolution == null ? void 0 : recyclingCenterResolution.recyclingResult,
       stripClubResult: stripClubResolution == null ? void 0 : stripClubResolution.stripClubResult,
-      powerStationResult: powerStationResolution == null ? void 0 : powerStationResolution.powerStationResult
+      powerStationResult: powerStationResolution == null ? void 0 : powerStationResolution.powerStationResult,
+      smugglingTunnelResult: smugglingTunnelResolution == null ? void 0 : smugglingTunnelResolution.smugglingTunnelResult,
+      schoolResult: schoolResolution == null ? void 0 : schoolResolution.schoolResult
     });
     const nextEffectState = createDistrictBuildingActionEffectState({
       state,
@@ -7026,13 +8031,24 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     const rawTicks = Math.ceil(cooldownMs / Math.max(1, context.config.tickRateMs));
     const baseTicks = Math.max(1, Math.ceil(rawTicks * context.config.balance.cooldownMultiplier));
-    const category = resolveGarageCategoryForBuildingAction(input.buildingTypeId, action2.actionId);
-    return category ? applyGarageCooldownReductionTicks({
+    const carDealerCategory = resolveCarDealerCategoryForBuildingAction(input.buildingTypeId, action2.actionId);
+    if (carDealerCategory) {
+      return applyCarDealerCooldownReductionTicks({
+        baseTicks,
+        state: input.state,
+        playerId: input.playerId,
+        config: context.config.balance.carDealer,
+        garageConfig: context.config.balance.garage,
+        category: carDealerCategory
+      });
+    }
+    const garageCategory = resolveGarageCategoryForBuildingAction(input.buildingTypeId, action2.actionId);
+    return garageCategory ? applyGarageCooldownReductionTicks({
       baseTicks,
       state: input.state,
       playerId: input.playerId,
       config: context.config.balance.garage,
-      category
+      category: garageCategory
     }) : baseTicks;
   };
   const createPlayerResourceState = (player, tick) => ({
@@ -7120,6 +8136,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       recyclingResult: input.recyclingResult,
       stripClubResult: input.stripClubResult,
       powerStationResult: input.powerStationResult,
+      smugglingTunnelResult: input.smugglingTunnelResult,
+      schoolResult: input.schoolResult,
       heatGain: input.action.heatGain,
       influenceChange: input.action.influenceChange,
       effectModifiers: input.action.effectModifiers,
@@ -7303,6 +8321,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         recyclingResult: asUnknownRecord(payload.recyclingResult),
         stripClubResult: asUnknownRecord(payload.stripClubResult),
         powerStationResult: asUnknownRecord(payload.powerStationResult),
+        smugglingTunnelResult: asUnknownRecord(payload.smugglingTunnelResult),
+        schoolResult: asUnknownRecord(payload.schoolResult),
         heatGain: Number(payload.heatGain ?? 0),
         influenceChange: Number(payload.influenceChange ?? 0),
         tick: Number(payload.tick ?? 0),
@@ -7390,7 +8410,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         shoppingMallConfig: input.shoppingMallConfig,
         powerStationConfig: input.powerStationConfig,
         recruitmentCenterConfig: input.recruitmentCenterConfig,
+        fitnessClubConfig: input.fitnessClubConfig,
         garageConfig: input.garageConfig,
+        carDealerConfig: input.carDealerConfig,
+        smugglingTunnelConfig: input.smugglingTunnelConfig,
+        schoolConfig: input.schoolConfig,
         recyclingCenterConfig: input.recyclingCenterConfig,
         district: input.district,
         playerId: input.playerId,
@@ -7421,7 +8445,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           shoppingMallConfig: input.shoppingMallConfig,
           powerStationConfig: input.powerStationConfig,
           recruitmentCenterConfig: input.recruitmentCenterConfig,
+          fitnessClubConfig: input.fitnessClubConfig,
           garageConfig: input.garageConfig,
+          carDealerConfig: input.carDealerConfig,
+          smugglingTunnelConfig: input.smugglingTunnelConfig,
+          schoolConfig: input.schoolConfig,
           recyclingCenterConfig: input.recyclingCenterConfig,
           tick: input.tick,
           tickRateMs: input.tickRateMs
@@ -7462,61 +8490,168 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         { label: "Market fee reduction", value: `-${formatNumber(marketBonuses.marketFeeReductionPct)} %` }
       ];
     }
+    if (input.building.buildingTypeId === "car_dealer" && input.carDealerConfig && input.building.ownerPlayerId) {
+      const ownedCount2 = getOwnedCarDealerCount(input.state, input.building.ownerPlayerId, input.carDealerConfig);
+      const network2 = resolveCarDealerNetworkMultipliers(ownedCount2, input.carDealerConfig);
+      const support = resolveCarDealerSupportStats({
+        state: input.state,
+        playerId: input.building.ownerPlayerId,
+        config: input.carDealerConfig,
+        garageConfig: input.garageConfig
+      });
+      return [
+        { label: "Clean / min", value: `$${formatNumber(input.carDealerConfig.cleanCashPerMinute * network2.cleanIncomeMultiplier)}` },
+        { label: "Dirty / min", value: `$${formatNumber(input.carDealerConfig.dirtyCashPerMinute * network2.dirtyIncomeMultiplier)}` },
+        { label: "Heat / min", value: formatNumber(input.carDealerConfig.heatPerMinute * network2.heatMultiplier) },
+        { label: "Owned car dealers", value: `${ownedCount2}/${input.carDealerConfig.countOnMap}` },
+        { label: "Clean income multiplier", value: `x${formatNumber(network2.cleanIncomeMultiplier)}` },
+        { label: "Dirty income multiplier", value: `x${formatNumber(network2.dirtyIncomeMultiplier)}` },
+        { label: "Mobility bonus", value: `+${formatNumber(support.mobilityBonusPct)} %` },
+        { label: "Cooldown reduction", value: `-${formatNumber(support.cooldownReductionPct)} %` },
+        { label: "Escape chance bonus", value: `+${formatNumber(support.escapeChanceBonusPct)} %` },
+        { label: "Garage + dealer cap", value: `-${formatNumber(support.combinedGarageDealerMaxReductionPct)} %` },
+        { label: "Applies to", value: formatCategoryList([...support.fullBonusCategories, ...support.halfBonusCategories, ...support.smallBonusCategories]) },
+        { label: "No bonus", value: formatCategoryList(support.excludedCategories) }
+      ];
+    }
+    if (input.building.buildingTypeId === "smuggling_tunnel" && input.smugglingTunnelConfig && input.building.ownerPlayerId) {
+      const ownedCount2 = getOwnedSmugglingTunnelCount(input.state, input.building.ownerPlayerId, input.smugglingTunnelConfig);
+      const network2 = resolveSmugglingTunnelNetworkMultipliers(ownedCount2, input.smugglingTunnelConfig);
+      const metadata2 = getSmugglingTunnelMetadata(input.building);
+      const activeSilentChannel = isSilentChannelActive(metadata2, input.tick);
+      const capacity = resolveSmugglingTunnelCapacity({
+        state: input.state,
+        building: input.building,
+        config: input.smugglingTunnelConfig,
+        tick: input.tick
+      });
+      const stored = Math.min(capacity, metadata2.storedDirtyCash);
+      const productionPerMinute = input.smugglingTunnelConfig.dirtyCashPerMinute * network2.dirtyProductionMultiplier * (activeSilentChannel ? input.smugglingTunnelConfig.silentChannel.dirtyProductionMultiplier : 1);
+      const heatPerMinute = input.smugglingTunnelConfig.passiveHeatPerMinute * network2.passiveHeatMultiplier * (activeSilentChannel ? input.smugglingTunnelConfig.silentChannel.passiveHeatMultiplier : 1);
+      const timeToFullTicks = productionPerMinute > 0 && stored < capacity ? Math.ceil((capacity - stored) / productionPerMinute * 6e4 / Math.max(1, input.tickRateMs ?? 5e3)) : 0;
+      return [
+        { label: "Dirty / min", value: `$${formatNumber(productionPerMinute)}` },
+        { label: "Passive heat / min", value: formatNumber(heatPerMinute) },
+        { label: "Stored batch", value: `$${formatNumber(stored)} / $${formatNumber(capacity)}` },
+        { label: "Time to full", value: stored >= capacity ? "Dávka připravena" : formatTickLabel$1(timeToFullTicks) },
+        { label: "Owned tunnels", value: `${ownedCount2}/${input.smugglingTunnelConfig.countOnMap}` },
+        { label: "Dirty production multiplier", value: `x${formatNumber(network2.dirtyProductionMultiplier)}` },
+        { label: "Batch capacity multiplier", value: `x${formatNumber(network2.batchCapacityMultiplier)}` },
+        { label: "Passive heat multiplier", value: `x${formatNumber(network2.passiveHeatMultiplier)}` },
+        { label: "Collect heat now", value: `+${formatNumber(resolveSmugglingTunnelCollectHeat(stored, input.smugglingTunnelConfig))}` },
+        { label: "Silent Channel", value: activeSilentChannel ? `active ${formatTickLabel$1(Math.max(0, Number(metadata2.silentChannelExpiresAtTick || 0) - input.tick))}` : "ready when off cooldown" },
+        { label: "Raid risk after boost", value: `${formatNumber(input.smugglingTunnelConfig.silentChannel.raidChancePct)} %` }
+      ];
+    }
+    if (input.building.buildingTypeId === "school" && input.schoolConfig && input.building.ownerPlayerId) {
+      const ownedCount2 = getOwnedSchoolCount(input.state, input.building.ownerPlayerId, input.schoolConfig);
+      const network2 = resolveSchoolNetworkMultipliers(ownedCount2, input.schoolConfig);
+      const metadata2 = getSchoolMetadata(input.building, input.tick);
+      const eveningActive = isEveningCourseActive(metadata2, input.tick);
+      const capacity = resolveSchoolCapacity({
+        state: input.state,
+        building: input.building,
+        config: input.schoolConfig
+      });
+      const stored = Math.min(capacity, metadata2.storedStudents);
+      const productionPerMinute = input.schoolConfig.populationPerMinute * network2.populationProductionMultiplier * (eveningActive ? input.schoolConfig.eveningCourse.populationProductionMultiplier : 1);
+      const timeToFullTicks = productionPerMinute > 0 && stored < capacity ? Math.ceil((capacity - stored) / productionPerMinute * 6e4 / Math.max(1, input.tickRateMs ?? 5e3)) : 0;
+      const talentChancePct = resolveSchoolTalentChancePct({
+        ownedCount: ownedCount2,
+        config: input.schoolConfig,
+        eveningCourseActive: eveningActive
+      });
+      return [
+        { label: "Clean / min", value: `$${formatNumber(input.schoolConfig.cleanCashPerMinute * network2.incomeMultiplier * (eveningActive ? input.schoolConfig.eveningCourse.cleanIncomeMultiplier : 1))}` },
+        { label: "Influence / min", value: formatNumber(input.schoolConfig.influencePerMinute) },
+        { label: "Population / min", value: formatNumber(productionPerMinute) },
+        { label: "Students", value: `${formatNumber(Math.floor(stored))} / ${formatNumber(capacity)}` },
+        { label: "Time to full", value: stored >= capacity ? "Plná kapacita" : formatTickLabel$1(timeToFullTicks) },
+        { label: "Owned schools", value: `${ownedCount2}/${input.schoolConfig.countOnMap}` },
+        { label: "Population multiplier", value: `x${formatNumber(network2.populationProductionMultiplier)}` },
+        { label: "Capacity multiplier", value: `x${formatNumber(network2.studentCapacityMultiplier)}` },
+        { label: "Income multiplier", value: `x${formatNumber(network2.incomeMultiplier)}` },
+        { label: "Talent chance", value: `${formatNumber(talentChancePct)} %` },
+        { label: "Výsledek talentu", value: "jen uliční zprávy" },
+        { label: "Evening course", value: eveningActive ? `active ${formatTickLabel$1(Math.max(0, Number(metadata2.eveningCourseExpiresAtTick || 0) - input.tick))}` : "ready when off cooldown" }
+      ];
+    }
+    if (input.building.buildingTypeId === "fitness_club" && input.fitnessClubConfig && input.building.ownerPlayerId) {
+      const ownedCount2 = getOwnedFitnessClubCount(input.state, input.building.ownerPlayerId, input.fitnessClubConfig);
+      const network2 = resolveFitnessClubNetworkMultipliers(ownedCount2, input.fitnessClubConfig);
+      const support = resolveFitnessClubSupportBonuses({
+        state: input.state,
+        playerId: input.building.ownerPlayerId,
+        config: input.fitnessClubConfig
+      });
+      return [
+        { label: "Clean / min", value: `$${formatNumber(input.fitnessClubConfig.cleanCashPerMinute * network2.incomeMultiplier)}` },
+        { label: "Heat / min", value: formatNumber(input.fitnessClubConfig.heatPerMinute * network2.heatMultiplier) },
+        { label: "Owned fitness clubs", value: `${ownedCount2}/${input.fitnessClubConfig.countOnMap}` },
+        { label: "Income multiplier", value: `x${formatNumber(network2.incomeMultiplier)}` },
+        { label: "Attack strength bonus", value: `+${formatNumber(support.attackStrengthBonusPct)} %` },
+        { label: "Defense strength bonus", value: `+${formatNumber(support.defenseStrengthBonusPct)} %` },
+        { label: "Recruitment + fitness attack cap", value: `+${formatNumber(support.combinedRecruitmentFitnessAttackCapPct)} %` },
+        { label: "Recruitment + fitness defense cap", value: `+${formatNumber(support.combinedRecruitmentFitnessDefenseCapPct)} %` },
+        { label: "Attack applies to", value: "gang body, bats, pistols, grenades, SMGs, bazookas by weight" },
+        { label: "Defense applies to", value: "gang body, vests, barricades; not cameras or alarm" }
+      ];
+    }
+    if (input.building.buildingTypeId === "garage" && input.garageConfig && input.building.ownerPlayerId) {
+      const ownedCount2 = getOwnedGarageCount(input.state, input.building.ownerPlayerId, input.garageConfig);
+      const network2 = resolveGarageNetworkMultipliers(ownedCount2, input.garageConfig);
+      const cooldownStats = resolveGarageCooldownStats({
+        state: input.state,
+        playerId: input.building.ownerPlayerId,
+        config: input.garageConfig
+      });
+      return [
+        { label: "Clean / min", value: `$${formatNumber(input.garageConfig.cleanCashPerMinute * network2.incomeMultiplier)}` },
+        { label: "Heat / min", value: formatNumber(input.garageConfig.heatPerMinute * network2.heatMultiplier) },
+        { label: "Owned garages", value: `${ownedCount2}/${input.garageConfig.countOnMap}` },
+        { label: "Income multiplier", value: `x${formatNumber(network2.incomeMultiplier)}` },
+        { label: "Cooldown reduction", value: `-${formatNumber(cooldownStats.cooldownReductionPct)} %` },
+        { label: "Full bonus categories", value: formatCategoryList(cooldownStats.fullBonusCategories) },
+        { label: "Half bonus categories", value: formatCategoryList(cooldownStats.halfBonusCategories) },
+        { label: "No bonus categories", value: formatCategoryList(cooldownStats.excludedCategories) }
+      ];
+    }
+    if (input.building.buildingTypeId === "recycling_center" && input.recyclingCenterConfig && input.building.ownerPlayerId) {
+      const recyclingCenterConfig = input.recyclingCenterConfig;
+      const ownedCount2 = getOwnedRecyclingCenterCount(input.state, input.building.ownerPlayerId, recyclingCenterConfig);
+      const network2 = resolveRecyclingCenterNetworkMultipliers(ownedCount2, recyclingCenterConfig);
+      const salvageStats = resolveRecyclingCenterSalvageStats({
+        state: input.state,
+        playerId: input.building.ownerPlayerId,
+        config: recyclingCenterConfig,
+        tickRateMs: input.tickRateMs ?? 5e3
+      });
+      const poolTotal = salvageStats.freshPool.reduce((total, entry) => total + Math.max(0, Number(entry.amount || 0)), 0);
+      const nextExpiry = salvageStats.freshPool.reduce((next, entry) => {
+        const lostAtTick = Number(entry.lostAtTick);
+        if (!Number.isFinite(lostAtTick)) return next;
+        const expiresAtTick = lostAtTick + Math.ceil(recyclingCenterConfig.salvage.poolTtlMinutes * 6e4 / Math.max(1, input.tickRateMs ?? 5e3));
+        const remaining = Math.max(0, expiresAtTick - input.tick);
+        return next === null ? remaining : Math.min(next, remaining);
+      }, null);
+      return [
+        { label: "Clean / min", value: `$${formatNumber(recyclingCenterConfig.cleanCashPerMinute * network2.incomeMultiplier)}` },
+        { label: "Heat / min", value: formatNumber(recyclingCenterConfig.heatPerMinute * network2.heatMultiplier) },
+        { label: "Owned centers", value: `${ownedCount2}/${recyclingCenterConfig.countOnMap}` },
+        { label: "Income multiplier", value: `x${formatNumber(network2.incomeMultiplier)}` },
+        { label: "Salvage rate", value: `${formatNumber(salvageStats.salvageRatePct)} %` },
+        { label: "Salvage pool", value: `${formatNumber(poolTotal)} items` },
+        { label: "Next expiry", value: nextExpiry === null ? "none" : formatTickLabel$1(nextExpiry) },
+        { label: "Action cost", value: `$${formatNumber(recyclingCenterConfig.extractLosses.cleanCashCost)}` },
+        { label: "Population recovery", value: "never returns gang members or population" }
+      ];
+    }
     if (input.building.buildingTypeId !== "strip_club" || !input.stripClubConfig || !input.building.ownerPlayerId) {
       if (input.building.buildingTypeId !== "power_station" || !input.powerStationConfig || !input.building.ownerPlayerId) {
         if (input.building.buildingTypeId !== "restaurant" || !input.restaurantConfig || !input.building.ownerPlayerId) {
           if (input.building.buildingTypeId !== "convenience_store" || !input.convenienceStoreConfig || !input.building.ownerPlayerId) {
             if (input.building.buildingTypeId !== "recruitment_center" || !input.recruitmentCenterConfig || !input.building.ownerPlayerId) {
-              if (input.building.buildingTypeId !== "garage" || !input.garageConfig || !input.building.ownerPlayerId) {
-                if (input.building.buildingTypeId !== "recycling_center" || !input.recyclingCenterConfig || !input.building.ownerPlayerId) {
-                  return baseStats;
-                }
-                const recyclingCenterConfig = input.recyclingCenterConfig;
-                const ownedCount7 = getOwnedRecyclingCenterCount(input.state, input.building.ownerPlayerId, recyclingCenterConfig);
-                const network7 = resolveRecyclingCenterNetworkMultipliers(ownedCount7, recyclingCenterConfig);
-                const salvageStats = resolveRecyclingCenterSalvageStats({
-                  state: input.state,
-                  playerId: input.building.ownerPlayerId,
-                  config: recyclingCenterConfig,
-                  tickRateMs: input.tickRateMs ?? 5e3
-                });
-                const poolTotal = salvageStats.freshPool.reduce((total, entry) => total + Math.max(0, Number(entry.amount || 0)), 0);
-                const nextExpiry = salvageStats.freshPool.reduce((next, entry) => {
-                  const lostAtTick = Number(entry.lostAtTick);
-                  if (!Number.isFinite(lostAtTick)) return next;
-                  const expiresAtTick = lostAtTick + Math.ceil(recyclingCenterConfig.salvage.poolTtlMinutes * 6e4 / Math.max(1, input.tickRateMs ?? 5e3));
-                  const remaining2 = Math.max(0, expiresAtTick - input.tick);
-                  return next === null ? remaining2 : Math.min(next, remaining2);
-                }, null);
-                return [
-                  { label: "Clean / min", value: `$${formatNumber(recyclingCenterConfig.cleanCashPerMinute * network7.incomeMultiplier)}` },
-                  { label: "Heat / min", value: formatNumber(recyclingCenterConfig.heatPerMinute * network7.heatMultiplier) },
-                  { label: "Owned centers", value: `${ownedCount7}/${recyclingCenterConfig.countOnMap}` },
-                  { label: "Income multiplier", value: `x${formatNumber(network7.incomeMultiplier)}` },
-                  { label: "Salvage rate", value: `${formatNumber(salvageStats.salvageRatePct)} %` },
-                  { label: "Salvage pool", value: `${formatNumber(poolTotal)} items` },
-                  { label: "Next expiry", value: nextExpiry === null ? "none" : formatTickLabel$1(nextExpiry) },
-                  { label: "Action cost", value: `$${formatNumber(recyclingCenterConfig.extractLosses.cleanCashCost)}` },
-                  { label: "Population recovery", value: "never returns gang members or population" }
-                ];
-              }
-              const ownedCount6 = getOwnedGarageCount(input.state, input.building.ownerPlayerId, input.garageConfig);
-              const network6 = resolveGarageNetworkMultipliers(ownedCount6, input.garageConfig);
-              const cooldownStats = resolveGarageCooldownStats({
-                state: input.state,
-                playerId: input.building.ownerPlayerId,
-                config: input.garageConfig
-              });
-              return [
-                { label: "Clean / min", value: `$${formatNumber(input.garageConfig.cleanCashPerMinute * network6.incomeMultiplier)}` },
-                { label: "Heat / min", value: formatNumber(input.garageConfig.heatPerMinute * network6.heatMultiplier) },
-                { label: "Owned garages", value: `${ownedCount6}/${input.garageConfig.countOnMap}` },
-                { label: "Income multiplier", value: `x${formatNumber(network6.incomeMultiplier)}` },
-                { label: "Cooldown reduction", value: `-${formatNumber(cooldownStats.cooldownReductionPct)} %` },
-                { label: "Full bonus categories", value: formatCategoryList(cooldownStats.fullBonusCategories) },
-                { label: "Half bonus categories", value: formatCategoryList(cooldownStats.halfBonusCategories) },
-                { label: "No bonus categories", value: formatCategoryList(cooldownStats.excludedCategories) }
-              ];
+              return baseStats;
             }
             const ownedCount5 = getOwnedRecruitmentCenterCount(input.state, input.building.ownerPlayerId, input.recruitmentCenterConfig);
             const network5 = resolveRecruitmentCenterNetworkMultipliers(ownedCount5, input.recruitmentCenterConfig);
@@ -7689,7 +8824,21 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       recyclingCenterConfig: input.recyclingCenterConfig,
       tickRateMs: input.tickRateMs ?? 5e3
     });
-    const disabledReason = ownerBlocked ? "Only the district owner can run this building action." : input.building.status !== "active" ? "Only active fixed buildings can run actions." : input.district.status === "contested" && !action2.allowedIfContested ? "This action is blocked while the district is contested." : stripClubDisabledReason ? stripClubDisabledReason : powerStationDisabledReason ? powerStationDisabledReason : recyclingCenterDisabledReason ? recyclingCenterDisabledReason : cooldownRemainingTicks > 0 ? `Cooldown ${formatTickLabel$1(cooldownRemainingTicks)}.` : missingCosts.length > 0 ? `Need ${formatInputSummary$1(Object.fromEntries(missingCosts))}.` : null;
+    const smugglingTunnelDisabledReason = resolveSmugglingTunnelDisabledReason({
+      state: input.state,
+      building: input.building,
+      action: action2,
+      smugglingTunnelConfig: input.smugglingTunnelConfig,
+      tick: input.tick
+    });
+    const schoolDisabledReason = resolveSchoolDisabledReason({
+      state: input.state,
+      building: input.building,
+      action: action2,
+      schoolConfig: input.schoolConfig,
+      tick: input.tick
+    });
+    const disabledReason = ownerBlocked ? "Only the district owner can run this building action." : input.building.status !== "active" ? "Only active fixed buildings can run actions." : input.district.status === "contested" && !action2.allowedIfContested ? "This action is blocked while the district is contested." : stripClubDisabledReason ? stripClubDisabledReason : powerStationDisabledReason ? powerStationDisabledReason : recyclingCenterDisabledReason ? recyclingCenterDisabledReason : smugglingTunnelDisabledReason ? smugglingTunnelDisabledReason : schoolDisabledReason ? schoolDisabledReason : cooldownRemainingTicks > 0 ? `Cooldown ${formatTickLabel$1(cooldownRemainingTicks)}.` : missingCosts.length > 0 ? `Need ${formatInputSummary$1(Object.fromEntries(missingCosts))}.` : null;
     return {
       actionId: action2.actionId,
       label: action2.label,
@@ -7779,6 +8928,45 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return null;
   };
+  const resolveSmugglingTunnelDisabledReason = (input) => {
+    const config = input.smugglingTunnelConfig;
+    if (!config || input.building.buildingTypeId !== config.buildingTypeId) {
+      return null;
+    }
+    const metadata = getSmugglingTunnelMetadata(input.building);
+    if (input.action.actionId === config.collectBatch.actionId) {
+      const stored = Math.floor(metadata.storedDirtyCash);
+      return stored >= config.collectBatch.minStoredDirtyCash ? null : `Need at least ${config.collectBatch.minStoredDirtyCash} dirty cash in this tunnel.`;
+    }
+    if (input.action.actionId !== config.silentChannel.actionId) {
+      return null;
+    }
+    if (isSilentChannelActive(metadata, input.tick)) {
+      return `Tichý kanál active ${formatTickLabel$1(Math.max(0, Number(metadata.silentChannelExpiresAtTick || 0) - input.tick))}.`;
+    }
+    const blockedUntil = Math.max(0, Number(metadata.silentChannelBlockedUntilTick || 0));
+    if (blockedUntil > input.tick) {
+      return `Uzavřený vstup ${formatTickLabel$1(blockedUntil - input.tick)}.`;
+    }
+    return null;
+  };
+  const resolveSchoolDisabledReason = (input) => {
+    const config = input.schoolConfig;
+    if (!config || input.building.buildingTypeId !== config.buildingTypeId) {
+      return null;
+    }
+    const metadata = getSchoolMetadata(input.building, input.tick);
+    if (input.action.actionId === config.collectStudents.actionId) {
+      return metadata.storedStudents > 0 ? null : "Škola zatím nemá studenty k vybrání.";
+    }
+    if (input.action.actionId !== config.eveningCourse.actionId) {
+      return null;
+    }
+    if (isEveningCourseActive(metadata, input.tick)) {
+      return `Večerní kurz active ${formatTickLabel$1(Math.max(0, Number(metadata.eveningCourseExpiresAtTick || 0) - input.tick))}.`;
+    }
+    return null;
+  };
   const createDistrictSpyTargetViews = (state, playerId, sourceDistrictId) => {
     const sourceDistrict = state.districtsById[sourceDistrictId];
     if (!sourceDistrict || sourceDistrict.ownerPlayerId !== playerId) {
@@ -7845,7 +9033,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         shoppingMallConfig: input.shoppingMallConfig,
         powerStationConfig: input.powerStationConfig,
         recruitmentCenterConfig: input.recruitmentCenterConfig,
+        fitnessClubConfig: input.fitnessClubConfig,
         garageConfig: input.garageConfig,
+        carDealerConfig: input.carDealerConfig,
+        smugglingTunnelConfig: input.smugglingTunnelConfig,
+        schoolConfig: input.schoolConfig,
         recyclingCenterConfig: input.recyclingCenterConfig,
         district,
         playerId: input.playerId,
@@ -8348,18 +9540,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   };
   const publicBuildingNameVariants = {
     stock_exchange: ["Vortex Exchange"],
-    central_bank: ["Iron Reserve Bank", "Obsidian Central Vault"],
+    central_bank: ["Iron Reserve Bank"],
     airport: ["Neon Skyport"],
-    lobby_club: ["Velvet Influence Club", "Shadow Lobby Lounge", "Golden Circle Club"],
-    city_hall: ["City Dominion Hall", "Urban Control Center"],
+    lobby_club: ["Velvet Influence Club", "Shadow Lobby Lounge"],
+    city_hall: ["City Dominion Hall"],
     parliament: ["The Vortex Council"],
     port: ["Black Tide Port", "Ironsea Dockyard", "Shadow Harbor"],
-    court: ["High Justice Court", "Iron Verdict Hall", "Obsidian Tribunal"],
+    court: ["High Justice Court", "Iron Verdict Hall"],
     vip_lounge: ["Platinum Lounge", "Eclipse VIP Gold Room"],
     shopping_mall: ["Neon Mall", "Iron Market Plaza", "Karina shopping center"],
     restaurant: ["Neon Bite", "Black Plate", "Street Fuel", "Blood & Grill", "Midnight Diner", "Iron Taste", "Shadow Kitchen", "Dirty Spoon", "Vice Kitchen", "Urban Hunger", "Smoke & Meat", "The Last Bite", "Gangster Grill", "Concrete Kitchen", "Dark Appetite", "Night Feast", "The Hungry Syndicate", "Rusty Fork", "Back Alley Bistro", "Sinful Kitchen", "Underground Taste", "Savage Kitchen", "Chrome Diner", "Heat Kitchen", "No Mercy Meals", "Broken Plate", "Elite Hunger"],
     pharmacy: ["Neon Medics", "Pulse Pharmacy", "Black Cross Pharma", "Street Remedy", "NightCare Clinic", "Iron Vein Pharmacy", "QuickFix Med", "Shadow Medics", "Urban Cure", "Last Chance Pharmacy"],
-    auto_salon: ["Neon Motors", "Iron Wheels Garage", "Blackline Autos", "Street Kings Motors", "Midnight Drive Showroom", "Chrome Syndicate Cars", "Ghost Ride Autos", "Velocity X Garage"],
+    car_dealer: ["Neon Motors", "Iron Wheels Garage", "Blackline Autos", "Street Kings Motors", "Midnight Drive Showroom", "Chrome Syndicate Cars", "Ghost Ride Autos", "Velocity X Garage"],
     fitness_club: ["Iron District Gym", "Beast Factory", "Street Power Club", "No Mercy Fitness"],
     exchange: ["ZeroSum Vault", "Neon Arbitrage", "Phantom Rates", "Cashflow Mirage", "Obsidian Exchange", "Flux Currency Lab", "DeadDrop Finance", "Parallax Exchange", "Ghost Ledger", "Black Circuit Exchange", "Silver Pulse Desk", "Midnight Convertor"],
     arcade: ["Neon Jackpots", "Lucky Circuit", "Black Reel Club", "Midnight Slots", "Spin Syndicate", "Velvet Jackpot Lounge", "Ghost Spin Arcade"],
@@ -8470,16 +9662,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       action({ actionId: "vip_night", label: "VIP noc", description: "Dočasně zvýší casino income, vliv, heat a audit risk. Nestackuje se sama se sebou.", effectSummary: "+clean income, +dirty income, +vliv, +heat, +audit risk na 10 minut", cooldownMs: 26 * minute, durationMs: 10 * minute, effectModifiers: { cleanIncomeMultiplier: 1.7, dirtyIncomeMultiplier: 1.55, influenceMultiplier: 1.25, heatMultiplier: 1.6 } }),
       action({ actionId: "bribed_inspector", label: "Podplacený inspektor", description: "Zaplatí inspektora. Úspěch sníží heat a audit risk, selhání zvýší tlak.", effectSummary: "Cena 5500 clean cash, šance selhání 14 %, heat control, audit control", cooldownMs: 32 * minute, durationMs: 12 * minute, inputCost: out("cash", 5500) })
     ]),
-    building("auto_salon", "Autosalon", "commercial", "Finance a logistika", "Pere peníze přes drahé zboží a podporuje mobilitu posádek.", perMinuteStat(5, 1, 4, 18), [
-      action({ actionId: "auto_salon_collect_sales", label: "Vybrat prodeje", description: "Prodeje aut přidají clean i dirty cash.", effectSummary: "+clean cash, +dirty cash, +heat", heatGain: 1, outputGain: resources({ cash: 260, "dirty-cash": 80 }) }),
-      action({ actionId: "auto_salon_prepare_fleet", label: "Připravit flotilu", description: "Flotila zvedne logistiku a income.", effectSummary: "+income, +vliv na 10 minut", durationMs: 10 * minute, influenceChange: 2, effectModifiers: { incomeMultiplier: 1.15 } }),
-      action({ actionId: "auto_salon_gray_import", label: "Zakryt špinavý cash", description: "Dirty cash se schová přes autosalon.", effectSummary: "+clean cash, -dirty cash, +heat", heatGain: 2, inputCost: out("dirty-cash", 1100), outputGain: out("cash", 902) })
-    ]),
-    building("fitness_club", "Fitness Club", "commercial", "Legální front", "Civilní front s dobrým clean příjmem, náborem lidí a bojovou utilitou.", perMinuteStat(4, 0.5, 3.8, 22), [
-      action({ actionId: "fitness_collect_fees", label: "Vybrat členské poplatky", description: "Členské poplatky přidají clean cash.", effectSummary: "+clean cash, +heat", heatGain: 1, outputGain: out("cash", 220) }),
-      action({ actionId: "fitness_gang_training", label: "Nabrat vyhazovače", description: "Vyhazovači posílí posádku a přinesou základní ochranu.", effectSummary: "+gang members, +obrana, +vliv, +heat", heatGain: 2, outputGain: resources({ "gang-members": 2, vest: 1 }), influenceChange: 2 }),
-      action({ actionId: "fitness_low_profile", label: "Držet nízký heat", description: "Nízký profil sníží heat a pasivní policejní stopu.", effectSummary: "-heat, menší heat na 10 minut", durationMs: 10 * minute, heatGain: -3, effectModifiers: { heatMultiplier: 0.85 } })
-    ]),
+    building("car_dealer", "Autosalon", "commercial", "Economy / mobility / logistics / cooldown multiplier", "Autosalon generuje peníze a zlepšuje mobilitu gangu. Lesklé kapoty vpředu, falešné smlouvy vzadu a klíče od aut, která nikdy neuvidí papíry. Autosalon není jen showroom. Je to úniková trasa na kolech.", perMinuteStat(68, 18, 0.08 * 60 * 24, 0, 1), []),
+    building("fitness_club", "Fitness Club", "commercial", "Economy / combat support / physical training", "Fitness Club generuje čistý příjem a posiluje fyzickou sílu útoku i obrany. Nezískáš víc lidí. Získáš tvrdší lidi. Rezavé činky, rozbité zrcadlo a trenér, který nepočítá opakování, ale přežití.", perMinuteStat(72, 0, 0.04 * 60 * 24, 0, 1), []),
     building("exchange", "Směnárna", "commercial", "Economy / laundering / network", "Směnárna pere menší částky bezpečněji než kasino. Jedna směnárna je služba. Síť směnáren je finanční pavouk přes celé město.", perMinuteStat(70, 95, 230.4, 403.2, 1), [
       action({ actionId: "good_rate", label: "Výhodný kurz", description: "Instantně vypere 16 % aktuálního dirty cash hráče přes síť směnáren.", effectSummary: "-dirty cash, +clean cash po 12 % poplatku, +heat, +vliv, +audit risk", cooldownMs: 11 * minute, heatGain: 4, influenceChange: 1.5 })
     ]),
@@ -8499,10 +9683,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         inputCost: out("cash", 1200)
       })
     ]),
-    building("school", "Škola", "residential", "Training", "Produkuje členy a podporuje disciplínu a chemické zázemí.", perMinuteStat(4.4, 1, 2, 16), [
-      action({ actionId: "school_lecture", label: "Trénovat členy", description: "Okamžitě přidá nové členy.", effectSummary: "+gang members, +heat", heatGain: 2, outputGain: out("gang-members", 4), influenceChange: 1 }),
-      action({ actionId: "school_discipline", label: "Zvýšit disciplínu", description: "Disciplína zlepší obranu na pár minut.", effectSummary: "+obrana, +defense, +vliv, +heat", durationMs: 8 * minute, heatGain: 2, outputGain: out("vest", 1), influenceChange: 2, effectModifiers: { defenseMultiplier: 1.08 } }),
-      action({ actionId: "school_chemistry_course", label: "Budovat vliv", description: "Kurz a kontakty přidají chemii i vliv.", effectSummary: "+chemicals, +vliv, +heat", heatGain: 3, outputGain: out("chemicals", 4), influenceChange: 3 })
+    building("school", "Škola", "residential", "Population / education / talent support / city life", "Škola generuje malé peníze, trochu obyvatel a talenty. Není to kasárna. Je to místo, kde město vyrábí chytřejší lidi. Rozbité lavice, studené chodby a tabule popsané věcmi, které se v učebnicích neučí.", perMinuteStat(18, 0, 0, 0.05 * 60 * 24, 1), [
+      action({ actionId: "collect_students", label: "Vybrat studenty", description: "Přesune lokálně uložené studenty do globální populace hráče a spustí Talent Pool roll.", effectSummary: "+obyvatelé, šance na malý talent, bez heatu", cooldownMs: 0 }),
+      action({ actionId: "evening_course", label: "Večerní kurz", description: "Na 8 minut zvýší produkci studentů, talent chance a čistý příjem Školy. Nestackuje se.", effectSummary: "Cena 600 clean cash, +60 % studenti, +12 % talent chance, +20 % clean income na 8 minut", cooldownMs: 20 * minute, durationMs: 8 * minute, inputCost: out("cash", 600), effectModifiers: { cleanIncomeMultiplier: 1.2 } })
     ]),
     building("factory", "Továrna", "industrial", "Production", "Produkční budova pro Metal Parts, Tech Core a Combat Module.", stat(0, 0, 3, 10, 14), [
       legacyAction("produce_metal_parts", "Produce Metal Parts", "Vyrobí kovové díly.", "+metal parts, +heat", 3e-3, 1, out("metal-parts", 5)),
@@ -8530,10 +9713,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       legacyAction("produce_pulse_shot", "Produce Pulse Shot", "Uvaří Pulse Shot.", "+pulse shot, +vliv, +heat", 4e-3, 3, out("pulse-shot", 1), 1, { chemicals: 2, biomass: 1 }),
       legacyAction("produce_velvet_smoke", "Produce Velvet Smoke", "Vyrobí Velvet Smoke.", "+velvet smoke, +vliv, +heat", 4e-3, 2, out("velvet-smoke", 2), 1, out("biomass", 2))
     ]),
-    building("smuggling_tunnel", "Pašovací tunel", "park", "Smuggling", "Skrytý logistický koridor pro dirty cash, drogy, suroviny a informace.", perMinuteStat(0.2, 3, 4.3, 18), [
-      action({ actionId: "smuggling_big_shipment", label: "Big shipment", description: "Velká zásilka projde tunelem.", effectSummary: "+dirty cash, +drugs, +tech core, +heat", heatGain: 5, outputGain: resources({ "dirty-cash": 520, "neon-dust": 1, "tech-core": 1 }), influenceChange: 1 }),
-      action({ actionId: "smuggling_flow_boost", label: "Přesunout zásilku", description: "Tok zásilek dočasně zvedne dirty income.", effectSummary: "+dirty income, +heat na 10 minut", durationMs: 10 * minute, heatGain: 4, effectModifiers: { dirtyIncomeMultiplier: 1.3 } }),
-      action({ actionId: "smuggling_reduce_trace", label: "Snížit stopu", description: "Stopa zásilky bude snížená a síť předá drby z okolí.", effectSummary: "-heat, +info, +vliv", heatGain: -3, influenceChange: 2 })
+    building("smuggling_tunnel", "Pašovací tunel", "park", "Dirty cash / smuggling / stash / risk reward", "Pašovací tunel není obchod. Je to díra pod městem, která plive špinavé peníze. Čím déle ji necháš běžet, tím větší balík vytáhneš. A tím víc bude město cítit, že pod ním něco hnije.", perMinuteStat(0, 62, 0.03 * 60 * 24, 0, 1), [
+      action({ actionId: "silent_channel", label: "Tichý kanál", description: "Na 8 minut zvýší dirty cash produkci, passive heat a kapacitu dávky v daném tunelu. Nestackuje se a po skončení má riziko zátahu.", effectSummary: "Cena 600 dirty cash, +80 % dirty production, +100 % passive heat, +25 % kapacita, 12 % zátah", cooldownMs: 20 * minute, durationMs: 8 * minute, inputCost: out("dirty-cash", 600) })
     ]),
     building("convenience_store", "Večerka", "park", "Economy / dirty cash / rumors / influence / street life", "Večerka generuje malé čisté peníze, drobné dirty cash, trochu vlivu a lokální pouliční drby. Zářivky bzučí, dveře pípají a kamera nad regálem vidí víc, než by měla. Večerka není nebezpečná. Nebezpeční jsou lidé, kteří se v ní v noci zastavují.", perMinuteStat(32, 18, 72, 144, 1), []),
     building("strip_club", "Strip Club", "park", "Economy / influence / rumors / social network", "Strip Club generuje peníze, vliv a drby. Není to jen podnik. Je to místo, kde město mluví. Neon na mokrém skle, basy pod podlahou a VIP salonek, kde se šeptá víc než v kanceláři starosty.", perMinuteStat(75, 65, 259.2, 547.2, 1), [
@@ -8973,6 +10154,102 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       { level: 4, cleanCashCost: 38e3, techCoreCost: 14, combatModuleCost: 3, incomeBonusPct: 40, launderingLimitBonusPct: 25, actionHeatReductionPct: 8 }
     ]
   };
+  const freeModeCarDealerConfig = {
+    id: "car_dealer",
+    buildingTypeId: "car_dealer",
+    legacyBuildingTypeIds: ["auto_salon"],
+    countOnMap: 10,
+    category: ["economy", "mobility", "logistics", "cooldown_multiplier"],
+    cleanCashPerMinute: 68,
+    dirtyCashPerMinute: 18,
+    influencePerMinute: 0,
+    heatPerMinute: 0.08,
+    actions: [],
+    noSpecialActions: true,
+    noLaundering: true,
+    noAuditRisk: true,
+    noPopulationProduction: true,
+    noIntelPower: true,
+    mobility: {
+      bonusPctPerDealer: 3,
+      maxBonusPct: 21,
+      fullBonusActionCategories: [
+        "gangMovement",
+        "equipmentTransfer",
+        "resourceTransfer",
+        "districtRobbery",
+        "attackPreparation",
+        "retreatReturn"
+      ],
+      halfBonusActionCategories: [
+        "attackTravelTime",
+        "defenseReposition"
+      ],
+      smallBonusActionCategories: [
+        "clinicEvacuationRecovery",
+        "recyclingSalvageTransport"
+      ],
+      excludedActionCategories: [
+        "moneyLaundering",
+        "casinoActions",
+        "exchangeOfficeActions",
+        "arcadeLaunderingActions",
+        "rumorGeneration",
+        "passiveProduction",
+        "intelScan",
+        "trapDetection"
+      ]
+    },
+    cooldownReduction: {
+      reductionPctPerDealer: 1.5,
+      maxReductionPct: 10.5,
+      combinedGarageDealerMaxReductionPct: 22,
+      fullBonusActionCategories: [
+        "gangMovement",
+        "equipmentTransfer",
+        "resourceTransfer",
+        "districtRobbery",
+        "attackPreparation",
+        "retreatReturn"
+      ],
+      halfBonusActionCategories: [
+        "attackTravelTime",
+        "defenseReposition"
+      ],
+      smallBonusActionCategories: [
+        "clinicEvacuationRecovery",
+        "recyclingSalvageTransport"
+      ],
+      excludedActionCategories: [
+        "moneyLaundering",
+        "casinoActions",
+        "exchangeOfficeActions",
+        "arcadeLaunderingActions",
+        "rumorGeneration",
+        "passiveProduction",
+        "intelScan",
+        "trapDetection"
+      ]
+    },
+    escapeChance: {
+      bonusPctPerDealer: 2,
+      maxBonusPct: 12,
+      appliesTo: [
+        "districtRobberyFailure",
+        "spyDetectedFailure",
+        "movementAmbush",
+        "attackReturn"
+      ]
+    },
+    network: {
+      cleanIncomeBonusPctPerExtraDealer: 4,
+      dirtyIncomeBonusPctPerExtraDealer: 4,
+      heatBonusPctPerExtraDealer: 3,
+      maxCleanIncomeMultiplier: 1.24,
+      maxDirtyIncomeMultiplier: 1.24,
+      maxHeatMultiplier: 1.18
+    }
+  };
   const freeModeClinicConfig = {
     id: "clinic",
     buildingTypeId: "clinic",
@@ -9109,6 +10386,53 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       lostClient: { dirtyIncomePenaltyPct: 10, durationMinutes: 10 },
       documentCheck: { heatGain: 10 },
       seizedCash: { dirtyCashLossPct: 8 }
+    }
+  };
+  const freeModeFitnessClubConfig = {
+    id: "fitness_club",
+    buildingTypeId: "fitness_club",
+    countOnMap: 5,
+    category: ["economy", "combat_support", "physical_training"],
+    cleanCashPerMinute: 72,
+    dirtyCashPerMinute: 0,
+    influencePerMinute: 0,
+    populationPerMinute: 0,
+    heatPerMinute: 0.04,
+    actions: [],
+    noSpecialActions: true,
+    noLaundering: true,
+    noAuditRisk: true,
+    noPopulationProduction: true,
+    noIntelPower: true,
+    combatConditioning: {
+      attackStrengthBonusPctPerClub: 4,
+      defenseStrengthBonusPctPerClub: 3,
+      maxAttackStrengthBonusPct: 20,
+      maxDefenseStrengthBonusPct: 15,
+      combinedRecruitmentFitnessAttackCapPct: 30,
+      combinedRecruitmentFitnessDefenseCapPct: 24,
+      attackApplication: {
+        baseGangMemberAttack: 1,
+        "baseball-bat": 1,
+        pistol: 0.5,
+        grenade: 0.25,
+        smg: 0.4,
+        bazooka: 0.15
+      },
+      defenseApplication: {
+        baseGangMemberDefense: 1,
+        vest: 0.6,
+        barricades: 0.35,
+        cameras: 0,
+        "defense-tower": 0,
+        alarm: 0
+      }
+    },
+    network: {
+      incomeBonusPctPerExtraClub: 5,
+      heatBonusPctPerExtraClub: 3,
+      maxIncomeMultiplier: 1.2,
+      maxHeatMultiplier: 1.12
     }
   };
   const freeModeGarageConfig = {
@@ -9266,6 +10590,107 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       heatBonusPctPerExtraCenter: 3,
       maxIncomeMultiplier: 1.28,
       maxHeatMultiplier: 1.21
+    }
+  };
+  const freeModeSchoolConfig = {
+    id: "school",
+    buildingTypeId: "school",
+    countOnMap: 6,
+    category: ["population", "education", "talent_support", "city_life"],
+    cleanCashPerMinute: 18,
+    dirtyCashPerMinute: 0,
+    influencePerMinute: 0.05,
+    heatPerMinute: 0,
+    populationPerMinute: 0.55,
+    baseStudentCapacity: 20,
+    noDirtyCash: true,
+    noLaundering: true,
+    noAuditRisk: true,
+    noHeat: true,
+    productionStopsAtCapacity: true,
+    requiresManualCollect: true,
+    allowPartialCollect: true,
+    network: {
+      populationProductionBonusPctPerExtraSchool: 8,
+      studentCapacityBonusPctPerExtraSchool: 10,
+      incomeBonusPctPerExtraSchool: 4,
+      maxPopulationProductionMultiplier: 1.4,
+      maxStudentCapacityMultiplier: 1.5,
+      maxIncomeMultiplier: 1.2
+    },
+    talentPool: {
+      baseChancePct: 12,
+      chancePctPerExtraSchool: 5,
+      maxChancePct: 38,
+      eveningCourseTalentChanceBonusPct: 12,
+      betterTalentChanceBonusPct: 20
+    },
+    collectStudents: {
+      actionId: "collect_students",
+      cooldownMinutes: 0
+    },
+    eveningCourse: {
+      actionId: "evening_course",
+      cooldownMinutes: 20,
+      durationMinutes: 8,
+      costCleanCash: 600,
+      heatGain: 0,
+      populationProductionMultiplier: 1.6,
+      talentChanceFlatBonusPct: 12,
+      betterTalentChanceBonusPct: 20,
+      cleanIncomeMultiplier: 1.2,
+      stackable: false
+    }
+  };
+  const freeModeSmugglingTunnelConfig = {
+    id: "smuggling_tunnel",
+    buildingTypeId: "smuggling_tunnel",
+    countOnMap: 18,
+    category: ["dirty_cash", "smuggling", "stash", "risk_reward"],
+    cleanCashPerMinute: 0,
+    dirtyCashPerMinute: 62,
+    influencePerMinute: 0,
+    populationPerMinute: 0,
+    passiveHeatPerMinute: 0.03,
+    noCleanCash: true,
+    noInfluence: true,
+    noPopulationProduction: true,
+    noIntelPower: true,
+    noLaundering: true,
+    noAuditRisk: true,
+    batch: {
+      baseCapacityDirtyCash: 2500,
+      minCollectDirtyCash: 300,
+      heatByCollectedDirtyCash: [
+        { minDirtyCash: 1, maxDirtyCash: 999, heatGain: 2 },
+        { minDirtyCash: 1e3, maxDirtyCash: 1999, heatGain: 4 },
+        { minDirtyCash: 2e3, maxDirtyCash: 2999, heatGain: 7 },
+        { minDirtyCash: 3e3, maxDirtyCash: 4999, heatGain: 11 },
+        { minDirtyCash: 5e3, heatGain: 16 }
+      ]
+    },
+    collectBatch: {
+      actionId: "collect_smuggling_batch",
+      minStoredDirtyCash: 300
+    },
+    silentChannel: {
+      actionId: "silent_channel",
+      cooldownMinutes: 20,
+      durationMinutes: 8,
+      costDirtyCash: 600,
+      dirtyProductionMultiplier: 1.8,
+      passiveHeatMultiplier: 2,
+      batchCapacityMultiplier: 1.25,
+      raidChancePct: 12,
+      blockedMinutesOnClosedEntrance: 10
+    },
+    network: {
+      dirtyProductionBonusPctPerExtraTunnel: 5,
+      batchCapacityBonusPctPerExtraTunnel: 6,
+      passiveHeatBonusPctPerExtraTunnel: 4,
+      maxDirtyProductionMultiplier: 1.35,
+      maxBatchCapacityMultiplier: 1.55,
+      maxPassiveHeatMultiplier: 1.28
     }
   };
   const freeModeRecruitmentCenterConfig = {
@@ -9552,6 +10977,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           influencePerDay: 0,
           maxLevel: 1
         },
+        school: {
+          cleanPerHour: freeModeSchoolConfig.cleanCashPerMinute * 60,
+          dirtyPerHour: 0,
+          heatPerDay: 0,
+          influencePerDay: freeModeSchoolConfig.influencePerMinute * 60 * 24,
+          maxLevel: 1
+        },
         warehouse: {
           cleanPerHour: freeModeWarehouseConfig.cleanCashPerMinute * 60,
           dirtyPerHour: 0,
@@ -9601,6 +11033,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           influencePerDay: freeModeShoppingMallConfig.influencePerMinute * 60 * 24,
           maxLevel: 1
         },
+        fitness_club: {
+          cleanPerHour: freeModeFitnessClubConfig.cleanCashPerMinute * 60,
+          dirtyPerHour: 0,
+          heatPerDay: freeModeFitnessClubConfig.heatPerMinute * 60 * 24,
+          influencePerDay: 0,
+          maxLevel: 1
+        },
         recruitment_center: {
           cleanPerHour: freeModeRecruitmentCenterConfig.cleanCashPerMinute * 60,
           dirtyPerHour: 0,
@@ -9615,15 +11054,59 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           influencePerDay: 0,
           maxLevel: 1
         },
+        car_dealer: {
+          cleanPerHour: freeModeCarDealerConfig.cleanCashPerMinute * 60,
+          dirtyPerHour: freeModeCarDealerConfig.dirtyCashPerMinute * 60,
+          heatPerDay: freeModeCarDealerConfig.heatPerMinute * 60 * 24,
+          influencePerDay: 0,
+          maxLevel: 1
+        },
         recycling_center: {
           cleanPerHour: freeModeRecyclingCenterConfig.cleanCashPerMinute * 60,
           dirtyPerHour: 0,
           heatPerDay: freeModeRecyclingCenterConfig.heatPerMinute * 60 * 24,
           influencePerDay: 0,
           maxLevel: 1
+        },
+        smuggling_tunnel: {
+          cleanPerHour: 0,
+          dirtyPerHour: freeModeSmugglingTunnelConfig.dirtyCashPerMinute * 60,
+          heatPerDay: freeModeSmugglingTunnelConfig.passiveHeatPerMinute * 60 * 24,
+          influencePerDay: 0,
+          maxLevel: 1
         }
       },
       buildingActions: {
+        collect_smuggling_batch: {
+          actionId: "collect_smuggling_batch",
+          buildingType: "smuggling_tunnel",
+          label: "Vybrat dávku",
+          description: "Přesune lokální dirty cash dávku z konkrétního Pašovacího tunelu do globální dirty cash.",
+          durationMs: 0,
+          cooldownMs: 0,
+          inputCost: {},
+          outputGain: {},
+          heatGain: 0,
+          influenceChange: 0,
+          requiredOwner: true,
+          allowedIfContested: false,
+          reportText: "Vybere dirty cash dávku z Pašovacího tunelu."
+        },
+        silent_channel: {
+          actionId: "silent_channel",
+          buildingType: "smuggling_tunnel",
+          label: "Tichý kanál",
+          description: "Na 8 minut zvýší dirty cash produkci, passive heat a kapacitu dávky v daném tunelu. Po skončení má 12% riziko zátahu.",
+          durationMs: freeModeSmugglingTunnelConfig.silentChannel.durationMinutes * 60 * 1e3,
+          cooldownMs: freeModeSmugglingTunnelConfig.silentChannel.cooldownMinutes * 60 * 1e3,
+          inputCost: { "dirty-cash": freeModeSmugglingTunnelConfig.silentChannel.costDirtyCash },
+          outputGain: {},
+          heatGain: 0,
+          influenceChange: 0,
+          requiredOwner: true,
+          allowedIfContested: false,
+          reportText: "Tichý kanál dočasně zvedne pašovací dávku a riziko."
+        },
         extract_losses: {
           actionId: "extract_losses",
           buildingType: "recycling_center",
@@ -9668,6 +11151,36 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           requiredOwner: true,
           allowedIfContested: false,
           reportText: "Vybere obyvatele z lokálního zásobníku bytového bloku."
+        },
+        collect_students: {
+          actionId: "collect_students",
+          buildingType: "school",
+          label: "Vybrat studenty",
+          description: "Přesune lokálně uložené studenty ze Školy do globální populace a spustí Talent Pool roll.",
+          durationMs: 0,
+          cooldownMs: 0,
+          inputCost: {},
+          outputGain: {},
+          heatGain: 0,
+          influenceChange: 0,
+          requiredOwner: true,
+          allowedIfContested: false,
+          reportText: "Vybere studenty ze Školy a zkusí najít talent."
+        },
+        evening_course: {
+          actionId: "evening_course",
+          buildingType: "school",
+          label: "Večerní kurz",
+          description: "Na 8 minut zvýší produkci studentů, šanci na talent a čistý příjem konkrétní Školy.",
+          durationMs: freeModeSchoolConfig.eveningCourse.durationMinutes * 60 * 1e3,
+          cooldownMs: freeModeSchoolConfig.eveningCourse.cooldownMinutes * 60 * 1e3,
+          inputCost: { cash: freeModeSchoolConfig.eveningCourse.costCleanCash },
+          outputGain: {},
+          heatGain: 0,
+          influenceChange: 0,
+          requiredOwner: true,
+          allowedIfContested: false,
+          reportText: "Večerní kurz dočasně zvedne studenty, talent roll a clean income Školy."
         },
         night_machines: {
           actionId: "night_machines",
@@ -9845,14 +11358,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       exchangeOffice: freeModeExchangeOfficeConfig,
       arcade: freeModeArcadeConfig,
       apartmentBlock: freeModeApartmentBlockConfig,
+      school: freeModeSchoolConfig,
       warehouse: freeModeWarehouseConfig,
       clinic: freeModeClinicConfig,
       stripClub: freeModeStripClubConfig,
       restaurant: freeModeRestaurantConfig,
       convenienceStore: freeModeConvenienceStoreConfig,
       shoppingMall: freeModeShoppingMallConfig,
+      fitnessClub: freeModeFitnessClubConfig,
       recruitmentCenter: freeModeRecruitmentCenterConfig,
       garage: freeModeGarageConfig,
+      carDealer: freeModeCarDealerConfig,
+      smugglingTunnel: freeModeSmugglingTunnelConfig,
       recyclingCenter: freeModeRecyclingCenterConfig,
       powerStation: freeModePowerStationConfig
     },
@@ -10056,17 +11573,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       set("commercial", "early", "early-stable-2", "Civilní utility", ["restaurant", "pharmacy"]),
       set("commercial", "early", "early-cash", "Lehký cashflow", ["restaurant", "exchange"]),
       set("commercial", "early", "early-safe-3", "Bezpečný mix", ["restaurant", "pharmacy", "fitness_club"]),
-      set("commercial", "early", "early-launder", "Startovní laundering", ["auto_salon", "restaurant"]),
-      set("commercial", "mid", "mid-balance-1", "Utility growth", ["auto_salon", "pharmacy"]),
-      set("commercial", "mid", "mid-balance-2", "Finanční uzel", ["auto_salon", "exchange"]),
+      set("commercial", "early", "early-launder", "Startovní mobilita", ["car_dealer", "restaurant"]),
+      set("commercial", "mid", "mid-balance-1", "Utility growth", ["car_dealer", "pharmacy"]),
+      set("commercial", "mid", "mid-balance-2", "Finanční uzel", ["car_dealer", "exchange"]),
       set("commercial", "mid", "mid-corp-1", "Korporátní stabilita", ["shopping_mall", "restaurant"]),
       set("commercial", "mid", "mid-corp-2", "Administrativní utility", ["shopping_mall", "pharmacy", "restaurant"]),
       set("commercial", "mid", "mid-mall-1", "Hlavní retail", ["shopping_mall", "restaurant"]),
       set("commercial", "mid", "mid-mix-1", "Vyvážený obchod", ["restaurant", "pharmacy", "exchange"]),
-      set("commercial", "mid", "mid-mix-2", "Prací front", ["auto_salon", "exchange", "restaurant"]),
+      set("commercial", "mid", "mid-mix-2", "Mobilní front", ["car_dealer", "exchange", "restaurant"]),
       set("commercial", "top", "top-casino-1", "Kasino hotspot", ["casino", "restaurant"]),
       set("commercial", "top", "top-casino-2", "Shady premium", ["casino", "restaurant", "pharmacy"]),
-      set("commercial", "top", "top-casino-3", "Black cash engine", ["casino", "exchange", "auto_salon"]),
+      set("commercial", "top", "top-casino-3", "Black cash engine", ["casino", "exchange", "car_dealer"]),
       set("commercial", "top", "top-mall-1", "Prémiový retail", ["shopping_mall", "pharmacy", "restaurant"]),
       set("commercial", "top", "top-mall-2", "Financial boulevard", ["shopping_mall", "exchange", "restaurant"])
     ],
@@ -10138,6 +11655,16 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       set("downtown", "core", "down-core-4", "System override", ["central_bank", "court", "lobby_club"])
     ]
   };
+  const downtownFixedBuildingSetByDistrictId = {
+    "79": set("downtown", "core", "downtown-fixed-79", "Elitní arbitráž", ["court", "vip_lounge"]),
+    "80": set("downtown", "core", "downtown-fixed-80", "Městské finance", ["central_bank"]),
+    "81": set("downtown", "core", "downtown-fixed-81", "Politický vliv", ["lobby_club"]),
+    "82": set("downtown", "core", "downtown-fixed-82", "Volatilní kapitál", ["stock_exchange"]),
+    "83": set("downtown", "core", "downtown-fixed-83", "Právní tlak", ["court"]),
+    "58": set("downtown", "core", "downtown-fixed-58", "Městská kontrola", ["city_hall"]),
+    "57": set("downtown", "core", "downtown-fixed-57", "Lobby síť", ["lobby_club"]),
+    "59": set("downtown", "core", "downtown-fixed-59", "VIP patro", ["vip_lounge"])
+  };
   const tierOrderByZone = {
     commercial: ["early", "mid", "top"],
     residential: ["early", "mid", "late"],
@@ -10165,6 +11692,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const directSet = input.buildingSetKey ? pool.find((candidate) => candidate.key === input.buildingSetKey) : null;
     if (directSet) {
       return directSet;
+    }
+    const fixedDowntownSet = zone === "downtown" ? downtownFixedBuildingSetByDistrictId[normalizeDistrictIdKey(input.districtId)] : null;
+    if (fixedDowntownSet) {
+      return fixedDowntownSet;
     }
     const tier = resolveDistrictTier(zone, input.districtId, input.buildingTier);
     const tierPool = pool.filter((candidate) => candidate.tier === tier);
@@ -10196,6 +11727,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   };
   function normalizeBuildingName(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  }
+  function normalizeDistrictIdKey(value) {
+    const match = String(value || "").match(/\d+/u);
+    return (match == null ? void 0 : match[0]) ?? "";
   }
   const hashDistrictSeed = (seed) => {
     const text = String(seed || "");
@@ -10427,9 +11962,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     restaurantConfig: runtime.config.balance.restaurant,
     convenienceStoreConfig: runtime.config.balance.convenienceStore,
     shoppingMallConfig: runtime.config.balance.shoppingMall,
+    fitnessClubConfig: runtime.config.balance.fitnessClub,
     powerStationConfig: runtime.config.balance.powerStation,
     recruitmentCenterConfig: runtime.config.balance.recruitmentCenter,
     garageConfig: runtime.config.balance.garage,
+    carDealerConfig: runtime.config.balance.carDealer,
+    smugglingTunnelConfig: runtime.config.balance.smugglingTunnel,
+    schoolConfig: runtime.config.balance.school,
     recyclingCenterConfig: runtime.config.balance.recyclingCenter,
     productionMultiplier: runtime.config.balance.productionMultiplier,
     tickRateMs: runtime.config.tickRateMs

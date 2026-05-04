@@ -115,3 +115,150 @@
   transform: none !important;
   animation: none !important;
 }
+
+:root {
+  --motion-modal-enter-duration: 90ms;
+  --motion-modal-fade-duration: 60ms;
+  --motion-panel-enter-duration: 90ms;
+}
+
+html {
+  scroll-behavior: auto !important;
+}
+
+:where(
+  a,
+  button,
+  summary,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [tabindex],
+  .btn,
+  .button,
+  .nav-btn
+) {
+  touch-action: manipulation;
+}
+
+:where(
+  a,
+  button,
+  summary,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [tabindex],
+  .btn,
+  .button,
+  .nav-btn,
+  .resource-pill,
+  .panel-action-button,
+  .panel-action-button--feature,
+  .map-phase-button,
+  .map-zoom-button,
+  .building-shortcut-button,
+  .buildings-popup__type-btn,
+  .buildings-popup__building--interactive,
+  .building-detail-title__action-btn,
+  .building-info-action-row,
+  .building-detail-tabs__btn,
+  .district-building-popup__action,
+  .district-building-popup__run-button,
+  .market-popup-row,
+  .market-popup-row__buy,
+  .market-popup-row__sell,
+  .modal__close,
+  .modal__confirm-btn,
+  .modal__cancel-btn
+) {
+  transition-duration: 80ms !important;
+  transition-delay: 0ms !important;
+}
+
+:where(
+  .modal__backdrop,
+  .district-popup-backdrop,
+  .attack-setup-popup-backdrop,
+  .buildings-popup-backdrop,
+  .wanted-popup-backdrop,
+  .player-popup-backdrop,
+  .alliance-popup-backdrop,
+  .armory-popup-backdrop,
+  .pharmacy-popup-backdrop,
+  .druglab-popup-backdrop,
+  .factory-popup-backdrop,
+  .market-popup-backdrop,
+  .leaderboard-popup-backdrop,
+  .storage-popup-backdrop,
+  .district-building-detail-backdrop
+) {
+  animation-duration: 60ms !important;
+}
+
+:where(
+  .game-brand-name,
+  .player-profile-trigger,
+  .game-resource-strip > *,
+  #city-events-card,
+  #buildings-card,
+  #market-card,
+  #building-shortcut-grid,
+  .building-action-status,
+  #leaderboard-card,
+  .gang-profile-panel
+) {
+  animation-duration: 80ms !important;
+  animation-delay: 0ms !important;
+}
+
+.resource-pill::after,
+#city-events-open::after,
+.building-action-status__item::after,
+.gang-profile-panel::before,
+.map-phase-button::after,
+.leaderboard-button::after {
+  animation: none !important;
+}
+
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+  :where(
+    .game-topbar,
+    .modal__backdrop,
+    .district-popup-backdrop,
+    .attack-setup-popup-backdrop,
+    .buildings-popup-backdrop,
+    .wanted-popup-backdrop,
+    .player-popup-backdrop,
+    .alliance-popup-backdrop,
+    .armory-popup-backdrop,
+    .pharmacy-popup-backdrop,
+    .druglab-popup-backdrop,
+    .factory-popup-backdrop,
+    .market-popup-backdrop,
+    .leaderboard-popup-backdrop,
+    .storage-popup-backdrop,
+    .district-building-detail-backdrop
+  ) {
+    backdrop-filter: blur(8px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(120%) !important;
+  }
+
+  :where(
+    .map-district-canvas,
+    .map-hover-canvas,
+    .map-canvas-shell
+  ) {
+    filter: none !important;
+  }
+
+  .map-canvas-shell::before,
+  .map-canvas-shell::after,
+  .map-interaction-overlay::before,
+  .map-interaction-overlay::after {
+    animation: none !important;
+    transition-duration: 60ms !important;
+  }
+}

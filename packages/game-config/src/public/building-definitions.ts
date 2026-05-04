@@ -195,10 +195,9 @@ export const publicBuildingDefinitions: PublicBuildingDefinition[] = [
       inputCost: out("cash", 1200)
     })
   ]),
-  building("school", "Škola", "residential", "Training", "Produkuje členy a podporuje disciplínu a chemické zázemí.", perMinuteStat(4.4, 1, 2, 16), [
-    action({ actionId: "school_lecture", label: "Trénovat členy", description: "Okamžitě přidá nové členy.", effectSummary: "+gang members, +heat", heatGain: 2, outputGain: out("gang-members", 4), influenceChange: 1 }),
-    action({ actionId: "school_discipline", label: "Zvýšit disciplínu", description: "Disciplína zlepší obranu na pár minut.", effectSummary: "+obrana, +defense, +vliv, +heat", durationMs: 8 * minute, heatGain: 2, outputGain: out("vest", 1), influenceChange: 2, effectModifiers: { defenseMultiplier: 1.08 } }),
-    action({ actionId: "school_chemistry_course", label: "Budovat vliv", description: "Kurz a kontakty přidají chemii i vliv.", effectSummary: "+chemicals, +vliv, +heat", heatGain: 3, outputGain: out("chemicals", 4), influenceChange: 3 })
+  building("school", "Škola", "residential", "Population / education / talent support / city life", "Škola generuje malé peníze, trochu obyvatel a talenty. Není to kasárna. Je to místo, kde město vyrábí chytřejší lidi. Rozbité lavice, studené chodby a tabule popsané věcmi, které se v učebnicích neučí.", perMinuteStat(18, 0, 0, 0.05 * 60 * 24, 1), [
+    action({ actionId: "collect_students", label: "Vybrat studenty", description: "Přesune lokálně uložené studenty do globální populace hráče a spustí Talent Pool roll.", effectSummary: "+obyvatelé, šance na malý talent, bez heatu", cooldownMs: 0 }),
+    action({ actionId: "evening_course", label: "Večerní kurz", description: "Na 8 minut zvýší produkci studentů, talent chance a čistý příjem Školy. Nestackuje se.", effectSummary: "Cena 600 clean cash, +60 % studenti, +12 % talent chance, +20 % clean income na 8 minut", cooldownMs: 20 * minute, durationMs: 8 * minute, inputCost: out("cash", 600), effectModifiers: { cleanIncomeMultiplier: 1.2 } })
   ]),
 
   building("factory", "Továrna", "industrial", "Production", "Produkční budova pro Metal Parts, Tech Core a Combat Module.", stat(0, 0, 3, 10, 14), [

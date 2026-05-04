@@ -30,6 +30,7 @@ export const createDistrictPanelProjection = (
     garageConfig: runtime.config.balance.garage,
     carDealerConfig: runtime.config.balance.carDealer,
     smugglingTunnelConfig: runtime.config.balance.smugglingTunnel,
+    schoolConfig: runtime.config.balance.school,
     recyclingCenterConfig: runtime.config.balance.recyclingCenter,
     productionMultiplier: runtime.config.balance.productionMultiplier,
     tickRateMs: runtime.config.tickRateMs

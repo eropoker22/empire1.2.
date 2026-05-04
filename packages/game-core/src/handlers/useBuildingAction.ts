@@ -26,6 +26,7 @@ import {
 } from "./garageBuildingActions";
 import { resolvePowerStationAction } from "./powerStationBuildingActions";
 import { resolveRecyclingCenterAction } from "./recyclingCenterBuildingActions";
+import { resolveSchoolAction } from "./schoolBuildingActions";
 import { resolveSmugglingTunnelAction } from "./smugglingTunnelBuildingActions";
 import { resolveStripClubAction } from "./stripClubBuildingActions";
 import { createPlayerPoliceState, resolveWantedLevel } from "./playerPoliceState";
@@ -167,7 +168,17 @@ export const handleUseBuildingAction = (
         tickRateMs: context.config.tickRateMs
       })
     : null;
-  const specialResolution = casinoResolution ?? exchangeOfficeResolution ?? arcadeResolution ?? apartmentBlockResolution ?? clinicResolution ?? recyclingCenterResolution ?? stripClubResolution ?? powerStationResolution ?? smugglingTunnelResolution;
+  const schoolResolution = !casinoResolution && !exchangeOfficeResolution && !arcadeResolution && !apartmentBlockResolution && !clinicResolution && !recyclingCenterResolution && !stripClubResolution && !powerStationResolution && !smugglingTunnelResolution && context.config.balance.school
+    ? resolveSchoolAction({
+        state,
+        building,
+        actionId: action.actionId,
+        balances: nextBalances,
+        config: context.config.balance.school,
+        tickRateMs: context.config.tickRateMs
+      })
+    : null;
+  const specialResolution = casinoResolution ?? exchangeOfficeResolution ?? arcadeResolution ?? apartmentBlockResolution ?? clinicResolution ?? recyclingCenterResolution ?? stripClubResolution ?? powerStationResolution ?? smugglingTunnelResolution ?? schoolResolution;
   const resolvedAction: BuildingActionBalanceConfig = specialResolution
     ? {
         ...action,
@@ -266,7 +277,8 @@ export const handleUseBuildingAction = (
     recyclingResult: recyclingCenterResolution?.recyclingResult,
     stripClubResult: stripClubResolution?.stripClubResult,
     powerStationResult: powerStationResolution?.powerStationResult,
-    smugglingTunnelResult: smugglingTunnelResolution?.smugglingTunnelResult
+    smugglingTunnelResult: smugglingTunnelResolution?.smugglingTunnelResult,
+    schoolResult: schoolResolution?.schoolResult
   });
   const nextEffectState = createDistrictBuildingActionEffectState({
     state,
@@ -461,6 +473,7 @@ const createBuildingActionReportNotification = (input: {
   stripClubResult?: Record<string, unknown>;
   powerStationResult?: Record<string, unknown>;
   smugglingTunnelResult?: Record<string, unknown>;
+  schoolResult?: Record<string, unknown>;
   tick: number;
   eventId: string;
 }): Notification =>
@@ -497,6 +510,7 @@ const createBuildingActionReportNotification = (input: {
       stripClubResult: input.stripClubResult,
       powerStationResult: input.powerStationResult,
       smugglingTunnelResult: input.smugglingTunnelResult,
+      schoolResult: input.schoolResult,
       heatGain: input.action.heatGain,
       influenceChange: input.action.influenceChange,
       effectModifiers: input.action.effectModifiers,

@@ -113,6 +113,17 @@ export const publicDistrictBuildingSetPools: Record<string, PublicDistrictBuildi
   ]
 };
 
+const downtownFixedBuildingSetByDistrictId: Record<string, PublicDistrictBuildingSet> = {
+  "79": set("downtown", "core", "downtown-fixed-79", "Elitní arbitráž", ["court", "vip_lounge"]),
+  "80": set("downtown", "core", "downtown-fixed-80", "Městské finance", ["central_bank"]),
+  "81": set("downtown", "core", "downtown-fixed-81", "Politický vliv", ["lobby_club"]),
+  "82": set("downtown", "core", "downtown-fixed-82", "Volatilní kapitál", ["stock_exchange"]),
+  "83": set("downtown", "core", "downtown-fixed-83", "Právní tlak", ["court"]),
+  "58": set("downtown", "core", "downtown-fixed-58", "Městská kontrola", ["city_hall"]),
+  "57": set("downtown", "core", "downtown-fixed-57", "Lobby síť", ["lobby_club"]),
+  "59": set("downtown", "core", "downtown-fixed-59", "VIP patro", ["vip_lounge"])
+};
+
 const tierOrderByZone: Record<string, string[]> = {
   commercial: ["early", "mid", "top"],
   residential: ["early", "mid", "late"],
@@ -151,6 +162,12 @@ export const resolveDistrictBuildingSet = (
     : null;
   if (directSet) {
     return directSet;
+  }
+  const fixedDowntownSet = zone === "downtown"
+    ? downtownFixedBuildingSetByDistrictId[normalizeDistrictIdKey(input.districtId)]
+    : null;
+  if (fixedDowntownSet) {
+    return fixedDowntownSet;
   }
   const tier = resolveDistrictTier(zone, input.districtId, input.buildingTier);
   const tierPool = pool.filter((candidate) => candidate.tier === tier);
@@ -191,6 +208,11 @@ function normalizeBuildingName(value: string): string {
     .toLowerCase()
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
+}
+
+function normalizeDistrictIdKey(value: string): string {
+  const match = String(value || "").match(/\d+/u);
+  return match?.[0] ?? "";
 }
 
 const hashDistrictSeed = (seed: string): number => {

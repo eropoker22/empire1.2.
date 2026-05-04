@@ -12,6 +12,7 @@ import type {
   RecruitmentCenterBalanceConfig,
   RecyclingCenterBalanceConfig,
   RestaurantBalanceConfig,
+  SchoolBalanceConfig,
   ShoppingMallBalanceConfig,
   SmugglingTunnelBalanceConfig,
   StripClubBalanceConfig
@@ -40,6 +41,7 @@ export interface DistrictPanelProjectionInput {
   garageConfig?: GarageBalanceConfig;
   carDealerConfig?: CarDealerBalanceConfig;
   smugglingTunnelConfig?: SmugglingTunnelBalanceConfig;
+  schoolConfig?: SchoolBalanceConfig;
   recyclingCenterConfig?: RecyclingCenterBalanceConfig;
   productionMultiplier: number;
   tickRateMs?: number;
@@ -102,6 +104,7 @@ export const createDistrictPanelView = (
       garageConfig: input.garageConfig,
       carDealerConfig: input.carDealerConfig,
       smugglingTunnelConfig: input.smugglingTunnelConfig,
+      schoolConfig: input.schoolConfig,
       recyclingCenterConfig: input.recyclingCenterConfig,
       district,
       playerId: input.playerId,

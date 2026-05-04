@@ -1267,6 +1267,28 @@ function applyHexAlpha(hexColor, alphaHex = "ff") {
   return normalizedColor ? `${normalizedColor}${normalizedAlpha}` : `#67e1ff${normalizedAlpha}`;
 }
 
+function resolveRuntimeAssetUrl(source) {
+  const normalizedSource = String(source || "").trim();
+  if (!normalizedSource) {
+    return "";
+  }
+
+  try {
+    return new URL(normalizedSource, window.location.href).href;
+  } catch {
+    return normalizedSource;
+  }
+}
+
+function formatCssUrlValue(source) {
+  const resolvedSource = resolveRuntimeAssetUrl(source);
+  if (!resolvedSource) {
+    return "none";
+  }
+
+  return `url("${String(resolvedSource).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}")`;
+}
+
 function getCurrentPlayerGangColor() {
   const registration = getStoredRegistration();
   return normalizeRuntimeHexColor(registration?.gangColor) || getRegistrationAccentColor(registration?.factionId || "mafian");
@@ -7335,6 +7357,11 @@ function getLaunchPlayerAvatar(ownerId) {
     if (registration?.avatar) {
       return String(registration.avatar).trim();
     }
+
+    const legacyAvatar = String(window.localStorage.getItem("empire_avatar") || "").trim();
+    if (legacyAvatar) {
+      return legacyAvatar;
+    }
   }
 
   const factionId = getLaunchPlayerFactionId(ownerId);
@@ -7566,8 +7593,7 @@ const namedDowntownExchanges = [
 ];
 
 const namedDowntownCentralBanks = [
-  "Iron Reserve Bank",
-  "Obsidian Central Vault"
+  "Iron Reserve Bank"
 ];
 
 const namedDowntownAirports = [
@@ -7576,13 +7602,11 @@ const namedDowntownAirports = [
 
 const namedDowntownLobbyClubs = [
   "Velvet Influence Club",
-  "Shadow Lobby Lounge",
-  "Golden Circle Club"
+  "Shadow Lobby Lounge"
 ];
 
 const namedDowntownCityHalls = [
-  "City Dominion Hall",
-  "Urban Control Center"
+  "City Dominion Hall"
 ];
 
 const namedDowntownParliaments = [
@@ -7597,8 +7621,7 @@ const namedDowntownPorts = [
 
 const namedDowntownCourts = [
   "High Justice Court",
-  "Iron Verdict Hall",
-  "Obsidian Tribunal"
+  "Iron Verdict Hall"
 ];
 
 const namedDowntownVipLounges = [
@@ -8023,7 +8046,7 @@ const DISTRICT_BUILDING_MINUTE_INCOME_RULES_EMPIRE2 = Object.freeze({
   Garage: Object.freeze({ clean: 42, dirty: 0 }),
   Klinika: Object.freeze({ clean: 55, dirty: 0 }),
   "Rekrutační centrum": Object.freeze({ clean: 35, dirty: 0 }),
-  "Škola": Object.freeze({ clean: 4.4, dirty: 1 }),
+  "Škola": Object.freeze({ clean: 18, dirty: 0 }),
   "Drug lab": Object.freeze({ clean: 1.5, dirty: 2 }),
   "Pašovací tunel": Object.freeze({ clean: 0, dirty: 62 }),
   "Pouliční dealeři": Object.freeze({ clean: 0.1, dirty: 4.5 }),
@@ -8054,6 +8077,7 @@ const DISTRICT_BUILDING_MINUTE_HEAT_RULES_EMPIRE2 = Object.freeze({
   Garage: Object.freeze({ heat: 0.06 }),
   Klinika: Object.freeze({ heat: 0.03 }),
   "Rekrutační centrum": Object.freeze({ heat: 0.07 }),
+  "Škola": Object.freeze({ heat: 0 }),
   "Večerka": Object.freeze({ heat: 0.05 }),
   "Recyklační centrum": Object.freeze({ heat: 0.08 })
 });
@@ -8072,6 +8096,7 @@ const DISTRICT_BUILDING_MINUTE_INFLUENCE_RULES_EMPIRE2 = Object.freeze({
   Garage: Object.freeze({ influence: 0 }),
   Klinika: Object.freeze({ influence: 0 }),
   "Rekrutační centrum": Object.freeze({ influence: 0 }),
+  "Škola": Object.freeze({ influence: 0.05 }),
   "Večerka": Object.freeze({ influence: 0.1 }),
   "Recyklační centrum": Object.freeze({ influence: 0 })
 });
@@ -8204,6 +8229,17 @@ const DISTRICT_BUILDING_PACKAGE_POOLS = Object.freeze({
   })
 });
 
+const DOWNTOWN_FIXED_BUILDING_PACKAGES_BY_DISTRICT_ID = Object.freeze({
+  79: Object.freeze({ key: "downtown-fixed-79", tier: "core", title: "Elitní arbitráž", buildings: Object.freeze(["Soud", "VIP salonek"]) }),
+  80: Object.freeze({ key: "downtown-fixed-80", tier: "core", title: "Městské finance", buildings: Object.freeze(["Centrální banka"]) }),
+  81: Object.freeze({ key: "downtown-fixed-81", tier: "core", title: "Politický vliv", buildings: Object.freeze(["Lobby klub"]) }),
+  82: Object.freeze({ key: "downtown-fixed-82", tier: "core", title: "Volatilní kapitál", buildings: Object.freeze(["Burza"]) }),
+  83: Object.freeze({ key: "downtown-fixed-83", tier: "core", title: "Právní tlak", buildings: Object.freeze(["Soud"]) }),
+  58: Object.freeze({ key: "downtown-fixed-58", tier: "core", title: "Městská kontrola", buildings: Object.freeze(["Magistrát"]) }),
+  57: Object.freeze({ key: "downtown-fixed-57", tier: "core", title: "Lobby síť", buildings: Object.freeze(["Lobby klub"]) }),
+  59: Object.freeze({ key: "downtown-fixed-59", tier: "core", title: "VIP patro", buildings: Object.freeze(["VIP salonek"]) })
+});
+
 function formatDistrictBuildingTierLabel(tier) {
   switch (String(tier || "").trim().toLowerCase()) {
     case "early":
@@ -8276,6 +8312,14 @@ function resolveDistrictBuildingPackage(district) {
   const districtType = DISTRICT_BUILDING_TYPE_META[district?.districtType]
     ? district.districtType
     : "resident";
+  const fixedDowntownPackage = districtType === "downtown"
+    ? DOWNTOWN_FIXED_BUILDING_PACKAGES_BY_DISTRICT_ID[Number(district?.id || 0)]
+    : null;
+
+  if (fixedDowntownPackage) {
+    return fixedDowntownPackage;
+  }
+
   const tier = resolveDistrictBuildingTier({ ...district, districtType });
   const poolsByTier = DISTRICT_BUILDING_PACKAGE_POOLS[districtType] || DISTRICT_BUILDING_PACKAGE_POOLS.resident;
   const pool = poolsByTier[tier]
@@ -8933,9 +8977,9 @@ const DISTRICT_BUILDING_DETAIL_PROFILES = Object.freeze({
     actions: Object.freeze(["Stabilizační protokol"])
   }),
   skola: Object.freeze({
-    role: "Výcvik",
-    info: "Škola zvyšuje kvalitu místní sítě a podporuje dlouhodobý růst vlivu.",
-    actions: Object.freeze(["Trénovat členy", "Zvýšit disciplínu", "Budovat vliv"])
+    role: "Population / education / talent support / city life",
+    info: "Škola generuje malé peníze, trochu obyvatel a talenty. Není to kasárna. Je to místo, kde město vyrábí chytřejší lidi.",
+    actions: Object.freeze(["Večerní kurz"])
   }),
   restaurace: Object.freeze({
     role: "Cashflow",
@@ -9048,6 +9092,9 @@ function getDistrictBuildingDetailProfile(buildingName) {
 const DISTRICT_BUILDING_SPECIAL_ACTION_PROFILES = Object.freeze({
   "bytovy blok": Object.freeze([
     Object.freeze({ apartmentCollectPopulation: true, cooldownMs: 0, summary: "Přesune lokálně uložené obyvatele do globální populace gangu." })
+  ]),
+  skola: Object.freeze([
+    Object.freeze({ schoolEveningCourse: true, cleanCost: 600, durationMs: 8 * 60 * 1000, cooldownMs: 20 * 60 * 1000, populationBoostPct: 60, talentChanceBonusPct: 12, betterTalentChancePct: 20, cleanIncomeBoostPct: 20, summary: "Večerní kurz zvedne studenty, šanci na talent a čistý příjem Školy." })
   ]),
   restaurace: Object.freeze([
     Object.freeze({ clean: 180, dirty: 90, heat: 1, summary: "Lokální tržby přepsány do zdrojů." }),
@@ -9172,6 +9219,28 @@ const APARTMENT_BLOCK_NETWORK_CONFIG = Object.freeze({
   capacityBonusPctPerExtraBlock: 8,
   maxPopulationProductionMultiplier: 1.55,
   maxCapacityMultiplier: 1.75
+});
+const SCHOOL_CONFIG = Object.freeze({
+  countOnMap: 6,
+  cleanCashPerMinute: 18,
+  influencePerMinute: 0.05,
+  populationPerMinute: 0.55,
+  baseStudentCapacity: 20,
+  populationProductionBonusPctPerExtraSchool: 8,
+  studentCapacityBonusPctPerExtraSchool: 10,
+  incomeBonusPctPerExtraSchool: 4,
+  maxPopulationProductionMultiplier: 1.4,
+  maxStudentCapacityMultiplier: 1.5,
+  maxIncomeMultiplier: 1.2,
+  baseTalentChancePct: 12,
+  talentChancePctPerExtraSchool: 5,
+  maxTalentChancePct: 38,
+  eveningCourseTalentChanceBonusPct: 12,
+  eveningCourseDurationMs: 8 * 60 * 1000,
+  eveningCourseCooldownMs: 20 * 60 * 1000,
+  eveningCourseCleanCost: 600,
+  eveningCoursePopulationMultiplier: 1.6,
+  eveningCourseCleanIncomeMultiplier: 1.2
 });
 const WAREHOUSE_BASE_STORAGE_CAPACITIES = Object.freeze({
   genericResources: 500,
@@ -9412,6 +9481,74 @@ function getApartmentBlockNetworkMultipliers(count = getOwnedApartmentBlockCount
       APARTMENT_BLOCK_NETWORK_CONFIG.maxCapacityMultiplier,
       1 + extra * APARTMENT_BLOCK_NETWORK_CONFIG.capacityBonusPctPerExtraBlock / 100
     )
+  };
+}
+
+function getOwnedSchoolCount() {
+  const interactionState = {
+    ownedDistrictIds: new Set(getResolvedWorldState().ownedDistrictIds || []),
+    gamePhase: getResolvedWorldState().phase || "live"
+  };
+  const ownedDistrictIds = getCurrentPlayerOwnedDistrictIds(interactionState);
+  return getDistrictResourceCatalog().reduce((count, district) => {
+    if (!ownedDistrictIds.has(Number(district.id))) return count;
+    const profile = resolveDistrictBuildingProfile(district);
+    const hasSchool = (profile?.buildings || []).some((building) => normalizeBuildingLookupKey(building.baseName) === "skola");
+    return count + (hasSchool ? 1 : 0);
+  }, 0);
+}
+
+function getSchoolNetworkMultipliers(count = getOwnedSchoolCount()) {
+  const extra = Math.max(0, Math.floor(Number(count || 0)) - 1);
+  return {
+    populationProductionMultiplier: Math.min(SCHOOL_CONFIG.maxPopulationProductionMultiplier, 1 + extra * SCHOOL_CONFIG.populationProductionBonusPctPerExtraSchool / 100),
+    studentCapacityMultiplier: Math.min(SCHOOL_CONFIG.maxStudentCapacityMultiplier, 1 + extra * SCHOOL_CONFIG.studentCapacityBonusPctPerExtraSchool / 100),
+    incomeMultiplier: Math.min(SCHOOL_CONFIG.maxIncomeMultiplier, 1 + extra * SCHOOL_CONFIG.incomeBonusPctPerExtraSchool / 100)
+  };
+}
+
+function getSchoolTalentChancePct(count = getOwnedSchoolCount(), eveningCourseActive = false) {
+  const extra = Math.max(0, Math.floor(Number(count || 0)) - 1);
+  const baseChance = Math.min(SCHOOL_CONFIG.maxTalentChancePct, SCHOOL_CONFIG.baseTalentChancePct + extra * SCHOOL_CONFIG.talentChancePctPerExtraSchool);
+  return Math.min(100, baseChance + (eveningCourseActive ? SCHOOL_CONFIG.eveningCourseTalentChanceBonusPct : 0));
+}
+
+function getSchoolTalentLabel(talentId) {
+  const labels = {
+    technician: "Technik",
+    informant: "Informátor",
+    medic: "Medik",
+    negotiator: "Vyjednavač",
+    organizer: "Organizátor",
+    protector: "Ochránce"
+  };
+  return labels[talentId] || "Talent";
+}
+
+function getSchoolTalentSummary(talentId) {
+  const summaries = {
+    technician: "Technik umí zrychlit výrobu ve Zbrojovce nebo Továrně.",
+    informant: "Informátor přinesl slabý civilní drb z okolí Školy.",
+    medic: "Medik zná levnější postup pro stabilizaci zraněných.",
+    negotiator: "Vyjednavač umí vytěžit z města drobný vliv.",
+    organizer: "Organizátor umí zkrátit logistické zdržení.",
+    protector: "Ochránce umí krátce podržet obranu nejbližšího vlastního districtu."
+  };
+  return summaries[talentId] || "malá výhoda zapsaná do uličních zpráv";
+}
+
+function rollSchoolTalent(chancePct, eveningCourseActive = false) {
+  if (Math.random() >= Math.max(0, Number(chancePct || 0)) / 100) {
+    return null;
+  }
+  const regularPool = ["technician", "informant", "medic", "negotiator", "organizer", "protector"];
+  const betterPool = ["technician", "medic", "organizer", "protector", "negotiator", "informant"];
+  const pool = eveningCourseActive && Math.random() < 0.2 ? betterPool : regularPool;
+  const talentId = pool[Math.floor(Math.random() * pool.length)] || "informant";
+  return {
+    id: talentId,
+    label: getSchoolTalentLabel(talentId),
+    summary: getSchoolTalentSummary(talentId)
   };
 }
 
@@ -9662,10 +9799,11 @@ function getDistrictBuildingDetailEntry(district, buildingName) {
   const key = getDistrictBuildingDetailStorageKey(district, buildingName);
   const entry = state[key] && typeof state[key] === "object" ? state[key] : {};
   const isApartmentBlock = normalizeBuildingLookupKey(buildingName) === "bytovy blok";
+  const isSchool = normalizeBuildingLookupKey(buildingName) === "skola";
   const level = Math.max(1, Math.min(DISTRICT_BUILDING_DETAIL_MAX_LEVEL, Math.floor(Number(entry.level || 1))));
   const lastCollectedAt = Number.isFinite(Number(entry.lastCollectedAt))
     ? Number(entry.lastCollectedAt)
-    : isApartmentBlock
+    : isApartmentBlock || isSchool
       ? Date.now()
       : Date.now() - DISTRICT_BUILDING_DETAIL_DEFAULT_ACCRUAL_MS;
   const actionCooldowns = entry.actionCooldowns && typeof entry.actionCooldowns === "object"
@@ -9676,7 +9814,6 @@ function getDistrictBuildingDetailEntry(district, buildingName) {
         .filter((effect) => effect && typeof effect === "object")
         .filter((effect) => Number(effect.expiresAt || 0) > Date.now())
     : [];
-
   return {
     level,
     lastCollectedAt,
@@ -9693,6 +9830,21 @@ function getDistrictBuildingDetailEntry(district, buildingName) {
       : APARTMENT_BLOCK_BASE_CAPACITY,
     populationFullNotifiedAt: Number.isFinite(Number(entry.populationFullNotifiedAt))
       ? Number(entry.populationFullNotifiedAt)
+      : 0,
+    storedStudents: Math.max(0, Number(entry.storedStudents || 0)),
+    schoolLastUpdatedAt: Number.isFinite(Number(entry.schoolLastUpdatedAt))
+      ? Number(entry.schoolLastUpdatedAt)
+      : isSchool
+        ? Date.now()
+        : lastCollectedAt,
+    studentCapacity: Number.isFinite(Number(entry.studentCapacity))
+      ? Math.max(1, Math.floor(Number(entry.studentCapacity)))
+      : SCHOOL_CONFIG.baseStudentCapacity,
+    studentFullNotifiedAt: Number.isFinite(Number(entry.studentFullNotifiedAt))
+      ? Number(entry.studentFullNotifiedAt)
+      : 0,
+    schoolEveningCourseExpiresAt: Number.isFinite(Number(entry.schoolEveningCourseExpiresAt))
+      ? Number(entry.schoolEveningCourseExpiresAt)
       : 0
   };
 }
@@ -9738,6 +9890,7 @@ function getDistrictBuildingActionDescription(action, mechanics, buildingName = 
       actionProfile.arcadeBackCashdesk ? `Pere ${actionProfile.dirtySharePct}% aktuálního dirty cash, max ${formatDistrictBuildingMoney(mechanics.arcadeLaunderingCapacity || actionProfile.maxDirty)}` : "",
       actionProfile.apartmentCollectPopulation ? `Vybere ${mechanics.apartmentWholePopulation}/${mechanics.apartmentCapacity} obyvatel do členů gangu` : "",
       actionProfile.clinicStabilizationProtocol ? `Cena ${formatDistrictBuildingMoney(actionProfile.cleanCost)} · recovery ${mechanics.clinicRecoveryRatePct}% · pool ${mechanics.clinicRecoveryPool?.totalFreshAmount || 0} položek` : "",
+      actionProfile.schoolEveningCourse ? `Cena ${formatDistrictBuildingMoney(actionProfile.cleanCost)} · studenti +${actionProfile.populationBoostPct}% · talent +${actionProfile.talentChanceBonusPct}% · clean income +${actionProfile.cleanIncomeBoostPct}%` : "",
       actionProfile.clean ? `Clean +${formatDistrictBuildingMoney(actionProfile.clean)}` : "",
       actionProfile.dirty ? `Dirty +${formatDistrictBuildingMoney(actionProfile.dirty)}` : "",
       actionProfile.influence ? `Vliv +${actionProfile.influence}` : "",
@@ -9792,6 +9945,7 @@ function formatDistrictBuildingOutputProfile(profile = {}) {
     profile.arcadeBackCashdesk ? `Vypere ${profile.dirtySharePct}% dirty cash, max ${formatDistrictBuildingMoney(profile.maxDirty)} · fee ${profile.feePct}%` : "",
     profile.apartmentCollectPopulation ? "Přesune uložené obyvatele do členů gangu" : "",
     profile.clinicStabilizationProtocol ? `Recovery pool · cena ${formatDistrictBuildingMoney(profile.cleanCost)} clean · heat +${profile.heat}` : "",
+    profile.schoolEveningCourse ? `Večerní kurz · cena ${formatDistrictBuildingMoney(profile.cleanCost)} clean · studenti +${profile.populationBoostPct}% · talent +${profile.talentChanceBonusPct}%` : "",
     profile.clean ? `Clean +${formatDistrictBuildingMoney(profile.clean)}` : "",
     profile.dirty ? `Dirty +${formatDistrictBuildingMoney(profile.dirty)}` : "",
     profile.exchangeDirty ? `Převod dirty ${formatDistrictBuildingMoney(profile.exchangeDirty)} -> clean` : "",
@@ -9922,6 +10076,16 @@ function renderDistrictBuildingInfoSection(infoElement, {
         createDistrictBuildingInfoLine("Pravidla", "0 cash · 0 dirty · 0 heat · 0 vliv · žádný audit · žádné praní"),
         createDistrictBuildingInfoLine("Mapa", "Populační budova: 29x na mapě")
       );
+    } else if (mechanics.mechanicsType === "school") {
+      rows.push(
+        createDistrictBuildingInfoLine("Lokální studenti", `${mechanics.schoolWholeStudents}/${mechanics.schoolCapacity} studentů`),
+        createDistrictBuildingInfoLine("Čas do naplnění", mechanics.schoolIsFull ? "Plná kapacita" : formatDistrictBuildingCooldown(mechanics.schoolTimeToFullMs)),
+        createDistrictBuildingInfoLine("Network multiplier", `populace x${mechanics.schoolNetwork.populationProductionMultiplier.toFixed(2)} · kapacita x${mechanics.schoolNetwork.studentCapacityMultiplier.toFixed(2)} · income x${mechanics.schoolNetwork.incomeMultiplier.toFixed(2)}`),
+        createDistrictBuildingInfoLine("Talent Pool", `${mechanics.schoolTalentChancePct}% při výběru studentů`),
+        createDistrictBuildingInfoLine("Vlastněné školy", `${mechanics.ownedSchools}/${SCHOOL_CONFIG.countOnMap}`),
+        createDistrictBuildingInfoLine("Večerní kurz", mechanics.schoolEveningCourseActive ? `Aktivní ještě ${formatDistrictBuildingCooldown(mechanics.schoolEveningCourseRemainingMs)}` : `Cena ${formatDistrictBuildingMoney(SCHOOL_CONFIG.eveningCourseCleanCost)} clean · cooldown 20 min`),
+        createDistrictBuildingInfoLine("Pravidla", "Žádný dirty cash · žádný heat · žádné praní · žádný audit")
+      );
     } else if (mechanics.mechanicsType === "warehouse") {
       rows.push(
         createDistrictBuildingInfoLine("Vlastněné sklady", `${mechanics.ownedWarehouses}/18`),
@@ -10032,6 +10196,8 @@ function resolveDistrictBuildingDetailMechanics(district, buildingName) {
     ? CASINO_DETAIL_MAX_LEVEL
     : mechanicsType === "apartment-block"
       ? 1
+      : mechanicsType === "school"
+        ? 1
       : DISTRICT_BUILDING_DETAIL_MAX_LEVEL;
   const level = Math.max(1, Math.min(maxLevel, Math.floor(Number(entry.level || 1))));
   const casinoUpgrade = mechanicsType === "casino" ? getCasinoDetailUpgrade(level) : null;
@@ -10041,6 +10207,10 @@ function resolveDistrictBuildingDetailMechanics(district, buildingName) {
   const arcadeNetwork = mechanicsType === "arcade" ? getArcadeNetworkMultipliers(ownedArcades) : null;
   const ownedApartmentBlocks = mechanicsType === "apartment-block" ? getOwnedApartmentBlockCount() : 0;
   const apartmentNetwork = mechanicsType === "apartment-block" ? getApartmentBlockNetworkMultipliers(ownedApartmentBlocks) : null;
+  const ownedSchools = mechanicsType === "school" ? getOwnedSchoolCount() : 0;
+  const schoolNetwork = mechanicsType === "school" ? getSchoolNetworkMultipliers(ownedSchools) : null;
+  const schoolEveningCourseActive = mechanicsType === "school" && Number(entry.schoolEveningCourseExpiresAt || 0) > now;
+  const schoolTalentChancePct = mechanicsType === "school" ? getSchoolTalentChancePct(ownedSchools, schoolEveningCourseActive) : 0;
   const ownedWarehouses = mechanicsType === "warehouse" ? getOwnedWarehouseCount() : 0;
   const warehouseNetwork = mechanicsType === "warehouse" ? getWarehouseNetworkMultipliers(ownedWarehouses) : null;
   const warehouseCapacity = mechanicsType === "warehouse" ? getWarehouseCapacityBreakdown(ownedWarehouses) : null;
@@ -10073,6 +10243,8 @@ function resolveDistrictBuildingDetailMechanics(district, buildingName) {
     ? clinicNetwork.incomeMultiplier
     : fitnessClubNetwork
     ? fitnessClubNetwork.incomeMultiplier
+    : schoolNetwork
+    ? schoolNetwork.incomeMultiplier * (schoolEveningCourseActive ? SCHOOL_CONFIG.eveningCourseCleanIncomeMultiplier : 1)
     : autoSalonNetwork
     ? autoSalonNetwork.cleanIncomeMultiplier
     : casinoUpgrade
@@ -10128,6 +10300,26 @@ function resolveDistrictBuildingDetailMechanics(district, buildingName) {
   const apartmentTimeToFullMs = mechanicsType === "apartment-block" && !apartmentIsFull && apartmentPopulationPerMinute > 0
     ? Math.ceil((apartmentCapacity - apartmentStoredPopulation) / apartmentPopulationPerMinute * 60000)
     : 0;
+  const schoolCapacity = schoolNetwork
+    ? Math.max(1, Math.floor(SCHOOL_CONFIG.baseStudentCapacity * schoolNetwork.studentCapacityMultiplier))
+    : 0;
+  const schoolElapsedMs = mechanicsType === "school"
+    ? Math.max(0, now - Number(entry.schoolLastUpdatedAt || entry.lastCollectedAt || now))
+    : 0;
+  const schoolStoredBase = mechanicsType === "school"
+    ? Math.min(schoolCapacity, Math.max(0, Number(entry.storedStudents || 0)))
+    : 0;
+  const schoolPopulationPerMinute = schoolNetwork
+    ? SCHOOL_CONFIG.populationPerMinute * schoolNetwork.populationProductionMultiplier * (schoolEveningCourseActive ? SCHOOL_CONFIG.eveningCoursePopulationMultiplier : 1)
+    : 0;
+  const schoolStoredStudents = mechanicsType === "school"
+    ? Math.min(schoolCapacity, schoolStoredBase + (schoolStoredBase >= schoolCapacity ? 0 : schoolPopulationPerMinute * schoolElapsedMs / 60000))
+    : 0;
+  const schoolWholeStudents = Math.max(0, Math.floor(schoolStoredStudents));
+  const schoolIsFull = mechanicsType === "school" && schoolCapacity > 0 && schoolStoredStudents >= schoolCapacity;
+  const schoolTimeToFullMs = mechanicsType === "school" && !schoolIsFull && schoolPopulationPerMinute > 0
+    ? Math.ceil((schoolCapacity - schoolStoredStudents) / schoolPopulationPerMinute * 60000)
+    : 0;
   const smugglingBatchCapacity = smugglingTunnelNetwork
     ? Math.max(1, Math.floor(SMUGGLING_TUNNEL_CONFIG.baseBatchCapacity * smugglingTunnelNetwork.batchCapacityMultiplier * (smugglingSilentActive ? SMUGGLING_TUNNEL_CONFIG.silentChannelBatchCapacityMultiplier : 1)))
     : 0;
@@ -10155,21 +10347,27 @@ function resolveDistrictBuildingDetailMechanics(district, buildingName) {
     .filter(Boolean);
   const canCollect =
     mechanicsType === "apartment-block" && apartmentWholePopulation > 0
+    || mechanicsType === "school" && schoolWholeStudents > 0
     || mechanicsType === "smuggling-tunnel" && smugglingWholeDirtyCash >= SMUGGLING_TUNNEL_CONFIG.minCollectDirty;
   const hasManualCollect =
     mechanicsType === "apartment-block"
+    || mechanicsType === "school"
     || mechanicsType === "smuggling-tunnel";
   const storedOutputLabel = [
     mechanicsType === "apartment-block" ? `${apartmentWholePopulation}/${apartmentCapacity} obyvatel` : "",
+    mechanicsType === "school" ? `${schoolWholeStudents}/${schoolCapacity} studentů` : "",
     mechanicsType === "smuggling-tunnel" ? `${formatDistrictBuildingMoney(smugglingWholeDirtyCash)}/${formatDistrictBuildingMoney(smugglingBatchCapacity)} dirty` : ""
   ].filter(Boolean).join(" · ") || "Zatím nic";
   const effectsLabel = [
     cleanHourly > 0 ? `Clean cash +${formatDistrictBuildingMoney(cleanHourly)}/hod` : "",
     dirtyHourly > 0 ? `Dirty cash +${formatDistrictBuildingMoney(dirtyHourly)}/hod` : "",
     mechanicsType === "apartment-block" ? `Populace +${apartmentPopulationPerMinute.toFixed(2)}/min` : "",
+    mechanicsType === "school" ? `Studenti +${schoolPopulationPerMinute.toFixed(2)}/min` : "",
     mechanicsType === "smuggling-tunnel" ? `Dávka +${formatDistrictBuildingMoney(smugglingDirtyPerMinute)}/min` : "",
     apartmentIsFull ? "Plná kapacita · Bytový blok je plný. Obyvatelé čekají na vybrání." : "",
+    schoolIsFull ? "Plná kapacita · Škola je plná. Studenti čekají na vybrání." : "",
     smugglingIsFull ? "Dávka připravena · Pašovací tunel je plný. Dirty cash čeká na vybrání." : "",
+    mechanicsType === "school" ? `Talent chance ${schoolTalentChancePct}%` : "",
     ...warehouseWarnings,
     dailyHeat > 0 ? `Heat +${dailyHeat}/den` : "",
     dailyInfluence > 0 ? `Vliv +${dailyInfluence}/den` : "",
@@ -10208,6 +10406,17 @@ function resolveDistrictBuildingDetailMechanics(district, buildingName) {
     apartmentWholePopulation,
     apartmentIsFull,
     apartmentTimeToFullMs,
+    ownedSchools,
+    schoolNetwork,
+    schoolStoredStudents,
+    schoolCapacity,
+    schoolPopulationPerMinute,
+    schoolWholeStudents,
+    schoolIsFull,
+    schoolTimeToFullMs,
+    schoolTalentChancePct,
+    schoolEveningCourseActive,
+    schoolEveningCourseRemainingMs: Math.max(0, Number(entry.schoolEveningCourseExpiresAt || 0) - now),
     ownedWarehouses,
     warehouseNetwork,
     warehouseCapacity,
@@ -10329,6 +10538,53 @@ function collectDistrictBuildingDetailOutput(root, shell) {
       `${Math.floor(remainingPopulation)}/${mechanics.apartmentCapacity} zůstává lokálně`
     );
     appendBuildingActionResultEntry(root, "police", createStorageCollectResultPayload({ buildingLabel: context.buildingName, items: summary.map((value, index) => ({ label: `Položka ${index + 1}`, value })), meta: "Vybrat obyvatele", districtLabel: context.district?.id ? `District ${context.district.id}` : "Fixed building" }), {}, { syncPreview: true, forceLog: true });
+    refreshDistrictBuildingDetailPopup(root, shell);
+    return;
+  }
+
+  if (mechanics.mechanicsType === "school") {
+    const collectedStudents = Math.max(0, Math.floor(Number(mechanics.schoolStoredStudents || 0)));
+    if (collectedStudents <= 0) {
+      setBuildingActionFeedback(root, "warning", context.buildingName, "Škola zatím nemá studenty k vybrání.", "Počkej na další produkci.");
+      return;
+    }
+    const gangState = getResolvedGangState();
+    const talent = rollSchoolTalent(mechanics.schoolTalentChancePct, mechanics.schoolEveningCourseActive);
+    setStoredGangState({ members: Math.max(0, Math.floor(Number(gangState.members || 0)) + collectedStudents) });
+    renderGangMembersState(root);
+    updateDistrictBuildingDetailEntry(context.district, context.buildingName, (entry) => ({
+      ...entry,
+      storedStudents: 0,
+      schoolLastUpdatedAt: Date.now(),
+      studentCapacity: mechanics.schoolCapacity,
+      studentFullNotifiedAt: 0,
+      lastCollectedAt: Date.now()
+    }));
+    const talentLine = talent
+      ? `Uliční zpráva: ${talent.label} · ${talent.summary}`
+      : `Talent nepadl (${mechanics.schoolTalentChancePct}% šance).`;
+    setBuildingActionFeedback(
+      root,
+      "success",
+      context.buildingName,
+      `Vybral jsi ${collectedStudents} obyvatel ze Školy.`,
+      talentLine
+    );
+    appendBuildingActionResultEntry(root, "police", {
+      tone: talent ? "positive" : "event",
+      title: `${context.buildingName}: Talent Pool`,
+      badge: "Škola",
+      summary: talent
+        ? `${talent.label}: ${talent.summary}`
+        : `Vybral jsi ${collectedStudents} obyvatel ze Školy. Talent tentokrát nepadl.`,
+      rows: [
+        { label: "Budova", value: context.buildingName },
+        context.district?.id ? { label: "District", value: `District ${context.district.id}` } : null,
+        { label: "Vybráno", value: `${collectedStudents} obyvatel`, nowrap: true },
+        { label: "Talent", value: talent ? talent.label : "nepadl", nowrap: true },
+        talent ? { label: "Uliční zpráva", value: talent.summary } : null
+      ].filter(Boolean)
+    }, {}, { syncPreview: true, forceLog: true });
     refreshDistrictBuildingDetailPopup(root, shell);
     return;
   }
@@ -10527,6 +10783,35 @@ function applyDistrictBuildingSpecialAction(root, context, action, actionProfile
     economyChanged = true;
     summaryParts.push(`Tichý kanál aktivní na ${formatDistrictBuildingCooldown(SMUGGLING_TUNNEL_CONFIG.silentChannelDurationMs)}.`);
     summaryParts.push(`Riziko zátahu po skončení ${SMUGGLING_TUNNEL_CONFIG.silentChannelRaidChancePct} %.`);
+  }
+
+  if (actionProfile.schoolEveningCourse) {
+    const cost = Math.max(0, Math.floor(Number(actionProfile.cleanCost || 0)));
+    const activeUntil = Number(mechanics.actionCooldowns?.schoolEveningCourseActiveUntil || 0);
+    if (activeUntil > Date.now() || mechanics.schoolEveningCourseActive) {
+      const remaining = Math.max(0, Math.max(activeUntil, Date.now() + mechanics.schoolEveningCourseRemainingMs) - Date.now());
+      setBuildingActionFeedback(root, "warning", action, `Večerní kurz už běží. Zbývá ${formatDistrictBuildingCooldown(remaining)}.`, context.buildingName);
+      return null;
+    }
+    if (cleanMoney < cost) {
+      setBuildingActionFeedback(root, "warning", action, `Chybí ${formatDistrictBuildingMoney(cost - cleanMoney)} clean cash.`, context.buildingName);
+      return null;
+    }
+    cleanMoney -= cost;
+    const expiresAt = Date.now() + SCHOOL_CONFIG.eveningCourseDurationMs;
+    updateDistrictBuildingDetailEntry(context.district, context.buildingName, (entry) => ({
+      ...entry,
+      schoolEveningCourseExpiresAt: expiresAt,
+      schoolLastUpdatedAt: Date.now(),
+      actionCooldowns: {
+        ...(entry.actionCooldowns || {}),
+        schoolEveningCourse: Date.now() + SCHOOL_CONFIG.eveningCourseCooldownMs,
+        schoolEveningCourseActiveUntil: expiresAt
+      }
+    }));
+    economyChanged = true;
+    summaryParts.push(`Večerní kurz aktivní na ${formatDistrictBuildingCooldown(SCHOOL_CONFIG.eveningCourseDurationMs)}.`);
+    summaryParts.push(`Studenti +${actionProfile.populationBoostPct}% · talent +${actionProfile.talentChanceBonusPct}% · clean income +${actionProfile.cleanIncomeBoostPct}%.`);
   }
 
   if (actionProfile.clinicStabilizationProtocol) {
@@ -11246,7 +11531,11 @@ function openGenericDistrictBuildingDetail(root, district, buildingName, display
     collectButton.title = showManualCollect
       ? (mechanics.canCollect
           ? `Vybrat připravený výstup: ${mechanics.storedOutputLabel}`
-          : "Populace zatím není připravená k vybrání.")
+          : mechanics.mechanicsType === "school"
+            ? "Škola zatím nemá celé studenty k vybrání."
+            : mechanics.mechanicsType === "smuggling-tunnel"
+              ? `V tunelu musí být alespoň ${formatDistrictBuildingMoney(SMUGGLING_TUNNEL_CONFIG.minCollectDirty)} dirty cash.`
+              : "Populace zatím není připravená k vybrání.")
       : "";
   }
 
@@ -11296,6 +11585,19 @@ function openGenericDistrictBuildingDetail(root, district, buildingName, display
           createDistrictBuildingStat("Kapacita network", `x${mechanics.apartmentNetwork.capacityMultiplier.toFixed(2)}`),
           createDistrictBuildingStat("Cash / dirty / heat", "0 / 0 / 0"),
           createDistrictBuildingStat("Upgrade", "Bez upgradu")
+        );
+      } else if (mechanics.mechanicsType === "school") {
+        statRows.splice(0, statRows.length,
+          createDistrictBuildingStat("Clean / min", `+${formatDistrictBuildingMoney(mechanics.cleanHourly / 60)}`),
+          createDistrictBuildingStat("Vliv / min", `+${SCHOOL_CONFIG.influencePerMinute.toFixed(2)}`),
+          createDistrictBuildingStat("Studenti", `${mechanics.schoolWholeStudents}/${mechanics.schoolCapacity}`),
+          createDistrictBuildingStat("Populace / min", `+${mechanics.schoolPopulationPerMinute.toFixed(2)}`),
+          createDistrictBuildingStat("Do naplnění", mechanics.schoolIsFull ? "Plná kapacita" : formatDistrictBuildingCooldown(mechanics.schoolTimeToFullMs)),
+          createDistrictBuildingStat("Školy", `${mechanics.ownedSchools}/${SCHOOL_CONFIG.countOnMap}`),
+          createDistrictBuildingStat("Talent chance", `${mechanics.schoolTalentChancePct}%`),
+          createDistrictBuildingStat("Income network", `x${mechanics.schoolNetwork.incomeMultiplier.toFixed(2)}`),
+          createDistrictBuildingStat("Kapacita network", `x${mechanics.schoolNetwork.studentCapacityMultiplier.toFixed(2)}`),
+          createDistrictBuildingStat("Večerní kurz", mechanics.schoolEveningCourseActive ? formatDistrictBuildingCooldown(mechanics.schoolEveningCourseRemainingMs) : "Neaktivní")
         );
       } else if (mechanics.mechanicsType === "exchange") {
         statRows.splice(6, 0,
@@ -11393,6 +11695,14 @@ function openGenericDistrictBuildingDetail(root, district, buildingName, display
           createDistrictBuildingMechanicRow("Collect", mechanics.canCollect ? "Připraveno" : "Čeká na obyvatele"),
           createDistrictBuildingMechanicRow("Síť", mechanics.ownedApartmentBlocks > 1 ? "Zvyšuje produkci a kapacitu" : "První bytový blok")
         );
+      } else if (mechanics.mechanicsType === "school") {
+        mechanicsList.replaceChildren(
+          createDistrictBuildingMechanicRow("Lokální studenti", `${mechanics.schoolWholeStudents}/${mechanics.schoolCapacity}`),
+          createDistrictBuildingMechanicRow("Produkce", `+${mechanics.schoolPopulationPerMinute.toFixed(2)} obyv./min`),
+          createDistrictBuildingMechanicRow("Talent Pool", `${mechanics.schoolTalentChancePct}% při collectu`),
+          createDistrictBuildingMechanicRow("Výsledek talentu", "zapíše se do uličních zpráv"),
+          createDistrictBuildingMechanicRow("Pravidla", "žádný dirty cash · žádný heat · žádné praní · žádný audit")
+        );
       } else if (mechanics.mechanicsType === "warehouse") {
         mechanicsList.replaceChildren(
           createDistrictBuildingMechanicRow("Kapacita generic", `${mechanics.warehouseUsage.genericResources}/${mechanics.warehouseCapacity.genericResources}`),
@@ -11462,6 +11772,16 @@ function openGenericDistrictBuildingDetail(root, district, buildingName, display
     }));
   }
 
+  if (mechanics.mechanicsType === "school") {
+    updateDistrictBuildingDetailEntry(district, buildingName, (entry) => ({
+      ...entry,
+      storedStudents: mechanics.schoolStoredStudents,
+      schoolLastUpdatedAt: Date.now(),
+      studentCapacity: mechanics.schoolCapacity,
+      studentFullNotifiedAt: entry.studentFullNotifiedAt
+    }));
+  }
+
   if (mechanics.mechanicsType === "smuggling-tunnel") {
     updateDistrictBuildingDetailEntry(district, buildingName, (entry) => ({
       ...entry,
@@ -11485,6 +11805,21 @@ function openGenericDistrictBuildingDetail(root, district, buildingName, display
       populationFullNotifiedAt: Date.now()
     }));
     setBuildingActionFeedback(root, "warning", displayLabel, "Bytový blok je plný. Obyvatelé čekají na vybrání.", "Plná kapacita");
+  }
+
+  if (
+    mechanics.mechanicsType === "school"
+    && mechanics.schoolIsFull
+    && Number(detailEntry.studentFullNotifiedAt || 0) <= 0
+  ) {
+    updateDistrictBuildingDetailEntry(district, buildingName, (entry) => ({
+      ...entry,
+      storedStudents: mechanics.schoolStoredStudents,
+      schoolLastUpdatedAt: Date.now(),
+      studentCapacity: mechanics.schoolCapacity,
+      studentFullNotifiedAt: Date.now()
+    }));
+    setBuildingActionFeedback(root, "warning", displayLabel, "Škola je plná. Studenti čekají na vybrání.", "Plná kapacita");
   }
 
   if (
@@ -11550,6 +11885,10 @@ function openGenericDistrictBuildingDetail(root, district, buildingName, display
           ? `Potřebuješ ${formatDistrictBuildingMoney(SMUGGLING_TUNNEL_CONFIG.silentChannelDirtyCost)} dirty cash.`
         : actionProfile?.smugglingSilentChannel && mechanics.smugglingSilentActive
           ? `Tichý kanál běží. Zbývá ${formatDistrictBuildingCooldown(mechanics.smugglingSilentRemainingMs)}.`
+        : actionProfile?.schoolEveningCourse && Number(economyState.cleanMoney || 0) < Number(actionProfile.cleanCost || 0)
+          ? `Potřebuješ ${formatDistrictBuildingMoney(actionProfile.cleanCost)} clean cash.`
+        : actionProfile?.schoolEveningCourse && mechanics.schoolEveningCourseActive
+          ? `Večerní kurz běží. Zbývá ${formatDistrictBuildingCooldown(mechanics.schoolEveningCourseRemainingMs)}.`
         : actionProfile?.clinicStabilizationProtocol && Number(economyState.cleanMoney || 0) < Number(actionProfile.cleanCost || 0)
           ? `Potřebuješ ${formatDistrictBuildingMoney(actionProfile.cleanCost)} clean cash.`
         : actionProfile?.clinicStabilizationProtocol && (!mechanics.clinicRecoveryPool || mechanics.clinicRecoveryPool.fresh.length <= 0)
@@ -12012,7 +12351,7 @@ function getDistrictFillStyle(district, isNight, interactionState = {}) {
   }
 
   if (ownedDistrictIds.has(district.id)) {
-    const playerColor = getCurrentPlayerGangColor();
+    const playerColor = getLaunchPlayerColor(CURRENT_PLAYER_ID);
     return applyHexAlpha(playerColor, "33");
   }
 
@@ -13125,14 +13464,53 @@ function drawAllianceDistrictBadge(context, district, badge, isNight = true) {
     return;
   }
 
+  const playerColor = getLaunchPlayerColor(CURRENT_PLAYER_ID);
+  const [red, green, blue] = hexToRgbParts(playerColor);
+  const haloRadius = 19;
+  const symbolY = district.centerY - 0.5;
+  const primaryGlow = `rgba(${red}, ${green}, ${blue}, ${isNight ? 0.78 : 0.58})`;
+  const softGlow = isNight ? "rgba(168, 85, 247, 0.58)" : "rgba(34, 211, 238, 0.38)";
+  const halo = context.createRadialGradient(
+    district.centerX,
+    symbolY,
+    2,
+    district.centerX,
+    symbolY,
+    haloRadius
+  );
+  halo.addColorStop(0, `rgba(${red}, ${green}, ${blue}, ${isNight ? 0.3 : 0.2})`);
+  halo.addColorStop(0.58, isNight ? "rgba(168, 85, 247, 0.18)" : "rgba(34, 211, 238, 0.13)");
+  halo.addColorStop(1, "rgba(0, 0, 0, 0)");
+
   context.save();
-  context.font = "900 17px Bahnschrift, Segoe UI Symbol, Segoe UI Emoji, sans-serif";
+  context.beginPath();
+  context.arc(district.centerX, symbolY, haloRadius, 0, Math.PI * 2);
+  context.fillStyle = halo;
+  context.fill();
+
+  context.beginPath();
+  context.arc(district.centerX, symbolY, 14, 0, Math.PI * 2);
+  context.strokeStyle = `rgba(${red}, ${green}, ${blue}, ${isNight ? 0.42 : 0.3})`;
+  context.lineWidth = 1.25;
+  context.shadowBlur = isNight ? 16 : 10;
+  context.shadowColor = primaryGlow;
+  context.stroke();
+
+  context.font = "900 25px Bahnschrift, Segoe UI Symbol, Segoe UI Emoji, sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillStyle = isNight ? "rgba(224, 196, 255, 0.96)" : "rgba(99, 52, 212, 0.92)";
-  context.shadowBlur = isNight ? 22 : 16;
-  context.shadowColor = isNight ? "rgba(168, 85, 247, 0.84)" : "rgba(103, 225, 255, 0.42)";
-  context.fillText(String(badge.symbol), district.centerX, district.centerY);
+  context.lineWidth = 2.4;
+  context.strokeStyle = isNight ? "rgba(3, 8, 16, 0.92)" : "rgba(232, 246, 255, 0.72)";
+  context.fillStyle = isNight ? "rgba(245, 235, 255, 0.98)" : "rgba(255, 255, 255, 0.96)";
+  context.shadowBlur = isNight ? 28 : 20;
+  context.shadowColor = primaryGlow;
+  context.strokeText(String(badge.symbol), district.centerX, symbolY);
+  context.fillText(String(badge.symbol), district.centerX, symbolY);
+
+  context.fillStyle = isNight ? "rgba(191, 235, 255, 0.72)" : "rgba(68, 84, 196, 0.72)";
+  context.shadowBlur = isNight ? 18 : 12;
+  context.shadowColor = softGlow;
+  context.fillText(String(badge.symbol), district.centerX, symbolY - 0.5);
   context.restore();
 }
 
@@ -17815,13 +18193,18 @@ function bindPlayerProfilePopup(root) {
     const accentRgb = hexToRgbParts(accentColor).join(", ");
 
     if (avatarSrc) {
-      popupCard.style.setProperty("--player-popup-avatar-url", `url("${String(avatarSrc).replace(/"/g, '\\"')}")`);
+      const resolvedAvatarSrc = resolveRuntimeAssetUrl(avatarSrc);
+      popupCard.dataset.playerAvatarBg = "ready";
+      popupCard.style.setProperty("--player-popup-avatar-url", formatCssUrlValue(resolvedAvatarSrc));
+      popupCard.style.setProperty("--player-popup-avatar-opacity", "1");
       if (popupAvatar instanceof HTMLImageElement) {
-        popupAvatar.src = avatarSrc;
+        popupAvatar.src = resolvedAvatarSrc;
         popupAvatar.classList.remove("is-empty");
       }
     } else {
+      delete popupCard.dataset.playerAvatarBg;
       popupCard.style.setProperty("--player-popup-avatar-url", "none");
+      popupCard.style.setProperty("--player-popup-avatar-opacity", "0");
       if (popupAvatar instanceof HTMLImageElement) {
         popupAvatar.removeAttribute("src");
         popupAvatar.classList.add("is-empty");

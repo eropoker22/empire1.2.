@@ -312,9 +312,24 @@ function initMobileOverlayScrollLock(windowObj = window, documentObj = document)
     frameId = windowObj.requestAnimationFrame(applyLock);
   };
 
+  const shouldRefreshForMutation = (mutation) => {
+    const target = mutation.target;
+    if (!(target instanceof windowObj.Element)) {
+      return false;
+    }
+    if (target.matches(MOBILE_OVERLAY_SELECTOR)) {
+      return true;
+    }
+    return Boolean(target.closest(MOBILE_OVERLAY_SELECTOR));
+  };
+
   applyLock();
   if (typeof windowObj.MutationObserver === "function") {
-    const observer = new windowObj.MutationObserver(requestApply);
+    const observer = new windowObj.MutationObserver((mutations) => {
+      if (mutations.some(shouldRefreshForMutation)) {
+        requestApply();
+      }
+    });
     observer.observe(documentObj.body, {
       subtree: true,
       attributes: true,

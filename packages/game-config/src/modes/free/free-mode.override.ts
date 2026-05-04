@@ -10,6 +10,7 @@ import { freeModeFitnessClubConfig } from "../../public/free-mode-fitness-club-c
 import { freeModeGarageConfig } from "../../public/free-mode-garage-config";
 import { freeModePowerStationConfig } from "../../public/free-mode-power-station-config";
 import { freeModeRecyclingCenterConfig } from "../../public/free-mode-recycling-center-config";
+import { freeModeSchoolConfig } from "../../public/free-mode-school-config";
 import { freeModeSmugglingTunnelConfig } from "../../public/free-mode-smuggling-tunnel-config";
 import { freeModeRecruitmentCenterConfig } from "../../public/free-mode-recruitment-center-config";
 import { freeModeRestaurantConfig } from "../../public/free-mode-restaurant-config";
@@ -86,6 +87,13 @@ export const freeModeOverride: Partial<ResolvedGameModeConfig> = {
         dirtyPerHour: 0,
         heatPerDay: 0,
         influencePerDay: 0,
+        maxLevel: 1
+      },
+      school: {
+        cleanPerHour: freeModeSchoolConfig.cleanCashPerMinute * 60,
+        dirtyPerHour: 0,
+        heatPerDay: 0,
+        influencePerDay: freeModeSchoolConfig.influencePerMinute * 60 * 24,
         maxLevel: 1
       },
       warehouse: {
@@ -255,6 +263,36 @@ export const freeModeOverride: Partial<ResolvedGameModeConfig> = {
         requiredOwner: true,
         allowedIfContested: false,
         reportText: "Vybere obyvatele z lokálního zásobníku bytového bloku."
+      },
+      collect_students: {
+        actionId: "collect_students",
+        buildingType: "school",
+        label: "Vybrat studenty",
+        description: "Přesune lokálně uložené studenty ze Školy do globální populace a spustí Talent Pool roll.",
+        durationMs: 0,
+        cooldownMs: 0,
+        inputCost: {},
+        outputGain: {},
+        heatGain: 0,
+        influenceChange: 0,
+        requiredOwner: true,
+        allowedIfContested: false,
+        reportText: "Vybere studenty ze Školy a zkusí najít talent."
+      },
+      evening_course: {
+        actionId: "evening_course",
+        buildingType: "school",
+        label: "Večerní kurz",
+        description: "Na 8 minut zvýší produkci studentů, šanci na talent a čistý příjem konkrétní Školy.",
+        durationMs: freeModeSchoolConfig.eveningCourse.durationMinutes * 60 * 1000,
+        cooldownMs: freeModeSchoolConfig.eveningCourse.cooldownMinutes * 60 * 1000,
+        inputCost: { cash: freeModeSchoolConfig.eveningCourse.costCleanCash },
+        outputGain: {},
+        heatGain: 0,
+        influenceChange: 0,
+        requiredOwner: true,
+        allowedIfContested: false,
+        reportText: "Večerní kurz dočasně zvedne studenty, talent roll a clean income Školy."
       },
       night_machines: {
         actionId: "night_machines",
@@ -432,6 +470,7 @@ export const freeModeOverride: Partial<ResolvedGameModeConfig> = {
     exchangeOffice: freeModeExchangeOfficeConfig,
     arcade: freeModeArcadeConfig,
     apartmentBlock: freeModeApartmentBlockConfig,
+    school: freeModeSchoolConfig,
     warehouse: freeModeWarehouseConfig,
     clinic: freeModeClinicConfig,
     stripClub: freeModeStripClubConfig,

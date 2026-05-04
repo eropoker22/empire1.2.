@@ -13,6 +13,7 @@ export * from "./free-mode-fitness-club-config";
 export * from "./free-mode-garage-config";
 export * from "./free-mode-power-station-config";
 export * from "./free-mode-recycling-center-config";
+export * from "./free-mode-school-config";
 export * from "./free-mode-smuggling-tunnel-config";
 export * from "./free-mode-shopping-mall-config";
 export * from "./free-mode-restaurant-config";

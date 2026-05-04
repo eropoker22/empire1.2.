@@ -62,7 +62,15 @@ import {
   resolveSmugglingTunnelCollectHeat,
   resolveSmugglingTunnelNetworkMultipliers
 } from "../handlers/smugglingTunnelBuildingActions";
-import type { CarDealerBalanceConfig, FitnessClubBalanceConfig, GarageBalanceConfig, PowerStationBalanceConfig, RecruitmentCenterBalanceConfig, RecyclingCenterBalanceConfig, RestaurantBalanceConfig, ShoppingMallBalanceConfig, SmugglingTunnelBalanceConfig, StripClubBalanceConfig } from "../contracts/game-mode-config";
+import {
+  getOwnedSchoolCount,
+  getSchoolMetadata,
+  isEveningCourseActive,
+  resolveSchoolCapacity,
+  resolveSchoolNetworkMultipliers,
+  resolveSchoolTalentChancePct
+} from "../handlers/schoolBuildingActions";
+import type { CarDealerBalanceConfig, FitnessClubBalanceConfig, GarageBalanceConfig, PowerStationBalanceConfig, RecruitmentCenterBalanceConfig, RecyclingCenterBalanceConfig, RestaurantBalanceConfig, SchoolBalanceConfig, ShoppingMallBalanceConfig, SmugglingTunnelBalanceConfig, StripClubBalanceConfig } from "../contracts/game-mode-config";
 import type { ConvenienceStoreBalanceConfig } from "../contracts/game-mode-config";
 
 export interface CreateDistrictPanelBuildingViewsInput {
@@ -80,6 +88,7 @@ export interface CreateDistrictPanelBuildingViewsInput {
   garageConfig?: GarageBalanceConfig;
   carDealerConfig?: CarDealerBalanceConfig;
   smugglingTunnelConfig?: SmugglingTunnelBalanceConfig;
+  schoolConfig?: SchoolBalanceConfig;
   recyclingCenterConfig?: RecyclingCenterBalanceConfig;
   district: CoreGameState["districtsById"][string];
   playerId: string;
@@ -109,6 +118,7 @@ export const createDistrictPanelBuildingViews = (
       garageConfig: input.garageConfig,
       carDealerConfig: input.carDealerConfig,
       smugglingTunnelConfig: input.smugglingTunnelConfig,
+      schoolConfig: input.schoolConfig,
       recyclingCenterConfig: input.recyclingCenterConfig,
       district: input.district,
       playerId: input.playerId,
@@ -145,6 +155,7 @@ export const createDistrictPanelBuildingViews = (
         garageConfig: input.garageConfig,
         carDealerConfig: input.carDealerConfig,
         smugglingTunnelConfig: input.smugglingTunnelConfig,
+        schoolConfig: input.schoolConfig,
         recyclingCenterConfig: input.recyclingCenterConfig,
         tick: input.tick,
         tickRateMs: input.tickRateMs
@@ -174,6 +185,7 @@ const createBuildingStats = (input: {
   garageConfig?: GarageBalanceConfig;
   carDealerConfig?: CarDealerBalanceConfig;
   smugglingTunnelConfig?: SmugglingTunnelBalanceConfig;
+  schoolConfig?: SchoolBalanceConfig;
   recyclingCenterConfig?: RecyclingCenterBalanceConfig;
   tick: number;
   tickRateMs?: number;
@@ -262,6 +274,43 @@ const createBuildingStats = (input: {
       { label: "Collect heat now", value: `+${formatNumber(resolveSmugglingTunnelCollectHeat(stored, input.smugglingTunnelConfig))}` },
       { label: "Silent Channel", value: activeSilentChannel ? `active ${formatTickLabel(Math.max(0, Number(metadata.silentChannelExpiresAtTick || 0) - input.tick))}` : "ready when off cooldown" },
       { label: "Raid risk after boost", value: `${formatNumber(input.smugglingTunnelConfig.silentChannel.raidChancePct)} %` }
+    ];
+  }
+  if (input.building.buildingTypeId === "school" && input.schoolConfig && input.building.ownerPlayerId) {
+    const ownedCount = getOwnedSchoolCount(input.state, input.building.ownerPlayerId, input.schoolConfig);
+    const network = resolveSchoolNetworkMultipliers(ownedCount, input.schoolConfig);
+    const metadata = getSchoolMetadata(input.building, input.tick);
+    const eveningActive = isEveningCourseActive(metadata, input.tick);
+    const capacity = resolveSchoolCapacity({
+      state: input.state,
+      building: input.building,
+      config: input.schoolConfig
+    });
+    const stored = Math.min(capacity, metadata.storedStudents);
+    const productionPerMinute = input.schoolConfig.populationPerMinute
+      * network.populationProductionMultiplier
+      * (eveningActive ? input.schoolConfig.eveningCourse.populationProductionMultiplier : 1);
+    const timeToFullTicks = productionPerMinute > 0 && stored < capacity
+      ? Math.ceil((capacity - stored) / productionPerMinute * 60000 / Math.max(1, input.tickRateMs ?? 5000))
+      : 0;
+    const talentChancePct = resolveSchoolTalentChancePct({
+      ownedCount,
+      config: input.schoolConfig,
+      eveningCourseActive: eveningActive
+    });
+    return [
+      { label: "Clean / min", value: `$${formatNumber(input.schoolConfig.cleanCashPerMinute * network.incomeMultiplier * (eveningActive ? input.schoolConfig.eveningCourse.cleanIncomeMultiplier : 1))}` },
+      { label: "Influence / min", value: formatNumber(input.schoolConfig.influencePerMinute) },
+      { label: "Population / min", value: formatNumber(productionPerMinute) },
+      { label: "Students", value: `${formatNumber(Math.floor(stored))} / ${formatNumber(capacity)}` },
+      { label: "Time to full", value: stored >= capacity ? "Plná kapacita" : formatTickLabel(timeToFullTicks) },
+      { label: "Owned schools", value: `${ownedCount}/${input.schoolConfig.countOnMap}` },
+      { label: "Population multiplier", value: `x${formatNumber(network.populationProductionMultiplier)}` },
+      { label: "Capacity multiplier", value: `x${formatNumber(network.studentCapacityMultiplier)}` },
+      { label: "Income multiplier", value: `x${formatNumber(network.incomeMultiplier)}` },
+      { label: "Talent chance", value: `${formatNumber(talentChancePct)} %` },
+      { label: "Výsledek talentu", value: "jen uliční zprávy" },
+      { label: "Evening course", value: eveningActive ? `active ${formatTickLabel(Math.max(0, Number(metadata.eveningCourseExpiresAtTick || 0) - input.tick))}` : "ready when off cooldown" }
     ];
   }
   if (input.building.buildingTypeId === "fitness_club" && input.fitnessClubConfig && input.building.ownerPlayerId) {
@@ -514,6 +563,7 @@ const createBuildingActionViews = (input: {
   garageConfig?: GarageBalanceConfig;
   carDealerConfig?: CarDealerBalanceConfig;
   smugglingTunnelConfig?: SmugglingTunnelBalanceConfig;
+  schoolConfig?: SchoolBalanceConfig;
   recyclingCenterConfig?: RecyclingCenterBalanceConfig;
   building: CoreGameState["buildingsById"][string];
   district: CoreGameState["districtsById"][string];
@@ -562,6 +612,13 @@ const createBuildingActionViews = (input: {
         smugglingTunnelConfig: input.smugglingTunnelConfig,
         tick: input.tick
       });
+      const schoolDisabledReason = resolveSchoolDisabledReason({
+        state: input.state,
+        building: input.building,
+        action,
+        schoolConfig: input.schoolConfig,
+        tick: input.tick
+      });
       const disabledReason = ownerBlocked
         ? "Only the district owner can run this building action."
         : input.building.status !== "active"
@@ -576,11 +633,13 @@ const createBuildingActionViews = (input: {
                   ? recyclingCenterDisabledReason
                   : smugglingTunnelDisabledReason
                     ? smugglingTunnelDisabledReason
-                    : cooldownRemainingTicks > 0
-                      ? `Cooldown ${formatTickLabel(cooldownRemainingTicks)}.`
-                      : missingCosts.length > 0
-                        ? `Need ${formatInputSummary(Object.fromEntries(missingCosts))}.`
-                        : null;
+                    : schoolDisabledReason
+                      ? schoolDisabledReason
+                      : cooldownRemainingTicks > 0
+                        ? `Cooldown ${formatTickLabel(cooldownRemainingTicks)}.`
+                        : missingCosts.length > 0
+                          ? `Need ${formatInputSummary(Object.fromEntries(missingCosts))}.`
+                          : null;
 
       return {
         actionId: action.actionId,
@@ -737,6 +796,30 @@ const resolveSmugglingTunnelDisabledReason = (input: {
   const blockedUntil = Math.max(0, Number(metadata.silentChannelBlockedUntilTick || 0));
   if (blockedUntil > input.tick) {
     return `Uzavřený vstup ${formatTickLabel(blockedUntil - input.tick)}.`;
+  }
+  return null;
+};
+
+const resolveSchoolDisabledReason = (input: {
+  state: CoreGameState;
+  building: CoreGameState["buildingsById"][string];
+  action: BuildingActionBalanceConfig;
+  schoolConfig?: SchoolBalanceConfig;
+  tick: number;
+}): string | null => {
+  const config = input.schoolConfig;
+  if (!config || input.building.buildingTypeId !== config.buildingTypeId) {
+    return null;
+  }
+  const metadata = getSchoolMetadata(input.building, input.tick);
+  if (input.action.actionId === config.collectStudents.actionId) {
+    return metadata.storedStudents > 0 ? null : "Škola zatím nemá studenty k vybrání.";
+  }
+  if (input.action.actionId !== config.eveningCourse.actionId) {
+    return null;
+  }
+  if (isEveningCourseActive(metadata, input.tick)) {
+    return `Večerní kurz active ${formatTickLabel(Math.max(0, Number(metadata.eveningCourseExpiresAtTick || 0) - input.tick))}.`;
   }
   return null;
 };

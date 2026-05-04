@@ -79,6 +79,7 @@ export interface BuildingActionReport {
   stripClubResult?: Record<string, unknown>;
   powerStationResult?: Record<string, unknown>;
   smugglingTunnelResult?: Record<string, unknown>;
+  schoolResult?: Record<string, unknown>;
   heatGain: number;
   influenceChange: number;
   tick: number;

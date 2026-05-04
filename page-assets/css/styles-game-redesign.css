@@ -3364,6 +3364,8 @@ body.game-body--booting .game-logo-slot {
 }
 
 .player-popup-card {
+  --player-popup-avatar-url: none;
+  --player-popup-avatar-opacity: 0;
   --player-popup-border-color: rgba(34, 211, 238, 0.45);
   width: min(520px, calc(100vw - 28px));
   padding: 14px;
@@ -3379,21 +3381,20 @@ body.game-body--booting .game-logo-slot {
 }
 
 .player-popup-card::before {
-  opacity: 1;
-  background-image:
-    linear-gradient(rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.18)),
-    var(--player-popup-avatar-url);
+  opacity: var(--player-popup-avatar-opacity, 0);
+  background-image: var(--player-popup-avatar-url);
   background-size: cover;
-  background-position: center;
+  background-position: center 18%;
   background-repeat: no-repeat;
-  filter: saturate(1.08) contrast(1.02);
+  filter: saturate(1.18) contrast(1.08) brightness(0.78);
+  transform: scale(1.035);
 }
 
 .player-popup-card::after {
   background:
     radial-gradient(circle at 16% 8%, rgba(34, 211, 238, 0.18), transparent 32%),
     radial-gradient(circle at 86% 8%, rgba(244, 114, 182, 0.14), transparent 30%),
-    linear-gradient(180deg, rgba(5, 10, 18, 0.22) 0%, rgba(5, 10, 18, 0.38) 40%, rgba(5, 10, 18, 0.58) 100%);
+    linear-gradient(180deg, rgba(5, 10, 18, 0.26) 0%, rgba(5, 10, 18, 0.44) 42%, rgba(5, 10, 18, 0.66) 100%);
 }
 
 .player-popup-avatar-wrap {
@@ -3452,13 +3453,15 @@ body.game-body--booting .game-logo-slot {
   }
 
   .player-popup-card::before {
-    filter: saturate(1.18) contrast(1.1) brightness(1.1);
+    background-position: center 14%;
+    filter: saturate(1.2) contrast(1.1) brightness(0.82);
+    transform: scale(1.045);
   }
 
   .player-popup-card::after {
     background:
       radial-gradient(circle at 18% 0%, rgba(34, 211, 238, 0.16), transparent 34%),
-      linear-gradient(180deg, rgba(5, 10, 18, 0.28) 0%, rgba(5, 10, 18, 0.42) 40%, rgba(5, 10, 18, 0.56) 100%);
+      linear-gradient(180deg, rgba(5, 10, 18, 0.3) 0%, rgba(5, 10, 18, 0.46) 40%, rgba(5, 10, 18, 0.66) 100%);
   }
 
   .player-popup-header {

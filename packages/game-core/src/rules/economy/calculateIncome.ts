@@ -14,6 +14,7 @@ import { applyRecruitmentCenterIncomeModifiers } from "../../handlers/recruitmen
 import { applyRecyclingCenterIncomeModifiers } from "../../handlers/recyclingCenterBuildingActions";
 import { applyRestaurantIncomeModifiers } from "../../handlers/restaurantBuildingActions";
 import { applyShoppingMallIncomeModifiers } from "../../handlers/shoppingMallBuildingActions";
+import { applySchoolIncomeModifiers } from "../../handlers/schoolBuildingActions";
 import { applySmugglingTunnelIncomeModifiers } from "../../handlers/smugglingTunnelBuildingActions";
 import { applyStripClubIncomeModifiers } from "../../handlers/stripClubBuildingActions";
 import { applyWarehouseIncomeModifiers } from "../../handlers/warehouseBuilding";
@@ -313,9 +314,9 @@ const calculateFixedBuildingIncomeForDistrict = (
             influencePerDay: carDealerConfig.influencePerDay
           })
         : carDealerConfig;
-      const smugglingTunnelConfig = context.config.balance.smugglingTunnel
-        ? applySmugglingTunnelIncomeModifiers({
-            config: context.config.balance.smugglingTunnel,
+      const schoolConfig = context.config.balance.school
+        ? applySchoolIncomeModifiers({
+            config: context.config.balance.school,
             state,
             building,
             tick: state.root.tick,
@@ -325,6 +326,18 @@ const calculateFixedBuildingIncomeForDistrict = (
             influencePerDay: recyclingCenterConfig.influencePerDay
           })
         : recyclingCenterConfig;
+      const smugglingTunnelConfig = context.config.balance.smugglingTunnel
+        ? applySmugglingTunnelIncomeModifiers({
+            config: context.config.balance.smugglingTunnel,
+            state,
+            building,
+            tick: state.root.tick,
+            cleanPerHour: schoolConfig.cleanPerHour,
+            dirtyPerHour: schoolConfig.dirtyPerHour,
+            heatPerDay: schoolConfig.heatPerDay,
+            influencePerDay: schoolConfig.influencePerDay
+          })
+        : schoolConfig;
       const powerStationConfig = context.config.balance.powerStation
         ? applyPowerStationIncomeModifiers({
             config: context.config.balance.powerStation,

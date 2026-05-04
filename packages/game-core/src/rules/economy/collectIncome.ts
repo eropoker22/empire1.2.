@@ -21,6 +21,10 @@ import { applyRecyclingCenterIncomeModifiers } from "../../handlers/recyclingCen
 import { applyRestaurantIncomeModifiers, applyRestaurantPassiveRumors } from "../../handlers/restaurantBuildingActions";
 import { applyShoppingMallIncomeModifiers } from "../../handlers/shoppingMallBuildingActions";
 import {
+  applySchoolIncomeModifiers,
+  applySchoolStudentProduction
+} from "../../handlers/schoolBuildingActions";
+import {
   applySmugglingTunnelBatchProduction,
   applySmugglingTunnelIncomeModifiers
 } from "../../handlers/smugglingTunnelBuildingActions";
@@ -100,14 +104,17 @@ export const collectIncome = (state: CoreGameState, context?: GameCoreContext): 
   const apartmentState = context?.config.balance.apartmentBlock
     ? applyApartmentBlockPopulationProduction(arcadeAuditState, context.config.balance.apartmentBlock, context.config.tickRateMs, context.config.balance.powerStation, context.config.balance.recruitmentCenter)
     : arcadeAuditState;
+  const schoolState = context?.config.balance.school
+    ? applySchoolStudentProduction(apartmentState, context.config.balance.school, context.config.tickRateMs)
+    : apartmentState;
   const smugglingTunnelState = context?.config.balance.smugglingTunnel
     ? applySmugglingTunnelBatchProduction({
-        state: apartmentState,
+        state: schoolState,
         config: context.config.balance.smugglingTunnel,
         tickRateMs: context.config.tickRateMs,
         incomeMultiplier: context.config.balance.incomeMultiplier
       })
-    : apartmentState;
+    : schoolState;
   const stripClubRumorState = context?.config.balance.stripClub
     ? applyStripClubPassiveRumors(smugglingTunnelState, context.config.balance.stripClub, context.config.tickRateMs)
     : smugglingTunnelState;
@@ -312,9 +319,9 @@ const applyFixedBuildingPassivePressure = (
             influencePerDay: carDealerConfig.influencePerDay
           })
         : carDealerConfig;
-      const smugglingTunnelConfig = context.config.balance.smugglingTunnel
-        ? applySmugglingTunnelIncomeModifiers({
-            config: context.config.balance.smugglingTunnel,
+      const schoolConfig = context.config.balance.school
+        ? applySchoolIncomeModifiers({
+            config: context.config.balance.school,
             state,
             building,
             tick: state.root.tick,
@@ -324,6 +331,18 @@ const applyFixedBuildingPassivePressure = (
             influencePerDay: recyclingCenterConfig.influencePerDay
           })
         : recyclingCenterConfig;
+      const smugglingTunnelConfig = context.config.balance.smugglingTunnel
+        ? applySmugglingTunnelIncomeModifiers({
+            config: context.config.balance.smugglingTunnel,
+            state,
+            building,
+            tick: state.root.tick,
+            cleanPerHour: schoolConfig.cleanPerHour,
+            dirtyPerHour: schoolConfig.dirtyPerHour,
+            heatPerDay: schoolConfig.heatPerDay,
+            influencePerDay: schoolConfig.influencePerDay
+          })
+        : schoolConfig;
       const powerStationConfig = context.config.balance.powerStation
         ? applyPowerStationIncomeModifiers({
             config: context.config.balance.powerStation,
@@ -496,9 +515,9 @@ const applyFixedBuildingPassivePressure = (
             influencePerDay: carDealerConfig.influencePerDay
           })
         : carDealerConfig;
-      const smugglingTunnelConfig = context.config.balance.smugglingTunnel
-        ? applySmugglingTunnelIncomeModifiers({
-            config: context.config.balance.smugglingTunnel,
+      const schoolConfig = context.config.balance.school
+        ? applySchoolIncomeModifiers({
+            config: context.config.balance.school,
             state,
             building,
             tick: state.root.tick,
@@ -508,6 +527,18 @@ const applyFixedBuildingPassivePressure = (
             influencePerDay: recyclingCenterConfig.influencePerDay
           })
         : recyclingCenterConfig;
+      const smugglingTunnelConfig = context.config.balance.smugglingTunnel
+        ? applySmugglingTunnelIncomeModifiers({
+            config: context.config.balance.smugglingTunnel,
+            state,
+            building,
+            tick: state.root.tick,
+            cleanPerHour: schoolConfig.cleanPerHour,
+            dirtyPerHour: schoolConfig.dirtyPerHour,
+            heatPerDay: schoolConfig.heatPerDay,
+            influencePerDay: schoolConfig.influencePerDay
+          })
+        : schoolConfig;
       const powerStationConfig = context.config.balance.powerStation
         ? applyPowerStationIncomeModifiers({
             config: context.config.balance.powerStation,

@@ -9,6 +9,7 @@ import { validateClinicAction } from "../handlers/clinicBuildingActions";
 import { validateExchangeOfficeAction } from "../handlers/exchangeOfficeBuildingActions";
 import { validatePowerStationAction } from "../handlers/powerStationBuildingActions";
 import { validateRecyclingCenterAction } from "../handlers/recyclingCenterBuildingActions";
+import { validateSchoolAction } from "../handlers/schoolBuildingActions";
 import { validateSmugglingTunnelAction } from "../handlers/smugglingTunnelBuildingActions";
 import { validateStripClubAction } from "../handlers/stripClubBuildingActions";
 
@@ -245,6 +246,20 @@ export const validateRunBuildingAction = (
     errors.push({
       code: smugglingTunnelErrorCode,
       message: "Smuggling tunnel action preconditions are not met."
+    });
+  }
+
+  const schoolErrorCode = validateSchoolAction({
+    state,
+    building,
+    actionId: action.actionId,
+    balances,
+    config: context.config.balance.school
+  });
+  if (schoolErrorCode) {
+    errors.push({
+      code: schoolErrorCode,
+      message: "School action preconditions are not met."
     });
   }
 

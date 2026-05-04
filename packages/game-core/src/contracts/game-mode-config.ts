@@ -267,6 +267,57 @@ export interface ApartmentBlockBalanceConfig {
   };
 }
 
+export interface SchoolBalanceConfig {
+  id: "school";
+  buildingTypeId: "school";
+  countOnMap: number;
+  category: string[];
+  cleanCashPerMinute: number;
+  dirtyCashPerMinute: 0;
+  influencePerMinute: number;
+  heatPerMinute: 0;
+  populationPerMinute: number;
+  baseStudentCapacity: number;
+  noDirtyCash: true;
+  noLaundering: true;
+  noAuditRisk: true;
+  noHeat: true;
+  productionStopsAtCapacity: true;
+  requiresManualCollect: true;
+  allowPartialCollect: true;
+  network: {
+    populationProductionBonusPctPerExtraSchool: number;
+    studentCapacityBonusPctPerExtraSchool: number;
+    incomeBonusPctPerExtraSchool: number;
+    maxPopulationProductionMultiplier: number;
+    maxStudentCapacityMultiplier: number;
+    maxIncomeMultiplier: number;
+  };
+  talentPool: {
+    baseChancePct: number;
+    chancePctPerExtraSchool: number;
+    maxChancePct: number;
+    eveningCourseTalentChanceBonusPct: number;
+    betterTalentChanceBonusPct: number;
+  };
+  collectStudents: {
+    actionId: "collect_students";
+    cooldownMinutes: number;
+  };
+  eveningCourse: {
+    actionId: "evening_course";
+    cooldownMinutes: number;
+    durationMinutes: number;
+    costCleanCash: number;
+    heatGain: 0;
+    populationProductionMultiplier: number;
+    talentChanceFlatBonusPct: number;
+    betterTalentChanceBonusPct: number;
+    cleanIncomeMultiplier: number;
+    stackable: false;
+  };
+}
+
 export interface WarehouseBalanceConfig {
   id: string;
   buildingTypeId: string;
@@ -847,6 +898,7 @@ export interface GameModeConfig {
     exchangeOffice?: ExchangeOfficeBalanceConfig;
     arcade?: ArcadeBalanceConfig;
     apartmentBlock?: ApartmentBlockBalanceConfig;
+    school?: SchoolBalanceConfig;
     warehouse?: WarehouseBalanceConfig;
     clinic?: ClinicBalanceConfig;
     stripClub?: StripClubBalanceConfig;

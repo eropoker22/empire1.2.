@@ -108,6 +108,7 @@ const mapNotificationToReport = (notification: Notification): ConflictReportView
       stripClubResult: asUnknownRecord(payload.stripClubResult),
       powerStationResult: asUnknownRecord(payload.powerStationResult),
       smugglingTunnelResult: asUnknownRecord(payload.smugglingTunnelResult),
+      schoolResult: asUnknownRecord(payload.schoolResult),
       heatGain: Number(payload.heatGain ?? 0),
       influenceChange: Number(payload.influenceChange ?? 0),
       tick: Number(payload.tick ?? 0),

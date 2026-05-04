@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyCommand, collectIncome, completeProduction, createConflictReportViews } from "@empire/game-core";
-import { getAllPublicBuildingDefinitions, resolveModeConfig } from "@empire/game-config";
+import { getAllPublicBuildingDefinitions, resolveDistrictBuildingTypes, resolveModeConfig } from "@empire/game-config";
 import {
   createCoreStateWithFixedBuildingFixture,
   createDistrictFixture,
@@ -42,16 +42,28 @@ describe("run-building-action command flow", () => {
     const definitions = getAllPublicBuildingDefinitions();
     const fixedBuildings = context.config.balance.fixedBuildings ?? {};
     const buildingActions = context.config.balance.buildingActions ?? {};
+    const downtownCountByType: Record<string, number> = {
+      court: 2,
+      central_bank: 1,
+      lobby_club: 2,
+      city_hall: 1,
+      stock_exchange: 1,
+      vip_lounge: 2
+    };
 
     expect(definitions).not.toHaveLength(0);
     for (const definition of definitions) {
+      const expectedDowntownCount = downtownCountByType[definition.buildingTypeId];
+      if (expectedDowntownCount !== undefined) {
+        expect(definition.nameVariants).toHaveLength(expectedDowntownCount);
+      }
       expect(fixedBuildings[definition.buildingTypeId]).toMatchObject(definition.stats);
-      if (definition.buildingTypeId === "apartment_block") {
+      if (definition.buildingTypeId === "apartment_block" || definition.buildingTypeId === "school") {
         expect(definition.stats).toMatchObject({
-          cleanPerHour: 0,
+          cleanPerHour: definition.buildingTypeId === "school" ? 1080 : 0,
           dirtyPerHour: 0,
           heatPerDay: 0,
-          influencePerDay: 0
+          influencePerDay: definition.buildingTypeId === "school" ? 72 : 0
         });
       } else {
         expect(definition.stats.heatPerDay).toBeGreaterThan(0);
@@ -81,6 +93,33 @@ describe("run-building-action command flow", () => {
         });
       }
     }
+  });
+
+  it("keeps downtown map building counts fixed for free mode", () => {
+    const downtownDistrictIds = ["79", "80", "81", "82", "83", "58", "57", "59"];
+    const counts = downtownDistrictIds
+      .flatMap((districtId) => resolveDistrictBuildingTypes({ districtId, zone: "downtown" }))
+      .reduce<Record<string, number>>((collection, buildingTypeId) => {
+        collection[buildingTypeId] = (collection[buildingTypeId] ?? 0) + 1;
+        return collection;
+      }, {});
+
+    expect(Object.keys(counts).sort()).toEqual([
+      "central_bank",
+      "city_hall",
+      "court",
+      "lobby_club",
+      "stock_exchange",
+      "vip_lounge"
+    ]);
+    expect(counts).toMatchObject({
+      court: 2,
+      central_bank: 1,
+      lobby_club: 2,
+      city_hall: 1,
+      stock_exchange: 1,
+      vip_lounge: 2
+    });
   });
 
   it("collects clean money, dirty money, heat, and influence from fixed buildings on income ticks", () => {
@@ -785,6 +824,153 @@ describe("run-building-action command flow", () => {
     );
 
     expect(result.errors.map((error) => error.code)).toContain("apartment_block_no_population");
+  });
+
+  it("stores school students locally while clean income and influence apply passively", () => {
+    const { state, building } = createStateWithFixedBuilding("school", {
+      playerBalances: {
+        cash: 0,
+        "dirty-cash": 0
+      },
+      metadata: {
+        school: {
+          storedStudents: 18,
+          lastUpdatedTick: 0,
+          lastCapacity: 20,
+          wasFull: false
+        }
+      }
+    });
+    state.root.tick = 120;
+
+    const result = collectIncome(state, context);
+    const metadata = result.buildingsById[building.id].metadata?.school as {
+      storedStudents?: number;
+      lastCapacity?: number;
+      wasFull?: boolean;
+    };
+
+    expect(result.resourceStatesById["resource:1"].balances.cash).toBeGreaterThan(0);
+    expect(result.resourceStatesById["resource:1"].balances["dirty-cash"]).toBe(0);
+    expect(result.districtsById["district:1"].heat).toBe(0);
+    expect(result.districtsById["district:1"].influence).toBeGreaterThan(0);
+    expect(metadata.storedStudents).toBe(20);
+    expect(metadata.lastCapacity).toBe(20);
+    expect(metadata.wasFull).toBe(true);
+  });
+
+  it("collects school students into player population without dirty cash, heat, or gang-member storage", () => {
+    const { state, building } = createStateWithFixedBuilding("school", {
+      metadata: {
+        school: {
+          storedStudents: 4.8,
+          lastUpdatedTick: 0,
+          lastCapacity: 20,
+          wasFull: false
+        }
+      }
+    });
+    state.playersById["player:1"] = {
+      ...state.playersById["player:1"],
+      population: 11
+    };
+    state.serverInstance = {
+      ...state.serverInstance,
+      worldSeed: "school-seed-11"
+    };
+
+    const result = applyCommand(
+      state,
+      createRunBuildingActionCommandFixture({
+        payload: {
+          districtId: "district:1",
+          buildingId: building.id,
+          actionId: "collect_students"
+        }
+      }),
+      context
+    );
+    const report = createConflictReportViews(result.nextState, { playerId: "player:1", limit: 1 })[0];
+
+    expect(result.errors).toEqual([]);
+    expect(result.nextState.playersById["player:1"].population).toBe(15);
+    expect(result.nextState.resourceStatesById["resource:1"].balances["gang-members"]).toBeUndefined();
+    expect(result.nextState.resourceStatesById["resource:1"].balances["dirty-cash"]).toBe(250);
+    expect(result.nextState.districtsById["district:1"].heat).toBe(0);
+    expect(result.nextState.districtsById["district:1"].influence).toBe(0);
+    expect(result.nextState.buildingsById[building.id].metadata?.school).toMatchObject({
+      storedStudents: 0,
+      wasFull: false
+    });
+    expect(result.nextState.buildingsById[building.id].metadata?.school).not.toHaveProperty("activeTalentBonuses");
+    expect(result.nextState.buildingsById[building.id].metadata?.school).not.toHaveProperty("talentEvents");
+    expect(report).toMatchObject({
+      reportType: "building-action",
+      buildingActionId: "collect_students",
+      schoolResult: {
+        type: "collect_students",
+        collectedPopulation: 4,
+        talent: {
+          id: "negotiator",
+          label: "Vyjednavač"
+        },
+        streetNews: expect.stringContaining("Uliční zpráva")
+      },
+      heatGain: 0,
+      influenceChange: 0
+    });
+  });
+
+  it("activates school evening course and blocks stacking while active", () => {
+    const { state, building } = createStateWithFixedBuilding("school", {
+      playerBalances: {
+        cash: 1000,
+        "dirty-cash": 0
+      }
+    });
+
+    const first = applyCommand(
+      state,
+      createRunBuildingActionCommandFixture({
+        id: "command:school:course:1",
+        payload: {
+          districtId: "district:1",
+          buildingId: building.id,
+          actionId: "evening_course"
+        }
+      }),
+      context
+    );
+    const second = applyCommand(
+      first.nextState,
+      createRunBuildingActionCommandFixture({
+        id: "command:school:course:2",
+        payload: {
+          districtId: "district:1",
+          buildingId: building.id,
+          actionId: "evening_course"
+        }
+      }),
+      context
+    );
+    const report = createConflictReportViews(first.nextState, { playerId: "player:1", limit: 1 })[0];
+
+    expect(first.errors).toEqual([]);
+    expect(first.nextState.resourceStatesById["resource:1"].balances.cash).toBe(400);
+    expect(first.nextState.buildingsById[building.id].metadata?.school).toMatchObject({
+      eveningCourseExpiresAtTick: 96
+    });
+    expect(first.nextState.buildingsById[building.id].actionCooldowns.evening_course).toBe(192);
+    expect(second.errors.map((error) => error.code)).toContain("building_action_cooldown");
+    expect(second.errors.map((error) => error.code)).toContain("school_evening_course_active");
+    expect(report).toMatchObject({
+      reportType: "building-action",
+      buildingActionId: "evening_course",
+      schoolResult: {
+        type: "education_boost"
+      },
+      heatGain: 0
+    });
   });
 
   it("runs warehouse as clean-only logistics income with heat and no actions", () => {

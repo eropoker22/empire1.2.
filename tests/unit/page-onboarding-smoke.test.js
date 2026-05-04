@@ -168,7 +168,11 @@ describe("page onboarding smoke", () => {
     expect(runtimeSource).toContain('mechanicsType === "apartment-block"');
     expect(runtimeSource).not.toContain("cleanMoney += mechanics.storedClean");
     expect(runtimeSource).not.toContain("dirtyMoney += mechanics.storedDirty");
-    expect(runtimeSource).not.toContain('|| mechanicsType === "school"');
-    expect(runtimeSource).not.toContain('if (mechanics.mechanicsType === "school")');
+    expect(runtimeSource).toContain('mechanicsType === "school"');
+    expect(runtimeSource).toContain('if (mechanics.mechanicsType === "school")');
+    expect(runtimeSource).toContain("SCHOOL_CONFIG");
+    expect(runtimeSource).toContain("rollSchoolTalent");
+    expect(runtimeSource).toContain("Výsledek talentu");
+    expect(runtimeSource).toContain("zapíše se do uličních zpráv");
   });
 });
