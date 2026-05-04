@@ -60,6 +60,16 @@
   animation: none !important;
 }
 
+.building-shortcut-button,
+.building-shortcut-button:hover,
+.building-shortcut-button:focus,
+.building-shortcut-button:focus-visible {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+}
+
 :where(
   a,
   button,

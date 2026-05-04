@@ -292,8 +292,7 @@ function initMobileOverlayScrollLock(windowObj = window, documentObj = document)
 
   const applyLock = () => {
     frameId = null;
-    const hasOpenOverlay = media.matches
-      && Array.from(documentObj.querySelectorAll(MOBILE_OVERLAY_SELECTOR)).some(isOpenOverlay);
+    const hasOpenOverlay = Array.from(documentObj.querySelectorAll(MOBILE_OVERLAY_SELECTOR)).some(isOpenOverlay);
 
     if (hasOpenOverlay && !lastOverlayState) {
       lockPageScroll();
