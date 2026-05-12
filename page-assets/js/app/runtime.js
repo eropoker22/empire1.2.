@@ -683,8 +683,21 @@ import {
 import {
   ensureBuildingDetailPanel,
   renderBuildingDetailPanel,
+  renderBuildingDetailInfoSection as renderBuildingDetailInfoSectionPanel,
   syncBuildingDetailTabs as syncBuildingDetailPanelTabs
 } from "./ui/buildingDetailPanel.js";
+import {
+  bindEscapeKeyHandlers,
+  hideElement,
+  hideElements,
+  isClassModalVisible,
+  isElementVisible
+} from "./ui/modalHelpers.js";
+import {
+  collectMounts as collectMountsUi,
+  createPageContext as createPageContextUi,
+  markMounts as markMountsUi
+} from "./ui/pageContext.js";
 import { createBuildingDetailViewModel } from "./runtime/buildingDetailViewModel.js";
 import { createBuildingDetailInfoViewModel } from "./runtime/buildingDetailInfoViewModel.js";
 import { createPlayerProfileViewModel } from "./runtime/playerProfileViewModel.js";
@@ -3706,34 +3719,14 @@ const {
 });
 
 function collectMounts(root) {
-  return Array.from(root.querySelectorAll(MOUNT_SELECTOR))
-    .filter((element) => element !== root)
-    .map((element) => ({
-      id: element.id,
-      role: element.dataset.mountRole || "generic",
-      node: element
-    }));
+  return collectMountsUi(root, MOUNT_SELECTOR);
 }
 
 function createPageContext(root) {
-  const mounts = collectMounts(root);
-  const mountsByRole = Object.fromEntries(
-    mounts.map((mount) => [mount.role, mount.node])
-  );
-
-  return {
-    name: root.dataset.page || "unknown",
-    root,
-    mounts,
-    mountsByRole
-  };
+  return createPageContextUi(root, MOUNT_SELECTOR);
 }
 
-function markMounts(context) {
-  for (const mount of context.mounts) {
-    mount.node.dataset.mountReady = "true";
-  }
-}
+const markMounts = markMountsUi;
 
 const START_PHASE_OWNER_BY_DISTRICT_ID = createLaunchOwnerMap(START_PHASE_OWNER_COORDINATES);
 
@@ -4541,28 +4534,12 @@ function resolveDistrictBuildingDetailMechanicsType(buildingName) {
   return DISTRICT_BUILDING_DETAIL_MECHANICS_TYPES[lookupKey] || "district-asset";
 }
 
-function createDistrictBuildingInfoLine(label, value) {
-  const row = document.createElement("div");
-  row.className = "district-building-detail-mechanic-row district-building-detail-info-line";
-  const rowLabel = document.createElement("span");
-  rowLabel.textContent = label;
-  const rowValue = document.createElement("strong");
-  rowValue.textContent = value;
-  row.append(rowLabel, rowValue);
-  return row;
-}
-
 function renderDistrictBuildingInfoSection(infoElement, {
   profile,
   mechanics,
   buildingName,
   entry
 }) {
-  const section = infoElement?.closest(".building-info-card__section") || infoElement?.parentElement;
-  if (!section) {
-    return;
-  }
-
   const viewModel = createBuildingDetailInfoViewModel({
     profile,
     mechanics,
@@ -4573,43 +4550,7 @@ function renderDistrictBuildingInfoSection(infoElement, {
     now: Date.now()
   });
 
-  const title = document.createElement("h5");
-  title.textContent = viewModel.title;
-
-  const intro = document.createElement("p");
-  intro.className = "building-detail-info-text";
-  intro.textContent = viewModel.intro;
-
-  const overview = document.createElement("div");
-  overview.className = "building-detail-mechanics district-building-detail-mechanics district-building-detail-info-grid";
-  overview.replaceChildren(...viewModel.rows.map((row) => createDistrictBuildingInfoLine(row.label, row.value)));
-
-  const actionsTitle = document.createElement("h5");
-  actionsTitle.textContent = viewModel.actionsTitle;
-
-  const actionList = document.createElement("div");
-  actionList.className = "building-info-card__actions district-building-detail-actions district-building-detail-info-actions";
-  for (const action of viewModel.actions) {
-    const row = document.createElement("div");
-    row.className = "building-info-action-row";
-    const rowTitle = document.createElement("strong");
-    rowTitle.className = "building-info-action-row__title";
-    rowTitle.textContent = action.title;
-    const desc = document.createElement("span");
-    desc.className = "building-info-action-row__desc";
-    desc.textContent = action.description;
-    const result = document.createElement("span");
-    result.className = "building-info-action-row__cooldown";
-    result.textContent = action.result;
-    row.append(rowTitle, desc, result);
-    actionList.append(row);
-  }
-
-  const children = [title, intro, overview];
-  if (viewModel.actions.length > 0) {
-    children.push(actionsTitle, actionList);
-  }
-  section.replaceChildren(...children);
+  renderBuildingDetailInfoSectionPanel(infoElement, viewModel);
 }
 
 function resolveDistrictBuildingDetailMechanics(district, buildingName) {
@@ -6660,49 +6601,22 @@ function bindDistrictCanvas(root) {
       popupRefreshTimerId = null;
     }
 
-    if (popup) {
-      popup.hidden = true;
-    }
-
     if (popupAtmosphereHero instanceof HTMLElement) {
       popupAtmosphereHero.setAttribute("aria-expanded", "false");
     }
 
-    if (popupAtmosphereWindow instanceof HTMLElement) {
-      popupAtmosphereWindow.hidden = true;
-    }
-
-    if (attackSetupPopup) {
-      attackSetupPopup.hidden = true;
-    }
-
-    if (attackConfirmPopup) {
-      attackConfirmPopup.hidden = true;
-    }
-
-    if (robberySetupPopup) {
-      robberySetupPopup.hidden = true;
-    }
-
-    if (robberyConfirmPopup) {
-      robberyConfirmPopup.hidden = true;
-    }
-
-    if (defenseSetupPopup) {
-      defenseSetupPopup.hidden = true;
-    }
-
-    if (trapConfirmPopup) {
-      trapConfirmPopup.hidden = true;
-    }
-
-    if (spyConfirmPopup) {
-      spyConfirmPopup.hidden = true;
-    }
-
-    if (occupyConfirmPopup) {
-      occupyConfirmPopup.hidden = true;
-    }
+    hideElements([
+      popup,
+      popupAtmosphereWindow instanceof HTMLElement ? popupAtmosphereWindow : null,
+      attackSetupPopup,
+      attackConfirmPopup,
+      robberySetupPopup,
+      robberyConfirmPopup,
+      defenseSetupPopup,
+      trapConfirmPopup,
+      spyConfirmPopup,
+      occupyConfirmPopup
+    ]);
 
     syncMapInteractionVisualState({
       hoveredDistrict: geometry?.districts?.find((district) => district.id === interactionState.hoveredDistrictId) || null,
@@ -6722,27 +6636,19 @@ function bindDistrictCanvas(root) {
   };
 
   const closeRobberySetupPopup = () => {
-    if (robberySetupPopup) {
-      robberySetupPopup.hidden = true;
-    }
+    hideElement(robberySetupPopup);
   };
 
   const closeRobberyConfirmPopup = () => {
-    if (robberyConfirmPopup) {
-      robberyConfirmPopup.hidden = true;
-    }
+    hideElement(robberyConfirmPopup);
   };
 
   const closeDefenseSetupPopup = () => {
-    if (defenseSetupPopup) {
-      defenseSetupPopup.hidden = true;
-    }
+    hideElement(defenseSetupPopup);
   };
 
   const closeTrapConfirmPopup = () => {
-    if (trapConfirmPopup) {
-      trapConfirmPopup.hidden = true;
-    }
+    hideElement(trapConfirmPopup);
   };
 
   const closeSpyConfirmPopup = () => {
@@ -6750,9 +6656,7 @@ function bindDistrictCanvas(root) {
   };
 
   const closeOccupyConfirmPopup = () => {
-    if (occupyConfirmPopup) {
-      occupyConfirmPopup.hidden = true;
-    }
+    hideElement(occupyConfirmPopup);
   };
 
   const getSelectedDistrict = () => (
@@ -8705,67 +8609,23 @@ function bindDistrictCanvas(root) {
     });
   }
 
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && popup && !popup.hidden) {
-      closePopup();
-    }
-
-    if (event.key === "Escape" && buildingsPopup && !buildingsPopup.hidden) {
-      closeBuildingsPopup();
-    }
-
-    if (event.key === "Escape" && attackSetupPopup && !attackSetupPopup.hidden) {
-      closeAttackSetupPopup();
-    }
-
-    if (event.key === "Escape" && attackConfirmPopup && !attackConfirmPopup.hidden) {
-      closeAttackConfirmPopup();
-    }
-
-    if (event.key === "Escape" && robberySetupPopup && !robberySetupPopup.hidden) {
-      closeRobberySetupPopup();
-    }
-
-    if (event.key === "Escape" && robberyConfirmPopup && !robberyConfirmPopup.hidden) {
-      closeRobberyConfirmPopup();
-    }
-
-    if (event.key === "Escape" && defenseSetupPopup && !defenseSetupPopup.hidden) {
-      closeDefenseSetupPopup();
-    }
-
-    if (event.key === "Escape" && trapConfirmPopup && !trapConfirmPopup.hidden) {
-      closeTrapConfirmPopup();
-    }
-
-    if (event.key === "Escape" && spyConfirmPopup && !spyConfirmPopup.hidden) {
-      closeSpyConfirmPopup();
-    }
-
-    if (event.key === "Escape" && occupyConfirmPopup && !occupyConfirmPopup.hidden) {
-      closeOccupyConfirmPopup();
-    }
-
-    if (event.key === "Escape" && spyResultModal && !spyResultModal.classList.contains("hidden")) {
-      closeResultModal(root, SPY_RESULT_MODAL_SELECTOR);
-    }
-
-    if (event.key === "Escape" && spyWarningModal && !spyWarningModal.classList.contains("hidden")) {
-      closeResultModal(root, SPY_WARNING_MODAL_SELECTOR);
-    }
-
-    if (event.key === "Escape" && raidResultModal && !raidResultModal.classList.contains("hidden")) {
-      closeResultModal(root, RAID_RESULT_MODAL_SELECTOR);
-    }
-
-    if (event.key === "Escape" && attackResultModal && !attackResultModal.classList.contains("hidden")) {
-      closeResultModal(root, ATTACK_RESULT_MODAL_SELECTOR);
-    }
-
-    if (event.key === "Escape" && policeActionResultModal && !policeActionResultModal.classList.contains("hidden")) {
-      closePoliceActionResultModal(root);
-    }
-  });
+  bindEscapeKeyHandlers(document, [
+    { element: popup, isOpen: isElementVisible, close: closePopup },
+    { element: buildingsPopup, isOpen: isElementVisible, close: closeBuildingsPopup },
+    { element: attackSetupPopup, isOpen: isElementVisible, close: closeAttackSetupPopup },
+    { element: attackConfirmPopup, isOpen: isElementVisible, close: closeAttackConfirmPopup },
+    { element: robberySetupPopup, isOpen: isElementVisible, close: closeRobberySetupPopup },
+    { element: robberyConfirmPopup, isOpen: isElementVisible, close: closeRobberyConfirmPopup },
+    { element: defenseSetupPopup, isOpen: isElementVisible, close: closeDefenseSetupPopup },
+    { element: trapConfirmPopup, isOpen: isElementVisible, close: closeTrapConfirmPopup },
+    { element: spyConfirmPopup, isOpen: isElementVisible, close: closeSpyConfirmPopup },
+    { element: occupyConfirmPopup, isOpen: isElementVisible, close: closeOccupyConfirmPopup },
+    { element: spyResultModal, isOpen: isClassModalVisible, close: () => closeResultModal(root, SPY_RESULT_MODAL_SELECTOR) },
+    { element: spyWarningModal, isOpen: isClassModalVisible, close: () => closeResultModal(root, SPY_WARNING_MODAL_SELECTOR) },
+    { element: raidResultModal, isOpen: isClassModalVisible, close: () => closeResultModal(root, RAID_RESULT_MODAL_SELECTOR) },
+    { element: attackResultModal, isOpen: isClassModalVisible, close: () => closeResultModal(root, ATTACK_RESULT_MODAL_SELECTOR) },
+    { element: policeActionResultModal, isOpen: isClassModalVisible, close: () => closePoliceActionResultModal(root) }
+  ]);
 
   Promise.all([
     loadImage(DAY_MAP_IMAGE_PATH),

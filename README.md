@@ -23,6 +23,14 @@ Project skeleton for a multiplayer browser strategy game with strict separation 
 - Debug/demo tooling stays outside production runtime
 - Keep modules small and feature boundaries explicit
 
+## Architecture guardrails
+
+See [docs/architecture-boundaries.md](docs/architecture-boundaries.md) for the main boundary rules between the legacy static frontend and the server-authoritative architecture.
+
+Runtime renders. Core decides. Config balances. Server owns authority.
+
+New gameplay changes should not be implemented directly in legacy `page-assets/js/app/runtime.js`.
+
 ## Compatibility
 
 - `packages/shared` and `packages/debug-tools` remain only as deprecated compatibility placeholders.

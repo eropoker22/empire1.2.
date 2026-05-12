@@ -284,6 +284,61 @@ export function renderBuildingEmptyState(options = {}) {
   return true;
 }
 
+function createBuildingDetailInfoLine(scopeElement, label, value) {
+  const row = createElement(scopeElement, "div", "district-building-detail-mechanic-row district-building-detail-info-line");
+  const rowLabel = createElement(scopeElement, "span");
+  const rowValue = createElement(scopeElement, "strong");
+  if (!row || !rowLabel || !rowValue) return null;
+  rowLabel.textContent = label;
+  rowValue.textContent = value;
+  row.append(rowLabel, rowValue);
+  return row;
+}
+
+export function renderBuildingDetailInfoSection(infoElement, viewModel = {}) {
+  const section = infoElement?.closest(".building-info-card__section") || infoElement?.parentElement;
+  if (!section) {
+    return false;
+  }
+
+  const title = createElement(section, "h5");
+  if (title) title.textContent = viewModel.title;
+
+  const intro = createElement(section, "p", "building-detail-info-text");
+  if (intro) intro.textContent = viewModel.intro;
+
+  const overview = createElement(section, "div", "building-detail-mechanics district-building-detail-mechanics district-building-detail-info-grid");
+  if (overview) {
+    overview.replaceChildren(...(Array.isArray(viewModel.rows) ? viewModel.rows : [])
+      .map((row) => createBuildingDetailInfoLine(overview, row.label, row.value))
+      .filter(Boolean));
+  }
+
+  const actionsTitle = createElement(section, "h5");
+  if (actionsTitle) actionsTitle.textContent = viewModel.actionsTitle;
+
+  const actionList = createElement(section, "div", "building-info-card__actions district-building-detail-actions district-building-detail-info-actions");
+  for (const action of Array.isArray(viewModel.actions) ? viewModel.actions : []) {
+    const row = createElement(section, "div", "building-info-action-row");
+    const rowTitle = createElement(section, "strong", "building-info-action-row__title");
+    const desc = createElement(section, "span", "building-info-action-row__desc");
+    const result = createElement(section, "span", "building-info-action-row__cooldown");
+    if (!row || !rowTitle || !desc || !result) continue;
+    rowTitle.textContent = action.title;
+    desc.textContent = action.description;
+    result.textContent = action.result;
+    row.append(rowTitle, desc, result);
+    actionList?.append(row);
+  }
+
+  const children = [title, intro, overview].filter(Boolean);
+  if (Array.isArray(viewModel.actions) && viewModel.actions.length > 0) {
+    children.push(actionsTitle, actionList);
+  }
+  section.replaceChildren(...children.filter(Boolean));
+  return true;
+}
+
 export function renderBuildingDetailPanel(buildingViewModel = {}, callbacks = {}, options = {}) {
   if (!buildingViewModel || typeof buildingViewModel !== "object") {
     return false;
@@ -383,6 +438,7 @@ if (typeof window !== "undefined") {
     renderBuildingDetailPanel,
     renderBuildingStats,
     renderBuildingActions,
+    renderBuildingDetailInfoSection,
     renderBuildingEmptyState,
     ensureBuildingDetailPanel,
     syncBuildingDetailTabs
