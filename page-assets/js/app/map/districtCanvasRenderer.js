@@ -66,6 +66,48 @@ function drawMapImage(context, image, width, height) {
   context.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
 }
 
+function drawDowntownNeonBorder(context, district, isNight, reducedMapEffects) {
+  if (String(district?.districtType || "").trim().toLowerCase() !== "downtown") {
+    return;
+  }
+
+  context.save();
+  context.globalCompositeOperation = "screen";
+  context.lineJoin = "round";
+  context.lineCap = "round";
+
+  drawDistrictPolygon(context, district.polygon);
+  context.shadowBlur = reducedMapEffects ? 8 : 26;
+  context.shadowColor = "rgba(255, 44, 202, 0.95)";
+  context.strokeStyle = isNight
+    ? "rgba(255, 44, 202, 0.42)"
+    : "rgba(255, 44, 202, 0.34)";
+  context.lineWidth = reducedMapEffects ? 3.2 : 6.8;
+  context.stroke();
+
+  if (!reducedMapEffects) {
+    drawDistrictPolygon(context, district.polygon);
+    context.shadowBlur = 16;
+    context.shadowColor = "rgba(255, 160, 236, 0.92)";
+    context.strokeStyle = isNight
+      ? "rgba(255, 104, 224, 0.78)"
+      : "rgba(255, 71, 194, 0.68)";
+    context.lineWidth = 3.3;
+    context.stroke();
+  }
+
+  drawDistrictPolygon(context, district.polygon);
+  context.shadowBlur = reducedMapEffects ? 4 : 10;
+  context.shadowColor = "rgba(255, 231, 252, 0.88)";
+  context.strokeStyle = isNight
+    ? "rgba(255, 232, 252, 0.96)"
+    : "rgba(255, 184, 242, 0.88)";
+  context.lineWidth = reducedMapEffects ? 1.4 : 1.65;
+  context.stroke();
+
+  context.restore();
+}
+
 function renderDistrictCanvas(canvas, phase, interactionState = {}, imageSet = null) {
   if (!canvas || typeof canvas.getContext !== "function") {
     return null;
@@ -156,6 +198,7 @@ function renderDistrictCanvas(canvas, phase, interactionState = {}, imageSet = n
     const isSelected = district.id === selectedDistrictId;
     const isOwned = effectiveOwnedDistrictIds.has(district.id);
     const isOwnedByCurrentPlayer = currentPlayerOwnedDistrictIds.has(district.id);
+    const isDowntownDistrict = String(district.districtType || "").trim().toLowerCase() === "downtown";
     const rawLaunchOwnerId = launchOwnerByDistrictId.get(district.id) ?? null;
     const showEnemyMarkers = showAllianceSymbols && mapVisibilityMode === "all" && !isOwnedByCurrentPlayer;
     const launchOwnerId = showEnemyMarkers ? rawLaunchOwnerId : null;
@@ -166,6 +209,8 @@ function renderDistrictCanvas(canvas, phase, interactionState = {}, imageSet = n
     drawDistrictPolygon(context, district.polygon);
     context.fillStyle = fillStyle;
     context.fill();
+
+    drawDowntownNeonBorder(context, district, isNight, reducedMapEffects);
 
     if (isSelected) {
       context.save();
@@ -187,6 +232,8 @@ function renderDistrictCanvas(canvas, phase, interactionState = {}, imageSet = n
             ? currentPlayerColor
           : launchOwnerColor
             ? launchOwnerColor
+          : isDowntownDistrict
+            ? "rgba(255, 71, 194, 0.96)"
           : borderColor === "black"
             ? "rgba(5, 8, 12, 0.92)"
           : isNight

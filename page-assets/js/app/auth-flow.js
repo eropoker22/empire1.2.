@@ -37,14 +37,15 @@ export const SERVER_CATALOG = Object.freeze([
     name: "Red Sector WAR-03",
     mode: "war",
     region: "EU Central",
-    players: 22,
+    players: 0,
     capacity: 150,
-    startLabel: "Live server",
+    startLabel: "Offline",
     badge: "",
-    status: "VYSOKÁ",
-    activity: "HIGH",
+    status: "POZASTAVEN",
+    activity: "LOW",
+    offline: true,
     riskPercent: 69,
-    description: "Vyvážený server s aktivní komunitou a častými bitvami."
+    description: "Server je dočasně pozastavený a není dostupný pro vstup."
   },
   {
     id: "war-eu-04",

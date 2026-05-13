@@ -63,18 +63,18 @@ export const MAP_HIDDEN_FILL_STYLES = Object.freeze({
 
 export const MAP_ZONE_FILL_STYLES = Object.freeze({
   day: Object.freeze({
-    downtown: "rgba(255, 71, 194, 0.24)",
-    industrial: "rgba(255, 154, 61, 0.18)",
-    resident: "rgba(103, 225, 255, 0.14)",
-    economy: "rgba(113, 255, 188, 0.16)",
-    park: "rgba(165, 255, 89, 0.14)"
+    downtown: "rgba(255, 71, 194, 0.3)",
+    industrial: "rgba(0, 0, 0, 0.34)",
+    resident: "rgba(250, 204, 21, 0.2)",
+    economy: "rgba(96, 165, 250, 0.18)",
+    park: "rgba(34, 197, 94, 0.16)"
   }),
   night: Object.freeze({
-    downtown: "rgba(255, 71, 194, 0.18)",
-    industrial: "rgba(255, 154, 61, 0.12)",
-    resident: "rgba(103, 225, 255, 0.10)",
-    economy: "rgba(113, 255, 188, 0.11)",
-    park: "rgba(165, 255, 89, 0.09)"
+    downtown: "rgba(255, 71, 194, 0.24)",
+    industrial: "rgba(0, 0, 0, 0.44)",
+    resident: "rgba(250, 204, 21, 0.15)",
+    economy: "rgba(96, 165, 250, 0.13)",
+    park: "rgba(34, 197, 94, 0.11)"
   })
 });
 

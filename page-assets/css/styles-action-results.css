@@ -151,6 +151,40 @@
   padding: 14px;
 }
 
+.district-action-confirm-popup-card[data-district-type="resident"],
+.district-action-confirm-popup-card[data-district-type="residential"] {
+  --result-accent-rgb: 250, 204, 21 !important;
+  --result-secondary-rgb: 254, 240, 138 !important;
+  --district-accent-rgb: 250, 204, 21 !important;
+  --district-secondary-rgb: 254, 240, 138 !important;
+  --district-shadow-rgb: 250, 204, 21 !important;
+}
+
+.district-action-confirm-popup-card[data-district-type="industrial"] {
+  --result-accent-rgb: 18, 22, 30 !important;
+  --result-secondary-rgb: 226, 232, 240 !important;
+  --district-accent-rgb: 18, 22, 30 !important;
+  --district-secondary-rgb: 226, 232, 240 !important;
+  --district-shadow-rgb: 0, 0, 0 !important;
+}
+
+.district-action-confirm-popup-card[data-district-type="economy"],
+.district-action-confirm-popup-card[data-district-type="commercial"] {
+  --result-accent-rgb: 96, 165, 250 !important;
+  --result-secondary-rgb: 191, 219, 254 !important;
+  --district-accent-rgb: 96, 165, 250 !important;
+  --district-secondary-rgb: 191, 219, 254 !important;
+  --district-shadow-rgb: 59, 130, 246 !important;
+}
+
+.district-action-confirm-popup-card[data-district-type="park"] {
+  --result-accent-rgb: 34, 197, 94 !important;
+  --result-secondary-rgb: 134, 239, 172 !important;
+  --district-accent-rgb: 34, 197, 94 !important;
+  --district-secondary-rgb: 134, 239, 172 !important;
+  --district-shadow-rgb: 34, 197, 94 !important;
+}
+
 #attack-confirm-modal .district-action-confirm-popup-card {
   width: min(640px, calc(100vw - 32px));
 }

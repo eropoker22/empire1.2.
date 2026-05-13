@@ -6145,6 +6145,10 @@ function getDistrictFillStyle(district, isNight, interactionState = {}) {
   const currentPlayerOwnedDistrictIds = getCurrentPlayerOwnedDistrictIds(interactionState);
   const gamePhase = interactionState.gamePhase || "launch";
 
+  if (districtType === MAP_DOWNTOWN_DISTRICT_TYPE && !ownedDistrictIds.has(districtId)) {
+    return resolveMapZoneFillStyle(districtType, isNight);
+  }
+
   if (gamePhase === "launch" && !ownedDistrictIds.has(districtId)) {
     return resolveMapLaunchUnownedFillStyle();
   }

@@ -3251,3 +3251,40 @@ html:has(body.auth-body--faction) {
     display: block;
   }
 }
+
+@media (max-width: 640px) {
+  .structure-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .structure-grid .structure-card,
+  .structure-card {
+    width: auto !important;
+    min-width: 0;
+    min-height: 92px;
+    flex: initial !important;
+    padding: 9px 7px 11px;
+    border-radius: 12px;
+  }
+
+  .structure-card__title {
+    max-width: 100%;
+    font-size: clamp(0.78rem, 4vw, 1rem);
+    line-height: 1.02;
+    letter-spacing: 0.03em;
+    overflow-wrap: anywhere;
+  }
+
+  .structure-card[data-structure="tajná organizace"] .structure-card__title,
+  .structure-card[data-structure="motorkářský gang"] .structure-card__title,
+  .structure-card[data-structure="soukromá armáda"] .structure-card__title {
+    font-size: clamp(0.68rem, 3.45vw, 0.88rem);
+    letter-spacing: 0.01em;
+  }
+}

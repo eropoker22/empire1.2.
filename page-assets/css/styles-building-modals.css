@@ -3958,6 +3958,28 @@
   --building-window-secondary-rgb: 52, 211, 153;
 }
 
+.district-building-detail-shell[data-building-district-type="resident"],
+.district-building-detail-shell[data-building-district-type="residential"] {
+  --building-window-accent-rgb: 250, 204, 21;
+  --building-window-secondary-rgb: 254, 240, 138;
+}
+
+.district-building-detail-shell[data-building-district-type="industrial"] {
+  --building-window-accent-rgb: 18, 22, 30;
+  --building-window-secondary-rgb: 226, 232, 240;
+}
+
+.district-building-detail-shell[data-building-district-type="economy"],
+.district-building-detail-shell[data-building-district-type="commercial"] {
+  --building-window-accent-rgb: 96, 165, 250;
+  --building-window-secondary-rgb: 191, 219, 254;
+}
+
+.district-building-detail-shell[data-building-district-type="park"] {
+  --building-window-accent-rgb: 34, 197, 94;
+  --building-window-secondary-rgb: 134, 239, 172;
+}
+
 .district-building-detail-backdrop {
   background:
     linear-gradient(180deg, rgba(2, 6, 12, 0.72), rgba(2, 6, 12, 0.88)),

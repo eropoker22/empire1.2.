@@ -274,7 +274,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const getServerCountdownText = (serverId) => {
     const server = availableServers.find((entry) => entry.id === serverId);
-    if (server?.full || server?.locked) {
+    if (server?.full || server?.locked || server?.offline) {
       return "";
     }
     const launchAt = Number(state.launchByServerId[serverId] || 0);
@@ -329,7 +329,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const getSelectedServer = () => availableServers.find((entry) => entry.id === state.serverId) || null;
-  const isServerUnavailable = (server) => Boolean(server?.full || server?.locked);
+  const isServerUnavailable = (server) => Boolean(server?.full || server?.locked || server?.offline);
   const getServerRiskPercent = (server) => Math.max(0, Math.min(100, Math.round(
     Number(server?.riskPercent ?? server?.riskPct ?? server?.heat ?? 0) || 0
   )));
@@ -429,7 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
         detailModalHint.textContent = !state.serverId
           ? "Vyber server"
           : isUnavailable
-            ? (server?.full ? "Server je plný" : "Server se připravuje")
+            ? (server?.full ? "Server je plný" : server?.offline ? "Server je offline" : "Server se připravuje")
             : "Vyber district";
         detailModalHint.classList.add("is-required");
       }
@@ -753,7 +753,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (detailModalHint) {
       detailModalHint.textContent = serverUnavailable
-        ? (server.full ? "Server je plný" : "Server se připravuje")
+        ? (server.full ? "Server je plný" : server.offline ? "Server je offline" : "Server se připravuje")
         : state.selectedDistrictId ? `Start: District ${state.selectedDistrictId}` : "Okraj mapy";
       detailModalHint.classList.toggle("is-required", serverUnavailable || !state.selectedDistrictId);
     }
@@ -779,7 +779,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const servers = getVisibleServers();
     list.innerHTML = servers.map((server) => `
-      <button type="button" class="auth-server-card ${server.id === state.serverId ? "is-selected" : ""} ${server.locked ? "is-locked" : ""} ${server.full ? "is-full" : ""}" data-server-card="${server.id}" data-server-mode="${server.mode}" data-testid="server-card-${server.id}">
+      <button type="button" class="auth-server-card ${server.id === state.serverId ? "is-selected" : ""} ${server.locked ? "is-locked" : ""} ${server.full ? "is-full" : ""} ${server.offline ? "is-offline" : ""}" data-server-card="${server.id}" data-server-mode="${server.mode}" data-testid="server-card-${server.id}">
         <span class="auth-server-card__label">${server.name}</span>
         <span class="auth-server-card__meta">${server.region} • ${server.mode.toUpperCase()} • ${server.players}/${server.capacity}</span>
         <span class="auth-server-card__schedule">${server.status || "ONLINE"}</span>
@@ -863,7 +863,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isServerUnavailable(server)) {
       setHoveredDetailDistrictId(null);
       if (detailModalHint) {
-        detailModalHint.textContent = server?.full ? "Server je plný" : "Server se připravuje";
+        detailModalHint.textContent = server?.full ? "Server je plný" : server?.offline ? "Server je offline" : "Server se připravuje";
         detailModalHint.classList.add("is-required");
       }
       return false;
