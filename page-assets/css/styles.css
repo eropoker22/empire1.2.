@@ -13,3 +13,121 @@
 @import "./styles-action-results.css";
 @import "./styles-mobile-fixes.css";
 @import "./styles-static-hover.css";
+
+/* Final loaded rule: mobile settings must render as a solid, opaque panel. */
+@media (max-width: 720px), (hover: none) and (pointer: coarse), (any-hover: none), (any-pointer: coarse) {
+  html body #settings-modal:not(.hidden),
+  html body.mobile-settings-modal-open #settings-modal {
+    background: #01040b !important;
+    background-color: #01040b !important;
+    background-image: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 9999 !important;
+  }
+
+  html body.mobile-settings-modal-open .game-shell {
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  html body #settings-modal:not(.hidden) > #settings-modal-backdrop.modal__backdrop,
+  html body.mobile-settings-modal-open #settings-modal > #settings-modal-backdrop.modal__backdrop {
+    background: #01040b !important;
+    background-color: #01040b !important;
+    background-image: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    animation: none !important;
+    pointer-events: auto !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .modal__content.settings-modal__content,
+  html body.mobile-settings-modal-open #settings-modal .modal__content.settings-modal__content {
+    background: #030814 !important;
+    background-color: #030814 !important;
+    background-image: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    animation: none !important;
+    pointer-events: auto !important;
+    border: 1px solid rgba(103, 232, 249, 0.78) !important;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      inset 0 0 34px rgba(34, 211, 238, 0.12),
+      0 24px 58px rgba(0, 0, 0, 0.82),
+      0 0 34px rgba(34, 211, 238, 0.3) !important;
+    mix-blend-mode: normal !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .modal__content.settings-modal__content::after,
+  html body.mobile-settings-modal-open #settings-modal .modal__content.settings-modal__content::after {
+    background: none !important;
+    opacity: 0 !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content > .modal__header,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__content > .modal__header {
+    background: #061123 !important;
+    background-color: #061123 !important;
+    background-image: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    animation: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__body,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__body {
+    background: #020610 !important;
+    background-color: #020610 !important;
+    background-image: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    animation: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__row,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__row {
+    background: #071426 !important;
+    background-color: #071426 !important;
+    background-image: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    animation: none !important;
+    border-color: rgba(103, 232, 249, 0.38) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__actions,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__select select,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__select select {
+    background: #030812 !important;
+    background-color: #030812 !important;
+    background-image: none !important;
+    width: 100% !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #e6fbff !important;
+  }
+
+  html body #settings-modal:not(.hidden) *,
+  html body.mobile-settings-modal-open #settings-modal * {
+    visibility: visible !important;
+  }
+}

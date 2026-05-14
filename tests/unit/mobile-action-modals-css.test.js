@@ -39,8 +39,9 @@ describe("mobile action modal CSS", () => {
 
   it("hides the mobile topbar while popup cards are open without moving layout", () => {
     for (const stylesheet of [css, clientCss]) {
-      expect(stylesheet).not.toContain("--mobile-topbar-offset: 0px !important;");
-      expect(stylesheet).toContain("--mobile-overlay-card-top: max(var(--mobile-overlay-top-offset, 72px), 72px);");
+      expect(stylesheet).toContain("--mobile-topbar-offset: 0px !important;");
+      expect(stylesheet).toContain("--mobile-overlay-card-top: max(env(safe-area-inset-top), 0px);");
+      expect(stylesheet).toContain("--mobile-overlay-card-gap: 6px;");
       expect(stylesheet).toContain("--game-mobile-bg-height: var(--mobile-locked-vh, 100svh);");
       expect(stylesheet).toContain("@supports (height: 100lvh)");
       expect(stylesheet).not.toContain("body.game-modal-scroll-locked::before");
@@ -52,9 +53,11 @@ describe("mobile action modal CSS", () => {
       expect(stylesheet).toContain("html body.game-modal-scroll-locked #spy-confirm-modal");
       expect(stylesheet).toContain("padding-top: calc(var(--mobile-overlay-card-top) + var(--mobile-overlay-card-gap)) !important;");
       expect(stylesheet).toContain("max-height: calc(100dvh - var(--mobile-overlay-card-top) - 18px - env(safe-area-inset-bottom)) !important;");
-      expect(stylesheet).toContain("Hard guard: large mobile windows must never open under the resource strip.");
+      expect(stylesheet).toContain("Hard guard: large mobile windows must open from the top of the phone viewport.");
       expect(stylesheet).toContain("--mobile-overlay-available-height: calc(");
       expect(stylesheet).toContain("html body.game-modal-scroll-locked #buildings-modal.buildings-popup-shell:not([hidden])");
+      expect(stylesheet).toContain("html body.game-modal-scroll-locked .market-popup-shell:not([hidden])");
+      expect(stylesheet).toContain("html body.game-modal-scroll-locked .market-popup-shell:not([hidden]) .market-popup-card");
       expect(stylesheet).toContain("html body.game-modal-scroll-locked .wanted-popup-shell:not([hidden]) .wanted-popup-card");
       expect(stylesheet).toContain("html body.game-modal-scroll-locked .armory-popup-shell:not([hidden]) .armory-popup-card.building-detail-modal__content");
       expect(stylesheet).toContain("top: auto !important;");

@@ -100,6 +100,83 @@ function bindSettingsModal(root) {
     scope.body?.classList.toggle("mobile-settings-modal-open", Boolean(open) && mobileMedia.matches);
   };
 
+  const setImportantStyle = (element, property, value) => {
+    if (!(element instanceof HTMLElement)) return;
+    element.style.setProperty(property, value, "important");
+  };
+
+  const applyOpaqueMobileSettingsStyles = () => {
+    if (!mobileMedia.matches) return;
+    setImportantStyle(modal, "background", "#01040b");
+    setImportantStyle(modal, "background-color", "#01040b");
+    setImportantStyle(modal, "background-image", "none");
+    setImportantStyle(modal, "opacity", "1");
+    setImportantStyle(modal, "visibility", "visible");
+    setImportantStyle(modal, "pointer-events", "auto");
+    setImportantStyle(modal, "z-index", "9999");
+
+    if (backdrop instanceof HTMLElement) {
+      setImportantStyle(backdrop, "background", "#01040b");
+      setImportantStyle(backdrop, "background-color", "#01040b");
+      setImportantStyle(backdrop, "background-image", "none");
+      setImportantStyle(backdrop, "opacity", "1");
+      setImportantStyle(backdrop, "visibility", "visible");
+      setImportantStyle(backdrop, "pointer-events", "auto");
+      setImportantStyle(backdrop, "backdrop-filter", "none");
+      setImportantStyle(backdrop, "-webkit-backdrop-filter", "none");
+    }
+
+    const content = modal.querySelector(".settings-modal__content");
+    setImportantStyle(content, "background", "#030814");
+    setImportantStyle(content, "background-color", "#030814");
+    setImportantStyle(content, "background-image", "none");
+    setImportantStyle(content, "opacity", "1");
+    setImportantStyle(content, "visibility", "visible");
+    setImportantStyle(content, "pointer-events", "auto");
+    setImportantStyle(content, "animation", "none");
+
+    const header = modal.querySelector(".settings-modal__content > .modal__header");
+    setImportantStyle(header, "background", "#061123");
+    setImportantStyle(header, "background-color", "#061123");
+    setImportantStyle(header, "background-image", "none");
+    setImportantStyle(header, "opacity", "1");
+    setImportantStyle(header, "visibility", "visible");
+    setImportantStyle(header, "pointer-events", "auto");
+    setImportantStyle(header, "animation", "none");
+
+    const body = modal.querySelector(".settings-modal__body");
+    setImportantStyle(body, "background", "#020610");
+    setImportantStyle(body, "background-color", "#020610");
+    setImportantStyle(body, "background-image", "none");
+    setImportantStyle(body, "opacity", "1");
+    setImportantStyle(body, "visibility", "visible");
+    setImportantStyle(body, "pointer-events", "auto");
+    setImportantStyle(body, "animation", "none");
+
+    modal.querySelectorAll(".settings-modal__row").forEach((row) => {
+      setImportantStyle(row, "background", "#071426");
+      setImportantStyle(row, "background-color", "#071426");
+      setImportantStyle(row, "background-image", "none");
+      setImportantStyle(row, "opacity", "1");
+      setImportantStyle(row, "visibility", "visible");
+      setImportantStyle(row, "animation", "none");
+    });
+
+    modal.querySelectorAll(".settings-modal__actions, .settings-modal__section-title, .settings-modal__save-btn").forEach((element) => {
+      setImportantStyle(element, "opacity", "1");
+      setImportantStyle(element, "visibility", "visible");
+      setImportantStyle(element, "animation", "none");
+    });
+
+    modal.querySelectorAll(".settings-modal__select select").forEach((select) => {
+      setImportantStyle(select, "background", "#030812");
+      setImportantStyle(select, "background-color", "#030812");
+      setImportantStyle(select, "background-image", "none");
+      setImportantStyle(select, "opacity", "1");
+      setImportantStyle(select, "visibility", "visible");
+    });
+  };
+
   const applySettingsToForm = (settings) => {
     mapBordersInput.checked = Boolean(settings.mapDistrictBorders);
     mapAllianceSymbolsInput.checked = Boolean(settings.mapAllianceSymbols);
@@ -134,6 +211,7 @@ function bindSettingsModal(root) {
     applySettingsToForm(settingsSnapshot);
     modal.classList.remove("hidden");
     syncMobileSettingsBackdropState(true);
+    applyOpaqueMobileSettingsStyles();
   };
 
   const saveSettings = () => {

@@ -243,7 +243,7 @@ html body .wanted-popup-card .wanted-popup-police-feed.police-feed-panel {
   }
 
   html.game-modal-scroll-locked {
-    --mobile-topbar-offset: var(--mobile-overlay-top-offset, 72px) !important;
+    --mobile-topbar-offset: 0px !important;
   }
 
   body.game-body {
@@ -544,13 +544,14 @@ html body .wanted-popup-card .wanted-popup-police-feed.police-feed-panel {
   }
 
   #profile-gang-card .gang-profile-row:has(#profile-alliance) .gang-profile-row__label {
+    justify-content: flex-start !important;
     min-width: 68px !important;
-    text-align: right !important;
+    text-align: left !important;
   }
 
   #profile-alliance {
     min-width: 68px !important;
-    text-align: center !important;
+    text-align: right !important;
   }
 
   #game-left-nav.panel-action-stack {
@@ -3817,6 +3818,299 @@ html body .storage-popup-heading > .storage-popup-close::before {
   }
 }
 
+/* Keep the market close button pinned to the header corner on phones. */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+  html body .market-popup-shell[data-market-popup] .market-popup-card {
+    padding-top: 14px !important;
+  }
+
+  html body .market-popup-shell[data-market-popup] .market-popup-heading {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start !important;
+    justify-content: stretch !important;
+    gap: 6px !important;
+    min-height: 34px !important;
+    height: auto !important;
+    margin: 0 0 8px !important;
+    padding: 0 42px 0 0 !important;
+    transform: none !important;
+  }
+
+  html body .market-popup-shell[data-market-popup] .market-popup-heading > .market-popup-eyebrow,
+  html body .market-popup-shell[data-market-popup] .market-popup-heading > .market-popup-server {
+    justify-self: start !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    text-align: left !important;
+  }
+
+  html body .market-popup-shell[data-market-popup] .market-popup-heading > .market-popup-close {
+    position: absolute !important;
+    inset: 0 0 auto auto !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: auto !important;
+    left: auto !important;
+    z-index: 56 !important;
+    flex: none !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
+    margin: 0 !important;
+    transform: none !important;
+  }
+
+  html body .market-popup-shell[data-market-popup] .market-popup-title {
+    margin-top: 0 !important;
+  }
+}
+
+/* Mobile settings dialog must stay readable over the city background. */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+  html body #settings-modal:not(.hidden) {
+    background: rgba(0, 0, 0, 0.28) !important;
+  }
+
+  html body #settings-modal:not(.hidden) > #settings-modal-backdrop.modal__backdrop {
+    background:
+      radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.18), transparent 38%),
+      radial-gradient(circle at 100% 100%, rgba(236, 72, 153, 0.12), transparent 42%),
+      rgba(1, 5, 12, 0.9) !important;
+    opacity: 1 !important;
+    backdrop-filter: blur(10px) saturate(0.85) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(0.85) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content {
+    isolation: isolate !important;
+    width: min(392px, calc(100vw - 18px)) !important;
+    max-height: min(82svh, 620px) !important;
+    border-radius: 18px !important;
+    border-color: rgba(103, 232, 249, 0.52) !important;
+    background:
+      radial-gradient(circle at 82% -10%, rgba(34, 211, 238, 0.26), transparent 36%),
+      radial-gradient(circle at 6% 104%, rgba(236, 72, 153, 0.18), transparent 42%),
+      linear-gradient(180deg, #050d1b, #020610) !important;
+    background-color: #020610 !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.11),
+      inset 0 0 34px rgba(34, 211, 238, 0.07),
+      0 24px 58px rgba(0, 0, 0, 0.68),
+      0 0 30px rgba(34, 211, 238, 0.22),
+      0 0 48px rgba(236, 72, 153, 0.12) !important;
+    opacity: 1 !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content::before {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 0 auto 0 !important;
+    z-index: 0 !important;
+    height: 4px !important;
+    background:
+      linear-gradient(90deg, rgba(34, 211, 238, 0.95), rgba(236, 72, 153, 0.9), rgba(96, 165, 250, 0.9)) !important;
+    box-shadow:
+      0 0 16px rgba(34, 211, 238, 0.58),
+      0 0 22px rgba(236, 72, 153, 0.28) !important;
+    pointer-events: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content::after {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, 0.045), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.03)),
+      repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 12px) !important;
+    opacity: 0.48 !important;
+    pointer-events: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content > * {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content > .modal__header {
+    min-height: 58px !important;
+    padding: 17px 58px 14px 16px !important;
+    border-bottom-color: rgba(103, 232, 249, 0.22) !important;
+    background:
+      linear-gradient(135deg, rgba(34, 211, 238, 0.13), rgba(236, 72, 153, 0.07) 48%, #040b18) !important;
+    background-color: #040b18 !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content > .modal__header h3 {
+    color: #f0fdff !important;
+    font-size: 1.04rem !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    text-shadow:
+      0 0 14px rgba(34, 211, 238, 0.42),
+      0 0 24px rgba(236, 72, 153, 0.14) !important;
+  }
+
+  html body #settings-modal:not(.hidden) #settings-modal-close.modal__close {
+    top: 13px !important;
+    right: 14px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    border-color: rgba(103, 232, 249, 0.58) !important;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.22), transparent 42%),
+      linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(236, 72, 153, 0.16)),
+      rgba(3, 8, 18, 0.9) !important;
+    color: #e6fbff !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.11),
+      0 0 16px rgba(34, 211, 238, 0.3),
+      0 0 20px rgba(236, 72, 153, 0.14) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__body {
+    gap: 11px !important;
+    padding: 14px !important;
+    background:
+      linear-gradient(180deg, #030916, #020610) !important;
+    background-color: #020610 !important;
+    opacity: 1 !important;
+    animation: none !important;
+    overflow-x: hidden !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__body > *,
+  html body #settings-modal:not(.hidden) .settings-modal__actions,
+  html body #settings-modal:not(.hidden) .settings-modal__row,
+  html body #settings-modal:not(.hidden) .settings-modal__section-title {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__section-title {
+    width: max-content !important;
+    max-width: 100% !important;
+    padding: 5px 9px !important;
+    border: 1px solid rgba(103, 232, 249, 0.24) !important;
+    border-radius: 999px !important;
+    background: rgba(3, 8, 18, 0.74) !important;
+    color: #a7f3ff !important;
+    font-size: 0.58rem !important;
+    letter-spacing: 0.16em !important;
+    box-shadow: 0 0 14px rgba(34, 211, 238, 0.1) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__row {
+    position: relative !important;
+    overflow: hidden !important;
+    min-height: 62px !important;
+    padding: 12px 13px !important;
+    border-radius: 13px !important;
+    border-color: rgba(103, 232, 249, 0.24) !important;
+    background:
+      radial-gradient(circle at right top, rgba(14, 165, 233, 0.15), transparent 44%),
+      linear-gradient(135deg, #061122, #071426) !important;
+    background-color: #061122 !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.065),
+      inset 0 0 18px rgba(34, 211, 238, 0.05),
+      0 10px 24px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__row::before {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 auto 0 0 !important;
+    width: 3px !important;
+    background: linear-gradient(180deg, rgba(34, 211, 238, 0.9), rgba(236, 72, 153, 0.8)) !important;
+    box-shadow: 0 0 14px rgba(34, 211, 238, 0.38) !important;
+    pointer-events: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__label {
+    color: #edfaff !important;
+    font-size: 0.82rem !important;
+    font-weight: 850 !important;
+    letter-spacing: 0.01em !important;
+    text-shadow: 0 0 10px rgba(34, 211, 238, 0.18) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-toggle {
+    justify-self: start !important;
+  }
+
+  html body #settings-modal:not(.hidden) .toggle__track {
+    border-color: rgba(103, 232, 249, 0.36) !important;
+    background:
+      linear-gradient(180deg, rgba(3, 8, 18, 0.98), rgba(6, 16, 31, 0.98)) !important;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+      inset 0 0 18px rgba(34, 211, 238, 0.07),
+      0 0 14px rgba(34, 211, 238, 0.1) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .toggle__track::after {
+    background: linear-gradient(180deg, #f7fdff, #67e8f9) !important;
+    box-shadow:
+      0 0 14px rgba(103, 232, 249, 0.42),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.7) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .toggle input:checked + .toggle__track {
+    border-color: rgba(236, 72, 153, 0.58) !important;
+    background:
+      linear-gradient(135deg, rgba(34, 211, 238, 0.34), rgba(236, 72, 153, 0.26)),
+      rgba(3, 8, 18, 0.98) !important;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 0 18px rgba(34, 211, 238, 0.2),
+      0 0 22px rgba(236, 72, 153, 0.14) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__select select {
+    min-height: 42px !important;
+    border-color: rgba(103, 232, 249, 0.34) !important;
+    border-radius: 12px !important;
+    background-color: #030812 !important;
+    color: #e6fbff !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.055),
+      0 0 16px rgba(34, 211, 238, 0.1) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__actions {
+    gap: 9px !important;
+    padding-top: 2px !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__save-btn {
+    min-height: 44px !important;
+    width: 100% !important;
+    border-color: rgba(103, 232, 249, 0.72) !important;
+    border-radius: 12px !important;
+    background:
+      linear-gradient(135deg, rgba(8, 145, 178, 0.98), rgba(59, 130, 246, 0.94) 50%, rgba(236, 72, 153, 0.82)) !important;
+    color: #f0fdff !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 12px 26px rgba(14, 165, 233, 0.26),
+      0 0 24px rgba(34, 211, 238, 0.26),
+      0 0 28px rgba(236, 72, 153, 0.14) !important;
+  }
+}
+
 /* Compact mobile action/result modals. Keep action colors consistent with the launch buttons. */
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
   html body #spy-confirm-modal,
@@ -4293,11 +4587,11 @@ html body .storage-popup-heading > .storage-popup-close::before {
   }
 }
 
-/* Mobile overlays must start below the visible resource strip, never under it. */
+/* Mobile overlays open from the top; the resource/top bars are hidden while cards are active. */
 @media (max-width: 720px), (hover: none), (pointer: coarse), (any-hover: none), (any-pointer: coarse) {
   html.game-modal-scroll-locked {
-    --mobile-overlay-card-top: max(var(--mobile-overlay-top-offset, 72px), 72px);
-    --mobile-overlay-card-gap: 8px;
+    --mobile-overlay-card-top: max(env(safe-area-inset-top), 0px);
+    --mobile-overlay-card-gap: 6px;
   }
 
   html body.game-modal-scroll-locked #spy-confirm-modal,
@@ -4380,12 +4674,12 @@ html body .storage-popup-heading > .storage-popup-close::before {
   }
 }
 
-/* Hard guard: large mobile windows must never open under the resource strip. */
+/* Hard guard: large mobile windows must open from the top of the phone viewport. */
 @media (max-width: 720px), (hover: none), (pointer: coarse), (any-hover: none), (any-pointer: coarse) {
   html.game-modal-scroll-locked {
-    --mobile-topbar-offset: var(--mobile-overlay-top-offset, 72px) !important;
-    --mobile-overlay-card-top: max(var(--mobile-overlay-top-offset, 72px), 72px);
-    --mobile-overlay-card-gap: 8px;
+    --mobile-topbar-offset: 0px !important;
+    --mobile-overlay-card-top: max(env(safe-area-inset-top), 0px);
+    --mobile-overlay-card-gap: 6px;
     --mobile-overlay-available-height: calc(
       var(--mobile-locked-vh, 100svh) - var(--mobile-overlay-card-top) - var(--mobile-overlay-card-gap) - max(8px, env(safe-area-inset-bottom))
     );
@@ -4397,6 +4691,7 @@ html body .storage-popup-heading > .storage-popup-close::before {
   html body.game-modal-scroll-locked .pharmacy-popup-shell:not([hidden]),
   html body.game-modal-scroll-locked .druglab-popup-shell:not([hidden]),
   html body.game-modal-scroll-locked .factory-popup-shell:not([hidden]),
+  html body.game-modal-scroll-locked .market-popup-shell:not([hidden]),
   html body.game-modal-scroll-locked .district-building-detail-shell:not([hidden]) {
     position: fixed !important;
     inset: 0 !important;
@@ -4417,7 +4712,8 @@ html body .storage-popup-heading > .storage-popup-close::before {
   html body.game-modal-scroll-locked .armory-popup-shell:not([hidden]) .armory-popup-card.building-detail-modal__content,
   html body.game-modal-scroll-locked .pharmacy-popup-shell:not([hidden]) .pharmacy-popup-card.building-detail-modal__content,
   html body.game-modal-scroll-locked .druglab-popup-shell:not([hidden]) .druglab-popup-card.building-detail-modal__content,
-  html body.game-modal-scroll-locked .factory-popup-shell:not([hidden]) .factory-popup-card.building-detail-modal__content {
+  html body.game-modal-scroll-locked .factory-popup-shell:not([hidden]) .factory-popup-card.building-detail-modal__content,
+  html body.game-modal-scroll-locked .market-popup-shell:not([hidden]) .market-popup-card {
     position: relative !important;
     inset: auto !important;
     top: auto !important;
@@ -4457,5 +4753,92 @@ html body .storage-popup-heading > .storage-popup-close::before {
     right: 10px !important;
     left: 10px !important;
     max-height: var(--mobile-overlay-available-height) !important;
+  }
+}
+
+/* Final hard override: mobile settings is an opaque panel, not glass. */
+@media (max-width: 720px), (hover: none) and (pointer: coarse), (any-hover: none), (any-pointer: coarse) {
+  html body #settings-modal:not(.hidden) {
+    background: #01040b !important;
+  }
+
+  html body #settings-modal:not(.hidden) > #settings-modal-backdrop.modal__backdrop {
+    background: #01040b !important;
+    opacity: 1 !important;
+    animation: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content,
+  html body #settings-modal:not(.hidden) .modal__content.settings-modal__content,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__content,
+  html body.mobile-settings-modal-open #settings-modal .modal__content.settings-modal__content {
+    background: #030814 !important;
+    background-color: #030814 !important;
+    background-image: none !important;
+    opacity: 1 !important;
+    animation: none !important;
+    border: 1px solid rgba(103, 232, 249, 0.72) !important;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      inset 0 0 34px rgba(34, 211, 238, 0.1),
+      0 22px 56px rgba(0, 0, 0, 0.76),
+      0 0 34px rgba(34, 211, 238, 0.28),
+      0 0 44px rgba(236, 72, 153, 0.18) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content::after,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__content::after {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+    background:
+      linear-gradient(90deg, rgba(34, 211, 238, 0.18), transparent 22%, transparent 78%, rgba(236, 72, 153, 0.14)),
+      repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 12px) !important;
+    opacity: 1 !important;
+    pointer-events: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content > .modal__header,
+  html body #settings-modal:not(.hidden) .settings-modal__body,
+  html body #settings-modal:not(.hidden) .settings-modal__row,
+  html body #settings-modal:not(.hidden) .settings-modal__actions,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__content > .modal__header,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__body,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__row,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__actions {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__content > .modal__header,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__content > .modal__header {
+    background: #061123 !important;
+    background-color: #061123 !important;
+    background-image: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__body,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__body {
+    background: #020610 !important;
+    background-color: #020610 !important;
+    background-image: none !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__row,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__row {
+    background: #071426 !important;
+    background-color: #071426 !important;
+    background-image: none !important;
+    border-color: rgba(103, 232, 249, 0.36) !important;
+  }
+
+  html body #settings-modal:not(.hidden) .settings-modal__select select,
+  html body.mobile-settings-modal-open #settings-modal .settings-modal__select select {
+    background: #030812 !important;
+    background-color: #030812 !important;
+    color: #e6fbff !important;
   }
 }

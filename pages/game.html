@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Empire Streets | Game Shell</title>
-    <link rel="stylesheet" href="../page-assets/css/styles.css">
+    <link rel="stylesheet" href="../page-assets/css/styles.css?v=settings-opaque-20260514">
     <link rel="stylesheet" href="../page-assets/css/styles-game-admin-slice.css">
   </head>
   <body class="game-body game-body--booting">
@@ -157,6 +157,15 @@
                       <path d="M5.5 5.5V9.2"></path>
                     </svg>
                   </button>
+                  <button
+                    type="button"
+                    class="button map-faction-action-btn map-faction-action-btn--desktop"
+                    data-faction-actions-open-trigger
+                    aria-label="Frakční akce"
+                    title="Frakční akce"
+                  >
+                    <span aria-hidden="true">F</span>
+                  </button>
                   <button class="button map-boost-btn map-boost-btn--desktop" type="button" data-boost-open-trigger aria-label="Boost">
                     Boost
                   </button>
@@ -233,6 +242,15 @@
                   <path d="M5.5 5.5H9.2"></path>
                   <path d="M5.5 5.5V9.2"></path>
                 </svg>
+              </button>
+              <button
+                type="button"
+                class="button map-faction-action-btn"
+                data-faction-actions-open-trigger
+                aria-label="Frakční akce"
+                title="Frakční akce"
+              >
+                <span aria-hidden="true">F</span>
               </button>
               <button class="button map-boost-btn" type="button" data-boost-open-trigger aria-label="Boost">
                 Boost
@@ -1983,6 +2001,26 @@
         </div>
       </div>
 
+      <div id="faction-actions-modal" class="modal hidden faction-actions-modal">
+        <div id="faction-actions-modal-backdrop" class="modal__backdrop"></div>
+        <div class="modal__content modal__content--profile faction-actions-modal__content">
+          <div class="modal__header faction-actions-modal__header">
+            <div>
+              <div class="faction-actions-modal__eyebrow">Faction uplink</div>
+              <h3>Frakční akce</h3>
+            </div>
+            <button class="modal__close" id="faction-actions-modal-close" aria-label="Zavřít">✕</button>
+          </div>
+          <div class="modal__body faction-actions-modal__body">
+            <div class="faction-actions-modal__intro">
+              Každá frakce drží jeden unikátní protokol. Vyber akci podle tlaku na mapě.
+            </div>
+            <div id="faction-actions-modal-grid" class="faction-actions-modal__grid"></div>
+            <div id="faction-actions-modal-status" class="faction-actions-modal__status">Frakční protokoly připravené.</div>
+          </div>
+        </div>
+      </div>
+
       <div id="settings-modal" class="modal hidden">
         <div id="settings-modal-backdrop" class="modal__backdrop"></div>
         <div class="modal__content modal__content--profile settings-modal__content">
@@ -2141,10 +2179,11 @@
     <script type="module" src="../page-assets/js/data/districtImages.js"></script>
     <script type="module" src="../page-assets/js/data/buildings.js"></script>
     <script type="module" src="../page-assets/js/data/events.js"></script>
-    <script type="module" src="../page-assets/js/app.js"></script>
+    <script type="module" src="../page-assets/js/app.js?v=settings-opaque-20260514"></script>
     <script type="module" src="../page-assets/js/app/city-events-runtime.js"></script>
     <script type="module" src="../page-assets/js/app/alliance-runtime.js"></script>
     <script type="module" src="../page-assets/js/app/bounty-runtime.js"></script>
+    <script type="module" src="../page-assets/js/app/faction-actions-runtime.js"></script>
     <script type="module" src="../page-assets/js/app/boost-runtime.js"></script>
     <script type="module" src="../page-assets/js/app/mobile-layout-runtime.js"></script>
     <script type="module" src="../page-assets/js/app/game-admin-slice-launcher.js"></script>

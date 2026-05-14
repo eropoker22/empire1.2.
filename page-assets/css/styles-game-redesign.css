@@ -2268,6 +2268,8 @@ body.game-body--booting .game-logo-slot {
 #profile-gang-card .gang-profile-row__label {
   color: rgba(191, 219, 254, 0.82);
   font-size: 0.62rem;
+  justify-content: flex-start !important;
+  text-align: left !important;
 }
 
 #profile-gang-card .gang-profile-row span {
@@ -2277,9 +2279,8 @@ body.game-body--booting .game-logo-slot {
 }
 
 #profile-gang-card .gang-profile-row:has(#profile-alliance) {
-  grid-template-columns: auto minmax(0, auto);
-  justify-content: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 #profile-alliance {
@@ -2291,7 +2292,7 @@ body.game-body--booting .game-logo-slot {
   color: #eef6ff;
   font-size: clamp(0.58rem, 0.72vw, 0.68rem) !important;
   line-height: 1.1;
-  text-align: center !important;
+  text-align: right !important;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3120,6 +3121,7 @@ body.game-body--booting .game-logo-slot {
   }
 
   .map-bounty-shortcut,
+  .map-faction-action-btn,
   .map-boost-btn {
     min-height: 16px;
     border-radius: 999px;
@@ -3148,6 +3150,17 @@ body.game-body--booting .game-logo-slot {
     width: 16px;
     min-width: 16px;
     height: 16px;
+  }
+
+  .map-faction-action-btn {
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
+    min-height: 16px;
+  }
+
+  .map-faction-action-btn span {
+    font-size: 0.58rem;
   }
 
   .map-boost-btn {
