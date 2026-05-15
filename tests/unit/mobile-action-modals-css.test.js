@@ -40,15 +40,17 @@ describe("mobile action modal CSS", () => {
   it("keeps the onboarding launch button attached to the leaderboard row on mobile", () => {
     expect(mobileRuntime).toContain('const leaderboardLaunchRow = leaderboardCard?.closest(".leaderboard-launch-row");');
     expect(mobileRuntime).toContain("const leaderboardBlock = leaderboardLaunchRow || leaderboardCard;");
-    expect(mobileRuntime).toContain("moveElementAfterAnchor(globalChatCard, allianceChatCard);");
-    expect(mobileRuntime).toContain("moveElementAfterAnchor(allianceChatCard, leaderboardBlock);");
+    expect(mobileRuntime).toContain('const streetNewsAnchor = documentObj.getElementById("mobile-alliance-card-anchor");');
+    expect(mobileRuntime).toContain("moveElementAfterAnchor(streetNewsAnchor, allianceChatCard);");
+    expect(mobileRuntime).toContain("moveElementAfterAnchor(allianceChatCard, globalChatCard);");
     expect(mobileRuntime).toContain("moveElementAfterAnchor(globalChatCard, leaderboardBlock);");
-    expect(mobileRuntime).not.toContain("moveElementAfterAnchor(allianceChatCard, globalChatCard);");
     expect(mobileRuntime).not.toContain("moveElementAfterAnchor(globalChatCard, leaderboardCard);");
     for (const stylesheet of [css, clientCss]) {
+      expect(stylesheet).toContain(".leaderboard-launch-row,\n  #leaderboard-card");
       expect(stylesheet).toContain(".leaderboard-launch-row #leaderboard-card");
       expect(stylesheet).toContain("grid-column: auto !important;");
       expect(stylesheet).toContain(".leaderboard-launch-row #onboarding-launch-button");
+      expect(stylesheet).toContain("padding-bottom: 0 !important;");
     }
   });
 

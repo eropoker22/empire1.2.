@@ -567,7 +567,7 @@ html body .wanted-popup-card .wanted-popup-police-feed.police-feed-panel {
     gap: 8px !important;
     margin-top: 8px !important;
     padding-top: 0 !important;
-    padding-bottom: 16px !important;
+    padding-bottom: 0 !important;
   }
 
   #game-left-nav.panel-action-stack::before {
@@ -575,18 +575,7 @@ html body .wanted-popup-card .wanted-popup-police-feed.police-feed-panel {
   }
 
   #game-left-nav.panel-action-stack::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    border-radius: 999px;
-    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.76), rgba(244, 114, 182, 0.58), transparent);
-    box-shadow:
-      0 0 8px rgba(34, 211, 238, 0.42),
-      0 0 14px rgba(244, 114, 182, 0.22);
-    pointer-events: none;
+    content: none !important;
   }
 
   #city-events-card,
@@ -634,6 +623,9 @@ html body .wanted-popup-card .wanted-popup-police-feed.police-feed-panel {
 
   #building-shortcut-grid,
   .building-action-status,
+  #alliance-chat-card,
+  #global-chat-card,
+  .leaderboard-launch-row,
   #leaderboard-card {
     grid-column: 1 / -1 !important;
   }
@@ -763,6 +755,8 @@ html body .wanted-popup-card .wanted-popup-police-feed.police-feed-panel {
   }
 
   #game-rail-left > #leaderboard-card,
+  #game-rail-left > #alliance-chat-card,
+  #game-rail-left > #global-chat-card,
   #game-rail-right > #leaderboard-card {
     width: 100% !important;
     min-height: 34px !important;
@@ -772,6 +766,39 @@ html body .wanted-popup-card .wanted-popup-police-feed.police-feed-panel {
     gap: 6px;
     border-radius: 11px;
     font-size: 0.52rem !important;
+  }
+
+  #game-rail-left > #alliance-chat-card {
+    position: relative !important;
+  }
+
+  #game-rail-left > #alliance-chat-card::after {
+    content: none !important;
+  }
+
+  #game-rail-left > #global-chat-card {
+    position: relative !important;
+    padding-top: 14px !important;
+  }
+
+  #game-rail-left > #global-chat-card::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 4px;
+    left: 10px;
+    right: 10px;
+    height: 1px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.74), rgba(244, 114, 182, 0.58), transparent);
+    box-shadow:
+      0 0 8px rgba(34, 211, 238, 0.42),
+      0 0 14px rgba(244, 114, 182, 0.22);
+    pointer-events: none;
+  }
+
+  #game-rail-left > #global-chat-card .alliance-chat.server-chat-panel::after {
+    content: none !important;
   }
 
   .leaderboard-button__icon {

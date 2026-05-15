@@ -216,11 +216,20 @@ function initMobilePrimaryActionCardsPlacement(documentObj = document) {
 function initMobileLeaderboardPlacement(windowObj = window, documentObj = document) {
   const leaderboardCard = documentObj.getElementById("leaderboard-card");
   const leaderboardAnchor = documentObj.getElementById("leaderboard-card-anchor");
+  const streetNewsAnchor = documentObj.getElementById("mobile-alliance-card-anchor");
   const globalChatCard = documentObj.getElementById("global-chat-card");
+  const globalChatAnchor = documentObj.getElementById("global-chat-card-anchor");
   const allianceChatCard = documentObj.getElementById("alliance-chat-card");
+  const allianceChatAnchor = documentObj.getElementById("alliance-chat-card-anchor");
   const leaderboardLaunchRow = leaderboardCard?.closest(".leaderboard-launch-row");
 
-  if (!leaderboardCard || !leaderboardAnchor || !globalChatCard) {
+  if (
+    !leaderboardCard
+    || !leaderboardAnchor
+    || !globalChatCard
+    || !globalChatAnchor
+    || !allianceChatAnchor
+  ) {
     return;
   }
 
@@ -231,14 +240,21 @@ function initMobileLeaderboardPlacement(windowObj = window, documentObj = docume
 
     if (media.matches) {
       if (allianceChatCard) {
-        moveElementAfterAnchor(globalChatCard, allianceChatCard);
-        moveElementAfterAnchor(allianceChatCard, leaderboardBlock);
+        if (streetNewsAnchor) {
+          moveElementAfterAnchor(streetNewsAnchor, allianceChatCard);
+        }
+        moveElementAfterAnchor(allianceChatCard, globalChatCard);
+        moveElementAfterAnchor(globalChatCard, leaderboardBlock);
         return;
       }
       moveElementAfterAnchor(globalChatCard, leaderboardBlock);
       return;
     }
 
+    if (allianceChatCard) {
+      moveElementAfterAnchor(allianceChatAnchor, allianceChatCard);
+    }
+    moveElementAfterAnchor(globalChatAnchor, globalChatCard);
     moveElementAfterAnchor(leaderboardAnchor, leaderboardBlock);
   };
 
