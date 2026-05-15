@@ -46,12 +46,20 @@ describe("Empire onboarding flow", () => {
       expect(step.body.length).toBeGreaterThan(0);
       expect(step).toEqual(expect.objectContaining({
         id: expect.any(String),
+        phase: expect.any(String),
+        badge: expect.any(String),
+        kind: expect.any(String),
+        subtitle: expect.any(String),
         placement: expect.any(String),
         completionCondition: expect.any(String),
         canSkip: expect.any(Boolean),
         highlightType: expect.any(String)
       }));
       expect(step).toHaveProperty("targetSelector");
+      expect(step.phase.length).toBeGreaterThan(0);
+      expect(step.badge.length).toBeGreaterThan(0);
+      expect(step.subtitle.length).toBeGreaterThan(0);
+      expect(["dirty", "objective", "map", "intel", "money", "resource", "danger", "system"]).toContain(step.kind);
     }
   });
 
@@ -134,6 +142,7 @@ describe("Empire onboarding flow", () => {
 
     expect(state.status).toBe("fallback");
     expect(state.missingTarget).toBe(true);
+    expect(state.fallbackTitle).toBe("Tenhle kus UI se schoval.");
     expect(state.fallback).toBe("fallback");
   });
 

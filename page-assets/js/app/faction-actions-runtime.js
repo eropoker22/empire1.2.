@@ -9,10 +9,10 @@ const PREVIEW_BY_FACTION_ID = Object.freeze({
   kartel: "Pasivně tlačí dirty cash a ilegální produkci. Aktivní schopnost zatím není core-backed.",
   kult: "Pasivně zvedá influence a obranu districtů. Aktivní schopnost zatím není core-backed.",
   "tajna-organizace": "Pasivně zlepšuje špehování a snižuje heat. Aktivní schopnost zatím není core-backed.",
-  hackeri: "Pasivně posilují tech produkci a intel. Aktivní schopnost zatím není core-backed.",
+  hackeri: "Pasivně posilují tech produkci a spy/intel. Market fee bonus je zatím plánovaný. Aktivní schopnost zatím není core-backed.",
   "motorkarsky-gang": "Pasivně zrychluje útoky a drží dirty tempo. Aktivní schopnost zatím není core-backed.",
-  "soukroma-armada": "Pasivně posiluje útok a obranu. Aktivní schopnost zatím není core-backed.",
-  korporace: "Pasivně posiluje clean economy a finance. Aktivní schopnost zatím není core-backed."
+  "soukroma-armada": "Pasivně posiluje útok a obranu. Equipment loss bonus je zatím plánovaný. Aktivní schopnost zatím není core-backed.",
+  korporace: "Pasivně posiluje clean economy a zpomalený combat má menší trest. Market fee bonus je zatím plánovaný. Aktivní schopnost zatím není core-backed."
 });
 
 function escapeHtml(value) {

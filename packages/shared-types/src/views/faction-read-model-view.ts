@@ -8,6 +8,7 @@ export interface FactionReadModel {
   strengths: string[];
   weaknesses: string[];
   activePassiveEffects: string[];
+  plannedPassiveEffects: string[];
   startingPackageSummary: string[];
   uiTheme: FactionUiTheme;
 }

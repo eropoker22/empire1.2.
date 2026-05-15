@@ -84,6 +84,85 @@ describe("gameplay slice Netlify function", () => {
     expect(duplicate.json.accepted).toBe(false);
     expect(duplicate.json.errors[0].code).toBe("server.duplicate_command");
   });
+
+  it("preserves factionId through cold snapshot submit flow", async () => {
+    const loadHandler = createTestHandler();
+    const load = await readBody(
+      loadHandler(
+        postEvent("/api/gameplay-slice/load", {
+          serverInstanceId: "instance:function-faction-snapshot",
+          playerId: "player:function-faction-snapshot",
+          districtId: "district:44",
+          factionId: "kartel"
+        })
+      )
+    );
+
+    expect(load.statusCode).toBe(200);
+    expect(load.json.readModel.player.factionId).toBe("kartel");
+
+    const building = load.json.readModel.district.buildings.find(
+      (candidate: { actions: unknown[] }) => candidate.actions.length > 0
+    );
+    const action = building.actions[0];
+    const command = {
+      id: "command:function:faction-snapshot-submit:1",
+      type: "run-building-action",
+      mode: load.json.readModel.mode.mode,
+      playerId: "player:function-faction-snapshot",
+      serverInstanceId: "instance:function-faction-snapshot",
+      issuedAt: new Date(0).toISOString(),
+      payload: {
+        districtId: "district:44",
+        buildingId: building.buildingId,
+        actionId: action.actionId
+      },
+      clientRequestId: null
+    };
+    const submitHandler = createTestHandler();
+    const submit = await readBody(
+      submitHandler(
+        postEvent("/api/gameplay-slice/submit", {
+          snapshotToken: load.json.snapshotToken,
+          focusDistrictId: "district:44",
+          command
+        })
+      )
+    );
+
+    expect(submit.statusCode).toBe(200);
+    expect(submit.json.accepted).toBe(true);
+    expect(submit.json.readModel.player.factionId).toBe("kartel");
+  });
+
+  it("rejects cold submit without snapshot instead of silently creating mafian fallback", async () => {
+    const submitHandler = createTestHandler();
+    const submit = await readBody(
+      submitHandler(
+        postEvent("/api/gameplay-slice/submit", {
+          focusDistrictId: "district:55",
+          command: {
+            id: "command:function:cold-submit-without-snapshot:1",
+            type: "collect-production",
+            mode: "free",
+            playerId: "player:cold-submit-without-snapshot",
+            serverInstanceId: "instance:function-cold-submit-without-snapshot",
+            issuedAt: new Date(0).toISOString(),
+            payload: {
+              districtId: "district:55",
+              buildingId: "building:district:55:factory:1"
+            },
+            clientRequestId: null
+          }
+        })
+      )
+    );
+
+    expect(submit.statusCode).toBe(200);
+    expect(submit.json.accepted).toBe(false);
+    expect(submit.json.readModel).toBeNull();
+    expect(submit.json.errors[0].code).toBe("transport.not_found");
+  });
 });
 
 const createTestHandler = () => createGameplaySliceFunctionHandler({

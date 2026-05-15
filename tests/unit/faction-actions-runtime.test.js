@@ -24,8 +24,9 @@ describe("faction actions runtime", () => {
     expect(action).toMatchObject({
       factionId: "hackeri",
       name: "Hackeři",
-      code: "Grid Breach"
+      code: "Passive foundation"
     });
+    expect(action.effect).toContain("Aktivní schopnost zatím není core-backed");
   });
 
   it("prefers selectedFaction from the locked registration", () => {
@@ -39,7 +40,7 @@ describe("faction actions runtime", () => {
     expect(getCurrentPlayerFactionId(storage)).toBe("korporace");
     expect(getFactionActionForPlayer(storage)).toMatchObject({
       factionId: "korporace",
-      code: "Legal Cover"
+      code: "Passive foundation"
     });
   });
 });

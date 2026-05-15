@@ -10,13 +10,17 @@ import {
 import { createFreeModePacingState } from "./state";
 import { applyPacingVariantToConfig, FREE_MODE_PACING_VARIANTS, resolveFreeModePacingVariant } from "./variants";
 import { createFactionWinRate } from "./factionMetrics";
+import { aggregateFactionBalanceStats, createFactionBalanceStats } from "./factionBalanceStats";
+import { createBehaviorProfileReport } from "./factionBotBehavior";
 import { recordEliminationTimelineEntries } from "./timeline";
 import {
   createInitialPacingMetrics,
   type FreeModePacingOptions,
+  type PacingMultiSeedFactionReport,
   type PacingVariantSuiteResult,
   type PacingSimulationResult
 } from "./types";
+import { PLAYER_FACTION_IDS, type PlayerFactionId } from "@empire/shared-types";
 
 const DEFAULT_CHECKPOINT_HOURS = [24, 48, 72, 96];
 const DEFAULT_BOT_COUNT = 20;
@@ -82,6 +86,7 @@ export const runFreeModePacingSimulation = (
       allowDurationVictoryFallback: config.balance.allowDurationVictoryFallback ?? true
     },
     finalState: state,
+    factionBalanceStats: createFactionBalanceStats(state, ticksPerHour, metrics.factionActionStats),
     snapshots,
     eliminationTimeline: metrics.eliminationTimeline,
     milestones: {
@@ -115,3 +120,92 @@ export const runFreeModePacingVariantSuite = (
     factionWinRate: createFactionWinRate(results.map((result) => result.finalState))
   };
 };
+
+export const runFreeModePacingMultiSeedAudit = (
+  options: FreeModePacingOptions = {}
+): PacingMultiSeedFactionReport => {
+  const seedCount = Math.max(1, Math.floor(options.seedCount ?? 20));
+  const variant = options.variant ?? resolveFreeModePacingVariant(
+    options.variantName ?? "elimination-8h-stop8-lower-catastrophe-faster-attacks"
+  );
+  const maxHours = options.maxHours ?? 96;
+  const botCount = options.botCount ?? DEFAULT_BOT_COUNT;
+  const districtCount = options.districtCount ?? DEFAULT_DISTRICT_COUNT;
+  const baseSeed = options.seed ?? "free-mode-faction-passive-audit";
+  const results = Array.from({ length: seedCount }, (_, index) =>
+    runFreeModePacingSimulation({
+      ...options,
+      seed: `${baseSeed}:${index + 1}`,
+      seedCount: undefined,
+      botCount,
+      districtCount,
+      maxHours,
+      checkpointHours: options.checkpointHours ?? [24, 48, 72, 96],
+      variant,
+      variantName: undefined
+    })
+  );
+  const factionWinRate = createFactionWinRate(results.map((result) => result.finalState));
+  const factionStats = aggregateFactionBalanceStats(
+    results.map((result) => result.factionBalanceStats),
+    factionWinRate
+  );
+
+  return {
+    variantName: variant.variantName,
+    seedCount,
+    simulatedHours: maxHours,
+    botCount,
+    districtCount,
+    results,
+    factionStats,
+    behaviorProfileByFaction: createBehaviorProfileReport(),
+    factionAttackRate: mapFactionStats(factionStats, "averageAttackCount"),
+    factionSpyRate: mapFactionStats(factionStats, "averageSpyAttempts"),
+    factionExpansionRate: mapFactionStats(factionStats, "averageSuccessfulAttacks"),
+    factionAverageHeat: mapFactionStats(factionStats, "averageHeat"),
+    factionDangerZoneEscapes: mapFactionStats(factionStats, "dangerZoneEscapes"),
+    factionTop8Rate: createTop8RateMap(factionStats, botCount),
+    factionAverageFinalPlacement: mapFactionStats(factionStats, "averageFinalPlacement"),
+    topFactionByControl: findTopFactionByMetric(factionStats, "averageControlledDistricts"),
+    strongestFaction: findTopFactionByMetric(factionStats, "averageFinalPlacement", "asc"),
+    weakestFaction: findTopFactionByMetric(factionStats, "averageFinalPlacement", "desc")
+  };
+};
+
+const mapFactionStats = (
+  stats: PacingMultiSeedFactionReport["factionStats"],
+  key: keyof PacingMultiSeedFactionReport["factionStats"][PlayerFactionId]
+): Record<PlayerFactionId, number> =>
+  Object.fromEntries(PLAYER_FACTION_IDS.map((factionId) => [factionId, round(Number(stats[factionId]?.[key] ?? 0))])) as Record<PlayerFactionId, number>;
+
+const createTop8RateMap = (
+  stats: PacingMultiSeedFactionReport["factionStats"],
+  botCount: number
+): Record<PlayerFactionId, number> =>
+  Object.fromEntries(
+    PLAYER_FACTION_IDS.map((factionId) => {
+      const expectedPlayers = Math.max(1, countFactionBots(botCount, factionId));
+      return [factionId, round(Number(stats[factionId]?.reachedTop8Count ?? 0) / expectedPlayers)];
+    })
+  ) as Record<PlayerFactionId, number>;
+
+const countFactionBots = (botCount: number, factionId: PlayerFactionId): number =>
+  Array.from({ length: Math.max(0, Math.floor(botCount)) }, (_, index) => PLAYER_FACTION_IDS[index % PLAYER_FACTION_IDS.length])
+    .filter((entry) => entry === factionId)
+    .length;
+
+const findTopFactionByMetric = (
+  stats: PacingMultiSeedFactionReport["factionStats"],
+  key: keyof PacingMultiSeedFactionReport["factionStats"][PlayerFactionId],
+  direction: "asc" | "desc" = "desc"
+): PlayerFactionId | null => {
+  const sorted = [...PLAYER_FACTION_IDS].sort((left, right) => {
+    const leftValue = Number(stats[left]?.[key] ?? 0);
+    const rightValue = Number(stats[right]?.[key] ?? 0);
+    return direction === "asc" ? leftValue - rightValue : rightValue - leftValue;
+  });
+  return sorted[0] ?? null;
+};
+
+const round = (value: number): number => Math.round(value * 100) / 100;

@@ -304,6 +304,7 @@ export function resolveOnboardingStepState(step = {}, readModel = {}, root = nul
     target,
     targetSelector: selector,
     missingTarget,
+    fallbackTitle: target ? null : (step.fallbackTitle || "Tenhle kus UI se schoval."),
     fallback: target ? null : (fallback || "Tahle část UI teď není dostupná. Pokračuj dál, pravidla zůstávají na serveru.")
   };
 }

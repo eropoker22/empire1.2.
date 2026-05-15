@@ -24,9 +24,7 @@ export const createFactionPacingMetrics = (
     if (player.status === "defeated") {
       eliminatedByFaction[factionId] += 1;
     }
-    survivalByFaction[factionId] += player.status === "active"
-      ? state.root.tick / Math.max(1, ticksPerHour)
-      : Number(player.metadata?.defeatedAtTick ?? state.root.tick) / Math.max(1, ticksPerHour);
+    survivalByFaction[factionId] += resolveSurvivalHours(state, player.id, ticksPerHour);
   }
 
   for (const district of Object.values(state.districtsById)) {
@@ -60,6 +58,19 @@ const createEmptyFactionNumberMap = (): Record<PlayerFactionId, number> =>
 
 const normalizeFactionId = (value: unknown): PlayerFactionId =>
   PLAYER_FACTION_IDS.includes(value as PlayerFactionId) ? value as PlayerFactionId : "mafian";
+
+const resolveSurvivalHours = (
+  state: CoreGameState,
+  playerId: string,
+  ticksPerHour: number
+): number => {
+  const player = state.playersById[playerId];
+  const eliminatedAtTick = Number(player?.metadata?.eliminatedAtTick ?? player?.metadata?.defeatedAtTick);
+  const survivedTicks = player?.status === "defeated" && Number.isFinite(eliminatedAtTick)
+    ? eliminatedAtTick
+    : state.root.tick;
+  return survivedTicks / Math.max(1, ticksPerHour);
+};
 
 const averageByFaction = (
   totals: Record<string, number>,

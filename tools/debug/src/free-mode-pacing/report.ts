@@ -7,6 +7,7 @@ import { createFactionPacingMetrics } from "./factionMetrics";
 import type {
   PacingMetrics,
   PacingMilestone,
+  PacingMultiSeedFactionReport,
   PacingSnapshot,
   PacingSimulationResult,
   PacingVariantName,
@@ -169,6 +170,36 @@ export const printVariantSuiteResult = (suite: PacingVariantSuiteResult): void =
   }
   console.log("\nFaction win rate");
   console.table(suite.factionWinRate);
+};
+
+export const printMultiSeedFactionReport = (report: PacingMultiSeedFactionReport): void => {
+  console.log("\nEmpire Streets faction passive multi-seed audit");
+  console.table({
+    variantName: report.variantName,
+    seedCount: report.seedCount,
+    simulatedHours: report.simulatedHours,
+    botCount: report.botCount,
+    districtCount: report.districtCount,
+    topFactionByControl: report.topFactionByControl,
+    strongestFaction: report.strongestFaction,
+    weakestFaction: report.weakestFaction
+  });
+  console.log("\nFaction bot behavior profiles");
+  console.table(report.behaviorProfileByFaction);
+  console.log("\nFaction behavior rates");
+  console.table({
+    factionAttackRate: report.factionAttackRate,
+    factionSpyRate: report.factionSpyRate,
+    factionExpansionRate: report.factionExpansionRate,
+    factionAverageHeat: report.factionAverageHeat,
+    factionDangerZoneEscapes: report.factionDangerZoneEscapes,
+    factionTop8Rate: report.factionTop8Rate,
+    factionAverageFinalPlacement: report.factionAverageFinalPlacement
+  });
+  console.log("\nFaction balance stats");
+  console.table(report.factionStats);
+  console.log("\nRun summaries");
+  console.table(report.results.map(createSimulationSummary));
 };
 
 export const createSimulationSummary = (result: PacingSimulationResult): Record<string, unknown> => {

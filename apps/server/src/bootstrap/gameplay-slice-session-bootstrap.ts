@@ -24,10 +24,7 @@ import {
   formatDistrictName,
   inferModeFromInstanceId
 } from "./gameplay-slice-bootstrap-format";
-import {
-  restoreGameplaySliceSessionFromSnapshot,
-  type EnsureGameplaySliceSessionOptions
-} from "./gameplay-slice-snapshot-restore";
+import { restoreGameplaySliceSessionFromSnapshot, type EnsureGameplaySliceSessionOptions } from "./gameplay-slice-snapshot-restore";
 
 export interface GameplaySliceSessionRequest {
   serverInstanceId: ServerInstanceId;
@@ -41,12 +38,12 @@ export const ensureGameplaySliceSession = async (
   instanceManager: ServerInstanceManager,
   request: LoadGameplaySliceRequest | SubmitGameplayCommandRequest,
   options: EnsureGameplaySliceSessionOptions = {}
-): Promise<void> => {
+): Promise<boolean> => {
   const sessionRequest = normalizeSessionRequest(request);
   const existingRuntime = instanceManager.getInstanceById(sessionRequest.serverInstanceId);
 
   if (existingRuntime) {
-    return;
+    return true;
   }
 
   const mode = sessionRequest.mode ?? inferModeFromInstanceId(sessionRequest.serverInstanceId);
@@ -60,7 +57,11 @@ export const ensureGameplaySliceSession = async (
   );
 
   if (restored) {
-    return;
+    return true;
+  }
+
+  if ("command" in request) {
+    return false;
   }
 
   const runtime = instanceManager.createInstance(sessionRequest.serverInstanceId, mode);
@@ -71,6 +72,7 @@ export const ensureGameplaySliceSession = async (
   });
 
   instanceManager.startInstance(sessionRequest.serverInstanceId);
+  return true;
 };
 
 const normalizeSessionRequest = (

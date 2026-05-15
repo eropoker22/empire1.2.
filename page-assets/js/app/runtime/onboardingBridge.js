@@ -200,6 +200,7 @@ export function createOnboardingBridge(deps = {}) {
   let readModel = createOnboardingReadModel({});
   let mount = null;
   let eventsBound = false;
+  const boundEvents = [];
 
   const getContext = () => ({
     ...(typeof deps.getContext === "function" ? safeObject(deps.getContext()) : {}),
@@ -299,6 +300,11 @@ export function createOnboardingBridge(deps = {}) {
     }
     eventsBound = true;
 
+    const addBoundEvent = (name, handler) => {
+      documentRef.addEventListener(name, handler);
+      boundEvents.push([name, handler]);
+    };
+
     const handleDistrictOpened = (event) => update({
       type: classifyDistrictOpen(getContext(), safeObject(event?.detail)),
       detail: event?.detail || {}
@@ -318,10 +324,10 @@ export function createOnboardingBridge(deps = {}) {
     ]);
 
     for (const [name, handler] of eventMap.entries()) {
-      documentRef.addEventListener(name, handler);
+      addBoundEvent(name, handler);
     }
 
-    documentRef.addEventListener("click", (event) => {
+    const handleClick = (event) => {
       const target = event?.target;
       if (!target?.closest) {
         return;
@@ -362,8 +368,20 @@ export function createOnboardingBridge(deps = {}) {
           detail: { actionId: actionButton.dataset?.districtActionId || "" }
         });
       }
-    });
+    };
+    addBoundEvent("click", handleClick);
 
+    return true;
+  };
+
+  const destroy = () => {
+    if (documentRef?.removeEventListener) {
+      for (const [name, handler] of boundEvents.splice(0)) {
+        documentRef.removeEventListener(name, handler);
+      }
+    }
+    eventsBound = false;
+    hidePanel();
     return true;
   };
 
@@ -384,6 +402,7 @@ export function createOnboardingBridge(deps = {}) {
     init,
     markDone: (stepId) => next(stepId),
     back,
+    destroy,
     render,
     restart,
     skip,

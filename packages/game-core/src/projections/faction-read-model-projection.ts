@@ -20,6 +20,7 @@ export const createFactionReadModel = (
     strengths: [...definition.strengths],
     weaknesses: [...definition.weaknesses],
     activePassiveEffects: [...definition.passiveEffectSummary],
+    plannedPassiveEffects: [...(definition.plannedPassiveEffectSummary ?? [])],
     startingPackageSummary: summarizeStartingPackage(definition.startingPackage),
     uiTheme: { ...definition.uiTheme }
   };

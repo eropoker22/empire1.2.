@@ -633,6 +633,24 @@ html body .wanted-popup-card .wanted-popup-police-feed.police-feed-panel {
     grid-column: 1 / -1 !important;
   }
 
+  .leaderboard-launch-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 36px !important;
+    align-items: stretch !important;
+    width: 100% !important;
+  }
+
+  .leaderboard-launch-row #leaderboard-card {
+    grid-column: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .leaderboard-launch-row #onboarding-launch-button {
+    grid-column: auto !important;
+    justify-self: end !important;
+  }
+
   #building-shortcut-grid {
     position: relative !important;
     margin-top: 24px !important;

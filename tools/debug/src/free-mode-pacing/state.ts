@@ -13,6 +13,7 @@ import {
   PLAYER_FACTION_IDS,
   type Player
 } from "@empire/shared-types";
+import { resolveFactionBotBehavior } from "./factionBotBehavior";
 
 const STARTING_LOADOUT = { "baseball-bat": 10, pistol: 5, grenade: 1 };
 
@@ -72,7 +73,7 @@ export const attachStarterBuildings = (
   districtId: string,
   playerId: string
 ): void => {
-  for (const buildingTypeId of ["restaurant", "factory", "armory", "warehouse"]) {
+  for (const buildingTypeId of resolveStarterBuildingTypes(state, playerId)) {
     if (state.districtsById[districtId]?.buildingIds.some((id) => state.buildingsById[id]?.buildingTypeId === buildingTypeId)) {
       continue;
     }
@@ -93,6 +94,12 @@ export const attachStarterBuildings = (
     state.buildingsById[building.id] = building;
     state.districtsById[districtId].buildingIds.push(building.id);
   }
+};
+
+const resolveStarterBuildingTypes = (state: CoreGameState, playerId: string): string[] => {
+  const profile = resolveFactionBotBehavior(state.playersById[playerId]?.factionId);
+  const fallback = ["restaurant", "factory", "armory", "warehouse"];
+  return [...new Set([...profile.preferredBuildingTypes, ...fallback])].slice(0, 4);
 };
 
 const addPlayer = (

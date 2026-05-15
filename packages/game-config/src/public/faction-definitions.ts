@@ -58,8 +58,9 @@ export const FACTION_DEFINITIONS: readonly FactionDefinition[] = [
     strengths: ["spy", "nízký heat", "kvalita informací"],
     weaknesses: ["slabší přímý combat", "menší startovní síla"],
     startingPackage: { cash: 150, dirtyCash: 70, resources: { "tech-core": 1 }, defenseLoadout: { cameras: 1 } },
-    passiveModifiers: { spySuccessChanceBonus: 0.1, heatGainMultiplier: 0.92, rumorTruthMultiplier: 1.1, attackPowerMultiplier: 0.95 },
-    passiveEffectSummary: ["Spy +10 p. b.", "Heat gain -8 %", "Attack power -5 %"],
+    passiveModifiers: { spySuccessChanceBonus: 0.1, heatGainMultiplier: 0.92, rumorTruthMultiplier: 1.1, attackPowerMultiplier: 0.97 },
+    passiveEffectSummary: ["Spy +10 p. b.", "Heat gain -8 %", "Attack power -3 %"],
+    plannedPassiveEffectSummary: ["Rumor truth/read quality +10 %"],
     uiTheme: { accent: "#67e8f9", glow: "rgba(103,232,249,.44)", surface: "rgba(8,30,42,.94)", glyph: "T" },
     recommendedFor: "hráče, kteří chtějí vědět víc než ostatní",
     difficulty: "těžká"
@@ -75,6 +76,7 @@ export const FACTION_DEFINITIONS: readonly FactionDefinition[] = [
     startingPackage: { cash: 120, dirtyCash: 60, resources: { "tech-core": 2, "metal-parts": 1 }, defenseLoadout: { cameras: 1 } },
     passiveModifiers: { techProductionMultiplier: 1.1, spySuccessChanceBonus: 0.08, marketFeeMultiplier: 0.95, defensePowerMultiplier: 0.95 },
     passiveEffectSummary: ["Tech production +10 %", "Spy/intel +8 p. b.", "Defense -5 %"],
+    plannedPassiveEffectSummary: ["Market fee -5 %"],
     uiTheme: { accent: "#22d3ee", glow: "rgba(34,211,238,.48)", surface: "rgba(8,27,34,.94)", glyph: "H" },
     recommendedFor: "hráče, kteří rádi hrají přes data a trh",
     difficulty: "těžká"
@@ -103,8 +105,9 @@ export const FACTION_DEFINITIONS: readonly FactionDefinition[] = [
     strengths: ["attack power", "defense power", "menší ztráty vybavení"],
     weaknesses: ["vyšší heat", "vyšší náklady"],
     startingPackage: { cash: 100, dirtyCash: 50, attackLoadout: { pistol: 2 }, defenseLoadout: { vest: 1, barricades: 1 }, initialHeat: 3 },
-    passiveModifiers: { attackPowerMultiplier: 1.05, defensePowerMultiplier: 1.1, equipmentLossMultiplier: 0.95, heatGainMultiplier: 1.05 },
-    passiveEffectSummary: ["Attack +5 %", "Defense +10 %", "Heat gain +5 %"],
+    passiveModifiers: { attackPowerMultiplier: 1.05, defensePowerMultiplier: 1.08, equipmentLossMultiplier: 0.95, heatGainMultiplier: 1.05 },
+    passiveEffectSummary: ["Attack +5 %", "Defense +8 %", "Heat gain +5 %"],
+    plannedPassiveEffectSummary: ["Equipment losses -5 %"],
     uiTheme: { accent: "#ef4444", glow: "rgba(239,68,68,.5)", surface: "rgba(40,18,18,.94)", glyph: "S" },
     recommendedFor: "hráče, kteří chtějí řešit mapu silou",
     difficulty: "snadná"
@@ -118,8 +121,9 @@ export const FACTION_DEFINITIONS: readonly FactionDefinition[] = [
     strengths: ["clean cash", "finance budovy", "downtown synergy"],
     weaknesses: ["dirty income", "pomalejší early combat"],
     startingPackage: { cash: 300, resources: { "tech-core": 1 }, initialInfluence: 5 },
-    passiveModifiers: { cleanIncomeMultiplier: 1.15, dirtyIncomeMultiplier: 0.92, attackDurationMultiplier: 1.05, marketFeeMultiplier: 0.9 },
-    passiveEffectSummary: ["Clean income +15 %", "Dirty income -8 %", "Attack duration +5 %"],
+    passiveModifiers: { cleanIncomeMultiplier: 1.15, dirtyIncomeMultiplier: 0.92, attackDurationMultiplier: 1.03, marketFeeMultiplier: 0.9 },
+    passiveEffectSummary: ["Clean income +15 %", "Dirty income -8 %", "Attack duration +3 %"],
+    plannedPassiveEffectSummary: ["Market fee -10 %"],
     uiTheme: { accent: "#60a5fa", glow: "rgba(96,165,250,.46)", surface: "rgba(13,25,44,.94)", glyph: "C" },
     recommendedFor: "hráče, kteří chtějí ekonomickou převahu",
     difficulty: "snadná"

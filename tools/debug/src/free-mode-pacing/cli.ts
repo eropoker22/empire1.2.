@@ -1,5 +1,9 @@
-import { printSimulationResult, printVariantSuiteResult } from "./report";
-import { runFreeModePacingSimulation, runFreeModePacingVariantSuite } from "./simulate";
+import { printMultiSeedFactionReport, printSimulationResult, printVariantSuiteResult } from "./report";
+import {
+  runFreeModePacingMultiSeedAudit,
+  runFreeModePacingSimulation,
+  runFreeModePacingVariantSuite
+} from "./simulate";
 import type { PacingVariantName } from "./types";
 
 declare const process: {
@@ -18,8 +22,14 @@ const parseHours = (value: unknown): number[] | undefined =>
     ? value.split(",").map((entry) => Number(entry.trim())).filter((entry) => Number.isFinite(entry) && entry > 0)
     : undefined;
 
+const parseSeedCount = (value: unknown): number | undefined => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
 const simulationOptions = {
   seed: typeof options.seed === "string" ? options.seed : undefined,
+  seedCount: parseSeedCount(options.seeds ?? options.multiSeed),
   botCount: options.bots ? Number(options.bots) : undefined,
   districtCount: options.districts ? Number(options.districts) : undefined,
   checkpointHours: parseHours(options.hours),
@@ -28,7 +38,9 @@ const simulationOptions = {
   variantName: typeof options.variant === "string" ? options.variant as PacingVariantName : undefined
 };
 
-if (simulationOptions.variantName) {
+if (options.multiSeed || options.seeds) {
+  printMultiSeedFactionReport(runFreeModePacingMultiSeedAudit(simulationOptions));
+} else if (simulationOptions.variantName) {
   printSimulationResult(runFreeModePacingSimulation(simulationOptions));
 } else {
   printVariantSuiteResult(runFreeModePacingVariantSuite(simulationOptions));

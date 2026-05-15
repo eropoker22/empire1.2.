@@ -15,7 +15,14 @@ import {
   LEGACY_FACTION_ID_MAP,
   resolveModeConfig
 } from "@empire/game-config";
-import { PLAYER_FACTION_IDS } from "@empire/shared-types";
+import { FACTION_PASSIVE_MODIFIER_KEYS, PLAYER_FACTION_IDS } from "@empire/shared-types";
+import {
+  FACTION_PASSIVE_MODIFIER_USAGE,
+  listFactionPassiveModifierUsage,
+  listUnusedPlannedFactionPassiveModifiers
+} from "../../../tools/debug/src/free-mode-pacing/factionPassiveAudit";
+import { resolveFactionBotBehavior } from "../../../tools/debug/src/free-mode-pacing/factionBotBehavior";
+import { runFreeModePacingMultiSeedAudit } from "../../../tools/debug/src/free-mode-pacing/simulate";
 import {
   createCoreStateFixture,
   createFixedBuildingFixture,
@@ -45,13 +52,66 @@ describe("faction core foundation", () => {
   });
 
   it("keeps starting packages inside free-mode balance range", () => {
+    const baseResources = context.config.balance.startingResources;
     for (const definition of FACTION_DEFINITIONS) {
       const pack = definition.startingPackage;
-      expect(pack.cash ?? 0).toBeLessThanOrEqual(500);
-      expect(pack.dirtyCash ?? 0).toBeLessThanOrEqual(250);
-      expect(pack.initialHeat ?? 0).toBeLessThanOrEqual(8);
+      expect(pack.cash ?? 0).toBeLessThanOrEqual(Number(baseResources.cash || 0) * 0.25);
+      expect(pack.dirtyCash ?? 0).toBeLessThanOrEqual(Number(baseResources["dirty-cash"] || 0) * 0.75);
+      for (const [resourceKey, amount] of Object.entries(pack.resources ?? {})) {
+        expect(amount).toBeLessThanOrEqual(Math.max(1, Number(baseResources[resourceKey] || 1)));
+      }
+      expect(Object.values(pack.attackLoadout ?? {}).reduce((sum, amount) => sum + Number(amount || 0), 0)).toBeLessThanOrEqual(3);
+      expect(Object.values(pack.defenseLoadout ?? {}).reduce((sum, amount) => sum + Number(amount || 0), 0)).toBeLessThanOrEqual(2);
+      expect(pack.initialHeat ?? 0).toBeLessThanOrEqual(3);
       expect(pack.initialInfluence ?? 0).toBeLessThanOrEqual(20);
     }
+  });
+
+  it("applies the small passive balance patch values", () => {
+    expect(FACTION_DEFINITION_BY_ID["soukroma-armada"].passiveModifiers.defensePowerMultiplier).toBe(1.08);
+    expect(FACTION_DEFINITION_BY_ID["soukroma-armada"].passiveModifiers.attackPowerMultiplier).toBe(1.05);
+    expect(FACTION_DEFINITION_BY_ID.korporace.passiveModifiers.attackDurationMultiplier).toBe(1.03);
+    expect(FACTION_DEFINITION_BY_ID["tajna-organizace"].passiveModifiers.attackPowerMultiplier).toBe(0.97);
+  });
+
+  it("keeps every passive modifier valid and explicitly audited", () => {
+    const definedModifierKeys = new Set<string>();
+
+    for (const definition of FACTION_DEFINITIONS) {
+      for (const [key, value] of Object.entries(definition.passiveModifiers)) {
+        definedModifierKeys.add(key);
+        expect(FACTION_PASSIVE_MODIFIER_KEYS).toContain(key);
+        expect(value).toEqual(expect.any(Number));
+        if (key.endsWith("Bonus")) {
+          expect(value).toBeGreaterThanOrEqual(-0.25);
+          expect(value).toBeLessThanOrEqual(0.25);
+        } else {
+          expect(value).toBeGreaterThanOrEqual(0.75);
+          expect(value).toBeLessThanOrEqual(1.25);
+        }
+      }
+    }
+
+    for (const usage of listFactionPassiveModifierUsage()) {
+      expect(["active", "partial", "planned"]).toContain(usage.status);
+      expect(usage.note.length).toBeGreaterThan(10);
+      if (usage.status === "active") {
+        expect(usage.surfaces.length).toBeGreaterThan(0);
+      }
+    }
+
+    for (const modifierKey of definedModifierKeys) {
+      expect(FACTION_PASSIVE_MODIFIER_USAGE[modifierKey as keyof typeof FACTION_PASSIVE_MODIFIER_USAGE]).toBeDefined();
+    }
+    expect([...definedModifierKeys].filter((key) =>
+      FACTION_PASSIVE_MODIFIER_USAGE[key as keyof typeof FACTION_PASSIVE_MODIFIER_USAGE]?.status === "planned"
+    ).sort()).toEqual(["equipmentLossMultiplier", "marketFeeMultiplier", "rumorTruthMultiplier"].sort());
+    expect(listUnusedPlannedFactionPassiveModifiers().map((usage) => usage.key).sort()).toEqual([
+      "equipmentLossMultiplier",
+      "marketFeeMultiplier",
+      "rumorTruthMultiplier",
+      "upkeepCostMultiplier"
+    ].sort());
   });
 
   it("applies starting package into authoritative server state", () => {
@@ -164,11 +224,55 @@ describe("faction core foundation", () => {
     expect(createFactionReadModel(state, "player:1", context)).toMatchObject({
       factionId: "mafian",
       name: "Mafián",
-      activePassiveEffects: expect.arrayContaining(["Clean income +10 %"])
+      activePassiveEffects: expect.arrayContaining(["Clean income +10 %"]),
+      plannedPassiveEffects: []
     });
     expect(createPlayerView(state, "player:1", context).faction).toMatchObject({
       factionId: "mafian",
       tagline: "Staré peníze, staré krytí."
     });
+  });
+
+  it("separates active and planned faction passive effects in the read model", () => {
+    const state = createCoreStateFixture();
+    state.playersById["player:1"] = {
+      ...state.playersById["player:1"],
+      factionId: "korporace"
+    };
+
+    const readModel = createFactionReadModel(state, "player:1", context);
+
+    expect(readModel?.activePassiveEffects).toEqual(expect.arrayContaining(["Clean income +15 %", "Attack duration +3 %"]));
+    expect(readModel?.plannedPassiveEffects).toEqual(expect.arrayContaining(["Market fee -10 %"]));
+  });
+
+  it("resolves faction-aware bot behavior profiles", () => {
+    expect(resolveFactionBotBehavior("tajna-organizace").spyTendency)
+      .toBeGreaterThan(resolveFactionBotBehavior("soukroma-armada").spyTendency);
+    expect(resolveFactionBotBehavior("motorkarsky-gang").attackTendency)
+      .toBeGreaterThan(resolveFactionBotBehavior("korporace").attackTendency);
+    expect(resolveFactionBotBehavior("unknown").factionId).toBe("mafian");
+  });
+
+  it("aggregates faction survival stats in a multi-seed pacing audit", () => {
+    const report = runFreeModePacingMultiSeedAudit({
+      seed: "unit-faction-passive-balance",
+      seedCount: 2,
+      maxHours: 24,
+      botCount: 20,
+      districtCount: 60,
+      tickStride: 720,
+      variantName: "elimination-8h-stop8"
+    });
+
+    expect(report.results).toHaveLength(2);
+    expect(Object.keys(report.factionStats).sort()).toEqual([...PLAYER_FACTION_IDS].sort());
+    expect(report.factionStats.mafian.averageSurvivalTimeHours).toBeGreaterThan(0);
+    expect(report.factionStats.kartel.averageAttackCount).toBeGreaterThanOrEqual(0);
+    expect(report.behaviorProfileByFaction.hackeri).toContain("under-modeled");
+    expect(report.factionAttackRate["motorkarsky-gang"]).toBeGreaterThanOrEqual(0);
+    expect(report.factionSpyRate["tajna-organizace"]).toBeGreaterThanOrEqual(0);
+    expect(report.factionTop8Rate.mafian).toBeGreaterThanOrEqual(0);
+    expect(report.topFactionByControl).toEqual(expect.any(String));
   });
 });

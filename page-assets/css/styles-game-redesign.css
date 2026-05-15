@@ -30,7 +30,7 @@ body.game-body {
       radial-gradient(circle at 82% 4%, rgba(244, 114, 182, 0.12), transparent 26%),
       radial-gradient(circle at 52% 102%, rgba(14, 165, 233, 0.12), transparent 44%),
       linear-gradient(180deg, rgba(5, 9, 19, 0.86), rgba(4, 9, 16, 0.82)),
-      url("../../img/tapeta.png") center / cover no-repeat,
+      url("../../img/gametapeta.png") center / cover no-repeat,
       linear-gradient(180deg, #050913 0%, #07111b 48%, #040812 100%);
   }
 

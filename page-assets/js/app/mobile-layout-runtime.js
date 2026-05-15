@@ -217,6 +217,8 @@ function initMobileLeaderboardPlacement(windowObj = window, documentObj = docume
   const leaderboardCard = documentObj.getElementById("leaderboard-card");
   const leaderboardAnchor = documentObj.getElementById("leaderboard-card-anchor");
   const globalChatCard = documentObj.getElementById("global-chat-card");
+  const allianceChatCard = documentObj.getElementById("alliance-chat-card");
+  const leaderboardLaunchRow = leaderboardCard?.closest(".leaderboard-launch-row");
 
   if (!leaderboardCard || !leaderboardAnchor || !globalChatCard) {
     return;
@@ -225,12 +227,19 @@ function initMobileLeaderboardPlacement(windowObj = window, documentObj = docume
   const media = windowObj.matchMedia(MOBILE_MEDIA);
 
   const applyPlacement = () => {
+    const leaderboardBlock = leaderboardLaunchRow || leaderboardCard;
+
     if (media.matches) {
-      moveElementAfterAnchor(globalChatCard, leaderboardCard);
+      if (allianceChatCard) {
+        moveElementAfterAnchor(globalChatCard, allianceChatCard);
+        moveElementAfterAnchor(allianceChatCard, leaderboardBlock);
+        return;
+      }
+      moveElementAfterAnchor(globalChatCard, leaderboardBlock);
       return;
     }
 
-    moveElementAfterAnchor(leaderboardAnchor, leaderboardCard);
+    moveElementAfterAnchor(leaderboardAnchor, leaderboardBlock);
   };
 
   applyPlacement();

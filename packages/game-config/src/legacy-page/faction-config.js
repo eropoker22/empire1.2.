@@ -64,7 +64,8 @@ export const FACTION_CATALOG = Object.freeze({
     influence: 0,
     heat: 0,
     advantages: ["Spy +10 p. b.", "Heat gain -8 %", "Lepší informace"],
-    disadvantages: ["Attack power -5 %", "Menší hrubá síla"]
+    plannedAdvantages: ["Rumor truth/read quality +10 %"],
+    disadvantages: ["Attack power -3 %", "Menší hrubá síla"]
   }),
   hackeri: createFactionCatalogEntry({
     id: "hackeri",
@@ -75,7 +76,8 @@ export const FACTION_CATALOG = Object.freeze({
     dirtyBonus: 60,
     influence: 0,
     heat: 0,
-    advantages: ["Tech production +10 %", "Spy/intel +8 p. b.", "Market výhoda"],
+    advantages: ["Tech production +10 %", "Spy/intel +8 p. b."],
+    plannedAdvantages: ["Market fee -5 %"],
     disadvantages: ["Defense -5 %", "Slabší fyzická obrana"]
   }),
   "motorkarsky-gang": createFactionCatalogEntry({
@@ -99,7 +101,8 @@ export const FACTION_CATALOG = Object.freeze({
     dirtyBonus: 50,
     influence: 0,
     heat: 3,
-    advantages: ["Attack +5 %", "Defense +10 %", "Menší ztráty vybavení"],
+    advantages: ["Attack +5 %", "Defense +8 %"],
+    plannedAdvantages: ["Equipment losses -5 %"],
     disadvantages: ["Heat gain +5 %", "Vyšší provozní tlak"]
   }),
   korporace: createFactionCatalogEntry({
@@ -111,7 +114,8 @@ export const FACTION_CATALOG = Object.freeze({
     dirtyBonus: 0,
     influence: 5,
     heat: 0,
-    advantages: ["Clean income +15 %", "Market fee -10 %", "Downtown finance synergy"],
+    advantages: ["Clean income +15 %", "Attack duration +3 %", "Downtown finance synergy"],
+    plannedAdvantages: ["Market fee -10 %"],
     disadvantages: ["Dirty income -8 %", "Pomalejší early combat"]
   })
 });
@@ -129,6 +133,7 @@ function createFactionCatalogEntry(input) {
       heat: input.heat
     },
     advantages: input.advantages,
+    plannedAdvantages: input.plannedAdvantages || [],
     disadvantages: input.disadvantages
   });
 }

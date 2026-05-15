@@ -43,6 +43,24 @@ export interface FactionPassiveModifiers {
   upkeepCostMultiplier?: number;
 }
 
+export const FACTION_PASSIVE_MODIFIER_KEYS = [
+  "cleanIncomeMultiplier",
+  "dirtyIncomeMultiplier",
+  "productionMultiplier",
+  "illegalProductionMultiplier",
+  "techProductionMultiplier",
+  "heatGainMultiplier",
+  "influenceGainMultiplier",
+  "spySuccessChanceBonus",
+  "attackPowerMultiplier",
+  "defensePowerMultiplier",
+  "attackDurationMultiplier",
+  "equipmentLossMultiplier",
+  "marketFeeMultiplier",
+  "rumorTruthMultiplier",
+  "upkeepCostMultiplier"
+] as const satisfies readonly (keyof FactionPassiveModifiers)[];
+
 export interface FactionUiTheme {
   accent: string;
   glow: string;
@@ -61,6 +79,7 @@ export interface FactionDefinition {
   startingPackage: FactionStartingPackage;
   passiveModifiers: FactionPassiveModifiers;
   passiveEffectSummary: string[];
+  plannedPassiveEffectSummary?: string[];
   uiTheme: FactionUiTheme;
   recommendedFor: string;
   difficulty: FactionDifficulty;

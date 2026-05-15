@@ -15,8 +15,10 @@ export const FREE_SESSION_ONBOARDING_STEPS = ONBOARDING_STEPS;
 const panelState = {
   mount: null,
   highlight: null,
+  highlightLabel: null,
   hidden: false,
-  currentStepId: "welcome"
+  currentStepId: "welcome",
+  lastFocusedStepId: null
 };
 
 function asArray(value) {
@@ -33,6 +35,122 @@ function createElement(ownerDocument, tagName, className = "") {
     element.className = className;
   }
   return element || null;
+}
+
+function setElementStyle(element, property, value) {
+  if (element?.style && property) {
+    element.style[property] = value;
+  }
+}
+
+function resolveStepKind(step = {}) {
+  return String(step.kind || step.highlightType || "dirty").trim() || "dirty";
+}
+
+function resolveStepPhase(step = {}, index = 0) {
+  if (step.phase) {
+    return String(step.phase);
+  }
+  if (index < 4) {
+    return "Základy";
+  }
+  if (index < 8) {
+    return "Ekonomika";
+  }
+  if (index < 11) {
+    return "Riziko";
+  }
+  if (index < 18) {
+    return "Expanze";
+  }
+  return "Endgame";
+}
+
+function resolveStepBadge(step = {}) {
+  return String(step.badge || step.eyebrow || "STREET").trim() || "STREET";
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function safeScrollIntoView(target) {
+  if (!target?.scrollIntoView) {
+    return;
+  }
+  try {
+    target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+  } catch {
+    try {
+      target.scrollIntoView();
+    } catch {
+      // UI-only helper: missing browser support must not break onboarding.
+    }
+  }
+}
+
+function safeFocus(element) {
+  if (!element?.focus) {
+    return;
+  }
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
+  }
+}
+
+function scheduleFocus(mount, stepId) {
+  if (!mount || panelState.lastFocusedStepId === stepId) {
+    return;
+  }
+  panelState.lastFocusedStepId = stepId;
+  const callback = () => safeFocus(mount.querySelector?.("[data-onboarding-primary-action]") || mount);
+  const win = mount.ownerDocument?.defaultView;
+  if (win?.requestAnimationFrame) {
+    win.requestAnimationFrame(callback);
+    return;
+  }
+  callback();
+}
+
+function resetPanelPlacement(mount) {
+  if (!mount?.style) {
+    return;
+  }
+  mount.style.left = "";
+  mount.style.top = "";
+  mount.style.right = "";
+  mount.style.bottom = "";
+  mount.dataset.placementMode = "default";
+}
+
+function positionPanelNearTarget(mount, target, step = {}) {
+  const win = mount?.ownerDocument?.defaultView;
+  if (!mount?.style || !target?.getBoundingClientRect || !win || win.innerWidth <= 900 || step.highlightType === "map") {
+    resetPanelPlacement(mount);
+    return;
+  }
+  const rect = target.getBoundingClientRect();
+  const width = mount.offsetWidth || 390;
+  const height = mount.offsetHeight || 420;
+  const gap = 16;
+  const viewportWidth = win.innerWidth || 1024;
+  const viewportHeight = win.innerHeight || 768;
+  let left = rect.right + gap;
+  if (left + width > viewportWidth - gap) {
+    left = rect.left - width - gap;
+  }
+  if (left < gap || left + width > viewportWidth - gap) {
+    resetPanelPlacement(mount);
+    return;
+  }
+  const top = clamp(rect.top, gap, Math.max(gap, viewportHeight - height - gap));
+  mount.style.left = `${left}px`;
+  mount.style.top = `${top}px`;
+  mount.style.right = "auto";
+  mount.style.bottom = "auto";
+  mount.dataset.placementMode = "anchored";
 }
 
 function stepIndexById(stepId) {
@@ -142,6 +260,14 @@ export function hideOnboardingPanel() {
   panelState.hidden = true;
   if (panelState.mount) {
     panelState.mount.hidden = true;
+    panelState.mount.onkeydown = null;
+    resetPanelPlacement(panelState.mount);
+  }
+  if (panelState.highlight) {
+    panelState.highlight.hidden = true;
+  }
+  if (panelState.highlightLabel) {
+    panelState.highlightLabel.hidden = true;
   }
   return true;
 }
@@ -164,7 +290,7 @@ function appendTextElement(ownerDocument, parent, tagName, className, text) {
   return element;
 }
 
-function updateHighlight(ownerDocument, target) {
+function updateHighlight(ownerDocument, target, step = {}) {
   const body = ownerDocument?.body;
   if (!body) {
     return null;
@@ -181,16 +307,44 @@ function updateHighlight(ownerDocument, target) {
   if (!highlight) {
     return null;
   }
+  let label = panelState.highlightLabel || ownerDocument.querySelector?.("[data-onboarding-target-label]");
+  if (!label) {
+    label = createElement(ownerDocument, "div", "empire-onboarding-target-label");
+    label?.setAttribute?.("data-onboarding-target-label", "");
+    if (label) {
+      body.append(label);
+    }
+  }
+  panelState.highlightLabel = label;
   if (!target?.getBoundingClientRect) {
     highlight.hidden = true;
+    if (label) {
+      label.hidden = true;
+    }
     return highlight;
   }
+  safeScrollIntoView(target);
   const rect = target.getBoundingClientRect();
+  const viewportWidth = ownerDocument.defaultView?.innerWidth || 1024;
+  const viewportHeight = ownerDocument.defaultView?.innerHeight || 768;
+  const padding = viewportWidth <= 720 ? 6 : 8;
+  const left = clamp(rect.left - padding, 6, Math.max(6, viewportWidth - 42));
+  const top = clamp(rect.top - padding, 6, Math.max(6, viewportHeight - 42));
+  const width = Math.min(Math.max(38, rect.width + padding * 2), Math.max(42, viewportWidth - left - 6));
+  const height = Math.min(Math.max(38, rect.height + padding * 2), Math.max(42, viewportHeight - top - 6));
   highlight.hidden = false;
-  highlight.style.left = `${Math.max(8, rect.left - 8)}px`;
-  highlight.style.top = `${Math.max(8, rect.top - 8)}px`;
-  highlight.style.width = `${Math.max(34, rect.width + 16)}px`;
-  highlight.style.height = `${Math.max(34, rect.height + 16)}px`;
+  highlight.dataset.highlightKind = resolveStepKind(step);
+  setElementStyle(highlight, "left", `${left}px`);
+  setElementStyle(highlight, "top", `${top}px`);
+  setElementStyle(highlight, "width", `${width}px`);
+  setElementStyle(highlight, "height", `${height}px`);
+  if (label) {
+    label.hidden = false;
+    label.textContent = step.targetLabel || "Tady, ty génie";
+    label.dataset.highlightKind = resolveStepKind(step);
+    setElementStyle(label, "left", `${clamp(left, 8, Math.max(8, viewportWidth - 158))}px`);
+    setElementStyle(label, "top", `${clamp(top - 30, 8, Math.max(8, viewportHeight - 34))}px`);
+  }
   return highlight;
 }
 
@@ -207,6 +361,11 @@ export function renderOnboardingPanel(progress = {}, callbacks = {}, options = {
   const step = normalized.currentStep || ONBOARDING_STEPS[0];
   const state = resolveOnboardingStepState(step, readModel, root);
   const isDefeated = state.status === "defeated";
+  const stepNumber = Math.min(normalized.currentIndex + 1, normalized.totalCount);
+  const progressPercent = normalized.totalCount > 0 ? Math.round((stepNumber / normalized.totalCount) * 100) : 0;
+  const stepKind = isDefeated ? "defeated" : resolveStepKind(step);
+  const phaseLabel = isDefeated ? "Defeated" : resolveStepPhase(step, normalized.currentIndex);
+  const badgeLabel = isDefeated ? "OUT" : resolveStepBadge(step);
 
   panelState.mount = mount;
   panelState.currentStepId = normalized.currentStepId;
@@ -215,55 +374,116 @@ export function renderOnboardingPanel(progress = {}, callbacks = {}, options = {
   mount.classList?.add?.("empire-onboarding");
   mount.classList?.add?.("free-onboarding-panel");
   mount.classList?.toggle?.("is-defeated", isDefeated);
-  mount.replaceChildren?.();
+  mount.classList?.toggle?.("is-fallback", Boolean(state.missingTarget));
+  mount.classList?.toggle?.("has-target", Boolean(state.target));
+  mount.dataset.kind = stepKind;
+  mount.setAttribute?.("role", "dialog");
+  mount.setAttribute?.("aria-modal", "false");
+  mount.setAttribute?.("aria-live", "polite");
+  mount.setAttribute?.("tabindex", "-1");
+  if (typeof mount.replaceChildren === "function") {
+    mount.replaceChildren();
+  } else {
+    mount.textContent = "";
+  }
 
   if (mount.hidden) {
     updateHighlight(ownerDocument, null);
+    resetPanelPlacement(mount);
     return true;
   }
 
   const header = createElement(ownerDocument, "header", "empire-onboarding__header");
+  const identity = createElement(ownerDocument, "div", "empire-onboarding__identity");
   const eyebrow = createElement(ownerDocument, "span", "empire-onboarding__eyebrow");
+  const phase = createElement(ownerDocument, "span", "empire-onboarding__phase");
   const progressLabel = createElement(ownerDocument, "span", "empire-onboarding__progress");
+  const progressTrack = createElement(ownerDocument, "div", "empire-onboarding__progress-track");
+  const progressFill = createElement(ownerDocument, "span", "empire-onboarding__progress-fill");
+  const badgeRow = createElement(ownerDocument, "div", "empire-onboarding__badge-row");
+  const badge = createElement(ownerDocument, "span", "empire-onboarding__badge");
+  const statusChip = createElement(ownerDocument, "span", "empire-onboarding__status-chip");
   const title = createElement(ownerDocument, "h2", "empire-onboarding__title");
+  const subtitle = createElement(ownerDocument, "p", "empire-onboarding__subtitle");
+  const content = createElement(ownerDocument, "div", "empire-onboarding__content");
   const body = createElement(ownerDocument, "p", "empire-onboarding__body");
+  const fallback = createElement(ownerDocument, "div", "empire-onboarding__fallback");
+  const fallbackTitle = createElement(ownerDocument, "strong", "empire-onboarding__fallback-title");
+  const fallbackBody = createElement(ownerDocument, "span", "empire-onboarding__fallback-copy");
   const task = createElement(ownerDocument, "p", "empire-onboarding__task");
   const detail = createElement(ownerDocument, "div", "empire-onboarding__detail");
+  const warning = createElement(ownerDocument, "div", "empire-onboarding__warning");
   const actions = createElement(ownerDocument, "div", "empire-onboarding__actions");
   const backButton = createElement(ownerDocument, "button", "button empire-onboarding__button empire-onboarding__button--ghost");
   const skipButton = createElement(ownerDocument, "button", "button empire-onboarding__button empire-onboarding__button--ghost");
-  const neverButton = createElement(ownerDocument, "button", "button empire-onboarding__button empire-onboarding__button--ghost");
+  const neverButton = createElement(ownerDocument, "button", "button empire-onboarding__button empire-onboarding__button--danger");
   const nextButton = createElement(ownerDocument, "button", "button empire-onboarding__button empire-onboarding__button--primary");
 
-  if (!header || !eyebrow || !progressLabel || !title || !body || !task || !detail || !actions || !backButton || !skipButton || !neverButton || !nextButton) {
+  if (!header || !identity || !eyebrow || !phase || !progressLabel || !progressTrack || !progressFill || !badgeRow || !badge || !statusChip || !title || !subtitle || !content || !body || !fallback || !fallbackTitle || !fallbackBody || !task || !detail || !warning || !actions || !backButton || !skipButton || !neverButton || !nextButton) {
     return false;
   }
 
-  eyebrow.textContent = "OPERATOR";
-  progressLabel.textContent = isDefeated ? "DEF" : `${Math.min(normalized.currentIndex + 1, normalized.totalCount)}/${normalized.totalCount}`;
-  header.append(eyebrow, progressLabel);
+  mount.setAttribute?.("aria-describedby", "empire-onboarding-copy");
+  eyebrow.textContent = isDefeated ? "OPERATOR OFFLINE" : "KANÁLOVÝ OPERÁTOR";
+  phase.textContent = phaseLabel;
+  identity.append(eyebrow, phase);
+  progressLabel.textContent = isDefeated ? "DEF" : `Krok ${stepNumber} / ${normalized.totalCount}`;
+  setElementStyle(progressFill, "width", isDefeated ? "100%" : `${progressPercent}%`);
+  progressTrack.append(progressFill);
+  header.append(identity, progressLabel);
+  badge.textContent = badgeLabel;
+  statusChip.textContent = state.missingTarget ? "Fallback" : (state.target ? "Target locked" : "Info");
+  badgeRow.append(badge, statusChip);
 
   if (isDefeated) {
     title.textContent = "Server tě vyplivl";
-    body.textContent = "Tenhle server tě vyplivl a ještě si odplivl. Prohra, ó tragický mistře špatného pořadí. Sleduj mapu jako mrtvý svědek, nebo běž na další server a tentokrát nebuď dole.";
+    subtitle.textContent = "Jsi mimo hru, králi popelnice.";
+    body.textContent = "Tenhle server tě vyplivl a ještě si otřel boty. Tutorial tě nebude tahat za mrtvolu po mapě.";
     task.textContent = state.fallback;
   } else {
     title.textContent = step.title;
+    subtitle.textContent = step.subtitle || step.optionalActionHint || "";
     body.textContent = step.body;
-    task.textContent = state.missingTarget ? state.fallback : (step.task || step.optionalActionHint || "");
+    task.textContent = state.missingTarget
+      ? (step.task || step.optionalActionHint || "")
+      : (step.task || step.taskLabel || step.optionalActionHint || "");
   }
 
-  mount.append(header, title, body, task);
+  body.id = "empire-onboarding-copy";
+  content.append(body);
 
-  if (!isDefeated && (step.detail || step.optionalActionHint)) {
+  if (!isDefeated && state.missingTarget) {
+    fallbackTitle.textContent = state.fallbackTitle || step.fallbackTitle || "Target se schoval.";
+    fallbackBody.textContent = state.fallback || step.fallbackBody || "Tahle část UI teď není dostupná. Pokračuj dál, core pravidla se nemění.";
+    fallback.append(fallbackTitle, fallbackBody);
+    content.append(fallback);
+  }
+
+  if (task.textContent) {
+    const taskLabel = createElement(ownerDocument, "span", "empire-onboarding__task-label");
+    if (taskLabel) {
+      taskLabel.textContent = isDefeated ? "Verdikt" : (step.taskLabel || "Teď udělej");
+      task.prepend?.(taskLabel);
+    }
+    content.append(task);
+  }
+
+  mount.append(header, progressTrack, badgeRow, title, subtitle, content);
+
+  if (!isDefeated && (step.detail || step.tip || step.optionalActionHint)) {
     const detailLabel = createElement(ownerDocument, "span", "empire-onboarding__detail-label");
     const detailCopy = createElement(ownerDocument, "span", "empire-onboarding__detail-copy");
     if (detailLabel && detailCopy) {
       detailLabel.textContent = "Co si zapamatovat";
-      detailCopy.textContent = step.detail || step.optionalActionHint || "";
+      detailCopy.textContent = step.detail || step.tip || step.optionalActionHint || "";
       detail.append(detailLabel, detailCopy);
-      mount.append(detail);
+      content.append(detail);
     }
+  }
+
+  if (!isDefeated && step.warning) {
+    warning.textContent = step.warning;
+    content.append(warning);
   }
 
   if ((step.id === "elimination" || step.id === "danger-zone") && readModel.elimination) {
@@ -272,26 +492,31 @@ export function renderOnboardingPanel(progress = {}, callbacks = {}, options = {
       appendTextElement(ownerDocument, meta, "span", "", `Další: ${readModel.elimination.nextEliminationLabel || "čeká"}`);
       appendTextElement(ownerDocument, meta, "span", "", readModel.elimination.dangerZoneLabel || "danger zone čeká");
       appendTextElement(ownerDocument, meta, "span", "", `Stav: ${readModel.elimination.currentPlayerStatus || "safe"}`);
-      mount.append(meta);
+      content.append(meta);
     }
   }
 
   backButton.type = "button";
   backButton.textContent = "Zpět";
+  backButton.setAttribute("aria-label", "Vrátit onboarding o krok zpět");
   backButton.disabled = normalized.currentIndex <= 0 || isDefeated;
   backButton.addEventListener?.("click", () => callbacks.onBack?.());
 
   skipButton.type = "button";
   skipButton.textContent = "Přeskočit";
+  skipButton.setAttribute("aria-label", "Přeskočit onboarding");
   skipButton.disabled = step.canSkip === false;
   skipButton.addEventListener?.("click", () => callbacks.onSkip?.());
 
   neverButton.type = "button";
   neverButton.textContent = "Už nezobrazovat";
+  neverButton.setAttribute("aria-label", "Dokončit onboarding a už ho automaticky nezobrazovat");
   neverButton.addEventListener?.("click", () => callbacks.onDismiss?.());
 
   nextButton.type = "button";
   nextButton.textContent = isDefeated ? "Zavřít" : (step.cta || "Další");
+  nextButton.setAttribute("aria-label", isDefeated ? "Zavřít defeated hlášku" : "Pokračovat na další onboarding krok");
+  nextButton.setAttribute("data-onboarding-primary-action", "");
   nextButton.addEventListener?.("click", () => {
     if (isDefeated) {
       callbacks.onSkip?.();
@@ -300,8 +525,22 @@ export function renderOnboardingPanel(progress = {}, callbacks = {}, options = {
     callbacks.onNext?.(step.id);
   });
 
-  actions.append(backButton, skipButton, neverButton, nextButton);
+  if (isDefeated) {
+    actions.append(neverButton, nextButton);
+  } else {
+    actions.append(backButton, skipButton, neverButton, nextButton);
+  }
   mount.append(actions);
+  mount.onkeydown = (event) => {
+    if (event?.key !== "Escape") {
+      return;
+    }
+    if (!isDefeated && step.canSkip === false) {
+      return;
+    }
+    event.preventDefault?.();
+    callbacks.onSkip?.();
+  };
 
   const target = state.target || null;
   const targetSelector = state.targetSelector || getOnboardingTargetSelector(step.id, readModel);
@@ -309,8 +548,12 @@ export function renderOnboardingPanel(progress = {}, callbacks = {}, options = {
   mount.dataset.highlight = step.highlightType || "none";
   if (targetSelector) {
     mount.dataset.onboardingTarget = targetSelector;
+  } else if (mount.dataset.onboardingTarget) {
+    delete mount.dataset.onboardingTarget;
   }
-  updateHighlight(ownerDocument, target);
+  updateHighlight(ownerDocument, target, step);
+  positionPanelNearTarget(mount, target, step);
+  scheduleFocus(mount, normalized.currentStepId);
 
   return true;
 }
