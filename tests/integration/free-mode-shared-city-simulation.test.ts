@@ -223,6 +223,7 @@ const createPolicyView = (): GameplaySliceView => ({
     districtId: "district:policy-source",
     spyTargets: [{ districtId: "district:policy-target", name: "Target", ownerPlayerId: null, status: "active", enabled: true, disabledReason: null }],
     attackTargets: [{ districtId: "district:policy-target", name: "Target", ownerPlayerId: null, status: "active", enabled: true, disabledReason: null }],
+    occupyTargets: [],
     slots: [
       {
         slotIndex: 0,

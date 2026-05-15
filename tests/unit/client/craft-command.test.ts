@@ -38,6 +38,7 @@ const createGameplaySliceFixture = (canCraft = true): GameplaySliceView => ({
     filledSlotCount: 1,
     buildings: [],
     spyTargets: [],
+    occupyTargets: [],
     trap: {
       enabled: true,
       disabledReason: null,

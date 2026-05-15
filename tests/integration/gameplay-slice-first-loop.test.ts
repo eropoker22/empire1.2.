@@ -4,6 +4,7 @@ import type {
   DistrictId,
   GameplaySliceView,
   LoadGameplaySliceRequest,
+  OccupyDistrictCommand,
   SpyDistrictCommand
 } from "@empire/shared-types";
 import type { CoreGameState } from "@empire/game-core";
@@ -123,6 +124,85 @@ describe("gameplay slice first 10 minutes shared city loop", () => {
     });
   });
 
+  it("unlocks and submits occupy-district after successful spy intel on a neutral neighbor", async () => {
+    const server = createServerApp();
+    const request = createLoadRequest(1);
+
+    await ensureGameplaySliceSessionResult(server.instanceManager, request);
+    const runtime = server.instanceManager.getInstanceById(serverInstanceId)!;
+    const homeDistrictId = runtime.state.playersById[request.playerId]!.homeDistrictId!;
+    runtime.state.districtsById[homeDistrictId] = {
+      ...runtime.state.districtsById[homeDistrictId],
+      influence: 10
+    };
+    const initial = server.gameplaySliceTransport.load(request);
+    const initialReadModel = initial.readModel as GameplaySliceView;
+    const sourceDistrictId = initialReadModel.district!.districtId;
+    const targetDistrictId = "district:connector:1";
+
+    expect(initialReadModel.district!.spyTargets.some((target) =>
+      target.districtId === targetDistrictId && target.enabled
+    )).toBe(true);
+    expect(initialReadModel.district!.occupyTargets).toContainEqual(expect.objectContaining({
+      districtId: targetDistrictId,
+      enabled: false,
+      disabledCode: "occupy_requires_successful_spy",
+      cost: { influence: 5 },
+      heatGain: 2
+    }));
+
+    const spy = server.gameplaySliceTransport.submit({
+      focusDistrictId: sourceDistrictId,
+      command: createSpyCommand({
+        id: "command:first-loop:occupy-spy:1",
+        playerId: request.playerId,
+        sourceDistrictId,
+        targetDistrictId
+      })
+    });
+    const spyReadModel = spy.readModel as GameplaySliceView;
+
+    expect(spy.accepted).toBe(true);
+    expect(spy.errors).toEqual([]);
+    expect(spyReadModel.reports[0]).toMatchObject({
+      reportType: "spy",
+      result: "success",
+      targetDistrictId
+    });
+    expect(spyReadModel.district?.occupyTargets).toContainEqual(
+      expect.objectContaining({
+        districtId: targetDistrictId,
+        enabled: true
+      })
+    );
+
+    const occupy = server.gameplaySliceTransport.submit({
+      focusDistrictId: sourceDistrictId,
+      command: createOccupyCommand({
+        id: "command:first-loop:occupy:1",
+        playerId: request.playerId,
+        sourceDistrictId,
+        targetDistrictId
+      })
+    });
+    const occupyReadModel = occupy.readModel as GameplaySliceView;
+
+    expect(occupy.accepted).toBe(true);
+    expect(occupy.errors).toEqual([]);
+    expect(runtime.state.districtsById[sourceDistrictId]?.influence).toBe(5);
+    expect(runtime.state.districtsById[targetDistrictId]?.ownerPlayerId).toBe(request.playerId);
+    expect(runtime.state.districtsById[targetDistrictId]?.heat).toBe(2);
+    expect(runtime.state.cooldownStatesById[runtime.state.playersById[request.playerId]!.cooldownStateId]?.cooldowns[`occupy:${targetDistrictId}`]).toBe(2);
+    expect(runtime.state.districtsById[targetDistrictId]?.buildingIds.every((buildingId) =>
+      runtime.state.buildingsById[buildingId]?.ownerPlayerId === request.playerId
+    )).toBe(true);
+    expect(occupyReadModel.district?.districtId).toBe(sourceDistrictId);
+    expect(occupyReadModel.cityFeed?.currentPlayerFeed.some((event) =>
+      event.sourceType === "district_capture" && event.districtId === targetDistrictId
+    )).toBe(true);
+    expect(occupy.metadata?.serverTick).toBe(runtime.state.root.tick);
+  });
+
   it("returns a clear error and a valid read model for invalid first-loop commands", async () => {
     const server = createServerApp();
     const request = createLoadRequest(1);
@@ -207,6 +287,25 @@ const createAttackCommand = (input: {
 }): AttackDistrictCommand => ({
   id: input.id,
   type: "attack-district",
+  mode: "free",
+  playerId: input.playerId,
+  serverInstanceId,
+  issuedAt: new Date(0).toISOString(),
+  payload: {
+    districtId: input.targetDistrictId,
+    sourceDistrictId: input.sourceDistrictId
+  },
+  clientRequestId: null
+});
+
+const createOccupyCommand = (input: {
+  id: string;
+  playerId: string;
+  sourceDistrictId: DistrictId;
+  targetDistrictId: DistrictId;
+}): OccupyDistrictCommand => ({
+  id: input.id,
+  type: "occupy-district",
   mode: "free",
   playerId: input.playerId,
   serverInstanceId,

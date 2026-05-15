@@ -33,20 +33,20 @@ export const createActionPolicy = (
 ): SimulationActionType[] => {
   switch (profile) {
     case "aggressor":
-      return ["attack-district", "spy-district", "collect-production"];
+      return ["attack-district", "occupy-district", "spy-district", "collect-production"];
     case "opportunist":
       return (round + playerIndex) % 2 === 0
-        ? ["attack-district", "spy-district", "collect-production"]
-        : ["collect-production", "spy-district", "attack-district"];
+        ? ["attack-district", "occupy-district", "spy-district", "collect-production"]
+        : ["collect-production", "occupy-district", "spy-district", "attack-district"];
     case "economy":
-      return ["collect-production", "spy-district", "attack-district"];
+      return ["collect-production", "occupy-district", "spy-district", "attack-district"];
     case "balanced":
       return createBalancedPolicy(round);
     case "scout":
     default:
       return round <= 3
-        ? ["spy-district", "collect-production", "attack-district"]
-        : ["spy-district", "attack-district", "collect-production"];
+        ? ["spy-district", "occupy-district", "collect-production", "attack-district"]
+        : ["spy-district", "occupy-district", "attack-district", "collect-production"];
   }
 };
 
@@ -61,7 +61,7 @@ export const parseBotProfileList = (value: string | undefined): SimulationBotPro
 
 const createBalancedPolicy = (round: number): SimulationActionType[] => {
   const mod = round % 3;
-  if (mod === 0) return ["attack-district", "spy-district", "collect-production"];
-  if (mod === 1) return ["spy-district", "attack-district", "collect-production"];
-  return ["collect-production", "spy-district", "attack-district"];
+  if (mod === 0) return ["attack-district", "occupy-district", "spy-district", "collect-production"];
+  if (mod === 1) return ["spy-district", "occupy-district", "attack-district", "collect-production"];
+  return ["collect-production", "occupy-district", "spy-district", "attack-district"];
 };

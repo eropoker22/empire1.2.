@@ -30,8 +30,11 @@ export const warModeOverride: Partial<ResolvedGameModeConfig> = {
     conflict: {
       spyCooldownTicks: 4,
       attackCooldownTicks: 48,
+      occupyCooldownTicks: 2,
       minAttackDurationTicks: 48,
       attackHeatGain: 14,
+      occupyHeatGain: 2,
+      occupyInfluenceCost: 5,
       spyBaseSuccessChance: 0.66,
       spyTrapRevealChance: 0.28,
       trapAttackLosses: 2,

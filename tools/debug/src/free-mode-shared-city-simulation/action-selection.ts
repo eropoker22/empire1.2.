@@ -4,16 +4,17 @@ import type {
   CollectProductionCommand,
   DistrictId,
   GameplaySliceView,
+  OccupyDistrictCommand,
   PlayerId,
   SpyDistrictCommand
 } from "@empire/shared-types";
 import type { ServerInstanceRuntime } from "../../../../apps/server/src/runtime/instance/server-instance-runtime";
-import { createAttackCommand, createCollectCommand, createSpyCommand } from "./commands";
+import { createAttackCommand, createCollectCommand, createOccupyCommand, createSpyCommand } from "./commands";
 import { createActionPolicy } from "./bot-profiles";
 import type { SimulationActionType, SimulationBotProfile } from "./types";
 
 export interface SelectedSimulationAction {
-  command: SpyDistrictCommand | AttackDistrictCommand | CollectProductionCommand;
+  command: SpyDistrictCommand | OccupyDistrictCommand | AttackDistrictCommand | CollectProductionCommand;
   focusDistrictId: DistrictId;
   routeKey?: string;
 }
@@ -52,6 +53,9 @@ const findActionByType = (
   if (actionType === "attack-district") {
     return findAttackAction(runtime, playerId, views, round, playerIndex);
   }
+  if (actionType === "occupy-district") {
+    return findOccupyAction(runtime, playerId, views, round, playerIndex);
+  }
   if (actionType === "collect-production") {
     return findCollectProductionAction(runtime, playerId, views, round, playerIndex);
   }
@@ -76,6 +80,26 @@ const findSpyAction = (
         focusDistrictId: sourceDistrictId,
         routeKey: createRouteKey(playerId, sourceDistrictId, target.districtId),
         command: createSpyCommand(runtime.record.id, playerId, sourceDistrictId, target.districtId, round, playerIndex)
+      };
+    }
+  }
+  return null;
+};
+
+const findOccupyAction = (
+  runtime: ServerInstanceRuntime,
+  playerId: PlayerId,
+  views: GameplaySliceView[],
+  round: number,
+  playerIndex: number
+): SelectedSimulationAction | null => {
+  for (const view of views) {
+    const sourceDistrictId = view.district?.districtId;
+    const target = view.district?.occupyTargets?.find((entry) => entry.enabled);
+    if (sourceDistrictId && target) {
+      return {
+        focusDistrictId: sourceDistrictId,
+        command: createOccupyCommand(runtime.record.id, playerId, sourceDistrictId, target.districtId, round, playerIndex)
       };
     }
   }

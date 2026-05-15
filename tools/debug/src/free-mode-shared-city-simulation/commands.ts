@@ -3,6 +3,7 @@ import type {
   CollectProductionCommand,
   DistrictId,
   GameplaySliceResponse,
+  OccupyDistrictCommand,
   PlayerId,
   ServerInstanceId,
   SpyDistrictCommand
@@ -84,6 +85,24 @@ export const createAttackCommand = (
 ): AttackDistrictCommand => ({
   id: createCommandId("attack-district", round, playerIndex, sourceDistrictId, targetDistrictId),
   type: "attack-district",
+  mode: "free",
+  playerId,
+  serverInstanceId,
+  issuedAt: new Date(0).toISOString(),
+  payload: { districtId: targetDistrictId, sourceDistrictId },
+  clientRequestId: null
+});
+
+export const createOccupyCommand = (
+  serverInstanceId: ServerInstanceId,
+  playerId: PlayerId,
+  sourceDistrictId: DistrictId,
+  targetDistrictId: DistrictId,
+  round: number,
+  playerIndex: number
+): OccupyDistrictCommand => ({
+  id: createCommandId("occupy-district", round, playerIndex, sourceDistrictId, targetDistrictId),
+  type: "occupy-district",
   mode: "free",
   playerId,
   serverInstanceId,

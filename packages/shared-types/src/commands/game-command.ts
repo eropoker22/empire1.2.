@@ -3,6 +3,7 @@ import type { AcknowledgePendingRaidCommand } from "./acknowledge-pending-raid-c
 import type { BuildStructureCommand } from "./build-structure-command";
 import type { CollectProductionCommand } from "./collect-production-command";
 import type { CraftItemCommand } from "./craft-item-command";
+import type { OccupyDistrictCommand } from "./occupy-district-command";
 import type { PlaceTrapCommand } from "./place-trap-command";
 import type { RunBuildingActionCommand } from "./run-building-action-command";
 import type { SpyDistrictCommand } from "./spy-district-command";
@@ -18,6 +19,7 @@ export type GameCommand =
   | BuildStructureCommand
   | CollectProductionCommand
   | CraftItemCommand
+  | OccupyDistrictCommand
   | PlaceTrapCommand
   | RunBuildingActionCommand
   | SpyDistrictCommand;

@@ -65,12 +65,24 @@ export const validateModeConfig = (config: ResolvedGameModeConfig): ResolvedGame
       throw new Error("Conflict config requires a non-negative attackCooldownTicks.");
     }
 
+    if ((config.balance.conflict.occupyCooldownTicks ?? 0) < 0) {
+      throw new Error("Conflict config requires a non-negative occupyCooldownTicks.");
+    }
+
     if ((config.balance.conflict.minAttackDurationTicks ?? 0) < 0) {
       throw new Error("Conflict config requires a non-negative minAttackDurationTicks.");
     }
 
     if ((config.balance.conflict.attackHeatGain ?? 0) < 0) {
       throw new Error("Conflict config requires a non-negative attackHeatGain.");
+    }
+
+    if ((config.balance.conflict.occupyHeatGain ?? 0) < 0) {
+      throw new Error("Conflict config requires a non-negative occupyHeatGain.");
+    }
+
+    if ((config.balance.conflict.occupyInfluenceCost ?? 0) < 0) {
+      throw new Error("Conflict config requires a non-negative occupyInfluenceCost.");
     }
 
     if (config.balance.conflict.trapAttackLosses < 0) {

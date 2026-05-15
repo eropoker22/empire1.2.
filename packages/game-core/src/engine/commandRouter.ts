@@ -8,6 +8,7 @@ import {
   handleBuildStructure,
   handleCollectProduction,
   handleCraftItem,
+  handleOccupyDistrict,
   handlePlaceTrap,
   handleSpyDistrict,
   handleUseBuildingAction
@@ -54,6 +55,8 @@ export const routeCommand = (
       return handleCollectProduction(state, command, context);
     case "craft-item":
       return handleCraftItem(state, command, context);
+    case "occupy-district":
+      return handleOccupyDistrict(state, command, context);
     case "place-trap":
       return handlePlaceTrap(state, command, context);
     case "run-building-action":

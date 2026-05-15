@@ -21,8 +21,11 @@ export interface CraftBuildingBalanceConfig {
 export interface ConflictBalanceConfig {
   spyCooldownTicks: number;
   attackCooldownTicks: number;
+  occupyCooldownTicks?: number;
   minAttackDurationTicks?: number;
   attackHeatGain?: number;
+  occupyHeatGain?: number;
+  occupyInfluenceCost?: number;
   spyBaseSuccessChance: number;
   spyTrapRevealChance: number;
   trapAttackLosses: number;

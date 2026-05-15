@@ -111,6 +111,7 @@ const createGameplaySliceFixture = (): GameplaySliceView => ({
         disabledReason: null
       }
     ],
+    occupyTargets: [],
     trap: {
       enabled: true,
       disabledReason: null,

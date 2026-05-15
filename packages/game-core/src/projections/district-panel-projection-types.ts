@@ -4,6 +4,7 @@ import type {
   CarDealerBalanceConfig,
   CentralBankBalanceConfig,
   CityHallBalanceConfig,
+  ConflictBalanceConfig,
   CourthouseBalanceConfig,
   LobbyClubBalanceConfig,
   ConvenienceStoreBalanceConfig,
@@ -32,6 +33,7 @@ export interface DistrictPanelProjectionInput {
   productionCatalog: Readonly<Record<string, ProductionBuildingBalanceConfig>>;
   craftCatalog: Readonly<Record<string, CraftBuildingBalanceConfig>>;
   buildingActionCatalog: Readonly<Record<string, BuildingActionBalanceConfig>>;
+  conflictConfig?: ConflictBalanceConfig;
   stripClubConfig?: StripClubBalanceConfig;
   restaurantConfig?: RestaurantBalanceConfig;
   convenienceStoreConfig?: ConvenienceStoreBalanceConfig;

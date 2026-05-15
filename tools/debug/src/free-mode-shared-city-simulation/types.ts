@@ -119,7 +119,7 @@ export interface FreeModeSharedCitySimulationResult {
   errorsByCode: Record<string, number>;
 }
 
-export type SimulationActionType = "spy-district" | "attack-district" | "collect-production";
+export type SimulationActionType = "spy-district" | "occupy-district" | "attack-district" | "collect-production";
 export type SimulationBotProfile = "scout" | "aggressor" | "opportunist" | "economy" | "balanced";
 
 export type FreeModeSharedCityScenarioName =

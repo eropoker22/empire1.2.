@@ -102,8 +102,11 @@ export const freeModeOverride: Partial<ResolvedGameModeConfig> = {
     conflict: {
       spyCooldownTicks: 1,
       attackCooldownTicks: 36,
+      occupyCooldownTicks: 2,
       minAttackDurationTicks: 36,
       attackHeatGain: 8,
+      occupyHeatGain: 2,
+      occupyInfluenceCost: 5,
       spyBaseSuccessChance: 0.76,
       spyTrapRevealChance: 0.2,
       trapAttackLosses: 2,

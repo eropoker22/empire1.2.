@@ -87,6 +87,7 @@ const createCooldownSlice = (): GameplaySliceView => ({
     ],
     attackTargets: [],
     spyTargets: [],
+    occupyTargets: [],
     trap: null,
     slots: []
   }

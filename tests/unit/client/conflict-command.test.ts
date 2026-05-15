@@ -55,6 +55,7 @@ const createGameplaySliceFixture = ({
         disabledReason: spyEnabled ? null : "Spy route is cooling down."
       }
     ],
+    occupyTargets: [],
     trap: {
       enabled: trapEnabled,
       disabledReason: trapEnabled ? null : "Only one active trap can be armed at a time.",

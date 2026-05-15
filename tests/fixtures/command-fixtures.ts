@@ -3,6 +3,7 @@ import type {
   BuildStructureCommand,
   CollectProductionCommand,
   CraftItemCommand,
+  OccupyDistrictCommand,
   PlaceTrapCommand,
   RunBuildingActionCommand,
   SpyDistrictCommand
@@ -101,6 +102,23 @@ export const createSpyDistrictCommandFixture = (
 ): SpyDistrictCommand => ({
   id: "command:spy:1",
   type: "spy-district",
+  mode: "free",
+  playerId: "player:1",
+  serverInstanceId: "instance:1",
+  issuedAt: new Date(0).toISOString(),
+  payload: {
+    districtId: "district:2",
+    sourceDistrictId: "district:1"
+  },
+  clientRequestId: null,
+  ...overrides
+});
+
+export const createOccupyDistrictCommandFixture = (
+  overrides: Partial<OccupyDistrictCommand> = {}
+): OccupyDistrictCommand => ({
+  id: "command:occupy:1",
+  type: "occupy-district",
   mode: "free",
   playerId: "player:1",
   serverInstanceId: "instance:1",

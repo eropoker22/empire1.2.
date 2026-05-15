@@ -134,6 +134,21 @@ export interface DistrictSpyTargetView {
   disabledReason: string | null;
 }
 
+export interface DistrictOccupyTargetView {
+  districtId: DistrictId;
+  name: string;
+  ownerPlayerId: PlayerId | null;
+  status: DistrictStatus;
+  enabled: boolean;
+  disabledCode: string | null;
+  disabledReason: string | null;
+  cost: {
+    influence: number;
+  };
+  heatGain: number;
+  cooldownRemainingTicks: number;
+}
+
 export interface DistrictTrapView {
   enabled: boolean;
   disabledReason: string | null;
@@ -159,5 +174,6 @@ export interface DistrictPanelView {
   slots: DistrictPanelSlotView[];
   attackTargets: DistrictAttackTargetView[];
   spyTargets: DistrictSpyTargetView[];
+  occupyTargets: DistrictOccupyTargetView[];
   trap: DistrictTrapView | null;
 }

@@ -5,6 +5,7 @@ export * from "./build-structure-command";
 export * from "./collect-production-command";
 export * from "./craft-item-command";
 export * from "./game-command";
+export * from "./occupy-district-command";
 export * from "./place-trap-command";
 export * from "./player-command";
 export * from "./run-building-action-command";

@@ -5,6 +5,7 @@ import { resolvePowerStationInfrastructureMultiplier } from "../handlers/powerSt
 import { composeEntityId } from "../utils";
 import { createDistrictAttackTargetViews } from "./district-attack-target-projection";
 import { createDistrictPanelBuildingViews } from "./district-building-action-projection";
+import { createDistrictOccupyTargetViews } from "./district-occupy-target-projection";
 import type { DistrictPanelProjectionInput } from "./district-panel-projection-types";
 import { createDistrictSpyTargetViews } from "./district-spy-target-projection";
 
@@ -35,6 +36,7 @@ export const createDistrictPanelView = (
     ? state.resourceStatesById[player.resourceStateId]?.balances ?? {}
     : {};
   const attackTargets = createDistrictAttackTargetViews(state, input.playerId, district.id);
+  const occupyTargets = createDistrictOccupyTargetViews(state, input.playerId, district.id, input.conflictConfig);
   const spyTargets = createDistrictSpyTargetViews(state, input.playerId, district.id);
   const trap = createTrapView(state, input.playerId, district.id);
   const isDestroyed = district.status === "destroyed";
@@ -85,6 +87,7 @@ export const createDistrictPanelView = (
     }),
     attackTargets: isDestroyed ? [] : attackTargets,
     spyTargets: isDestroyed ? [] : spyTargets,
+    occupyTargets: isDestroyed ? [] : occupyTargets,
     trap: isDestroyed ? null : trap,
     slots: isDestroyed ? [] : Array.from({ length: district.slotCount }, (_value, slotIndex) => {
       const buildingId = district.buildingIds[slotIndex];

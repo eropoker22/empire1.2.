@@ -40,8 +40,11 @@ export const baseBalanceConfig: BalanceConfig = {
   conflict: {
     spyCooldownTicks: 2,
     attackCooldownTicks: 2,
+    occupyCooldownTicks: 2,
     minAttackDurationTicks: 2,
     attackHeatGain: 6,
+    occupyHeatGain: 2,
+    occupyInfluenceCost: 5,
     spyBaseSuccessChance: 0.72,
     spyTrapRevealChance: 0.22,
     trapAttackLosses: 1,
