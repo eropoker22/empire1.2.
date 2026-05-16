@@ -1,21 +1,7 @@
 // Compatibility bridge for legacy static pages.
 // Authoritative gameplay faction balance lives in packages/game-config/src/public/faction-definitions.ts.
 
-const BASE_PREVIEW_START = Object.freeze({
-  cleanMoney: 1500,
-  dirtyMoney: 300
-});
-
-export const FACTION_WEAPON_PRESETS = Object.freeze({
-  mafian: { pistol: 1 },
-  kartel: { pistol: 1 },
-  kult: { barricades: 1 },
-  "tajna-organizace": { cameras: 1 },
-  hackeri: { cameras: 1 },
-  "motorkarsky-gang": { "baseball-bat": 2, pistol: 1 },
-  "soukroma-armada": { pistol: 2, vest: 1, barricades: 1 },
-  korporace: {}
-});
+export const FACTION_WEAPON_PRESETS = Object.freeze({});
 
 export const FACTION_CATALOG = Object.freeze({
   mafian: createFactionCatalogEntry({
@@ -23,100 +9,372 @@ export const FACTION_CATALOG = Object.freeze({
     name: "Mafián",
     tagline: "Staré peníze, staré krytí.",
     description: "Stabilní ekonomika, výpalné a vliv na správných dveřích.",
-    cashBonus: 250,
-    dirtyBonus: 40,
-    influence: 6,
-    heat: 0,
-    advantages: ["Clean income +10 %", "Heat gain -4 %", "Legální budovy drží tempo"],
-    disadvantages: ["Slabší tech", "Slabší špehování"]
+    playstyleSummary: "Economy / clean cash / influence / heat control",
+    advantages: ["Clean income +10 %", "Heat gain -4 %"],
+    disadvantages: ["Spy success chance -3 p. b."],
+    passiveEffectSummary: ["Clean income +10 %", "Heat gain -4 %", "Spy -3 p. b."],
+    specialAction: {
+      name: "Tichá dohoda",
+      description: "Mafián zatlačí na správné kontakty a na krátký čas sníží nový policejní heat ze svých akcí.",
+      status: "preview",
+      intendedFutureEffect: [
+        "Sníží nový heat gain o 35 % na omezenou dobu.",
+        "Neodstraňuje existující heat.",
+        "Neruší pending raids.",
+        "Neruší aktivní raids.",
+        "Nestackuje se."
+      ]
+    }
   }),
   kartel: createFactionCatalogEntry({
     id: "kartel",
     name: "Kartel",
-    tagline: "Rychlá špína, rychlý problém.",
-    description: "Dirty cash, drogy a pašování, které přitahují heat.",
-    cashBonus: 100,
-    dirtyBonus: 180,
-    influence: 0,
-    heat: 3,
-    advantages: ["Dirty income +15 %", "Illegal production +10 %", "Rychlé cashflow"],
-    disadvantages: ["Heat gain +8 %", "Větší policejní tlak"]
+    tagline: "Prachy tečou rychle. Krev taky.",
+    description: "Kartel staví impérium na dirty cash, drogách a pašování. Vydělává rychleji z ilegálních zdrojů a jeho produkce jede tvrději než u ostatních frakcí. Každá zásilka má ale stopu: Kartel generuje víc policejního tlaku, hůř vydělává čisté peníze a při obraně území není tak pevný.",
+    playstyleSummary: "Dirty cash / illegal production / drugs / smuggling / high risk economy",
+    advantages: [
+      "+18 % dirty income",
+      "+15 % ilegální produkce",
+      "+10 % pašování"
+    ],
+    disadvantages: [
+      "+15 % heat z ilegálních akcí",
+      "-8 % clean income",
+      "-5 % defense power"
+    ],
+    passiveEffectSummary: [
+      "+18 % dirty income",
+      "+15 % ilegální produkce",
+      "+10 % pašování",
+      "+15 % heat z ilegálních akcí",
+      "-8 % clean income",
+      "-5 % defense power"
+    ],
+    specialAction: {
+      name: "Noční zásilka",
+      description: "Kartel spustí riskantní zásilku přes město. Přinese dirty cash podle vlastněné ilegální sítě, ale výrazně zvýší policejní heat.",
+      status: "preview",
+      intendedFutureEffect: [
+        "Instant dirty cash reward podle vlastněných illegal/smuggling/drug buildings.",
+        "Base dirty cash 500.",
+        "Dirty cash per illegal building 100.",
+        "Dirty cash per smuggling building 150.",
+        "Dirty cash per drug building 120.",
+        "Player heat gain 12.",
+        "District heat gain 3 na relevantní vlastněný illegal district, pokud to pipeline podporuje.",
+        "Vytvoří suspicion-style city feed event, pokud to pipeline podporuje.",
+        "Cooldown: 2700 sekund.",
+        "Nedává clean cash.",
+        "Nedává okamžité resources.",
+        "Nesnižuje heat.",
+        "Neruší raids.",
+        "Nestackuje se.",
+        "Suggested cost: influence 15."
+      ]
+    }
   }),
   kult: createFactionCatalogEntry({
     id: "kult",
     name: "Kult",
-    tagline: "Víra je munice.",
-    description: "Fanatismus, influence a tvrdé držení districtů.",
-    cashBonus: 80,
-    dirtyBonus: 60,
-    influence: 14,
-    heat: 0,
-    advantages: ["Influence +15 %", "Defense +5 %", "Lepší držení území"],
-    disadvantages: ["Clean income -5 %", "Pomalejší cash start"]
+    tagline: "Město se zlomí vírou.",
+    description: "Kult roste skrz vliv, loajalitu a strach. Přitahuje víc lidí, lépe drží obsazené districty a dokáže město zaplavit neklidem. Není ale silný v čisté ekonomice ani v přímém útoku.",
+    playstyleSummary: "Influence / population / defense / manipulation / city feed chaos",
+    advantages: [
+      "+20 % influence gain",
+      "+10 % population generation",
+      "+10 % defense power"
+    ],
+    plannedAdvantages: [
+        "Silnější práce s drby / podezřením"
+    ],
+    disadvantages: [
+      "-10 % clean income",
+      "+10 % market fee",
+      "-5 % attack power"
+    ],
+    passiveEffectSummary: [
+      "+20 % influence gain",
+      "+10 % population generation",
+      "+10 % defense power",
+      "-10 % clean income",
+      "-5 % attack power"
+    ],
+    plannedPassiveEffectSummary: [
+      "Silnější práce s drby / podezřením",
+      "+10 % market fee"
+    ],
+    specialAction: {
+      name: "Masová posedlost",
+      description: "Kult rozpoutá v ulicích fanatickou vlnu oddanosti. Na krátký čas posílí vliv, růst populace a obranu, ale přitáhne policejní pozornost.",
+      status: "preview",
+      intendedFutureEffect: [
+        "Duration: 600 sekund.",
+        "Cooldown: 2400 sekund.",
+        "Aktivní influence gain multiplier 1.35.",
+        "Aktivní population generation multiplier 1.20.",
+        "Aktivní defense power multiplier 1.10.",
+        "Přidá player heat nebo district heat.",
+        "Vytvoří suspicion-style city feed event.",
+        "Nestackuje se.",
+        "Nedává instant cash.",
+        "Nedává instant resources.",
+        "Neruší raids.",
+        "Neblokuje útoky.",
+        "Suggested cost: influence 30."
+      ]
+    }
   }),
   "tajna-organizace": createFactionCatalogEntry({
     id: "tajna-organizace",
     name: "Tajná organizace",
-    tagline: "Nevidíš je. To je pointa.",
-    description: "Špehování, infiltrace a menší stopa v policejních systémech.",
-    cashBonus: 150,
-    dirtyBonus: 70,
-    influence: 0,
-    heat: 0,
-    advantages: ["Spy +10 p. b.", "Heat gain -8 %", "Lepší informace"],
-    plannedAdvantages: ["Rumor truth/read quality +10 %"],
-    disadvantages: ["Attack power -3 %", "Menší hrubá síla"]
+    tagline: "Nevidíš nás. Jen následky.",
+    description: "Tajná organizace ovládá město přes infiltrace, špehování, falešné stopy a spící buňky. Má přesnější informace, lépe odhaluje pasti a dokáže provádět tajné operace s menším policejním tlakem. V otevřené válce ale ztrácí sílu.",
+    playstyleSummary: "Spying / infiltration / traps / secret actions / false information / low heat",
+    advantages: [
+      "+15 % šance na úspěšné špehování",
+      "+15 % šance odhalit pasti",
+      "+10 % kvalita intel/drbů"
+    ],
+    plannedAdvantages: [
+      "+15 % kvalita informací ze špehování",
+      "-8 % heat z tajných akcí"
+    ],
+    disadvantages: [
+      "-10 % attack power",
+      "-8 % clean income",
+      "-8 % dirty income"
+    ],
+    passiveEffectSummary: [
+      "+15 % šance na úspěšné špehování",
+      "+15 % šance odhalit pasti",
+      "+10 % kvalita intel/drbů",
+      "-10 % attack power",
+      "-8 % clean income",
+      "-8 % dirty income"
+    ],
+    plannedPassiveEffectSummary: [
+      "+15 % kvalita informací ze špehování",
+      "-8 % heat z tajných akcí"
+    ],
+    specialAction: {
+      name: "Spící buňka",
+      description: "Tajná organizace skrytě aktivuje buňku ve vlastním districtu. První nepřátelský útok nebo pokus o obsazení bude oslabený a pro útočníka dražší.",
+      status: "preview",
+      intendedFutureEffect: [
+        "Target: jeden vlastněný district.",
+        "Duration: 1800 sekund.",
+        "Cooldown: 3600 sekund.",
+        "Cost: influence 25 + clean cash 1000.",
+        "Trigger: nepřítel zaútočí na chráněný district.",
+        "Trigger: nepřítel se pokusí obsadit chráněný district.",
+        "Enemy attack power multiplier 0.85.",
+        "Enemy occupy power multiplier 0.85.",
+        "Enemy loss multiplier 1.10.",
+        "Enemy cooldown penalty 180 sekund.",
+        "Efekt se po triggeru spotřebuje.",
+        "Lze položit jen na vlastněný district.",
+        "Nestackuje se na stejném districtu.",
+        "Nenahrazuje toxic trap mechaniku.",
+        "Neobchází existující trap mechaniky.",
+        "Neodstraňuje heat.",
+        "Neruší raids.",
+        "Není globálně viditelná.",
+        "Nemá být běžně odhalená rumory.",
+        "Může být naznačená jen high-quality spyingem, pokud to spy systém podporuje.",
+        "Vyprší, pokud se nepoužije."
+      ]
+    }
   }),
   hackeri: createFactionCatalogEntry({
     id: "hackeri",
     name: "Hackeři",
-    tagline: "Město je jen špatně zamčený terminál.",
-    description: "Data, sabotage, market intel a asymetrická válka.",
-    cashBonus: 120,
-    dirtyBonus: 60,
-    influence: 0,
-    heat: 0,
-    advantages: ["Tech production +10 %", "Spy/intel +8 p. b."],
-    plannedAdvantages: ["Market fee -5 %"],
-    disadvantages: ["Defense -5 %", "Slabší fyzická obrana"]
+    tagline: "Kdo ovládá data, ovládá válku.",
+    description: "Hackeři nevyhrávají přes hrubou sílu. Čtou město přes kamery, alarmy, datová centra a potvrzené drby. Jejich informace jsou výrazně spolehlivější a jejich technická obrana je silnější než u ostatních frakcí. V otevřeném boji ale ztrácí.",
+    playstyleSummary: "Tech / confirmed rumors / cameras / alarms / spying / digital sabotage",
+    advantages: [
+      "+50 % potvrzenost drbů",
+      "+15 % účinnost kamer",
+      "+15 % účinnost alarmů",
+      "+10 % tech production",
+      "+10 % šance na úspěšné špehování"
+    ],
+    disadvantages: [
+      "-8 % attack power",
+      "-8 % dirty income",
+      "-5 % základní obrana bez kamer/alarmů"
+    ],
+    passiveEffectSummary: [
+      "+50 % potvrzenost drbů",
+      "+15 % účinnost kamer",
+      "+15 % účinnost alarmů",
+      "+10 % tech production",
+      "+10 % šance na úspěšné špehování",
+      "-8 % attack power",
+      "-8 % dirty income",
+      "-5 % základní obrana bez kamer/alarmů"
+    ],
+    specialAction: {
+      name: "Výpadek systému",
+      description: "Hackeři naruší cílový district. Na krátký čas oslabí kamery, alarmy a technickou obranu cíle, čímž zvýší šanci na úspěšné špehování nebo vykradení.",
+      status: "preview",
+      intendedFutureEffect: [
+        "Target: enemy district.",
+        "Duration: 600 sekund.",
+        "Cooldown: 2400 sekund.",
+        "Target camera effectiveness multiplier 0.80.",
+        "Target alarm effectiveness multiplier 0.80.",
+        "Spy against target chance bonus 0.15.",
+        "Robbery against target chance bonus 0.10.",
+        "Player heat gain 4.",
+        "Neodhaluje pasti automaticky.",
+        "Nevypíná toxic traps.",
+        "Negarantuje úspěšné špehování.",
+        "Negarantuje úspěšné vykradení.",
+        "Neruší raids.",
+        "Neodstraňuje heat.",
+        "Nestackuje se na stejném cíli.",
+        "Suggested cost: tech core 1 + influence 15."
+      ]
+    }
   }),
   "motorkarsky-gang": createFactionCatalogEntry({
     id: "motorkarsky-gang",
     name: "Motorkářský gang",
-    tagline: "Rychle dovnitř. Rychle ven.",
-    description: "Mobilita, early aggression a špinavé malé výhody.",
-    cashBonus: 80,
-    dirtyBonus: 140,
-    influence: 0,
-    heat: 2,
-    advantages: ["Attack duration -8 %", "Dirty income +5 %", "Rychlé tempo"],
-    disadvantages: ["Defense -5 %", "Horší dlouhá stabilita"]
+    tagline: "Rychlost zabíjí.",
+    description: "Motorkáři nehrají na trpělivost. Vyráží rychle, berou co najdou a mizí dřív, než se město vzpamatuje. Mají kratší cooldowny na agresivní akce a víc vydělají z vykrádání. Jenže držet území není jejich silná stránka a rychlý chaos zanechává větší policejní stopu.",
+    playstyleSummary: "Speed / robbery / attacks / pressure / dirty cash",
+    advantages: [
+      "-15 % cooldown na vykrádání",
+      "-10 % cooldown na útoky",
+      "-10 % cooldown na obsazování",
+      "+10 % dirty cash z vykrádání"
+    ],
+    disadvantages: [
+      "-10 % obrana districtů",
+      "+8 % heat z útoků a vykrádání"
+    ],
+    passiveEffectSummary: [
+      "-15 % cooldown na vykrádání",
+      "-10 % cooldown na útoky",
+      "-10 % cooldown na obsazování",
+      "+10 % dirty cash z vykrádání",
+      "-10 % obrana districtů",
+      "+8 % heat z útoků a vykrádání"
+    ],
+    specialAction: {
+      name: "Bleskový nájezd",
+      description: "Gang vyrazí do ulic bez varování. Další vykradení nebo útok proběhne výrazně rychleji a silněji, ale vygeneruje víc heat.",
+      status: "preview",
+      intendedFutureEffect: [
+        "Platí na další vykradení nebo útok.",
+        "Další agresivní akce duration multiplier 0.60.",
+        "Další robbery loot multiplier 1.15.",
+        "Další attack power multiplier 1.10.",
+        "Další aggressive action heat multiplier 1.15.",
+        "Nestackuje se.",
+        "Vyprší po omezené době, pokud se nepoužije.",
+        "Cooldown: medium.",
+        "Suggested cost: dirty cash + influence."
+      ]
+    }
   }),
   "soukroma-armada": createFactionCatalogEntry({
     id: "soukroma-armada",
     name: "Soukromá armáda",
-    tagline: "Když diplomacie krvácí, přijde kontrakt.",
-    description: "Combat, obrana, vybavení a tvrdé držení mapy.",
-    cashBonus: 100,
-    dirtyBonus: 50,
-    influence: 0,
-    heat: 3,
-    advantages: ["Attack +5 %", "Defense +8 %"],
-    plannedAdvantages: ["Equipment losses -5 %"],
-    disadvantages: ["Heat gain +5 %", "Vyšší provozní tlak"]
+    tagline: "Když diplomacie selže, přijde faktura.",
+    description: "Soukromá armáda nehraje na pouliční chaos. Nasazuje vycvičené jednotky, taktiku a přesilu. Je silnější v útoku, lépe brání districty a při obsazování ztrácí méně vybavení. Profesionální násilí je ale drahé a viditelné.",
+    playstyleSummary: "Combat / defense / occupation / territory control / expensive operations",
+    advantages: [
+      "+12 % attack power",
+      "+12 % defense power",
+      "-10 % ztráty vybavení v boji"
+    ],
+    plannedAdvantages: ["+10 % síla při obsazování"],
+    disadvantages: [
+      "+8 % heat z útoků a obsazování",
+      "-8 % clean income"
+    ],
+    plannedDisadvantages: ["+12 % upkeep / combat cost"],
+    passiveEffectSummary: [
+      "+12 % attack power",
+      "+12 % defense power",
+      "-10 % ztráty vybavení v boji",
+      "+8 % heat z útoků a obsazování",
+      "-8 % clean income"
+    ],
+    plannedPassiveEffectSummary: [
+      "+10 % síla při obsazování",
+      "+12 % upkeep / combat cost"
+    ],
+    specialAction: {
+      name: "Taktické nasazení",
+      description: "Soukromá armáda spustí profesionální zásah. Další útok nebo obsazení districtu získá výrazný bojový bonus a nižší ztráty, ale vygeneruje více heat.",
+      status: "preview",
+      intendedFutureEffect: [
+        "Platí pouze na další útok nebo obsazení districtu.",
+        "Neplatí na vykrádání.",
+        "Next combat action power multiplier 1.25.",
+        "Next occupy power multiplier 1.25.",
+        "Next combat loss multiplier 0.80.",
+        "Next combat heat multiplier 1.15.",
+        "Duration: 900 sekund.",
+        "Cooldown: 2700 sekund.",
+        "Nestackuje se.",
+        "Vyprší, pokud se nepoužije.",
+        "Negarantuje vítězství.",
+        "Neobchází pasti.",
+        "Neruší efekty nepřátelských pastí.",
+        "Neodstraňuje heat.",
+        "Neruší raids.",
+        "Suggested cost: clean cash 2000 + dirty cash 500 + influence 15."
+      ]
+    }
   }),
   korporace: createFactionCatalogEntry({
     id: "korporace",
-    name: "Korporace",
-    tagline: "Legální zločin je pořád zločin.",
-    description: "Finance, downtown páky a čisté cashflow s úsměvem v obleku.",
-    cashBonus: 300,
-    dirtyBonus: 0,
-    influence: 5,
-    heat: 0,
-    advantages: ["Clean income +15 %", "Attack duration +3 %", "Downtown finance synergy"],
-    plannedAdvantages: ["Market fee -10 %"],
-    disadvantages: ["Dirty income -8 %", "Pomalejší early combat"]
+    name: "Korporát",
+    tagline: "Zločin je špinavý. Moc je legální.",
+    description: "Korporát nevlastní ulice přes strach, ale přes smlouvy, právníky, bezpečnostní systémy a účty, které nikdo nechce kontrolovat. Vydělává silněji z čisté ekonomiky, lépe obchoduje a dokáže zmírnit následky policejního tlaku. V pouliční špíně ale ztrácí tempo.",
+    playstyleSummary: "Clean economy / legal cover / defense systems / market efficiency / safer growth",
+    advantages: [
+      "+15 % clean income",
+      "-3 % heat gain",
+      "+10 % efekt obranných systémů"
+    ],
+    plannedAdvantages: ["-10 % market fee"],
+    disadvantages: [
+      "-15 % dirty income",
+      "-10 % loot z vykrádání",
+      "+10 % délka útoků"
+    ],
+    passiveEffectSummary: [
+      "+15 % clean income",
+      "-3 % heat gain",
+      "+10 % efekt obranných systémů",
+      "-15 % dirty income",
+      "-10 % loot z vykrádání",
+      "+10 % délka útoků"
+    ],
+    plannedPassiveEffectSummary: ["-10 % market fee"],
+    specialAction: {
+      name: "Právní štít",
+      description: "Korporát aktivuje právníky, compliance tým a krizové krytí. Další policejní razie má mírnější následky, ale není zrušena.",
+      status: "preview",
+      intendedFutureEffect: [
+        "Platí pouze na další policejní razii.",
+        "Next raid consequence multiplier 0.65.",
+        "Duration: 1200 sekund.",
+        "Cooldown: 3600 sekund.",
+        "Neruší razii.",
+        "Nesnižuje aktuální heat.",
+        "Neodstraňuje pending raid.",
+        "Neodstraňuje active raid.",
+        "Nestackuje se.",
+        "Musí zůstat slabší než mitigace Soudu.",
+        "Pokud během duration nepřijde razie, efekt vyprší.",
+        "Suggested cost: clean cash 3000 + influence 20."
+      ]
+    }
   })
 });
 
@@ -126,14 +384,16 @@ function createFactionCatalogEntry(input) {
     name: input.name,
     tagline: input.tagline,
     description: input.description,
-    startingPackage: {
-      cleanMoney: BASE_PREVIEW_START.cleanMoney + input.cashBonus,
-      dirtyMoney: BASE_PREVIEW_START.dirtyMoney + input.dirtyBonus,
-      influence: input.influence,
-      heat: input.heat
-    },
-    advantages: input.advantages,
-    plannedAdvantages: input.plannedAdvantages || [],
-    disadvantages: input.disadvantages
+    playstyleSummary: input.playstyleSummary,
+    advantages: Object.freeze([...(input.advantages || [])]),
+    plannedAdvantages: Object.freeze([...(input.plannedAdvantages || [])]),
+    disadvantages: Object.freeze([...(input.disadvantages || [])]),
+    plannedDisadvantages: Object.freeze([...(input.plannedDisadvantages || [])]),
+    coreBackedEffects: Object.freeze([...(input.passiveEffectSummary || input.advantages || [])]),
+    plannedEffects: Object.freeze([...(input.plannedPassiveEffectSummary || input.plannedAdvantages || [])]),
+    specialAction: input.specialAction ? Object.freeze({
+      ...input.specialAction,
+      intendedFutureEffect: Object.freeze([...(input.specialAction.intendedFutureEffect || [])])
+    }) : null
   });
 }

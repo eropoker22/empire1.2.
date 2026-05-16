@@ -30,13 +30,31 @@ export interface FactionPassiveModifiers {
   dirtyIncomeMultiplier?: number;
   productionMultiplier?: number;
   illegalProductionMultiplier?: number;
+  smugglingIncomeMultiplier?: number;
   techProductionMultiplier?: number;
   heatGainMultiplier?: number;
+  illegalActionHeatGainMultiplier?: number;
   influenceGainMultiplier?: number;
   spySuccessChanceBonus?: number;
+  spyInfoQualityMultiplier?: number;
+  trapDetectionChanceBonus?: number;
+  secretActionHeatGainMultiplier?: number;
   attackPowerMultiplier?: number;
   defensePowerMultiplier?: number;
+  baseDefensePowerMultiplier?: number;
+  cameraEffectivenessMultiplier?: number;
+  alarmEffectivenessMultiplier?: number;
+  occupyPowerMultiplier?: number;
   attackDurationMultiplier?: number;
+  robberyCooldownMultiplier?: number;
+  attackCooldownMultiplier?: number;
+  occupyCooldownMultiplier?: number;
+  robberyDirtyCashLootMultiplier?: number;
+  robberyLootMultiplier?: number;
+  aggressiveActionHeatGainMultiplier?: number;
+  defenseSystemEffectivenessMultiplier?: number;
+  populationGenerationMultiplier?: number;
+  rumorGenerationMultiplier?: number;
   equipmentLossMultiplier?: number;
   marketFeeMultiplier?: number;
   rumorTruthMultiplier?: number;
@@ -48,13 +66,31 @@ export const FACTION_PASSIVE_MODIFIER_KEYS = [
   "dirtyIncomeMultiplier",
   "productionMultiplier",
   "illegalProductionMultiplier",
+  "smugglingIncomeMultiplier",
   "techProductionMultiplier",
   "heatGainMultiplier",
+  "illegalActionHeatGainMultiplier",
   "influenceGainMultiplier",
   "spySuccessChanceBonus",
+  "spyInfoQualityMultiplier",
+  "trapDetectionChanceBonus",
+  "secretActionHeatGainMultiplier",
   "attackPowerMultiplier",
   "defensePowerMultiplier",
+  "baseDefensePowerMultiplier",
+  "cameraEffectivenessMultiplier",
+  "alarmEffectivenessMultiplier",
+  "occupyPowerMultiplier",
   "attackDurationMultiplier",
+  "robberyCooldownMultiplier",
+  "attackCooldownMultiplier",
+  "occupyCooldownMultiplier",
+  "robberyDirtyCashLootMultiplier",
+  "robberyLootMultiplier",
+  "aggressiveActionHeatGainMultiplier",
+  "defenseSystemEffectivenessMultiplier",
+  "populationGenerationMultiplier",
+  "rumorGenerationMultiplier",
   "equipmentLossMultiplier",
   "marketFeeMultiplier",
   "rumorTruthMultiplier",
@@ -68,6 +104,15 @@ export interface FactionUiTheme {
   glyph: string;
 }
 
+export type FactionSpecialActionStatus = "preview" | "planned" | "implemented";
+
+export interface FactionSpecialActionMetadata {
+  name: string;
+  description: string;
+  status: FactionSpecialActionStatus;
+  intendedFutureEffect?: string[];
+}
+
 export interface FactionDefinition {
   id: PlayerFactionId;
   name: string;
@@ -76,10 +121,11 @@ export interface FactionDefinition {
   playstyleSummary: string;
   strengths: string[];
   weaknesses: string[];
-  startingPackage: FactionStartingPackage;
+  startingPackage?: FactionStartingPackage;
   passiveModifiers: FactionPassiveModifiers;
   passiveEffectSummary: string[];
   plannedPassiveEffectSummary?: string[];
+  specialAction?: FactionSpecialActionMetadata;
   uiTheme: FactionUiTheme;
   recommendedFor: string;
   difficulty: FactionDifficulty;

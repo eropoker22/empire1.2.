@@ -1,4 +1,4 @@
-import type { FactionReadModel, FactionStartingPackage } from "@empire/shared-types";
+import type { FactionReadModel } from "@empire/shared-types";
 import type { CoreGameState } from "../entities";
 import type { GameCoreContext } from "../engine/context";
 import { resolvePlayerFaction } from "../rules/factions/factionRules";
@@ -21,25 +21,8 @@ export const createFactionReadModel = (
     weaknesses: [...definition.weaknesses],
     activePassiveEffects: [...definition.passiveEffectSummary],
     plannedPassiveEffects: [...(definition.plannedPassiveEffectSummary ?? [])],
-    startingPackageSummary: summarizeStartingPackage(definition.startingPackage),
+    startingPackageSummary: [],
+    specialAction: definition.specialAction ? { ...definition.specialAction } : undefined,
     uiTheme: { ...definition.uiTheme }
   };
-};
-
-const summarizeStartingPackage = (pack: FactionStartingPackage): string[] => {
-  const summary: string[] = [];
-  if (pack.cash) summary.push(`Clean cash +${pack.cash}`);
-  if (pack.dirtyCash) summary.push(`Dirty cash +${pack.dirtyCash}`);
-  for (const [resourceKey, amount] of Object.entries(pack.resources ?? {})) {
-    if (Number(amount) > 0) summary.push(`${resourceKey} +${amount}`);
-  }
-  for (const [weaponId, amount] of Object.entries(pack.attackLoadout ?? {})) {
-    if (Number(amount) > 0) summary.push(`${weaponId} +${amount}`);
-  }
-  for (const [weaponId, amount] of Object.entries(pack.defenseLoadout ?? {})) {
-    if (Number(amount) > 0) summary.push(`${weaponId} +${amount}`);
-  }
-  if (pack.initialInfluence) summary.push(`Influence +${pack.initialInfluence}`);
-  if (pack.initialHeat) summary.push(`Heat +${pack.initialHeat}`);
-  return summary;
 };

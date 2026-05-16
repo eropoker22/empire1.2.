@@ -1499,6 +1499,37 @@ describe("run-building-action command flow", () => {
     expect(result.resourceStatesById["resource:1"].balances.influence).toBeUndefined();
   });
 
+  it("applies Kult population generation bonus to apartment block production", () => {
+    const createPopulationSubject = (factionId: "mafian" | "kult") => {
+      const { state, building } = createStateWithFixedBuilding("apartment_block", {
+        metadata: {
+          apartmentBlock: {
+            storedPopulation: 0,
+            lastUpdatedTick: 0,
+            lastCapacity: 50,
+            wasFull: false
+          }
+        },
+        playerBalances: {
+          cash: 0,
+          "dirty-cash": 0
+        }
+      });
+      state.playersById["player:1"] = {
+        ...state.playersById["player:1"],
+        factionId
+      };
+      state.root.tick = 12;
+      const result = collectIncome(state, context);
+      return Number((result.buildingsById[building.id].metadata?.apartmentBlock as { storedPopulation?: number })?.storedPopulation || 0);
+    };
+
+    const baselinePopulation = createPopulationSubject("mafian");
+    const cultPopulation = createPopulationSubject("kult");
+
+    expect(cultPopulation).toBeCloseTo(baselinePopulation * 1.1);
+  });
+
   it("collects recruitment center income without dirty cash, influence, or actions", () => {
     const { state, building } = createStateWithFixedBuilding("recruitment_center", {
       playerBalances: {

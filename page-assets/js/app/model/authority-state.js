@@ -10,7 +10,6 @@ import {
   MARKET_PRICE_REFRESH_MS,
   MARKET_TAB_CONFIG
 } from "../../../../packages/game-config/src/legacy-page/economy-config.js";
-import { FACTION_CATALOG } from "../../../../packages/game-config/src/legacy-page/faction-config.js";
 import {
   loadState,
   saveState
@@ -21,6 +20,14 @@ import {
 // authority is present.
 
 const DEFAULT_MARKET_SERVER_ID = "preview-server";
+const DEFAULT_PREVIEW_ECONOMY = Object.freeze({
+  cleanMoney: 1500,
+  dirtyMoney: 300
+});
+const DEFAULT_PREVIEW_GANG = Object.freeze({
+  influence: 0,
+  heat: 0
+});
 
 function normalizeMarketServerId(serverId) {
   const normalizedServerId = String(serverId || "").trim();
@@ -130,8 +137,7 @@ function createDefaultProductionBuildingsState() {
   };
 }
 
-export function createDefaultPreviewSession(factionId = "mafian") {
-  const faction = FACTION_CATALOG[factionId] || FACTION_CATALOG.mafian;
+export function createDefaultPreviewSession(_factionId = "mafian") {
   const market = createDefaultMarketState();
 
   return {
@@ -143,13 +149,13 @@ export function createDefaultPreviewSession(factionId = "mafian") {
       factorySupplies: createDefaultFactoryResources()
     },
     economy: {
-      cleanMoney: faction.startingPackage.cleanMoney,
-      dirtyMoney: faction.startingPackage.dirtyMoney
+      cleanMoney: DEFAULT_PREVIEW_ECONOMY.cleanMoney,
+      dirtyMoney: DEFAULT_PREVIEW_ECONOMY.dirtyMoney
     },
     gang: {
       members: DEFAULT_GANG_MEMBERS,
-      influence: faction.startingPackage.influence,
-      heat: faction.startingPackage.heat,
+      influence: DEFAULT_PREVIEW_GANG.influence,
+      heat: DEFAULT_PREVIEW_GANG.heat,
       policeRaidProtectionUntil: 0,
       autoPoliceNextActionAt: 0,
       heatJournal: [],

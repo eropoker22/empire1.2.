@@ -37,7 +37,8 @@ describe("authority session accessors", () => {
           this.type = type;
         }
       },
-      factionCatalog: { mafian: { startingPackage: { cleanMoney: 10, dirtyMoney: 20 } } },
+      defaultEconomyState: { cleanMoney: 10, dirtyMoney: 20 },
+      factionCatalog: { mafian: {} },
       factionWeaponPresets: { mafian: { pistol: 3 } },
       getAuthoritySession: () => session,
       getStoredRegistration: () => ({ factionId: "mafian" }),
@@ -60,6 +61,6 @@ describe("authority session accessors", () => {
       revealedTypeDistrictIds: [3],
       revealedDefenseDistrictIds: [4]
     });
-    expect(api.createWeaponInventoryFromFaction("mafian")).toEqual({ pistol: 3 });
+    expect(api.createWeaponInventoryFromFaction("mafian")).toEqual({ pistol: 1 });
   });
 });

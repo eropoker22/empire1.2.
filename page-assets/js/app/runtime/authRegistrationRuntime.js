@@ -85,7 +85,8 @@ export function createAuthRegistrationRuntime(deps = {}) {
       const identity = identityInput.value.trim() || "Host";
       const factionId = factionInput.value in deps.FACTION_CATALOG ? factionInput.value : "mafian";
       const now = new Date().toISOString();
-      const faction = deps.FACTION_CATALOG[factionId];
+      const defaultEconomy = deps.DEFAULT_ECONOMY_STATE || { cleanMoney: 1500, dirtyMoney: 300 };
+      const defaultGangState = deps.DEFAULT_GANG_STATE || { influence: 0, heat: 0 };
 
       deps.setStoredRegistration?.({ identity, factionId, lockedAt: now });
       deps.setStoredWeaponInventory?.(deps.createWeaponInventoryFromFaction?.(factionId));
@@ -93,14 +94,14 @@ export function createAuthRegistrationRuntime(deps = {}) {
       deps.setStoredDrugInventory?.(deps.DEFAULT_DRUG_INVENTORY);
       deps.setStoredProductionState?.({});
       deps.setStoredEconomyState?.({
-        cleanMoney: faction.startingPackage.cleanMoney,
-        dirtyMoney: faction.startingPackage.dirtyMoney
+        cleanMoney: Number(defaultEconomy.cleanMoney || 0),
+        dirtyMoney: Number(defaultEconomy.dirtyMoney || 0)
       });
       deps.setStoredMarketPriceState?.(deps.createDefaultMarketPriceState?.());
       deps.setStoredGangState?.({
         members: deps.DEFAULT_GANG_MEMBERS,
-        influence: faction.startingPackage.influence,
-        heat: faction.startingPackage.heat,
+        influence: Number(defaultGangState.influence || 0),
+        heat: Number(defaultGangState.heat || 0),
         policeRaidProtectionUntil: 0,
         autoPoliceNextActionAt: 0,
         heatJournal: [],

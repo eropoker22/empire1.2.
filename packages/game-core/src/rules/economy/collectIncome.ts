@@ -97,10 +97,10 @@ export const collectIncome = (state: CoreGameState, context?: GameCoreContext): 
     ? applyArcadeAuditChecks(exchangeAuditState, context.config.balance.arcade, context.config.tickRateMs)
     : exchangeAuditState;
   const apartmentState = context?.config.balance.apartmentBlock
-    ? applyApartmentBlockPopulationProduction(arcadeAuditState, context.config.balance.apartmentBlock, context.config.tickRateMs, context.config.balance.powerStation, context.config.balance.recruitmentCenter)
+    ? applyApartmentBlockPopulationProduction(arcadeAuditState, context.config.balance.apartmentBlock, context.config.tickRateMs, context.config.balance.powerStation, context.config.balance.recruitmentCenter, context)
     : arcadeAuditState;
   const schoolState = context?.config.balance.school
-    ? applySchoolStudentProduction(apartmentState, context.config.balance.school, context.config.tickRateMs)
+    ? applySchoolStudentProduction(apartmentState, context.config.balance.school, context.config.tickRateMs, context)
     : apartmentState;
   const smugglingTunnelState = context?.config.balance.smugglingTunnel
     ? applySmugglingTunnelBatchProduction({

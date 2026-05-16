@@ -85,12 +85,7 @@ describe("auth panel UI module", () => {
       name: "Mafie",
       tagline: "Tichá kontrola",
       description: "Popis.",
-      startingPackage: {
-        cleanMoney: 100,
-        dirtyMoney: 50,
-        influence: 2,
-        heat: 1
-      },
+      playstyleSummary: "Economy / heat control",
       advantages: ["Bonus"],
       disadvantages: ["Riziko"]
     });
@@ -98,7 +93,7 @@ describe("auth panel UI module", () => {
     expect(renderFactionPreviewPanel(root, viewModel, { formatCurrency: (value) => `$${value}` })).toBe(true);
 
     expect(elements.get("[data-faction-name]").textContent).toBe("Mafie");
-    expect(elements.get("[data-faction-clean-money]").textContent).toBe("$100");
-    expect(elements.get("[data-faction-advantages]").children[0].textContent).toBe("Bonus");
+    expect(elements.get("[data-faction-clean-money]").textContent).toBe("Economy / heat control");
+    expect(elements.get("[data-faction-advantages]").children[0].textContent).toBe("Bonus (core-backed)");
   });
 });

@@ -33,26 +33,16 @@ function createRoot(elements = {}, all = {}) {
 function createRuntime(overrides = {}) {
   return createAuthRegistrationRuntime({
     DEFAULT_DRUG_INVENTORY: { meds: 1 },
+    DEFAULT_ECONOMY_STATE: { cleanMoney: 1000, dirtyMoney: 250 },
     DEFAULT_GANG_MEMBERS: 4,
+    DEFAULT_GANG_STATE: { influence: 0, heat: 0 },
     DEFAULT_MATERIAL_INVENTORY: { metal: 2 },
     FACTION_CATALOG: {
       mafian: {
-        name: "Mafian",
-        startingPackage: {
-          cleanMoney: 100,
-          dirtyMoney: 50,
-          heat: 3,
-          influence: 7
-        }
+        name: "Mafian"
       },
       cartel: {
-        name: "Cartel",
-        startingPackage: {
-          cleanMoney: 80,
-          dirtyMoney: 90,
-          heat: 8,
-          influence: 6
-        }
+        name: "Cartel"
       }
     },
     createCompletedRegistrationStatusViewModel: vi.fn(({ identity }) => ({
@@ -134,12 +124,12 @@ describe("auth registration runtime", () => {
       identity: "Boss"
     }));
     expect(setStoredEconomyState).toHaveBeenCalledWith({
-      cleanMoney: 80,
-      dirtyMoney: 90
+      cleanMoney: 1000,
+      dirtyMoney: 250
     });
     expect(setStoredGangState).toHaveBeenCalledWith(expect.objectContaining({
-      heat: 8,
-      influence: 6,
+      heat: 0,
+      influence: 0,
       members: 4
     }));
     expect(identity.readOnly).toBe(true);

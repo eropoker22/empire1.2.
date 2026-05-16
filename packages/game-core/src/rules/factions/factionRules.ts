@@ -1,26 +1,33 @@
 import type {
-  AttackWeaponId,
-  DefenseWeaponId,
   FactionDefinition,
   FactionPassiveModifiers,
-  FactionStartingPackage,
   PlayerFactionId
 } from "@empire/shared-types";
 import { PLAYER_FACTION_IDS } from "@empire/shared-types";
 import type { GameModeConfig } from "../../contracts";
 import type { CoreGameState } from "../../entities";
 import type { GameCoreContext } from "../../engine/context";
-import { resolveWantedLevel } from "../police/wantedLevel";
 
 const DEFAULT_FACTION_ID: PlayerFactionId = "mafian";
 const ILLEGAL_PRODUCTION_BUILDINGS = new Set(["drug_lab", "smuggling_tunnel", "street_dealers"]);
 const TECH_RESOURCE_KEYS = new Set(["tech-core", "data", "intel"]);
+const LEGACY_FACTION_ALIASES: Partial<Record<string, PlayerFactionId>> = {
+  mafia: "mafian",
+  cartel: "kartel",
+  cult: "kult",
+  secret: "tajna-organizace",
+  hackers: "hackeri",
+  bikers: "motorkarsky-gang",
+  military: "soukroma-armada",
+  corporation: "korporace"
+};
 
 export const normalizeFactionId = (
   factionId: unknown,
   config?: GameModeConfig
 ): PlayerFactionId => {
-  const normalized = String(factionId || "").trim().toLowerCase();
+  const raw = String(factionId || "").trim().toLowerCase();
+  const normalized = LEGACY_FACTION_ALIASES[raw] ?? raw;
   const configured = config?.balance.factions;
   if (isFactionId(normalized) && (!configured || configured[normalized])) {
     return normalized;
@@ -55,6 +62,14 @@ export const getFactionPassiveModifiers = (
   return resolvePlayerFaction(state, playerId, context)?.passiveModifiers ?? {};
 };
 
+export const resolveFactionPassiveModifiersFromDefinitions = (
+  factions: Partial<Record<PlayerFactionId, FactionDefinition>> | null | undefined,
+  factionId: unknown
+): FactionPassiveModifiers => {
+  if (!factions) return {};
+  return factions[normalizeFactionId(factionId)]?.passiveModifiers ?? {};
+};
+
 export const applyFactionMultiplier = (value: number, modifier: number | undefined): number => {
   const multiplier = Number(modifier);
   return Number.isFinite(multiplier) && multiplier > 0 ? value * multiplier : value;
@@ -65,6 +80,11 @@ export const applyFactionChanceBonus = (chance: number, bonus: number | undefine
   const nextChance = chance + (Number.isFinite(delta) ? delta : 0);
   return Math.max(0, Math.min(0.98, nextChance));
 };
+
+export const applyFactionTrapDetectionChance = (
+  chance: number,
+  modifiers: FactionPassiveModifiers
+): number => applyFactionChanceBonus(chance, modifiers.trapDetectionChanceBonus);
 
 export const resolveFactionIncomeMultiplier = (
   resourceKey: string,
@@ -88,10 +108,45 @@ export const resolveFactionProductionMultiplier = (
   return base * illegal * tech;
 };
 
+export const applyFactionRumorTruthChancePct = (
+  truthChancePct: number | undefined,
+  modifiers: FactionPassiveModifiers
+): number | undefined => {
+  if (truthChancePct === undefined) return undefined;
+  const base = Math.max(0, Number(truthChancePct) || 0);
+  const modified = applyFactionMultiplier(base, modifiers.rumorTruthMultiplier);
+  return Math.min(95, Math.max(0, modified));
+};
+
+export const isFactionIllegalActionBuilding = (buildingTypeId: string): boolean =>
+  ILLEGAL_PRODUCTION_BUILDINGS.has(buildingTypeId);
+
 export const applyFactionHeatGain = (
   heatGain: number,
   modifiers: FactionPassiveModifiers
 ): number => Math.max(0, applyFactionMultiplier(heatGain, modifiers.heatGainMultiplier));
+
+export const applyFactionIllegalActionHeatGain = (
+  heatGain: number,
+  modifiers: FactionPassiveModifiers
+): number => {
+  const base = Math.max(0, Number(heatGain) || 0);
+  const modified = Math.max(0, applyFactionMultiplier(applyFactionHeatGain(base, modifiers), modifiers.illegalActionHeatGainMultiplier));
+  if (modified > base) return Math.ceil(modified);
+  if (modified < base) return Math.floor(modified);
+  return modified;
+};
+
+export const applyFactionAggressiveHeatGain = (
+  heatGain: number,
+  modifiers: FactionPassiveModifiers
+): number => {
+  const base = Math.max(0, Number(heatGain) || 0);
+  const modified = Math.max(0, applyFactionMultiplier(applyFactionHeatGain(base, modifiers), modifiers.aggressiveActionHeatGainMultiplier));
+  if (modified > base) return Math.ceil(modified);
+  if (modified < base) return Math.floor(modified);
+  return modified;
+};
 
 export const applyFactionInfluenceGain = (
   influenceChange: number,
@@ -101,75 +156,93 @@ export const applyFactionInfluenceGain = (
     ? applyFactionMultiplier(influenceChange, modifiers.influenceGainMultiplier)
     : influenceChange;
 
-export const applyFactionStartingPackage = (
-  state: CoreGameState,
-  playerId: string,
-  context: GameCoreContext
-): CoreGameState => {
-  const player = state.playersById[playerId];
-  const definition = player ? getFactionDefinition(context.config, player.factionId) : null;
-  if (!player || !definition) return state;
+export type FactionCooldownAction = "attack" | "occupy" | "robbery";
 
-  const pack = definition.startingPackage;
-  return applyStartingPackageToState(state, playerId, pack);
+export const resolveFactionCooldownMultiplier = (
+  action: FactionCooldownAction,
+  modifiers: FactionPassiveModifiers
+): number => {
+  const actionMultiplier = action === "attack"
+    ? safeMultiplier(modifiers.attackCooldownMultiplier)
+    : action === "occupy"
+      ? safeMultiplier(modifiers.occupyCooldownMultiplier)
+      : safeMultiplier(modifiers.robberyCooldownMultiplier);
+  const legacyAttackDurationMultiplier = action === "attack"
+    ? safeMultiplier(modifiers.attackDurationMultiplier)
+    : 1;
+  return actionMultiplier * legacyAttackDurationMultiplier;
 };
 
-const applyStartingPackageToState = (
-  state: CoreGameState,
-  playerId: string,
-  pack: FactionStartingPackage
-): CoreGameState => {
-  const player = state.playersById[playerId];
-  const resourceState = state.resourceStatesById[player.resourceStateId];
-  const homeDistrict = player.homeDistrictId ? state.districtsById[player.homeDistrictId] : null;
-  const policeState = state.policeStatesById[player.policeStateId];
-  const resources = {
-    ...(pack.cash ? { cash: pack.cash } : {}),
-    ...(pack.dirtyCash ? { "dirty-cash": pack.dirtyCash } : {}),
-    ...(pack.resources ?? {})
-  };
-  const nextResourceState = resourceState
-    ? {
-        ...resourceState,
-        balances: addBalances(resourceState.balances, resources),
-        version: resourceState.version + 1
-      }
-    : resourceState;
-  const nextPlayer = {
-    ...player,
-    attackLoadout: addLoadout(player.attackLoadout, pack.attackLoadout),
-    version: player.version + 1
-  };
-  const nextHomeDistrict = homeDistrict
-    ? {
-        ...homeDistrict,
-        defenseLoadout: addLoadout(homeDistrict.defenseLoadout, pack.defenseLoadout),
-        influence: Math.max(0, Number(homeDistrict.influence || 0) + Math.max(0, Number(pack.initialInfluence || 0))),
-        version: homeDistrict.version + 1
-      }
-    : homeDistrict;
-  const nextPoliceState = policeState && Number(pack.initialHeat || 0) > 0
-    ? {
-        ...policeState,
-        heat: Math.max(0, Number(policeState.heat || 0) + Number(pack.initialHeat || 0)),
-        wantedLevel: resolveWantedLevel(Math.max(0, Number(policeState.heat || 0) + Number(pack.initialHeat || 0))),
-        version: policeState.version + 1
-      }
-    : policeState;
+export const applyFactionCooldownTicks = (
+  ticks: number,
+  action: FactionCooldownAction,
+  modifiers: FactionPassiveModifiers
+): number => Math.max(0, Math.ceil(Math.max(0, Number(ticks) || 0) * resolveFactionCooldownMultiplier(action, modifiers)));
 
-  return {
-    ...state,
-    playersById: { ...state.playersById, [player.id]: nextPlayer },
-    resourceStatesById: nextResourceState
-      ? { ...state.resourceStatesById, [nextResourceState.id]: nextResourceState }
-      : state.resourceStatesById,
-    districtsById: nextHomeDistrict
-      ? { ...state.districtsById, [nextHomeDistrict.id]: nextHomeDistrict }
-      : state.districtsById,
-    policeStatesById: nextPoliceState
-      ? { ...state.policeStatesById, [nextPoliceState.id]: nextPoliceState }
-      : state.policeStatesById
-  };
+export const applyFactionRobberyDirtyCashLoot = (
+  dirtyCash: number,
+  modifiers: FactionPassiveModifiers
+): number => Math.max(0, Math.floor(applyFactionMultiplier(dirtyCash, modifiers.robberyDirtyCashLootMultiplier)));
+
+export const applyFactionRobberyLoot = (
+  loot: number,
+  modifiers: FactionPassiveModifiers
+): number => Math.max(0, Math.floor(applyFactionMultiplier(loot, modifiers.robberyLootMultiplier)));
+
+export const applyFactionSmugglingIncome = (
+  dirtyCash: number,
+  modifiers: FactionPassiveModifiers
+): number => Math.max(0, applyFactionMultiplier(dirtyCash, modifiers.smugglingIncomeMultiplier));
+
+export const applyFactionEquipmentLosses = <TKey extends string>(
+  losses: Partial<Record<TKey, number>>,
+  modifiers: FactionPassiveModifiers
+): Partial<Record<TKey, number>> => {
+  const multiplier = safeMultiplier(modifiers.equipmentLossMultiplier);
+  if (multiplier === 1) return losses;
+
+  const nextLosses: Partial<Record<TKey, number>> = {};
+  for (const [key, value] of Object.entries(losses) as Array<[TKey, number]>) {
+    const reduced = Math.max(0, Math.floor(Math.max(0, Number(value) || 0) * multiplier));
+    if (reduced > 0) {
+      nextLosses[key] = reduced;
+    }
+  }
+  return nextLosses;
+};
+
+export const resolveFactionDefenseSystemEffectivenessMultiplier = (
+  modifiers: FactionPassiveModifiers
+): number => safeMultiplier(modifiers.defenseSystemEffectivenessMultiplier);
+
+export const resolveFactionCameraEffectivenessMultiplier = (
+  modifiers: FactionPassiveModifiers
+): number => resolveFactionDefenseSystemEffectivenessMultiplier(modifiers) * safeMultiplier(modifiers.cameraEffectivenessMultiplier);
+
+export const resolveFactionAlarmEffectivenessMultiplier = (
+  modifiers: FactionPassiveModifiers
+): number => resolveFactionDefenseSystemEffectivenessMultiplier(modifiers) * safeMultiplier(modifiers.alarmEffectivenessMultiplier);
+
+export const resolveFactionBaseDefensePowerMultiplier = (
+  modifiers: FactionPassiveModifiers
+): number => safeMultiplier(modifiers.baseDefensePowerMultiplier);
+
+export const applyFactionDefenseSystemEffectiveness = (
+  baseMultiplier: number,
+  modifiers: FactionPassiveModifiers
+): number => applyFactionMultiplier(baseMultiplier, modifiers.defenseSystemEffectivenessMultiplier);
+
+export const applyFactionPopulationGeneration = (
+  population: number,
+  modifiers: FactionPassiveModifiers
+): number => Math.max(0, applyFactionMultiplier(population, modifiers.populationGenerationMultiplier));
+
+export const applyFactionStartingPackage = (
+  state: CoreGameState,
+  _playerId: string,
+  _context: GameCoreContext
+): CoreGameState => {
+  return state;
 };
 
 const isFactionId = (value: string): value is PlayerFactionId =>
@@ -178,30 +251,4 @@ const isFactionId = (value: string): value is PlayerFactionId =>
 const safeMultiplier = (value: number | undefined): number => {
   const multiplier = Number(value);
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
-};
-
-const addBalances = (
-  balances: Record<string, number>,
-  delta: Record<string, number>
-): Record<string, number> => {
-  const next = { ...balances };
-  for (const [resourceKey, amount] of Object.entries(delta)) {
-    const safeAmount = Number(amount);
-    if (resourceKey && Number.isFinite(safeAmount) && safeAmount > 0) {
-      next[resourceKey] = Math.max(0, Number(next[resourceKey] || 0) + safeAmount);
-    }
-  }
-  return next;
-};
-
-const addLoadout = <TWeaponId extends AttackWeaponId | DefenseWeaponId>(
-  current: Partial<Record<TWeaponId, number>>,
-  delta: Partial<Record<TWeaponId, number>> | undefined
-): Partial<Record<TWeaponId, number>> => {
-  const next = { ...current };
-  for (const [weaponId, amount] of Object.entries(delta ?? {}) as [TWeaponId, number][]) {
-    const safeAmount = Math.max(0, Math.floor(Number(amount || 0)));
-    if (safeAmount > 0) next[weaponId] = Math.max(0, Math.floor(Number(next[weaponId] || 0))) + safeAmount;
-  }
-  return next;
 };

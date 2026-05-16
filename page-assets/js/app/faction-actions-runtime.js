@@ -5,14 +5,14 @@ const PAGE_SELECTOR = "[data-client-surface='game-shell']";
 const DEFAULT_FACTION_ID = "mafian";
 
 const PREVIEW_BY_FACTION_ID = Object.freeze({
-  mafian: "Pasivně drží čisté peníze a lepší práci s heatem. Aktivní schopnost zatím není core-backed.",
-  kartel: "Pasivně tlačí dirty cash a ilegální produkci. Aktivní schopnost zatím není core-backed.",
-  kult: "Pasivně zvedá influence a obranu districtů. Aktivní schopnost zatím není core-backed.",
-  "tajna-organizace": "Pasivně zlepšuje špehování a snižuje heat. Aktivní schopnost zatím není core-backed.",
-  hackeri: "Pasivně posilují tech produkci a spy/intel. Market fee bonus je zatím plánovaný. Aktivní schopnost zatím není core-backed.",
-  "motorkarsky-gang": "Pasivně zrychluje útoky a drží dirty tempo. Aktivní schopnost zatím není core-backed.",
-  "soukroma-armada": "Pasivně posiluje útok a obranu. Equipment loss bonus je zatím plánovaný. Aktivní schopnost zatím není core-backed.",
-  korporace: "Pasivně posiluje clean economy a zpomalený combat má menší trest. Market fee bonus je zatím plánovaný. Aktivní schopnost zatím není core-backed."
+  mafian: "Pasivně drží čisté peníze a lepší práci s heatem. Speciální akce je zatím jen preview.",
+  kartel: "Pasivně tlačí dirty cash, ilegální produkci a pašování, ale zvedá heat z ilegálních akcí. Noční zásilka je preview: zatím není core-backed.",
+  kult: "Pasivně zvedá influence, růst populace a obranu, ale oslabuje clean economy a přímý útok. Masová posedlost je preview: zatím není core-backed.",
+  "tajna-organizace": "Pasivně zlepšuje špehování, trap detection a intel mind-games. Spící buňka je preview: zatím není core-backed.",
+  hackeri: "Pasivně posilují potvrzenost drbů, kamery, alarmy, tech produkci a spying. Výpadek systému je preview: zatím není core-backed.",
+  "motorkarsky-gang": "Pasivně zkracuje cooldowny na vykrádání, útoky a obsazování. Bleskový nájezd je preview: zatím není core-backed.",
+  "soukroma-armada": "Pasivně posiluje útok, obranu a snižuje bojové ztráty vybavení. Taktické nasazení je preview: zatím není core-backed.",
+  korporace: "Pasivně posiluje clean economy, snižuje heat a zlepšuje obranné systémy. Právní štít je preview: zatím není core-backed."
 });
 
 function escapeHtml(value) {
@@ -42,18 +42,32 @@ export function getCurrentPlayerFactionId(storage = globalThis.window?.localStor
 export function getFactionActionForPlayer(storage) {
   const factionId = getCurrentPlayerFactionId(storage);
   const faction = FACTION_CATALOG[factionId] || FACTION_CATALOG[DEFAULT_FACTION_ID];
+  const specialAction = faction.specialAction || null;
+  const effect = specialAction
+    ? `${specialAction.description} ${specialAction.status === "implemented" ? "Schopnost je implementovaná." : "Preview: zatím není core-backed."}`
+    : PREVIEW_BY_FACTION_ID[factionId] || PREVIEW_BY_FACTION_ID[DEFAULT_FACTION_ID];
   return {
     factionId,
     name: faction.name,
-    code: "Passive foundation",
-    effect: PREVIEW_BY_FACTION_ID[factionId] || PREVIEW_BY_FACTION_ID[DEFAULT_FACTION_ID],
-    cost: "Žádná aktivní schopnost"
+    code: specialAction?.name || "Passive foundation",
+    effect,
+    cost: specialAction?.status === "implemented" ? "Dostupné" : "Preview pouze",
+    canRun: specialAction?.status === "implemented"
   };
 }
 
 function renderFactionActions(grid, action = getFactionActionForPlayer()) {
   grid.innerHTML = `
     <div class="faction-action-launch faction-action-launch--preview">
+      <button
+        class="faction-action-launch-button"
+        type="button"
+        data-faction-action-run
+        ${action.canRun ? "" : "disabled"}
+        aria-disabled="${action.canRun ? "false" : "true"}"
+      >
+        ${action.canRun ? "Aktivovat schopnost" : "Plánovaná schopnost"}
+      </button>
       <p class="faction-action-launch-description">
         ${escapeHtml(action.effect)}
       </p>
@@ -81,6 +95,13 @@ function initFactionActionsRuntime() {
   const open = () => {
     const playerAction = getFactionActionForPlayer();
     renderFactionActions(grid, playerAction);
+    grid.querySelector("[data-faction-action-run]")?.addEventListener("click", () => {
+      if (status) {
+        status.textContent = playerAction.canRun
+          ? `${playerAction.code}: akce je připravená.`
+          : `${playerAction.code}: zatím preview, core spuštění ještě není implementované.`;
+      }
+    });
     if (status) {
       status.textContent = `${playerAction.name}: pasivní frakční efekty jsou aktivní.`;
     }

@@ -3,6 +3,14 @@ import {
   applyDayNightHeistDetectionChance,
   applyDayNightHeistSuccessChance
 } from "../day-night/dayNight";
+import type { FactionPassiveModifiers } from "@empire/shared-types";
+import {
+  applyFactionAggressiveHeatGain,
+  applyFactionRobberyDirtyCashLoot,
+  applyFactionRobberyLoot,
+  resolveFactionCooldownMultiplier,
+  resolveFactionPassiveModifiersFromDefinitions
+} from "../factions/factionRules";
 
 export type HeistStyleId = "stealth" | "balanced" | "all_in";
 export type HeistOutcome = "clean_success" | "success" | "detected" | "failed" | "trap_triggered";
@@ -381,7 +389,7 @@ export const startDistrictHeist = (
   heistState.activeHeists.push(activeHeist);
   heistState.stats.started += 1;
 
-  addHeatToPlayer(nextState, attackerPlayerId, scaleHeat(styleConfig.heatOnStart, mode), "heist_start");
+  addHeatToPlayer(nextState, attackerPlayerId, scaleHeat(styleConfig.heatOnStart, mode), "heist_start", getHeistFactionModifiers(nextState, attackerPlayerId));
   appendGameLog(nextState, "heist", "Vykrást hráče začalo. Gang míří na cizí cash/resources bez převzetí districtu.", {
     heistId,
     attackerPlayerId,
@@ -454,25 +462,31 @@ export const calculateHeistLoot = (
   const districtModifier = getDistrictTypeModifier(districtType);
   const modeMultiplier = getModeMultipliers(mode).lootMultiplier;
   const outcomeMultiplier = getOutcomeLootMultiplier(outcome, heist.lootRoll);
+  const factionRobberyLootMultiplier = resolveFactionRobberyLootMultiplier(gameState, heist.attackerPlayerId);
   const loot = createEmptyLoot();
   const containers = collectLootContainers(gameState, target, district);
 
   loot.cleanCash = calculateLootAmount(
     getTotalBalance(containers, CASH_KEY_ALIASES),
     heistConfig.lootRules.maxCashPercent,
-    styleConfig.lootMultiplier * districtModifier.cashLootModifier * outcomeMultiplier * modeMultiplier
+    styleConfig.lootMultiplier * districtModifier.cashLootModifier * outcomeMultiplier * modeMultiplier * factionRobberyLootMultiplier
   );
   loot.dirtyCash = calculateLootAmount(
     getTotalBalance(containers, DIRTY_CASH_KEY_ALIASES),
     heistConfig.lootRules.maxCashPercent,
-    styleConfig.lootMultiplier * districtModifier.cashLootModifier * outcomeMultiplier * modeMultiplier
+    styleConfig.lootMultiplier
+      * districtModifier.cashLootModifier
+      * outcomeMultiplier
+      * modeMultiplier
+      * factionRobberyLootMultiplier
+      * resolveFactionRobberyDirtyCashLootMultiplier(gameState, heist.attackerPlayerId)
   );
 
   for (const key of RESOURCE_KEYS) {
     loot.resources[key] = calculateLootAmount(
       getTotalBalance(containers, RESOURCE_KEY_ALIASES[key]),
       heistConfig.lootRules.maxResourcePercent,
-      styleConfig.lootMultiplier * districtModifier.resourceLootModifier * outcomeMultiplier * modeMultiplier
+      styleConfig.lootMultiplier * districtModifier.resourceLootModifier * outcomeMultiplier * modeMultiplier * factionRobberyLootMultiplier
     );
   }
 
@@ -521,9 +535,9 @@ export const resolveDistrictHeist = (
   consumeReservedGangMembers(attacker, gangLost, "district_heist_loss");
   appendRecoveryEntryToAnyPlayer(attacker, "gang-members", gangLost, outcome === "trap_triggered" ? "trap" : "robbery", now);
   removeActiveHeist(heistState, heist.id);
-  applyResolveCooldowns(heistState, heist.targetDistrictId, outcome, mode, now);
+  applyResolveCooldowns(heistState, heist.targetDistrictId, outcome, mode, now, getHeistFactionModifiers(nextState, heist.attackerPlayerId));
   updateHeistStats(heistState, outcome, loot, gangLost);
-  applyOutcomeHeatAndPolice(nextState, heist.attackerPlayerId, styleConfig, outcome, mode);
+  applyOutcomeHeatAndPolice(nextState, heist.attackerPlayerId, styleConfig, outcome, mode, getHeistFactionModifiers(nextState, heist.attackerPlayerId));
 
   appendResolveLogs(nextState, heist, outcome, loot, gangLost, gangReturned);
   appendOutcomeRumor(nextState, heist, outcome);
@@ -858,6 +872,33 @@ const getDistrictTypeModifier = (districtType: string) =>
 const resolveGameMode = (gameState: AnyRecord): HeistModeId => {
   const mode = String(gameState.mode ?? gameState.serverInstance?.mode ?? gameState.root?.mode ?? "free").toLowerCase();
   return mode === "war" ? "war" : "free";
+};
+
+const getFactionDefinitions = (gameState: AnyRecord) =>
+  gameState.config?.balance?.factions ?? gameState.balance?.factions ?? gameState.factions;
+
+const getHeistFactionModifiers = (
+  gameState: AnyRecord,
+  playerId: string
+): FactionPassiveModifiers => {
+  const player = findPlayer(gameState, playerId);
+  return resolveFactionPassiveModifiersFromDefinitions(getFactionDefinitions(gameState), player?.factionId);
+};
+
+const resolveFactionRobberyDirtyCashLootMultiplier = (
+  gameState: AnyRecord,
+  playerId: string
+): number => {
+  const modifiers = getHeistFactionModifiers(gameState, playerId);
+  return applyFactionRobberyDirtyCashLoot(1000, modifiers) / 1000;
+};
+
+const resolveFactionRobberyLootMultiplier = (
+  gameState: AnyRecord,
+  playerId: string
+): number => {
+  const modifiers = getHeistFactionModifiers(gameState, playerId);
+  return applyFactionRobberyLoot(1000, modifiers) / 1000;
 };
 
 const getModeMultipliers = (mode: HeistModeId) =>
@@ -1534,9 +1575,10 @@ const applyResolveCooldowns = (
   targetDistrictId: string,
   outcome: HeistOutcome,
   mode: HeistModeId,
-  now: number
+  now: number,
+  modifiers: FactionPassiveModifiers = {}
 ): void => {
-  const multiplier = getModeMultipliers(mode).cooldownMultiplier;
+  const multiplier = getModeMultipliers(mode).cooldownMultiplier * resolveFactionCooldownMultiplier("robbery", modifiers);
   const globalMs = heistConfig.cooldowns.globalFreeSeconds * multiplier * 1000;
   const sameTargetMs = heistConfig.cooldowns.sameTargetFreeSeconds * multiplier * 1000;
   const trapTargetMs = 420 * multiplier * 1000;
@@ -1572,21 +1614,29 @@ const applyOutcomeHeatAndPolice = (
   attackerPlayerId: string,
   styleConfig: AnyRecord,
   outcome: HeistOutcome,
-  mode: HeistModeId
+  mode: HeistModeId,
+  modifiers: FactionPassiveModifiers = {}
 ): void => {
   if (outcome === "clean_success" || outcome === "success") {
-    addHeatToPlayer(gameState, attackerPlayerId, scaleHeat(styleConfig.heatOnSuccess, mode), "heist_success");
+    addHeatToPlayer(gameState, attackerPlayerId, scaleHeat(styleConfig.heatOnSuccess, mode), "heist_success", modifiers);
     return;
   }
 
   const reason = outcome === "trap_triggered" ? "heist_trap_triggered" : outcome === "failed" ? "heist_failed" : "heist_detected";
-  addHeatToPlayer(gameState, attackerPlayerId, scaleHeat(styleConfig.heatOnDetected, mode), reason);
+  addHeatToPlayer(gameState, attackerPlayerId, scaleHeat(styleConfig.heatOnDetected, mode), reason, modifiers);
   addPoliceSuspicionToPlayer(gameState, attackerPlayerId, scaleHeat(styleConfig.policeSuspicionOnDetected, mode), reason);
 };
 
-const addHeatToPlayer = (gameState: AnyRecord, playerId: string, amount: number, reason: string): void => {
+const addHeatToPlayer = (
+  gameState: AnyRecord,
+  playerId: string,
+  amount: number,
+  reason: string,
+  modifiers: FactionPassiveModifiers = {}
+): void => {
   const player = findPlayer(gameState, playerId);
-  const safeAmount = safeInteger(applyDayNightHeatGain(amount, gameState, gameState.config ? { config: gameState.config } : undefined));
+  const baseAmount = applyDayNightHeatGain(amount, gameState, gameState.config ? { config: gameState.config } : undefined);
+  const safeAmount = safeInteger(applyFactionAggressiveHeatGain(baseAmount, modifiers));
   if (!player || safeAmount <= 0) {
     return;
   }

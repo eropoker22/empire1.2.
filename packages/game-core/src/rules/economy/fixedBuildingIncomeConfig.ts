@@ -27,6 +27,7 @@ import { applyStripClubIncomeModifiers } from "../../handlers/stripClubBuildingA
 import { applyVipLoungeIncomeModifiers } from "../../handlers/vipLoungeBuildingActions";
 import { applyWarehouseIncomeModifiers } from "../../handlers/warehouseBuilding";
 import { applyDayNightBuildingIncomeModifiers } from "../day-night/dayNight";
+import { getFactionPassiveModifiers } from "../factions/factionRules";
 
 interface FixedBuildingIncomeValues {
   cleanPerHour: number;
@@ -213,11 +214,12 @@ export const resolveFixedBuildingIncomeConfig = (input: {
   const smugglingTunnelConfig = context.config.balance.smugglingTunnel
     ? applySmugglingTunnelIncomeModifiers({
         config: context.config.balance.smugglingTunnel,
-        state,
-        building,
-        tick: state.root.tick,
-        ...toIncomeModifierInput(schoolConfig)
-      })
+      state,
+      building,
+      tick: state.root.tick,
+      factionModifiers: getFactionPassiveModifiers(state, building.ownerPlayerId, context),
+      ...toIncomeModifierInput(schoolConfig)
+    })
     : schoolConfig;
   const streetDealersConfig = context.config.balance.streetDealers
     ? applyStreetDealersIncomeModifiers({

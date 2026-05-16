@@ -9,7 +9,13 @@ import type { CoreEvent } from "../events";
 import type { CoreError } from "../errors";
 import { CORE_EVENT_TYPES, createEvent, createNotification } from "../events";
 import { resolveSpy } from "../rules";
-import { applyFactionChanceBonus, getFactionPassiveModifiers } from "../rules/factions/factionRules";
+import {
+  applyFactionChanceBonus,
+  applyFactionTrapDetectionChance,
+  getFactionPassiveModifiers,
+  resolveFactionAlarmEffectivenessMultiplier,
+  resolveFactionCameraEffectivenessMultiplier
+} from "../rules/factions/factionRules";
 import { composeEntityId } from "../utils";
 import { validateSpy } from "../validation";
 import { applyGarageCooldownReductionTicks } from "./garageBuildingActions";
@@ -49,6 +55,10 @@ export const handleSpyDistrict = (
     powerStationConfig: context.config.balance.powerStation,
     tick: state.root.tick
   });
+  const defenderFactionModifiers = getFactionPassiveModifiers(state, targetDistrict.ownerPlayerId, context);
+  const spyFactionModifiers = getFactionPassiveModifiers(state, player.id, context);
+  const cameraStrengthBonusPct = ((1 + combinedCameraAlarmBonuses.cameraStrengthBonusPct / 100) * resolveFactionCameraEffectivenessMultiplier(defenderFactionModifiers) - 1) * 100;
+  const alarmStrengthBonusPct = ((1 + combinedCameraAlarmBonuses.alarmStrengthBonusPct / 100) * resolveFactionAlarmEffectivenessMultiplier(defenderFactionModifiers) - 1) * 100;
   const reportResult = resolveSpy({
     worldSeed: state.serverInstance.worldSeed,
     playerId: player.id,
@@ -58,11 +68,14 @@ export const handleSpyDistrict = (
     hasActiveTrap: Boolean(activeTrap),
     spyBaseSuccessChance: applyFactionChanceBonus(
       context.config.balance.conflict?.spyBaseSuccessChance ?? 0.72,
-      getFactionPassiveModifiers(state, player.id, context).spySuccessChanceBonus
+      spyFactionModifiers.spySuccessChanceBonus
     ),
-    spyTrapRevealChance: context.config.balance.conflict?.spyTrapRevealChance ?? 0.22,
-    cameraStrengthBonusPct: combinedCameraAlarmBonuses.cameraStrengthBonusPct,
-    alarmStrengthBonusPct: combinedCameraAlarmBonuses.alarmStrengthBonusPct
+    spyTrapRevealChance: applyFactionTrapDetectionChance(
+      context.config.balance.conflict?.spyTrapRevealChance ?? 0.22,
+      spyFactionModifiers
+    ),
+    cameraStrengthBonusPct,
+    alarmStrengthBonusPct
   });
   const report = createSpyReportNotification({
     command,

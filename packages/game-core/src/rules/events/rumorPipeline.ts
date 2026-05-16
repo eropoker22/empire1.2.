@@ -13,6 +13,7 @@ import type { CoreGameState } from "../../entities";
 import { applyDayNightRumorTruthChancePct, shouldGenerateDayNightRumor } from "../day-night/dayNight";
 import { deterministicRollPct } from "../../utils/math";
 import { getLobbyClubMetadata, getOwnedLobbyClubs } from "../../handlers/lobbyClubMetadata";
+import { applyFactionRumorTruthChancePct, getFactionPassiveModifiers } from "../factions/factionRules";
 
 export const CITY_FEED_DEFAULT_LIMIT = 50;
 
@@ -63,7 +64,10 @@ export const resolveRumorEvent = (
   const sourceSeed = context.seed || `${state.serverInstance.worldSeed}:${sourceEventId}`;
   const trapSuspicion = isTrapSuspicion(input);
   const confirmedHardEvent = input.truthiness === "confirmed" && !trapSuspicion;
-  const truthChancePct = applyDayNightRumorTruthChancePct(input.truthChancePct, state, context.config ? { config: context.config } : undefined);
+  const dayNightTruthChancePct = applyDayNightRumorTruthChancePct(input.truthChancePct, state, context.config ? { config: context.config } : undefined);
+  const truthChancePct = context.config && input.playerId
+    ? applyFactionRumorTruthChancePct(dayNightTruthChancePct, getFactionPassiveModifiers(state, input.playerId, { config: context.config }))
+    : dayNightTruthChancePct;
   const truthiness = resolveTruthiness({ ...input, truthChancePct }, sourceSeed, trapSuspicion, confirmedHardEvent);
   const intelType = resolveIntelType(input, truthiness, trapSuspicion, confirmedHardEvent);
   const category = trapSuspicion ? "rumor" : input.category || resolveDefaultCategory(sourceType);

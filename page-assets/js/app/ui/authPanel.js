@@ -47,14 +47,11 @@ export function replaceListItems(listElement, values = []) {
 }
 
 export function renderFactionPreviewPanel(root, faction = {}, options = {}) {
-  const formatCurrency = typeof options.formatCurrency === "function"
-    ? options.formatCurrency
-    : (value) => `$${Math.max(0, Math.round(Number(value || 0))).toLocaleString("cs-CZ")}`;
-  const startingPackage = faction?.startingPackage || {};
-  const cleanMoneyLabel = faction?.cleanMoneyLabel ?? formatCurrency(startingPackage.cleanMoney);
-  const dirtyMoneyLabel = faction?.dirtyMoneyLabel ?? formatCurrency(startingPackage.dirtyMoney);
-  const influenceLabel = faction?.influenceLabel ?? startingPackage.influence;
-  const heatLabel = faction?.heatLabel ?? startingPackage.heat;
+  void options;
+  const cleanMoneyLabel = faction?.cleanMoneyLabel ?? "Frakce upravuje styl hry";
+  const dirtyMoneyLabel = faction?.dirtyMoneyLabel ?? "Start je globální pro všechny hráče";
+  const influenceLabel = faction?.influenceLabel ?? "Pasivy jsou oddělené od startu";
+  const heatLabel = faction?.heatLabel ?? "Schopnost je preview-only";
 
   setText(safeQuery(root, FACTION_NAME_SELECTOR), faction?.name);
   setText(safeQuery(root, FACTION_TAGLINE_SELECTOR), faction?.tagline);

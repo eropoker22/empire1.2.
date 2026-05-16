@@ -1,21 +1,31 @@
-import { formatCurrency } from "./formatters.js";
-
 function resolveFaction(factionCatalog = {}, factionId = "mafian") {
   return factionCatalog?.[factionId] || factionCatalog?.mafian || {};
 }
 
 export function createFactionPreviewViewModel(faction = {}) {
-  const startingPackage = faction?.startingPackage || {};
+  const specialAction = faction?.specialAction || null;
   return {
     name: faction?.name || "",
     tagline: faction?.tagline || "",
     description: faction?.description || "",
-    cleanMoneyLabel: formatCurrency(startingPackage.cleanMoney),
-    dirtyMoneyLabel: formatCurrency(startingPackage.dirtyMoney),
-    influenceLabel: String(startingPackage.influence ?? ""),
-    heatLabel: String(startingPackage.heat ?? ""),
-    advantages: Array.isArray(faction?.advantages) ? faction.advantages : [],
-    disadvantages: Array.isArray(faction?.disadvantages) ? faction.disadvantages : []
+    playstyleLabel: faction?.playstyleSummary || "",
+    cleanMoneyLabel: faction?.playstyleSummary || "Frakce upravuje styl hry",
+    dirtyMoneyLabel: "Start je globální pro všechny hráče",
+    influenceLabel: "Pasivy jsou oddělené od startu",
+    heatLabel: specialAction ? `${specialAction.name}: preview-only` : "Schopnost je preview-only",
+    advantages: [
+      ...(Array.isArray(faction?.advantages) ? faction.advantages.map((item) => `${item} (core-backed)`) : []),
+      ...(Array.isArray(faction?.plannedAdvantages) ? faction.plannedAdvantages.map((item) => `${item} (planned/display-only)`) : [])
+    ],
+    disadvantages: [
+      ...(Array.isArray(faction?.disadvantages) ? faction.disadvantages.map((item) => `${item} (core-backed)`) : []),
+      ...(Array.isArray(faction?.plannedDisadvantages) ? faction.plannedDisadvantages.map((item) => `${item} (planned/display-only)`) : [])
+    ],
+    coreBackedEffects: Array.isArray(faction?.coreBackedEffects) ? faction.coreBackedEffects : [],
+    plannedEffects: Array.isArray(faction?.plannedEffects) ? faction.plannedEffects : [],
+    specialActionLabel: specialAction?.name || "",
+    specialActionDescription: specialAction?.description || "",
+    specialActionStatus: specialAction?.status || ""
   };
 }
 
@@ -28,7 +38,7 @@ export function createExistingRegistrationViewModel(existingRegistration = null,
       identityReadOnly: false,
       optionsDisabled: false,
       statusTitle: "Výběr frakce",
-      statusNote: "Vyber frakci před registrací. Po vstupu na server se volba uzamkne a určí startovní zdroje, heat i profil výhod."
+      statusNote: "Vyber frakci před registrací. Po vstupu na server se volba uzamkne a určí styl hry, pasivní výhody a nevýhody."
     };
   }
 

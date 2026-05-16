@@ -9,9 +9,15 @@ import {
   startDistrictHeist,
   tickHeists
 } from "../../../packages/game-core/src/rules/heists";
+import { FACTION_DEFINITION_BY_ID } from "../../../packages/game-config/src";
 
 const createHeistStateFixture = () => ({
   mode: "free",
+  config: {
+    balance: {
+      factions: FACTION_DEFINITION_BY_ID
+    }
+  },
   playersById: {
     "player:1": {
       id: "player:1",
@@ -25,7 +31,8 @@ const createHeistStateFixture = () => ({
         biomass: 0
       },
       heat: 0,
-      policeSuspicion: 0
+      policeSuspicion: 0,
+      factionId: "mafian"
     },
     "player:2": {
       id: "player:2",
@@ -39,7 +46,8 @@ const createHeistStateFixture = () => ({
         biomass: 50
       },
       heat: 0,
-      policeSuspicion: 0
+      policeSuspicion: 0,
+      factionId: "mafian"
     }
   },
   districtsById: {
@@ -304,6 +312,55 @@ describe("district heist system", () => {
     expect(repeated.success).toBe(false);
     expect(repeated.reason).toBe("COOLDOWN_ACTIVE");
     expect(repeated.cooldownRemainingSeconds).toBeGreaterThan(0);
+  });
+
+  it("applies Motorkářský gang robbery cooldown, dirty-cash loot and heat modifiers", () => {
+    const state = createHeistStateFixture();
+    state.playersById["player:1"].factionId = "motorkarsky-gang";
+    const started = startDistrictHeist(state, "player:1", "district:2", "balanced", 20);
+    expect(started.success).toBe(true);
+    expect(started.nextState?.playersById["player:1"].heat).toBe(3);
+
+    const active = firstActiveHeist(started.nextState as ReturnType<typeof createHeistStateFixture>);
+    active.resolvesAt = 1;
+    active.detectionRoll = 0.99;
+    active.lossRoll = 0;
+    active.lootRoll = 1;
+    active.rareLootRoll = 1;
+
+    const preview = calculateHeistLoot(started.nextState!, active, "clean_success");
+    expect(preview.dirtyCash).toBe(82);
+
+    const resolved = resolveDistrictHeist(started.nextState!, active.id, 2);
+    const heists = getPlayerHeistState(resolved.nextState!, "player:1");
+
+    expect(resolved.outcome).toBe("clean_success");
+    expect(resolved.loot?.dirtyCash).toBe(82);
+    expect(resolved.nextState?.playersById["player:1"].heat).toBe(7);
+    expect(heists.cooldowns.globalUntil).toBe(153002);
+    expect(heists.cooldowns.targetUntilByDistrictId["district:2"]).toBe(255002);
+  });
+
+  it("applies Korporat robbery loot penalty through central loot calculation", () => {
+    const createLootPreview = (factionId: "mafian" | "korporace") => {
+      const state = createHeistStateFixture();
+      state.playersById["player:1"].factionId = factionId;
+      const started = startDistrictHeist(state, "player:1", "district:2", "balanced", 20);
+      const active = firstActiveHeist(started.nextState as ReturnType<typeof createHeistStateFixture>);
+      active.resolvesAt = 1;
+      active.detectionRoll = 0.99;
+      active.lossRoll = 0;
+      active.lootRoll = 1;
+      active.rareLootRoll = 1;
+      return calculateHeistLoot(started.nextState!, active, "clean_success");
+    };
+
+    const baseline = createLootPreview("mafian");
+    const corporate = createLootPreview("korporace");
+
+    expect(corporate.cleanCash).toBe(Math.floor(baseline.cleanCash * 0.9));
+    expect(corporate.dirtyCash).toBe(Math.floor(baseline.dirtyCash * 0.9));
+    expect(corporate.resources.chemicals).toBe(Math.floor(baseline.resources.chemicals * 0.9));
   });
 
   it("ticks due heists and leaves missing optional systems safe", () => {

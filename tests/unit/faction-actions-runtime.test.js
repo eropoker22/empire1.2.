@@ -24,9 +24,10 @@ describe("faction actions runtime", () => {
     expect(action).toMatchObject({
       factionId: "hackeri",
       name: "Hackeři",
-      code: "Passive foundation"
+      code: "Výpadek systému",
+      canRun: false
     });
-    expect(action.effect).toContain("Aktivní schopnost zatím není core-backed");
+    expect(action.effect).toContain("není core-backed");
   });
 
   it("prefers selectedFaction from the locked registration", () => {
@@ -40,7 +41,73 @@ describe("faction actions runtime", () => {
     expect(getCurrentPlayerFactionId(storage)).toBe("korporace");
     expect(getFactionActionForPlayer(storage)).toMatchObject({
       factionId: "korporace",
-      code: "Passive foundation"
+      name: "Korporát",
+      code: "Právní štít",
+      canRun: false
     });
+  });
+
+  it("shows private army action as preview-only", () => {
+    const action = getFactionActionForPlayer(createStorage({
+      registration: {
+        factionId: "soukroma-armada"
+      }
+    }));
+
+    expect(action).toMatchObject({
+      factionId: "soukroma-armada",
+      name: "Soukromá armáda",
+      code: "Taktické nasazení",
+      canRun: false
+    });
+    expect(action.effect).toContain("není core-backed");
+  });
+
+  it("shows Kartel action as preview-only", () => {
+    const action = getFactionActionForPlayer(createStorage({
+      registration: {
+        factionId: "kartel"
+      }
+    }));
+
+    expect(action).toMatchObject({
+      factionId: "kartel",
+      name: "Kartel",
+      code: "Noční zásilka",
+      canRun: false
+    });
+    expect(action.effect).toContain("není core-backed");
+  });
+
+  it("shows secret organization action as preview-only", () => {
+    const action = getFactionActionForPlayer(createStorage({
+      registration: {
+        factionId: "tajna-organizace"
+      }
+    }));
+
+    expect(action).toMatchObject({
+      factionId: "tajna-organizace",
+      name: "Tajná organizace",
+      code: "Spící buňka",
+      canRun: false
+    });
+    expect(action.effect).toContain("není core-backed");
+  });
+
+  it("shows hacker action as preview-only", () => {
+    const action = getFactionActionForPlayer(createStorage({
+      registration: {
+        factionId: "hackeri"
+      }
+    }));
+
+    expect(action).toMatchObject({
+      factionId: "hackeri",
+      name: "Hackeři",
+      code: "Výpadek systému",
+      canRun: false
+    });
+    expect(action.effect).toContain("není core-backed");
   });
 });

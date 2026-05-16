@@ -3,10 +3,7 @@ import {
   DEFAULT_MATERIAL_INVENTORY,
   DEFAULT_WEAPON_INVENTORY
 } from "../../packages/game-config/src/legacy-page/economy-config.js";
-import {
-  FACTION_CATALOG,
-  FACTION_WEAPON_PRESETS
-} from "../../packages/game-config/src/legacy-page/faction-config.js";
+import { FACTION_CATALOG } from "../../packages/game-config/src/legacy-page/faction-config.js";
 import {
   createDefaultPreviewSession,
   updateStoredPreviewSession
@@ -45,8 +42,8 @@ const FACTION_META = {
   mafian: {
     structure: "mafián",
     desc: "Staré rodiny už dávno nevládnou jen násilím. Drží bary, kluby, účetní stopy i lidi, co rozhodují za zataženými závěsy.",
-    bonus: "Protection Network",
-    bonusCopy: "Podniky v jejich sektorech generují o 25 % více peněz.",
+    bonus: "Tichá dohoda",
+    bonusCopy: "Speciální akce je zatím preview: v budoucnu krátce sníží nový policejní heat, ale neodmaže existující heat ani nezruší raids.",
     prefix: "Don Umbra",
     bios: [
       "Tichý vyjednavač, který kupuje loajalitu dřív, než padne první výstřel.",
@@ -73,9 +70,9 @@ const FACTION_META = {
   },
   kartel: {
     structure: "kartel",
-    desc: "Kartel netlačí moc na odiv. Protéká městem tunelem, přístavem a nočním transportem, dokud se černý trh nezačne točit jen podle jeho pravidel.",
-    bonus: "Smuggling Routes",
-    bonusCopy: "Každou herní hodinu získávají pasivní příjem z černého trhu.",
+    desc: "Kartel staví impérium na dirty cash, drogách a pašování. Vydělává rychleji z ilegálních zdrojů a jeho produkce jede tvrději než u ostatních frakcí. Každá zásilka má ale stopu: Kartel generuje víc policejního tlaku, hůř vydělává čisté peníze a při obraně území není tak pevný.",
+    bonus: "Noční zásilka",
+    bonusCopy: "Preview: riskantní zásilka přinese dirty cash podle ilegální sítě Kartelu, ale výrazně zvýší heat.",
     prefix: "El Circuito",
     bios: [
       "Logistický mozek pašerácké trasy mezi přístavem a nočními sklady.",
@@ -100,9 +97,9 @@ const FACTION_META = {
   },
   kult: {
     structure: "kult",
-    desc: "Kult nestaví svou moc na velikosti, ale na poslušnosti, nátlaku a vlivu. Funguje tiše, disciplinovaně a dlouhodobě.",
-    bonus: "Devotion Network",
-    bonusCopy: "Získává vyšší vliv a stabilnější udržení districtů.",
+    desc: "Kult roste skrz vliv, loajalitu a strach. Přitahuje víc lidí, lépe drží obsazené districty a dokáže město zaplavit neklidem. Není ale silný v čisté ekonomice ani v přímém útoku.",
+    bonus: "Masová posedlost",
+    bonusCopy: "Preview: na krátký čas zvýší influence, růst populace a obranu, ale přitáhne policejní pozornost.",
     prefix: "High Oracle",
     bios: [
       "Fanatický hlasatel, který mění strach v poslušnost.",
@@ -127,9 +124,9 @@ const FACTION_META = {
   },
   "tajna-organizace": {
     structure: "tajná organizace",
-    desc: "Nikdo je nevidí přicházet. Jen po nich zůstávají ztracené záznamy, přepsaná moc a sektory, které náhle přestanou poslouchat původní majitele.",
-    bonus: "Shadow Control",
-    bonusCopy: "Dokážou převzít oslabený sektor bez přímého útoku.",
+    desc: "Tajná organizace ovládá město přes infiltrace, špehování, falešné stopy a spící buňky. Má přesnější informace, lépe odhaluje pasti a dokáže provádět tajné operace s menším policejním tlakem. V otevřené válce ale ztrácí sílu.",
+    bonus: "Spící buňka",
+    bonusCopy: "Preview: skrytě zabezpečí vlastní district. První nepřátelský útok nebo obsazení bude oslabené a pro útočníka dražší.",
     prefix: "Shade Proxy",
     bios: ["Operativní stín, který sbírá kompromitující data.", "Mistr infiltrace, co mění cizí pevnosti ve vlastní spící buňky."],
     motives: ["Chce ovládnout město ze stínu a rozhodovat o válkách bez otevřeného boje."],
@@ -147,9 +144,9 @@ const FACTION_META = {
   },
   hackeri: {
     structure: "hackeři",
-    desc: "Nevstupují dveřmi. Vypínají zabezpečení, přesměrovávají finance a nechávají protivníka stát v mrtvé zóně bez dat a bez reakce.",
-    bonus: "System Breach",
-    bonusCopy: "Mohou krást peníze nebo dočasně vypnout celý sektor.",
+    desc: "Hackeři nevyhrávají přes hrubou sílu. Čtou město přes kamery, alarmy, datová centra a potvrzené drby. Jejich informace jsou výrazně spolehlivější a jejich technická obrana je silnější než u ostatních frakcí. V otevřeném boji ale ztrácí.",
+    bonus: "Výpadek systému",
+    bonusCopy: "Preview: dočasně oslabí kamery a alarmy cílového districtu a zvýší šanci na úspěšné špehování nebo vykradení.",
     prefix: "Null Ghost",
     bios: ["Síťový predátor, co láme zabezpečení městské infrastruktury.", "Architekt malwaru, co vypíná kamery přesně před útokem."],
     motives: ["Chce přepsat digitální pravidla města a přesměrovat jeho finance pod vlastní kontrolu."],
@@ -167,9 +164,9 @@ const FACTION_META = {
   },
   "motorkarsky-gang": {
     structure: "motorkářský gang",
-    desc: "Silnice jsou jejich krevní oběh a hluk motorů jejich varování. Přijedou rychle, udeří tvrdě a zmizí dřív, než se město stihne srovnat.",
-    bonus: "Road Dominance",
-    bonusCopy: "Jednotky se pohybují po mapě o 35 % rychleji.",
+    desc: "Motorkáři nehrají na trpělivost. Vyráží rychle, berou co najdou a mizí dřív, než se město vzpamatuje. Mají kratší cooldowny na agresivní akce a víc vydělají z vykrádání. Jenže držet území není jejich silná stránka a rychlý chaos zanechává větší policejní stopu.",
+    bonus: "Bleskový nájezd",
+    bonusCopy: "Další vykradení nebo útok proběhne výrazně rychleji a silněji, ale vygeneruje víc heat.",
     prefix: "Road Viper",
     bios: ["Velitel kolon, který proměňuje dálnice v nepřátelské území.", "Mechanik-válečník, co staví rychlé stroje i mobilní obranné pasti."],
     motives: ["Chce držet všechny dopravní tepny města a rozhodovat, kdo projede a kdo zmizí."],
@@ -187,9 +184,9 @@ const FACTION_META = {
   },
   "soukroma-armada": {
     structure: "soukromá armáda",
-    desc: "Tohle nejsou gangsteři. Tohle jsou kontraktoři války. Každý vstup, každý tah a každá obrana má řád.",
-    bonus: "Elite Training",
-    bonusCopy: "Jejich jednotky mají nejvyšší obrannou efektivitu ve hře.",
+    desc: "Soukromá armáda nehraje na pouliční chaos. Nasazuje vycvičené jednotky, taktiku a přesilu. Je silnější v útoku, lépe brání districty a při obsazování ztrácí méně vybavení. Profesionální násilí je ale drahé a viditelné.",
+    bonus: "Taktické nasazení",
+    bonusCopy: "Preview: další útok nebo obsazení získá silný bojový bonus a nižší ztráty, ale vygeneruje víc heat.",
     prefix: "Iron Unit",
     bios: ["Bývalý instruktor elit, co vede městské operace s vojenskou přesností.", "Specialista na obranné linie, který mění sektor v pevnost."],
     motives: ["Chce proměnit město v pevnost řízenou disciplínou a vojenským řádem."],
@@ -206,10 +203,10 @@ const FACTION_META = {
     ]
   },
   korporace: {
-    structure: "korporace",
-    desc: "Nevyhrávají ulici hlukem, ale tlakem kapitálu. Kupují vliv, přetáčejí politiku a z oslabených čtvrtí dělají aktiva.",
-    bonus: "Corporate Buyout",
-    bonusCopy: "Oslabený sektor mohou převzít nákupem místo útoku.",
+    structure: "korporát",
+    desc: "Korporát nevlastní ulice přes strach, ale přes smlouvy, právníky, bezpečnostní systémy a účty, které nikdo nechce kontrolovat. Vydělává silněji z čisté ekonomiky, lépe obchoduje a dokáže zmírnit následky policejního tlaku. V pouliční špíně ale ztrácí tempo.",
+    bonus: "Právní štít",
+    bonusCopy: "Preview: další policejní razie má mírnější následky, ale není zrušena.",
     prefix: "Executive Prime",
     bios: ["Firemní vyjednavač, který kupuje radnice i policejní ticho.", "Investiční predátor, co převádí krizové zóny do portfolia korporace."],
     motives: ["Chce převzít město ekonomicky a změnit gangy v dodavatele korporátní moci."],
@@ -240,12 +237,8 @@ function normalizeHexColor(value) {
   return /^#[0-9a-f]{6}$/.test(raw) ? raw : null;
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(value || 0));
-}
-
-function createWeaponInventoryFromFaction(factionId) {
-  return { ...DEFAULT_WEAPON_INVENTORY, ...(FACTION_WEAPON_PRESETS[factionId] || {}) };
+function createWeaponInventoryFromFaction(_factionId) {
+  return { ...DEFAULT_WEAPON_INVENTORY };
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -419,6 +412,10 @@ document.addEventListener("DOMContentLoaded", () => {
     element.innerHTML = (items || []).map((item) => `<li>${item}</li>`).join("");
   }
 
+  function formatLabeledEffects(items, label) {
+    return (items || []).map((item) => `${item} (${label})`);
+  }
+
   function renderFactionPreview(factionId) {
     const faction = FACTION_CATALOG[factionId] || FACTION_CATALOG.mafian;
     const meta = getFactionMeta(factionId);
@@ -428,14 +425,42 @@ document.addEventListener("DOMContentLoaded", () => {
     if (tagline) tagline.textContent = faction.tagline;
     if (desc) desc.textContent = meta.desc || faction.description;
     if (bonus) {
-      bonus.innerHTML = `<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>${meta.bonus}</strong> ${meta.bonusCopy}</span>`;
+      const action = faction.specialAction;
+      const actionLabel = action?.status === "implemented" ? "Aktivní" : "Preview";
+      const actionTitle = action?.name || meta.bonus;
+      const actionCopy = action?.description || meta.bonusCopy;
+      const advantageCopy = (faction.advantages || []).join(" • ");
+      const plannedAdvantageCopy = (faction.plannedAdvantages || []).join(" • ");
+      const disadvantageCopy = (faction.disadvantages || []).join(" • ");
+      const plannedDisadvantageCopy = (faction.plannedDisadvantages || []).join(" • ");
+      const coreBackedCopy = (faction.coreBackedEffects || []).join(" • ");
+      const plannedCopy = (faction.plannedEffects || []).join(" • ");
+      bonus.innerHTML = `
+        <span class="faction-bonus__icon" aria-hidden="true">✦</span>
+        <span class="faction-bonus__copy">
+          <strong>Styl:</strong> ${faction.playstyleSummary || "pasivní frakční profil"}<br>
+          <strong>Výhody:</strong> ${advantageCopy || "bez samostatné výhody"}<br>
+          ${plannedAdvantageCopy ? `<strong>Plánované výhody:</strong> ${plannedAdvantageCopy}<br>` : ""}
+          <strong>Nevýhody:</strong> ${disadvantageCopy || "bez samostatné nevýhody"}<br>
+          ${plannedDisadvantageCopy ? `<strong>Plánované nevýhody:</strong> ${plannedDisadvantageCopy}<br>` : ""}
+          <strong>Core-backed:</strong> ${coreBackedCopy || "zatím žádné core-backed efekty"}<br>
+          ${plannedCopy ? `<strong>Planned/display-only:</strong> ${plannedCopy}<br>` : ""}
+          <strong>${actionTitle}</strong> ${actionCopy} <em>${actionLabel}: ${action?.status === "implemented" ? "core-backed." : "planned/preview-only."}</em>
+        </span>
+      `;
     }
-    if (cleanMoneyEl) cleanMoneyEl.textContent = formatCurrency(faction.startingPackage.cleanMoney);
-    if (dirtyMoneyEl) dirtyMoneyEl.textContent = formatCurrency(faction.startingPackage.dirtyMoney);
-    if (influenceEl) influenceEl.textContent = String(faction.startingPackage.influence);
-    if (heatEl) heatEl.textContent = String(faction.startingPackage.heat);
-    replaceList(advantagesEl, faction.advantages);
-    replaceList(disadvantagesEl, faction.disadvantages);
+    if (cleanMoneyEl) cleanMoneyEl.textContent = faction.playstyleSummary || "-";
+    if (dirtyMoneyEl) dirtyMoneyEl.textContent = "Start je globální pro všechny hráče";
+    if (influenceEl) influenceEl.textContent = "Frakce upravuje pouze styl a pasivy";
+    if (heatEl) heatEl.textContent = "Schopnosti jsou zatím preview-only";
+    replaceList(advantagesEl, [
+      ...formatLabeledEffects(faction.advantages, "core-backed"),
+      ...formatLabeledEffects(faction.plannedAdvantages, "planned/display-only")
+    ]);
+    replaceList(disadvantagesEl, [
+      ...formatLabeledEffects(faction.disadvantages, "core-backed"),
+      ...formatLabeledEffects(faction.plannedDisadvantages, "planned/display-only")
+    ]);
   }
 
   function renderEmptyFactionPreview() {
@@ -445,7 +470,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (tagline) tagline.textContent = "";
     if (desc) desc.textContent = "";
     if (bonus) {
-      bonus.innerHTML = '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Signál frakce</strong> Každá volba má vlastní rytmus, výhodu i cenu. Vyber si, jak bude město šeptat tvoje jméno.</span>';
+      bonus.innerHTML = '<span class="faction-bonus__icon" aria-hidden="true">✦</span><span class="faction-bonus__copy"><strong>Signál frakce</strong> Každá volba má vlastní pasivní rytmus, slabinu a preview speciální akce.</span>';
     }
     if (cleanMoneyEl) cleanMoneyEl.textContent = "-";
     if (dirtyMoneyEl) dirtyMoneyEl.textContent = "-";
@@ -749,10 +774,6 @@ document.addEventListener("DOMContentLoaded", () => {
         weapons: createWeaponInventoryFromFaction(factionId),
         materials: { ...DEFAULT_MATERIAL_INVENTORY },
         drugs: { ...DEFAULT_DRUG_INVENTORY }
-      },
-      economy: {
-        cleanMoney: FACTION_CATALOG[factionId].startingPackage.cleanMoney,
-        dirtyMoney: FACTION_CATALOG[factionId].startingPackage.dirtyMoney
       },
       world: {
         ...baseSession.world,

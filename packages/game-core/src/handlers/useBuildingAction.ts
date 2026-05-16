@@ -34,8 +34,10 @@ import {
 import { createPlayerPoliceState, resolveWantedLevel } from "./playerPoliceState";
 import {
   applyFactionHeatGain,
+  applyFactionIllegalActionHeatGain,
   applyFactionInfluenceGain,
-  getFactionPassiveModifiers
+  getFactionPassiveModifiers,
+  isFactionIllegalActionBuilding
 } from "../rules/factions/factionRules";
 
 /**
@@ -158,7 +160,9 @@ export const handleUseBuildingAction = (
   const factionModifiers = getFactionPassiveModifiers(state, player.id, context);
   resolvedAction = {
     ...resolvedAction,
-    heatGain: applyFactionHeatGain(resolvedAction.heatGain, factionModifiers),
+    heatGain: isFactionIllegalActionBuilding(building.buildingTypeId)
+      ? applyFactionIllegalActionHeatGain(resolvedAction.heatGain, factionModifiers)
+      : applyFactionHeatGain(resolvedAction.heatGain, factionModifiers),
     influenceChange: applyFactionInfluenceGain(resolvedAction.influenceChange, factionModifiers)
   };
 

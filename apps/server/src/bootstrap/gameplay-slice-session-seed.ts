@@ -1,5 +1,4 @@
 import {
-  applyFactionStartingPackage,
   type CoreGameState,
   createPlayerPoliceState,
   normalizeFactionId
@@ -58,7 +57,7 @@ export const addPlayerToGameplaySliceState = (
   state.policeStatesById[player.policeStateId] = createPlayerPoliceState(player, state.root.tick);
   appendUnique(state.root.playerIds, player.id);
 
-  return applyFactionStartingPackage(state, player.id, { config });
+  return state;
 };
 
 const createPlayer = (

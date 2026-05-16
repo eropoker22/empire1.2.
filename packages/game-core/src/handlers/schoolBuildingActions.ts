@@ -1,5 +1,7 @@
 import type { FixedBuildingBalanceConfig, SchoolBalanceConfig } from "../contracts";
 import type { CoreGameState } from "../entities";
+import type { GameCoreContext } from "../engine/context";
+import { applyFactionPopulationGeneration, getFactionPassiveModifiers } from "../rules/factions/factionRules";
 import { deterministicUnitInterval } from "../utils/math";
 
 export type SchoolTalentId =
@@ -174,7 +176,8 @@ export const resolveSchoolCapacity = (input: {
 export const applySchoolStudentProduction = (
   state: CoreGameState,
   config: SchoolBalanceConfig,
-  tickRateMs: number
+  tickRateMs: number,
+  context?: GameCoreContext
 ): CoreGameState => {
   let buildingsById = state.buildingsById;
   let changed = false;
@@ -193,7 +196,7 @@ export const applySchoolStudentProduction = (
     const eveningMultiplier = isEveningCourseActive(metadata, state.root.tick)
       ? config.eveningCourse.populationProductionMultiplier
       : 1;
-    const gain = currentStored >= capacity
+    const baseGain = currentStored >= capacity
       ? 0
       : config.populationPerMinute
         * network.populationProductionMultiplier
@@ -201,6 +204,9 @@ export const applySchoolStudentProduction = (
         * elapsedTicks
         * Math.max(1, tickRateMs)
         / 60000;
+    const gain = context
+      ? applyFactionPopulationGeneration(baseGain, getFactionPassiveModifiers(state, building.ownerPlayerId, context))
+      : baseGain;
     const nextStored = Math.min(capacity, currentStored + gain);
     const nextMetadata: SchoolMetadata = {
       ...metadata,

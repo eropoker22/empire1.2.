@@ -1,5 +1,7 @@
 import type { ApartmentBlockBalanceConfig, PowerStationBalanceConfig, RecruitmentCenterBalanceConfig } from "../contracts";
 import type { CoreGameState } from "../entities";
+import type { GameCoreContext } from "../engine/context";
+import { applyFactionPopulationGeneration, getFactionPassiveModifiers } from "../rules/factions/factionRules";
 import { resolvePowerStationInfrastructureMultiplier } from "./powerStationBuildingActions";
 import { resolveRecruitmentCenterSupportBonuses } from "./recruitmentCenterBuildingActions";
 
@@ -63,7 +65,8 @@ export const applyApartmentBlockPopulationProduction = (
   config: ApartmentBlockBalanceConfig,
   tickRateMs: number,
   powerStationConfig?: PowerStationBalanceConfig,
-  recruitmentCenterConfig?: RecruitmentCenterBalanceConfig
+  recruitmentCenterConfig?: RecruitmentCenterBalanceConfig,
+  context?: GameCoreContext
 ): CoreGameState => {
   let buildingsById = state.buildingsById;
   let changed = false;
@@ -93,9 +96,12 @@ export const applyApartmentBlockPopulationProduction = (
     const recruitmentCapacityMultiplier = 1 + recruitmentBonuses.apartmentCapacityBonusPct / 100;
     const capacity = Math.max(1, Math.floor(config.baseCapacity * multipliers.capacityMultiplier * recruitmentCapacityMultiplier + 1e-9));
     const currentStored = Math.min(capacity, metadata.storedPopulation);
-    const gain = currentStored >= capacity
+    const baseGain = currentStored >= capacity
       ? 0
       : config.populationPerMinute * multipliers.populationProductionMultiplier * recruitmentPopulationMultiplier * infrastructureMultiplier * elapsedTicks * Math.max(1, tickRateMs) / 60000;
+    const gain = context
+      ? applyFactionPopulationGeneration(baseGain, getFactionPassiveModifiers(state, building.ownerPlayerId, context))
+      : baseGain;
     const nextStored = Math.min(capacity, currentStored + gain);
     const nextMetadata: ApartmentBlockMetadata = {
       storedPopulation: nextStored,

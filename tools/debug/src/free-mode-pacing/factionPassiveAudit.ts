@@ -44,6 +44,15 @@ export const FACTION_PASSIVE_MODIFIER_USAGE: Record<
     surfaces: ["packages/game-core/src/rules/factions/factionRules.ts: illegal production building set"],
     note: "Aktivní pro drug_lab, smuggling_tunnel a street_dealers, pokud produkují přes productionBuildings."
   },
+  smugglingIncomeMultiplier: {
+    key: "smugglingIncomeMultiplier",
+    status: "active",
+    surfaces: [
+      "packages/game-core/src/handlers/smugglingTunnelBuildingActions.ts",
+      "packages/game-core/src/rules/economy/fixedBuildingIncomeConfig.ts"
+    ],
+    note: "Aplikuje se na dirty income z pasivního Smuggling Tunnel výpočtu."
+  },
   techProductionMultiplier: {
     key: "techProductionMultiplier",
     status: "active",
@@ -60,6 +69,12 @@ export const FACTION_PASSIVE_MODIFIER_USAGE: Record<
     ],
     note: "Aplikuje se na attack heat, building action heat a pasivní heat z fixed budov."
   },
+  illegalActionHeatGainMultiplier: {
+    key: "illegalActionHeatGainMultiplier",
+    status: "active",
+    surfaces: ["packages/game-core/src/handlers/useBuildingAction.ts"],
+    note: "Aplikuje se na building action heat pro drug_lab, smuggling_tunnel a street_dealers přes centrální faction helper."
+  },
   influenceGainMultiplier: {
     key: "influenceGainMultiplier",
     status: "active",
@@ -75,6 +90,24 @@ export const FACTION_PASSIVE_MODIFIER_USAGE: Record<
     surfaces: ["packages/game-core/src/handlers/spyDistrict.ts"],
     note: "Aditivní bonus v p. b. přes applyFactionChanceBonus."
   },
+  spyInfoQualityMultiplier: {
+    key: "spyInfoQualityMultiplier",
+    status: "planned",
+    surfaces: [],
+    note: "Definováno pro Tajnou organizaci, ale spy report zatím nemá škálovanou quality vrstvu nad success/failure výsledkem."
+  },
+  trapDetectionChanceBonus: {
+    key: "trapDetectionChanceBonus",
+    status: "active",
+    surfaces: ["packages/game-core/src/handlers/spyDistrict.ts"],
+    note: "Aditivní bonus k trap reveal šanci při úspěšném spy reportu přes capped faction helper."
+  },
+  secretActionHeatGainMultiplier: {
+    key: "secretActionHeatGainMultiplier",
+    status: "planned",
+    surfaces: [],
+    note: "Definováno pro Tajnou organizaci, ale secret/spy/infiltration akce zatím nemají jednotný heat gain kontext."
+  },
   attackPowerMultiplier: {
     key: "attackPowerMultiplier",
     status: "active",
@@ -87,17 +120,111 @@ export const FACTION_PASSIVE_MODIFIER_USAGE: Record<
     surfaces: ["packages/game-core/src/handlers/attackDistrict.ts"],
     note: "Aplikuje se na defender power po district efektech."
   },
+  baseDefensePowerMultiplier: {
+    key: "baseDefensePowerMultiplier",
+    status: "active",
+    surfaces: ["packages/game-core/src/handlers/attackDistrict.ts"],
+    note: "Aplikuje se na základní defense položky bez kamer a alarmů v district attack flow."
+  },
+  cameraEffectivenessMultiplier: {
+    key: "cameraEffectivenessMultiplier",
+    status: "active",
+    surfaces: [
+      "packages/game-core/src/handlers/attackDistrict.ts",
+      "packages/game-core/src/handlers/spyDistrict.ts"
+    ],
+    note: "Aplikuje se na účinnost kamer v combat defense a proti spy pokusům."
+  },
+  alarmEffectivenessMultiplier: {
+    key: "alarmEffectivenessMultiplier",
+    status: "active",
+    surfaces: [
+      "packages/game-core/src/handlers/attackDistrict.ts",
+      "packages/game-core/src/handlers/spyDistrict.ts"
+    ],
+    note: "Aplikuje se na účinnost alarmů v combat defense a proti spy pokusům."
+  },
+  occupyPowerMultiplier: {
+    key: "occupyPowerMultiplier",
+    status: "planned",
+    surfaces: [],
+    note: "Definováno pro Soukromou armádu, ale occupy je zatím binární claim po spy reportu bez power/chance výpočtu."
+  },
   attackDurationMultiplier: {
     key: "attackDurationMultiplier",
     status: "active",
     surfaces: ["packages/game-core/src/handlers/attackDistrict.ts"],
     note: "Aplikuje se na výsledný attack cooldown/duration po day-night a building redukcích."
   },
-  equipmentLossMultiplier: {
-    key: "equipmentLossMultiplier",
+  robberyCooldownMultiplier: {
+    key: "robberyCooldownMultiplier",
+    status: "active",
+    surfaces: ["packages/game-core/src/rules/heists/heistSystem.ts"],
+    note: "Aplikuje se centrálně na global i same-target cooldown po district heistu."
+  },
+  attackCooldownMultiplier: {
+    key: "attackCooldownMultiplier",
+    status: "active",
+    surfaces: ["packages/game-core/src/handlers/attackDistrict.ts"],
+    note: "Aplikuje se centrálně na attack cooldown spolu se starším attackDurationMultiplier."
+  },
+  occupyCooldownMultiplier: {
+    key: "occupyCooldownMultiplier",
+    status: "active",
+    surfaces: ["packages/game-core/src/handlers/occupyDistrict.ts"],
+    note: "Aplikuje se na cooldown obsazení neutrálního districtu po úspěšném spy intel."
+  },
+  robberyDirtyCashLootMultiplier: {
+    key: "robberyDirtyCashLootMultiplier",
+    status: "active",
+    surfaces: ["packages/game-core/src/rules/heists/heistSystem.ts"],
+    note: "Aplikuje se pouze na dirty-cash složku district heist lootu."
+  },
+  robberyLootMultiplier: {
+    key: "robberyLootMultiplier",
+    status: "active",
+    surfaces: ["packages/game-core/src/rules/heists/heistSystem.ts"],
+    note: "Aplikuje se centrálně na clean cash, dirty cash a resource loot z district heistu."
+  },
+  aggressiveActionHeatGainMultiplier: {
+    key: "aggressiveActionHeatGainMultiplier",
+    status: "active",
+    surfaces: [
+      "packages/game-core/src/handlers/attackDistrict.ts",
+      "packages/game-core/src/rules/heists/heistSystem.ts"
+    ],
+    note: "Aplikuje se na heat z útoků a district heist start/outcome heat."
+  },
+  defenseSystemEffectivenessMultiplier: {
+    key: "defenseSystemEffectivenessMultiplier",
+    status: "active",
+    surfaces: [
+      "packages/game-core/src/handlers/attackDistrict.ts",
+      "packages/game-core/src/handlers/spyDistrict.ts"
+    ],
+    note: "Aplikuje se na efekt kamer a alarmů při obraně districtu a proti spy pokusům."
+  },
+  populationGenerationMultiplier: {
+    key: "populationGenerationMultiplier",
+    status: "active",
+    surfaces: [
+      "packages/game-core/src/handlers/apartmentBlockBuildingActions.ts",
+      "packages/game-core/src/handlers/schoolBuildingActions.ts"
+    ],
+    note: "Aplikuje se centrálně na lokální generování populace v Apartment Blocku a studentů ve Škole."
+  },
+  // TODO(factions): Wire this once rumor/suspicion generation has one central faction-aware helper.
+  rumorGenerationMultiplier: {
+    key: "rumorGenerationMultiplier",
     status: "planned",
     surfaces: [],
-    note: "Definováno pro Soukromou armádu, zatím nenapojeno na loss/mitigation pipeline."
+    note: "Definováno pro Kult jako budoucí tlak na drby/podezření; rumor generace zatím nemá jednotný faction-aware helper."
+  },
+  equipmentLossMultiplier: {
+    key: "equipmentLossMultiplier",
+    status: "active",
+    surfaces: ["packages/game-core/src/handlers/attackDistrict.ts"],
+    note: "Aplikuje se na attacker equipment losses v district attack flow před escape/recovery mitigací."
   },
   marketFeeMultiplier: {
     key: "marketFeeMultiplier",
@@ -107,9 +234,9 @@ export const FACTION_PASSIVE_MODIFIER_USAGE: Record<
   },
   rumorTruthMultiplier: {
     key: "rumorTruthMultiplier",
-    status: "planned",
-    surfaces: [],
-    note: "Definováno pro Tajnou organizaci, zatím nenapojeno do rumorPipeline truthChancePct."
+    status: "active",
+    surfaces: ["packages/game-core/src/rules/events/rumorPipeline.ts"],
+    note: "Aplikuje se na truthChancePct u faction-owned rumor events přes capped multiplier; negarantuje 100% pravdu."
   },
   upkeepCostMultiplier: {
     key: "upkeepCostMultiplier",

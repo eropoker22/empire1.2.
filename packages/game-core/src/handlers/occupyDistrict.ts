@@ -5,6 +5,11 @@ import type { CoreEvent } from "../events";
 import type { CoreError } from "../errors";
 import { CORE_EVENT_TYPES, createEvent } from "../events";
 import { createOccupyCooldownKey, resolveOccupyBalance } from "../rules";
+import {
+  applyFactionCooldownTicks,
+  applyFactionMultiplier,
+  getFactionPassiveModifiers
+} from "../rules/factions/factionRules";
 import { validateOccupy } from "../validation";
 import { createPlayerCooldownState, reassignCapturedDistrictBuildings } from "./attackDistrictHelpers";
 import { increasePlayerPoliceHeat } from "./playerPoliceState";
@@ -33,9 +38,12 @@ export const handleOccupyDistrict = (
   const sourceDistrict = state.districtsById[command.payload.sourceDistrictId ?? ""]!;
   const targetDistrict = state.districtsById[command.payload.districtId];
   const balance = resolveOccupyBalance(context.config.balance.conflict);
+  const factionModifiers = getFactionPassiveModifiers(state, player.id, context);
+  const cooldownTicks = applyFactionCooldownTicks(balance.cooldownTicks, "occupy", factionModifiers);
+  const heatGain = resolveOccupyHeatGain(balance.heatGain, factionModifiers.aggressiveActionHeatGainMultiplier);
   const cooldownState = state.cooldownStatesById[player.cooldownStateId] ?? createPlayerCooldownState(player.id, player.cooldownStateId);
   const occupyCooldownKey = createOccupyCooldownKey(targetDistrict.id);
-  const nextPoliceState = increasePlayerPoliceHeat(state, player, balance.heatGain, state.root.tick);
+  const nextPoliceState = increasePlayerPoliceHeat(state, player, heatGain, state.root.tick);
   const nextBuildingsById = reassignCapturedDistrictBuildings(state, targetDistrict.buildingIds, player.id);
 
   return {
@@ -60,7 +68,7 @@ export const handleOccupyDistrict = (
           ...targetDistrict,
           ownerPlayerId: player.id,
           controllerAllianceId: player.allianceId,
-          heat: Math.max(0, Number(targetDistrict.heat || 0) + balance.heatGain),
+          heat: Math.max(0, Number(targetDistrict.heat || 0) + heatGain),
           status: "claimed",
           lastHeatDecayTick: state.root.tick,
           version: targetDistrict.version + 1
@@ -73,7 +81,7 @@ export const handleOccupyDistrict = (
           ...cooldownState,
           cooldowns: {
             ...cooldownState.cooldowns,
-            [occupyCooldownKey]: state.root.tick + balance.cooldownTicks
+            [occupyCooldownKey]: state.root.tick + cooldownTicks
           },
           version: cooldownState.version + (state.cooldownStatesById[cooldownState.id] ? 1 : 0)
         }
@@ -94,11 +102,19 @@ export const handleOccupyDistrict = (
           previousOwnerPlayerId: null,
           sourceDistrictId: command.payload.sourceDistrictId,
         actionType: "occupy-district",
-        heatGained: balance.heatGain,
+        heatGained: heatGain,
         influenceCost: balance.influenceCost,
-        cooldownTicks: balance.cooldownTicks
+        cooldownTicks
       })
     ],
     errors: []
   };
+};
+
+const resolveOccupyHeatGain = (baseHeatGain: number, aggressiveActionHeatGainMultiplier: number | undefined): number => {
+  const base = Math.max(0, Number(baseHeatGain) || 0);
+  const modified = Math.max(0, applyFactionMultiplier(base, aggressiveActionHeatGainMultiplier));
+  if (modified > base) return Math.ceil(modified);
+  if (modified < base) return Math.floor(modified);
+  return modified;
 };

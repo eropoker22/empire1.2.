@@ -23,9 +23,14 @@ import {
   resolveActiveDistrictEffectModifiers
 } from "../rules/economy/calculateIncome";
 import {
-  applyFactionHeatGain,
+  applyFactionAggressiveHeatGain,
+  applyFactionCooldownTicks,
+  applyFactionEquipmentLosses,
   applyFactionMultiplier,
-  getFactionPassiveModifiers
+  getFactionPassiveModifiers,
+  resolveFactionAlarmEffectivenessMultiplier,
+  resolveFactionBaseDefensePowerMultiplier,
+  resolveFactionCameraEffectivenessMultiplier
 } from "../rules/factions/factionRules";
 import { validateAttack } from "../validation";
 import {
@@ -127,8 +132,11 @@ export const handleAttackDistrict = (
     fitnessConfig: context.config.balance.fitnessClub,
     recruitmentCenterConfig: context.config.balance.recruitmentCenter,
     baseModifiers: {
-      cameras: 1 + combinedCameraAlarmBonuses.cameraStrengthBonusPct / 100,
-      alarm: 1 + combinedCameraAlarmBonuses.alarmStrengthBonusPct / 100
+      vest: resolveFactionBaseDefensePowerMultiplier(defenderFactionModifiers),
+      barricades: resolveFactionBaseDefensePowerMultiplier(defenderFactionModifiers),
+      "defense-tower": resolveFactionBaseDefensePowerMultiplier(defenderFactionModifiers),
+      cameras: (1 + combinedCameraAlarmBonuses.cameraStrengthBonusPct / 100) * resolveFactionCameraEffectivenessMultiplier(defenderFactionModifiers),
+      alarm: (1 + combinedCameraAlarmBonuses.alarmStrengthBonusPct / 100) * resolveFactionAlarmEffectivenessMultiplier(defenderFactionModifiers)
     }
   });
   const baseAttackPower = calculateTotalAttackPower(attacker.attackLoadout, 1, attackWeaponModifiers);
@@ -157,7 +165,7 @@ export const handleAttackDistrict = (
     effectiveAttackPower,
     effectiveDefensePower,
     trapLosses: trapResolution.losses,
-    heatGain: applyFactionHeatGain(
+    heatGain: applyFactionAggressiveHeatGain(
       applyDayNightHeatGain(context.config.balance.conflict?.attackHeatGain ?? 6, state, context),
       attackerFactionModifiers
     )
@@ -178,9 +186,10 @@ export const handleAttackDistrict = (
   const escapeRoll = deterministicUnitInterval(
     `${state.serverInstance.worldSeed}:attack:escape:${command.playerId}:${targetDistrict.id}:${state.root.tick}:${command.id}`
   );
+  const factionAdjustedAttackerLosses = applyFactionEquipmentLosses(combatResolution.attackerLosses, attackerFactionModifiers);
   const escapeMitigation = resolveAttackEscapeMitigation({
-    losses: combatResolution.attackerLosses,
-    nextLoadout: combatResolution.nextAttackerLoadout,
+    losses: factionAdjustedAttackerLosses,
+    nextLoadout: applyFactionEquipmentLossesToLoadout(effectiveLoadout, factionAdjustedAttackerLosses),
     heatGained: combatResolution.heatGained,
     enabled: !attackSucceeded,
     bonusPct: escapeChanceBonusPct + airportEvacuation.escapeChanceBonusPct,
@@ -191,7 +200,7 @@ export const handleAttackDistrict = (
   const attackCooldownKey = `attack:${targetDistrict.id}`;
   const attackDurationTicks = Math.max(
     context.config.balance.conflict?.minAttackDurationTicks ?? 1,
-    Math.ceil(applyFactionMultiplier(
+    applyFactionCooldownTicks(
       applyDayNightAttackDurationTicks(applyCarDealerCooldownReductionTicks({
         baseTicks: resolveAttackDurationTicks(context),
         state,
@@ -200,8 +209,9 @@ export const handleAttackDistrict = (
         garageConfig: context.config.balance.garage,
         category: "attackPreparation"
       }), state, context),
-      attackerFactionModifiers.attackDurationMultiplier
-    ))
+      "attack",
+      attackerFactionModifiers
+    )
   );
   const nextPoliceState = increasePlayerPoliceHeat(state, attacker, escapeMitigation.heatGained, state.root.tick);
   const notificationEntries = createBattleReportNotifications({
@@ -399,4 +409,15 @@ export const handleAttackDistrict = (
     events,
     errors: []
   };
+};
+
+const applyFactionEquipmentLossesToLoadout = (
+  loadout: Partial<Record<AttackWeaponId, number>>,
+  losses: Partial<Record<AttackWeaponId, number>>
+): Partial<Record<AttackWeaponId, number>> => {
+  const nextLoadout = { ...loadout };
+  for (const [itemId, amount] of Object.entries(losses) as Array<[AttackWeaponId, number]>) {
+    nextLoadout[itemId] = Math.max(0, Number(nextLoadout[itemId] || 0) - Math.max(0, Number(amount) || 0));
+  }
+  return nextLoadout;
 };

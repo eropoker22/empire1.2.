@@ -111,6 +111,51 @@ describe("occupy district command", () => {
     expect(result.nextState.cooldownStatesById["cooldown:1"]?.cooldowns["occupy:district:2"]).toBe(4);
   });
 
+  it("reduces occupy cooldown for Motorkářský gang faction", () => {
+    const state = createNeutralOccupyState();
+    state.playersById["player:1"] = {
+      ...state.playersById["player:1"],
+      factionId: "motorkarsky-gang"
+    };
+    seedSuccessfulSpyIntel(state, "player:1", "district:1", "district:2");
+    const config = createOccupyConfig({
+      influenceCost: 5,
+      heatGain: 2,
+      cooldownTicks: 10
+    });
+
+    const result = applyCommand(state, createOccupyDistrictCommandFixture(), { config });
+
+    expect(result.errors).toEqual([]);
+    expect(result.nextState.cooldownStatesById["cooldown:1"]?.cooldowns["occupy:district:2"]).toBe(9);
+    expect(result.events[0]?.payload).toMatchObject({
+      cooldownTicks: 9
+    });
+  });
+
+  it("increases occupy heat for Soukromá armáda faction", () => {
+    const state = createNeutralOccupyState();
+    state.playersById["player:1"] = {
+      ...state.playersById["player:1"],
+      factionId: "soukroma-armada"
+    };
+    seedSuccessfulSpyIntel(state, "player:1", "district:1", "district:2");
+    const config = createOccupyConfig({
+      influenceCost: 5,
+      heatGain: 2,
+      cooldownTicks: 10
+    });
+
+    const result = applyCommand(state, createOccupyDistrictCommandFixture(), { config });
+
+    expect(result.errors).toEqual([]);
+    expect(result.nextState.districtsById["district:2"].heat).toBe(3);
+    expect(result.nextState.policeStatesById["police:1"]?.heat).toBe(3);
+    expect(result.events[0]?.payload).toMatchObject({
+      heatGained: 3
+    });
+  });
+
   it("rejects occupation during an active occupy cooldown", () => {
     const state = createNeutralOccupyState();
     seedSuccessfulSpyIntel(state, "player:1", "district:1", "district:2");

@@ -3,6 +3,7 @@ export function createAuthoritySessionAccessors(deps = {}) {
   const updateStoredPreviewSession = typeof deps.updateStoredPreviewSession === "function" ? deps.updateStoredPreviewSession : () => {};
   const documentRef = deps.documentRef || (typeof document === "undefined" ? null : document);
   const CustomEventCtor = deps.CustomEventCtor || globalThis.CustomEvent;
+  const defaultEconomyState = deps.defaultEconomyState || { cleanMoney: 1500, dirtyMoney: 300 };
 
   const getStoredWeaponInventory = () => getAuthoritySession().inventory.weapons;
   const setStoredWeaponInventory = (payload) => updateStoredPreviewSession((session) => ({
@@ -78,13 +79,9 @@ export function createAuthoritySessionAccessors(deps = {}) {
       };
     }
 
-    const registration = deps.getStoredRegistration?.();
-    const faction = registration?.factionId && deps.factionCatalog?.[registration.factionId]
-      ? deps.factionCatalog[registration.factionId]
-      : deps.factionCatalog?.mafian;
     const nextState = {
-      cleanMoney: faction?.startingPackage?.cleanMoney ?? 0,
-      dirtyMoney: faction?.startingPackage?.dirtyMoney ?? 0
+      cleanMoney: Number(defaultEconomyState.cleanMoney || 0),
+      dirtyMoney: Number(defaultEconomyState.dirtyMoney || 0)
     };
     setStoredEconomyState(nextState);
     return nextState;
@@ -179,10 +176,7 @@ export function createAuthoritySessionAccessors(deps = {}) {
     return nextIntel;
   };
 
-  const createWeaponInventoryFromFaction = (factionId) => ({
-    ...deps.defaultWeaponInventory,
-    ...(deps.factionWeaponPresets?.[factionId] || {})
-  });
+  const createWeaponInventoryFromFaction = (_factionId) => ({ ...deps.defaultWeaponInventory });
 
   return {
     createWeaponInventoryFromFaction,

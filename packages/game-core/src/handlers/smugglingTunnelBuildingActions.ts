@@ -1,5 +1,7 @@
 import type { FixedBuildingBalanceConfig, SmugglingTunnelBalanceConfig } from "../contracts";
 import type { CoreGameState } from "../entities";
+import type { FactionPassiveModifiers } from "@empire/shared-types";
+import { applyFactionSmugglingIncome } from "../rules/factions/factionRules";
 
 export interface SmugglingTunnelPlayerMetadata {
   openChannelExpiresAtTick?: number;
@@ -160,6 +162,7 @@ export const applySmugglingTunnelIncomeModifiers = (input: {
   dirtyPerHour: number;
   heatPerDay: number;
   influencePerDay: number;
+  factionModifiers?: FactionPassiveModifiers;
 }): FixedBuildingBalanceConfig => {
   if (input.building.buildingTypeId !== input.config.buildingTypeId || !input.building.ownerPlayerId) {
     return {
@@ -181,7 +184,10 @@ export const applySmugglingTunnelIncomeModifiers = (input: {
   const channelDirtyMultiplier = 1 + channel.tunnelDirtyProductionBonusPct / 100;
   return {
     cleanPerHour: 0,
-    dirtyPerHour: input.dirtyPerHour * network.dirtyProductionMultiplier * channelDirtyMultiplier,
+    dirtyPerHour: applyFactionSmugglingIncome(
+      input.dirtyPerHour * network.dirtyProductionMultiplier * channelDirtyMultiplier,
+      input.factionModifiers ?? {}
+    ),
     heatPerDay: input.heatPerDay * network.heatMultiplier,
     influencePerDay: 0,
     maxLevel: 1

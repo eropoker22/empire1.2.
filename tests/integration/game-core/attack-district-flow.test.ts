@@ -132,6 +132,67 @@ describe("attack-district command flow", () => {
     expect(result.nextState.cooldownStatesById["cooldown:1"].cooldowns["attack:district:2"]).toBe(89);
   });
 
+  it("reduces attack preparation cooldown for Motorkářský gang faction", () => {
+    const state = createCombatStateFixture();
+    state.playersById["player:1"] = {
+      ...state.playersById["player:1"],
+      factionId: "motorkarsky-gang"
+    };
+    const resolvedConfig = resolveModeConfig("free");
+    const bikerContext = {
+      config: {
+        ...resolvedConfig,
+        balance: {
+          ...resolvedConfig.balance,
+          conflict: {
+            ...resolvedConfig.balance.conflict!,
+            attackCooldownTicks: 100,
+            minAttackDurationTicks: 0
+          }
+        }
+      }
+    };
+
+    const result = applyCommand(state, createAttackDistrictCommandFixture(), bikerContext);
+    const attackEvent = result.events.find((event) => event.type === "district-attacked");
+
+    expect(result.errors).toEqual([]);
+    expect(attackEvent?.payload).toMatchObject({
+      attackDurationTicks: 95
+    });
+    expect(result.nextState.cooldownStatesById["cooldown:1"].cooldowns["attack:district:2"]).toBe(95);
+  });
+
+  it("applies Soukromá armáda attack power, heat and equipment-loss modifiers", () => {
+    const state = createCombatStateFixture();
+    state.playersById["player:1"] = {
+      ...state.playersById["player:1"],
+      factionId: "soukroma-armada"
+    };
+    const armyContext = {
+      config: {
+        ...resolveModeConfig("free"),
+        balance: {
+          ...resolveModeConfig("free").balance,
+          conflict: {
+            ...resolveModeConfig("free").balance.conflict!,
+            attackCooldownTicks: 2
+          }
+        }
+      }
+    };
+
+    const result = applyCommand(state, createAttackDistrictCommandFixture(), armyContext);
+    const attackEvent = result.events.find((event) => event.type === "district-attacked");
+    const attackPayload = attackEvent?.payload as Record<string, unknown>;
+    const attackerLosses = attackPayload.attackerLosses as Record<string, number>;
+
+    expect(result.errors).toEqual([]);
+    expect(attackPayload.attackPowerAfterEffects).toBeCloseTo(Number(attackPayload.attackPowerAfterTrap) * 1.12);
+    expect(attackPayload.heatGained).toBe(9);
+    expect(Object.values(attackerLosses).reduce((sum, amount) => sum + Number(amount || 0), 0)).toBeLessThanOrEqual(1);
+  });
+
   it("reduces attack preparation cooldown with car dealers and respects garage combined cap", () => {
     const state = createCombatStateFixture();
     const resolvedConfig = resolveModeConfig("free");
